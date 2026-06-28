@@ -4,6 +4,8 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>FINSIGHT // PERSONAL TERMINAL</title>
+<link rel="icon" type="image/png" href="/icon.png" />
+<link rel="apple-touch-icon" href="/icon.png" />
 <link rel="stylesheet" href="/styles.css" />
 <script>/* apply saved theme/font before first paint (no flash) */
 try { var d = document.documentElement;
@@ -15,7 +17,7 @@ try { var d = document.documentElement;
   <!-- ===================== LOCK SCREEN ===================== -->
   <div id="lock-screen" class="lock">
     <div class="lock-box">
-      <div class="lock-logo"><span class="logo">▮</span> FINSIGHT</div>
+      <div class="lock-logo"><img class="logo-img lock-logo-img" src="/icon.png" alt="FinSight logo" /> FINSIGHT</div>
       <div id="lock-title" class="lock-title">Enter your PIN</div>
       <input id="lock-pin" class="lock-input" type="password" inputmode="numeric" autocomplete="off" maxlength="12" placeholder="● ● ● ●" />
       <input id="lock-pin2" class="lock-input hidden" type="password" inputmode="numeric" autocomplete="off" maxlength="12" placeholder="Confirm PIN" />
@@ -28,7 +30,7 @@ try { var d = document.documentElement;
   <!-- ===================== TOP BAR ===================== -->
   <header class="topbar">
     <div class="brand">
-      <span class="logo">▮</span> FINSIGHT<span class="dim">//</span><span class="amber">PERSONAL&nbsp;TERMINAL</span>
+      <img class="logo-img" src="/icon.png" alt="FinSight logo" /> FINSIGHT<span class="dim">//</span><span class="amber">PERSONAL&nbsp;TERMINAL</span>
     </div>
     <div class="topbar-right">
       <label class="base-sel" title="Account / portfolio — each holds its own positions">

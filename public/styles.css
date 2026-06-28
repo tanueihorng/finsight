@@ -88,9 +88,11 @@ body {
   border-bottom: 1px solid var(--amber);
   padding: 6px 12px;
 }
-.brand { font-weight: 700; letter-spacing: 1px; color: var(--text); }
+.brand { font-weight: 700; letter-spacing: 1px; color: var(--text); display: flex; align-items: center; }
 .brand .logo { color: var(--amber); margin-right: 6px; }
 .brand .dim { margin: 0 2px; }
+.logo-img { height: 22px; width: 22px; border-radius: 5px; margin-right: 8px; vertical-align: middle; object-fit: cover; }
+.lock-logo-img { height: 30px; width: 30px; border-radius: 7px; margin-right: 4px; }
 .topbar-right { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 6px 10px; }
 .pill {
   background: #1a1d22; color: var(--muted); border: 1px solid var(--border-2);
@@ -403,7 +405,7 @@ body.locked .lock { display: flex; }
 /* hide the app behind the lock */
 body.locked > .topbar, body.locked > .cmdbar, body.locked > .cmd-status, body.locked > .grid, body.locked > .statusbar { display: none !important; }
 .lock-box { width: 300px; max-width: 88vw; text-align: center; display: flex; flex-direction: column; gap: 12px; }
-.lock-logo { font-size: 20px; font-weight: 700; letter-spacing: 2px; color: var(--text); }
+.lock-logo { font-size: 20px; font-weight: 700; letter-spacing: 2px; color: var(--text); display: inline-flex; align-items: center; }
 .lock-logo .logo { color: var(--amber); }
 .lock-title { color: var(--muted); font-size: 13px; letter-spacing: .5px; }
 .lock-input { background: #06080b; border: 1px solid var(--border-2); color: var(--amber-2); font-family: inherit; font-size: 22px; letter-spacing: 8px; text-align: center; padding: 12px; border-radius: 5px; outline: none; }

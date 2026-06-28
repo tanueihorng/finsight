@@ -1,8 +1,8 @@
 <div align="center">
 
-<img src="docs/hero.svg" alt="FinSight — personal terminal" width="100%">
+<img src="docs/logo.png" alt="FinSight Terminal" width="620">
 
-<h1>FINSIGHT <sub>// personal terminal</sub></h1>
+<h1>FinSight <sub>// personal terminal</sub></h1>
 
 <p><b>A free, Bloomberg-style portfolio terminal that runs entirely on your own machine.</b><br>
 Live market data, FX-risk tracking, and an economic calendar — no accounts, no API keys, no build step.</p>
@@ -32,6 +32,8 @@ Live market data, FX-risk tracking, and an economic calendar — no accounts, no
 A personal trading terminal that's **small, hackable, and 100% free** — inspired by the Bloomberg-terminal idea but rebuilt as a ~250 KB zero-dependency web app you run locally. Your portfolio lives in a single `data/portfolio.json` on your machine and **never leaves it**. No sign-up, no paid feeds, no telemetry — just `node server.js` and a browser tab.
 
 It's built for the investor who **funds in one currency and invests in another** (e.g. convert SGD → USD to buy US stocks): it separates how much of your return came from the **stock moving** vs the **currency moving**, and gives you a real **FX-risk cockpit**.
+
+<div align="center"><img src="docs/hero.svg" alt="FinSight terminal — a glimpse of the UI" width="100%"></div>
 
 ## 🚀 Quick start
 
