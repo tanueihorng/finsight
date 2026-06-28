@@ -1,0 +1,11 @@
+# Personal data — never commit or share
+data/
+*.csv
+
+# Local working files (not part of the published project)
+finsight-handoff.md
+*.zip
+.claude/
+
+# macOS
+.DS_Store

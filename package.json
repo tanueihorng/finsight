@@ -1,0 +1,29 @@
+{
+  "name": "finsight",
+  "version": "1.0.0",
+  "description": "A personal Bloomberg-style terminal for tracking your portfolio with free, no-API-key market data (Yahoo Finance, World Bank, FRED, FX-risk + economic calendar).",
+  "type": "commonjs",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "author": "tanueihorng",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tanueihorng/finsight.git"
+  },
+  "keywords": [
+    "portfolio",
+    "stocks",
+    "terminal",
+    "finance",
+    "fx-risk",
+    "yahoo-finance",
+    "fred",
+    "no-dependencies"
+  ]
+}
