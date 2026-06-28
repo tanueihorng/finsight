@@ -399,7 +399,37 @@ function renderCardsEditor() {
     </div>`;
   }).join('');
 }
-$('#cards-btn').addEventListener('click', () => { renderCardsEditor(); renderPanelsEditor(); $('#cards-modal').classList.remove('hidden'); });
+// ---- appearance: switchable theme + font (system fonts only, no downloads) ----
+const THEMES = [
+  { id: 'violet',   label: 'Violet',   accent: '#a78bfa' },
+  { id: 'amber',    label: 'Amber',    accent: '#ff9e16' },
+  { id: 'teal',     label: 'Teal',     accent: '#2dd4bf' },
+  { id: 'phosphor', label: 'Phosphor', accent: '#4ade80' },
+];
+const FONTS = [
+  { id: 'mono', label: 'Mono' },
+  { id: 'sans', label: 'Sans' },
+  { id: 'slab', label: 'Serif' },
+];
+let curTheme = localStorage.getItem('finsight-theme') || 'violet';
+let curFont  = localStorage.getItem('finsight-font')  || 'mono';
+function applyTheme() { document.documentElement.dataset.theme = curTheme; document.documentElement.dataset.font = curFont; }
+function setTheme(id) {
+  curTheme = id; localStorage.setItem('finsight-theme', id); applyTheme();
+  renderAppearance(); if (state.selected) loadDetail(); // repaint canvas chart with new colours
+}
+function setFont(id) { curFont = id; localStorage.setItem('finsight-font', id); applyTheme(); renderAppearance(); }
+function renderAppearance() {
+  const tl = $('#theme-list'); if (tl) tl.innerHTML = THEMES.map((t) =>
+    `<button class="swatch ${t.id === curTheme ? 'on' : ''}" data-theme="${t.id}"><span class="dot" style="background:${t.accent}"></span>${t.label}</button>`).join('');
+  const fl = $('#font-list'); if (fl) fl.innerHTML = FONTS.map((f) =>
+    `<button class="font-btn ${f.id === curFont ? 'on' : ''}" data-font="${f.id}">${f.label}</button>`).join('');
+}
+$('#theme-list')?.addEventListener('click', (e) => { const b = e.target.closest('[data-theme]'); if (b) setTheme(b.dataset.theme); });
+$('#font-list')?.addEventListener('click', (e) => { const b = e.target.closest('[data-font]'); if (b) setFont(b.dataset.font); });
+applyTheme(); // also re-assert on script load (head script already set it pre-paint)
+
+$('#cards-btn').addEventListener('click', () => { renderAppearance(); renderCardsEditor(); renderPanelsEditor(); $('#cards-modal').classList.remove('hidden'); });
 $('#cards-close').addEventListener('click', () => $('#cards-modal').classList.add('hidden'));
 $('#cards-done').addEventListener('click', () => $('#cards-modal').classList.add('hidden'));
 $('#cards-modal').addEventListener('click', (e) => { if (e.target.id === 'cards-modal') $('#cards-modal').classList.add('hidden'); });
@@ -1114,7 +1144,7 @@ $('#heat-metric').addEventListener('click', (e) => {
   heatMetric = b.dataset.metric; renderHeatmap(lastPositions);
 });
 
-const PALETTE = ['#ff9e16', '#38bdf8', '#2ec27e', '#ff4d4d', '#a78bfa', '#f472b6', '#facc15', '#34d399', '#60a5fa', '#fb923c', '#94a3b8'];
+const PALETTE = ['#a78bfa', '#38bdf8', '#2ec27e', '#fb7185', '#f472b6', '#facc15', '#34d399', '#60a5fa', '#2dd4bf', '#c084fc', '#94a3b8'];
 function renderAllocation(positions) {
   const box = $('#alloc-body');
   if (!positions || !positions.length) { box.innerHTML = '<span class="muted">Add positions to see allocation.</span>'; return; }

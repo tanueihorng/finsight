@@ -167,7 +167,7 @@
     ['sma20', 'MA20', 'sma', 20, '#ffd166'],
     ['sma50', 'MA50', 'sma', 50, '#38bdf8'],
     ['sma200', 'MA200', 'sma', 200, '#c678dd'],
-    ['ema21', 'EMA21', 'ema', 21, '#ff9e16'],
+    ['ema21', 'EMA21', 'ema', 21, '#a78bfa'],
     ['bb', 'BBANDS', 'bb', 20, '#7b8794'],
   ];
   const PANES = [['vol', 'VOL'], ['rsi', 'RSI'], ['macd', 'MACD']];

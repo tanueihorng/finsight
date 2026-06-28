@@ -5,6 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>FINSIGHT // PERSONAL TERMINAL</title>
 <link rel="stylesheet" href="/styles.css" />
+<script>/* apply saved theme/font before first paint (no flash) */
+try { var d = document.documentElement;
+  d.dataset.theme = localStorage.getItem('finsight-theme') || 'violet';
+  d.dataset.font  = localStorage.getItem('finsight-font')  || 'mono';
+} catch (e) {}</script>
 </head>
 <body class="locked">
   <!-- ===================== LOCK SCREEN ===================== -->
@@ -351,6 +356,11 @@ MSFT,5,380,2023-11-02
         <button id="cards-close" class="x-btn">✕</button>
       </div>
       <div class="modal-body">
+        <div class="setup-label muted small">APPEARANCE — theme</div>
+        <div id="theme-list" class="swatch-row"></div>
+        <div class="setup-label muted small" style="margin-top:12px">APPEARANCE — font</div>
+        <div id="font-list" class="swatch-row"></div>
+        <div style="border-top:1px solid var(--border); margin:16px 0 12px"></div>
         <p class="muted small">Summary cards — tick the ones you want and use ▲▼ to reorder. Changes apply instantly.</p>
         <div id="cards-list" class="cards-list"></div>
         <div class="setup-label muted small" style="margin-top:14px">PANELS — show / hide whole widgets</div>

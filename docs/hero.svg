@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 440" width="1280" height="440" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" role="img" aria-label="FinSight — personal terminal">
+  <defs>
+    <linearGradient id="area" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#a78bfa" stop-opacity="0.34"/>
+      <stop offset="1" stop-color="#a78bfa" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- backdrop -->
+  <rect width="1280" height="440" fill="#08080f"/>
+  <rect x="8" y="8" width="1264" height="424" rx="14" fill="none" stroke="#20203a"/>
+
+  <!-- header -->
+  <rect x="44" y="35" width="15" height="15" rx="2" fill="#a78bfa"/>
+  <text x="70" y="51" font-size="26" font-weight="700" fill="#ece8fb">FINSIGHT<tspan fill="#a78bfa" font-weight="400"> // PERSONAL TERMINAL</tspan></text>
+  <text x="1236" y="49" font-size="13" text-anchor="end" letter-spacing="1.5" fill="#7e7e96">● <tspan fill="#2ec27e">LIVE</tspan>   ·   NO API KEYS   ·   OFFLINE   ·   MIT</text>
+  <line x1="44" y1="70" x2="1236" y2="70" stroke="#20203a"/>
+
+  <!-- metric cards -->
+  <g>
+    <rect x="44"  y="92" width="283" height="104" rx="8" fill="#12121f" stroke="#20203a"/>
+    <text x="62"  y="122" font-size="13" letter-spacing="1" fill="#7e7e96">TOTAL VALUE</text>
+    <text x="62"  y="156" font-size="30" font-weight="700" fill="#e8ecf0">S$25.7K</text>
+    <text x="62"  y="180" font-size="13" fill="#6b6b85">cost S$19.5K</text>
+
+    <rect x="347" y="92" width="283" height="104" rx="8" fill="#12121f" stroke="#20203a"/>
+    <text x="365" y="122" font-size="13" letter-spacing="1" fill="#7e7e96">DAY P&amp;L</text>
+    <text x="365" y="156" font-size="30" font-weight="700" fill="#2ec27e">+S$233.40</text>
+    <text x="365" y="180" font-size="13" fill="#6b6b85">today</text>
+
+    <rect x="650" y="92" width="283" height="104" rx="8" fill="#12121f" stroke="#20203a"/>
+    <text x="668" y="122" font-size="13" letter-spacing="1" fill="#7e7e96">FX P&amp;L</text>
+    <text x="668" y="156" font-size="30" font-weight="700" fill="#f87171">−S$507.30</text>
+    <text x="668" y="180" font-size="13" fill="#6b6b85">currency move</text>
+
+    <rect x="953" y="92" width="283" height="104" rx="8" fill="#12121f" stroke="#20203a"/>
+    <text x="971" y="122" font-size="13" letter-spacing="1" fill="#7e7e96">1σ FX / WEEK</text>
+    <text x="971" y="156" font-size="30" font-weight="700" fill="#a78bfa">±S$165</text>
+    <text x="971" y="180" font-size="13" fill="#6b6b85">95% VaR  S$272</text>
+  </g>
+
+  <!-- performance panel -->
+  <rect x="44" y="216" width="760" height="192" rx="8" fill="#0d0d18" stroke="#20203a"/>
+  <text x="62" y="244" font-size="13" letter-spacing="1.5" fill="#a78bfa">PORTFOLIO PERFORMANCE<tspan fill="#2ec27e" letter-spacing="0">   +24.2% · 1Y</tspan></text>
+  <line x1="62" y1="392" x2="786" y2="392" stroke="#20203a"/>
+  <path d="M70,392 L70,378 124,372 179,360 233,366 288,344 342,350 397,330 451,338 506,316 560,300 615,308 669,284 724,272 780,258 L780,392 Z" fill="url(#area)"/>
+  <polyline points="70,378 124,372 179,360 233,366 288,344 342,350 397,330 451,338 506,316 560,300 615,308 669,284 724,272 780,258" fill="none" stroke="#a78bfa" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+  <circle cx="780" cy="258" r="4.5" fill="#c4b5fd"/>
+
+  <!-- fx risk panel -->
+  <rect x="824" y="216" width="412" height="192" rx="8" fill="#0d0d18" stroke="#20203a"/>
+  <text x="842" y="244" font-size="13" letter-spacing="1.5" fill="#a78bfa">FX RISK · USD/SGD</text>
+  <text x="1218" y="244" font-size="12" text-anchor="end" fill="#7e7e96">spot 1.2931</text>
+
+  <text x="842" y="280" font-size="12" fill="#7e7e96">USD EXPOSURE</text>
+  <text x="1218" y="280" font-size="12" text-anchor="end" fill="#e8ecf0">S$24.9K · 100% of book</text>
+  <rect x="842" y="290" width="376" height="7" rx="3.5" fill="#1b1633"/>
+  <rect x="842" y="290" width="376" height="7" rx="3.5" fill="#a78bfa"/>
+
+  <text x="842" y="332" font-size="12" fill="#7e7e96">BLENDED ENTRY</text>
+  <text x="1010" y="332" font-size="12" text-anchor="end" fill="#e8ecf0">1.3284</text>
+  <text x="1050" y="332" font-size="12" fill="#7e7e96">DRIFT</text>
+  <text x="1218" y="332" font-size="12" text-anchor="end" fill="#f87171">−2.7%</text>
+
+  <line x1="842" y1="348" x2="1218" y2="348" stroke="#20203a"/>
+  <text x="842" y="372" font-size="11" fill="#6b6b85">PER-BUY FX</text>
+  <text x="842" y="392" font-size="12" fill="#c4b5fd">AAPL</text>
+  <text x="980" y="392" font-size="12" text-anchor="end" fill="#7e7e96">1.3503→1.2931</text>
+  <text x="1218" y="392" font-size="12" text-anchor="end" fill="#f87171">−S$134</text>
+
+  <!-- footer -->
+  <text x="44" y="430" font-size="11" fill="#4b4b63">$ node server.js  →  http://localhost:8000      ·      Yahoo Finance · FRED · World Bank · zero dependencies</text>
+</svg>

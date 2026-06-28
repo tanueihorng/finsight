@@ -1,32 +1,69 @@
 /* ===========================================================================
-   FINSIGHT // PERSONAL TERMINAL  —  Bloomberg-inspired dark theme
+   FINSIGHT // PERSONAL TERMINAL  —  dark "violet terminal" theme
+   --amber / --amber-2 keep their legacy names but now hold the VIOLET accent
+   (kept as concrete hex, not var(), so chart.js getComputedStyle reads a color).
    =========================================================================== */
+/* Default theme = "violet". Switch via <html data-theme="..."> (see presets below).
+   --amber/--amber-2 keep their legacy names but hold the active accent (concrete
+   hex, not var(), so chart.js getComputedStyle reads a real colour).
+   --tint/--glow are accent-derived rgba used for soft fills + focus glows.
+   --font is the active font stack, switched via <html data-font="..."> .          */
 :root {
-  --bg:        #050608;
-  --panel:     #0b0d11;
-  --panel-2:   #0f1217;
-  --border:    #1c2128;
-  --border-2:  #2a323d;
-  --text:      #d7dde3;
-  --muted:     #7b8794;
-  --dim:       #4b5563;
-  --amber:     #ff9e16;
-  --amber-2:   #ffb84d;
-  --up:        #2ec27e;
-  --down:      #ff4d4d;
+  --bg:        #08080f;
+  --panel:     #0d0d18;
+  --panel-2:   #12121f;
+  --border:    #20203a;
+  --border-2:  #2d2d4d;
+  --text:      #d7dadf;
+  --muted:     #7e7e96;
+  --dim:       #4b4b63;
+  --amber:     #a78bfa;   /* brand accent — violet */
+  --amber-2:   #c4b5fd;
+  --up:        #2ec27e;   /* green — universal up */
+  --down:      #f87171;   /* rose-red — universal down */
   --cyan:      #38bdf8;
-  --head:      #0a0c10;
-  --row-alt:   #0c0f13;
-  --selected:  #14201c;
+  --head:      #0b0b14;
+  --row-alt:   #0e0e1a;
+  --selected:  #1b1633;
+  --tint:      rgba(167,139,250,.10);
+  --glow:      rgba(167,139,250,.30);
+  --font:      "SF Mono", "JetBrains Mono", "Menlo", "Consolas", ui-monospace, monospace;
   font-size: 13px;
 }
+
+/* ---- accent / palette presets (data-theme on <html>) ---------------------- */
+:root[data-theme="amber"] {   /* classic Bloomberg look */
+  --bg:#050608; --panel:#0b0d11; --panel-2:#0f1217; --border:#1c2128; --border-2:#2a323d;
+  --text:#d7dde3; --muted:#7b8794; --dim:#4b5563;
+  --amber:#ff9e16; --amber-2:#ffb84d; --down:#ff4d4d; --cyan:#38bdf8;
+  --head:#0a0c10; --row-alt:#0c0f13; --selected:#14201c;
+  --tint:rgba(255,158,22,.10); --glow:rgba(255,158,22,.30);
+}
+:root[data-theme="teal"] {
+  --bg:#06090d; --panel:#0c121a; --panel-2:#0f1620; --border:#16202b; --border-2:#23303d;
+  --text:#cbd5e1; --muted:#6b7c8c; --dim:#475569;
+  --amber:#2dd4bf; --amber-2:#5eead4; --down:#fb7185; --cyan:#38bdf8;
+  --head:#080d12; --row-alt:#0a0f15; --selected:#0d2420;
+  --tint:rgba(45,212,191,.10); --glow:rgba(45,212,191,.30);
+}
+:root[data-theme="phosphor"] {   /* retro green CRT */
+  --bg:#04120b; --panel:#081a10; --panel-2:#0a2014; --border:#0f2c1c; --border-2:#15402a;
+  --text:#b9f5cf; --muted:#5f9d77; --dim:#3f6b50;
+  --amber:#4ade80; --amber-2:#86efac; --up:#86efac; --down:#ff6b6b; --cyan:#22d3ee;
+  --head:#06160d; --row-alt:#071a10; --selected:#0c3020;
+  --tint:rgba(74,222,128,.10); --glow:rgba(74,222,128,.30);
+}
+
+/* ---- font presets (data-font on <html>) — system fonts only, no downloads -- */
+:root[data-font="sans"] { --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", "Helvetica Neue", Arial, sans-serif; }
+:root[data-font="slab"] { --font: "Iowan Old Style", "Source Serif Pro", "Georgia", "Cambria", serif; }
 
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; }
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: "SF Mono", "JetBrains Mono", "Menlo", "Consolas", ui-monospace, monospace;
+  font-family: var(--font);
   font-size: 13px;
   line-height: 1.35;
   display: flex;
@@ -303,11 +340,22 @@ body {
 .al-row { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 8px; padding: 5px 10px; border-bottom: 1px solid #11151a; font-size: 11px; font-variant-numeric: tabular-nums; }
 .al-row .al-sym { color: var(--amber-2); font-weight: 700; }
 .al-row .al-cond { color: var(--muted); }
-.al-row.met { background: rgba(255,158,22,.10); }
+.al-row.met { background: var(--tint); }
 .al-row .al-badge { font-size: 9px; padding: 1px 5px; border-radius: 2px; border: 1px solid var(--border-2); color: var(--muted); }
 .al-row.met .al-badge { color: #000; background: var(--amber); border-color: var(--amber); font-weight: 700; }
 .al-row .al-x { background: transparent; border: 1px solid var(--border-2); color: var(--muted); border-radius: 2px; padding: 0 5px; cursor: pointer; font-family: inherit; font-size: 10px; }
 .al-row .al-x:hover { color: var(--down); border-color: var(--down); }
+
+/* ---------------- appearance switcher (theme + font) ---------------- */
+.swatch-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+.swatch, .font-btn {
+  display: flex; align-items: center; gap: 7px; background: var(--panel-2);
+  border: 1px solid var(--border-2); border-radius: 4px; padding: 5px 10px;
+  cursor: pointer; font-size: 11px; color: var(--muted); font-family: inherit; letter-spacing: .3px;
+}
+.swatch:hover, .font-btn:hover { border-color: var(--amber); color: var(--text); }
+.swatch.on, .font-btn.on { border-color: var(--amber); color: var(--text); background: var(--tint); }
+.swatch .dot { width: 12px; height: 12px; border-radius: 50%; border: 1px solid rgba(0,0,0,.4); }
 
 /* ---------------- news ---------------- */
 .news { max-height: 230px; overflow: auto; padding: 4px 10px; }
@@ -318,9 +366,9 @@ body {
 
 /* ---------------- modal ---------------- */
 .modal { position: fixed; inset: 0; background: rgba(0,0,0,.7); display: flex; align-items: center; justify-content: center; z-index: 100; }
-.modal-box { background: var(--panel); border: 1px solid var(--amber); border-radius: 5px; width: 560px; max-width: 92vw; box-shadow: 0 12px 50px rgba(0,0,0,.6); }
+.modal-box { background: var(--panel); border: 1px solid var(--amber); border-radius: 5px; width: 560px; max-width: 92vw; box-shadow: 0 12px 50px rgba(0,0,0,.6); max-height: 90vh; display: flex; flex-direction: column; }
 .modal-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--head); }
-.modal-body { padding: 12px; }
+.modal-body { padding: 12px; overflow-y: auto; }
 .modal-body p { margin: 0 0 8px; }
 .modal-body textarea { width: 100%; height: 150px; background: #06080b; border: 1px solid var(--border-2); color: var(--text); font-family: inherit; font-size: 12px; padding: 8px; border-radius: 3px; outline: none; resize: vertical; }
 .modal-body textarea:focus { border-color: var(--amber); }
@@ -359,7 +407,7 @@ body.locked > .topbar, body.locked > .cmdbar, body.locked > .cmd-status, body.lo
 .lock-logo .logo { color: var(--amber); }
 .lock-title { color: var(--muted); font-size: 13px; letter-spacing: .5px; }
 .lock-input { background: #06080b; border: 1px solid var(--border-2); color: var(--amber-2); font-family: inherit; font-size: 22px; letter-spacing: 8px; text-align: center; padding: 12px; border-radius: 5px; outline: none; }
-.lock-input:focus { border-color: var(--amber); box-shadow: 0 0 10px rgba(255,158,22,.25); }
+.lock-input:focus { border-color: var(--amber); box-shadow: 0 0 10px var(--glow); }
 .lock-input::placeholder { letter-spacing: 6px; color: #3a424d; }
 .lock-btn { background: var(--amber); color: #000; border: none; font-weight: 700; letter-spacing: 1px; padding: 11px; cursor: pointer; border-radius: 5px; font-family: inherit; font-size: 13px; }
 .lock-btn:hover { background: var(--amber-2); }
