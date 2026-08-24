@@ -3,5 +3,5 @@
 # Close the window or press Ctrl-C to stop it.
 cd "$(dirname "$0")"
 echo "Starting FINSIGHT // PERSONAL TERMINAL ..."
-echo "Open http://localhost:8000 in your browser."
+echo "Open http://localhost:${PORT:-8000} in your browser."
 exec node server.js

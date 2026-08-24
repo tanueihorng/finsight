@@ -217,7 +217,8 @@ purchase-time FX anchoring as `/api/portfolio`, so `totalFxPnl` reconciles with 
 #### `GET /api/calendar`
 Economic calendar (no key, no base/account). The FOMC anchor is a curated, hardcoded schedule
 (refresh annually); `events` is a best-effort, 1-hour-cached pull of this week's high-impact US (and
-any SG) releases from Forex Factory's free weekly JSON, filtered to CPI/PCE/jobs/GDP/rate-decision.
+any SG) releases from Forex Factory's free weekly JSON, filtered by currency + impact
+(all high-impact USD releases plus any SGD releases — no title matching).
 Degrades to `eventsOk: false` (FOMC anchor only) if the feed is unavailable.
 → `{ now, fomc: [ { start, end, sep, decisionMs } ], nextFomc, nextSep,
      events: [ { title, country, time, impact, forecast, previous } ], eventsOk, sepUrl }`
@@ -271,8 +272,9 @@ are bucketed by instrument type.
   the ⚙ Layout customizer.
 - **New chart indicator/overlay**: add a pure function (aligned 1:1 with bars, `null` during warm-up) to
   `public/chart.js`, register it in the `OVERLAYS` (price-pane line) or `PANES` (sub-pane) table, and draw
-  it in `_drawPrice`/`drawIndicatorPanes`. A new drawing tool: add it to `TOOLS`, handle it in
-  `_onDown`/`_onUp`, `_drawOne`, and `_hitTest`. Indicators are computed once per `setData` and sliced per
+  it in `_drawPrice`/`_drawPaneRSI`/`_drawPaneMACD`. A new drawing tool: add it to `TOOLS`, handle it in
+  `_onDown`/`_onUp`, `_drawOne`, and `_hitTest`. Indicators are computed once per `PriceChart.prototype.load`
+  and sliced per
   visible window, so pan/zoom never recompute them.
 - **Draggable panels**: each panel is tagged with a stable `data-pid` (see `PANEL_PIDS` in `app.js`); a ⠿
   grip in the header drives HTML5 drag-and-drop. Order is saved per column in `localStorage`

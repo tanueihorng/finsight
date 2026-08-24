@@ -18,6 +18,10 @@ const { execFile } = require('child_process');
 const crypto = require('crypto');
 
 const PORT = process.env.PORT || 8000;
+// Bind loopback only: this app holds your full portfolio and has no HTTPS, so it
+// must not be reachable from other machines on the network. Set HOST=0.0.0.0
+// only if you genuinely understand the exposure.
+const HOST = process.env.HOST || '127.0.0.1';
 const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const DATA_DIR = path.join(ROOT, 'data');
@@ -270,11 +274,13 @@ async function getMarkets() {
   const cached = cacheGet(key);
   if (cached) return cached;
   const groups = {};
-  for (const [group, items] of Object.entries(MARKET_GROUPS)) {
+  // Groups fetch in parallel: five serialized Yahoo round-trips made first paint
+  // of World Markets crawl and multiplied bot-detection exposure.
+  await Promise.all(Object.entries(MARKET_GROUPS).map(async ([group, items]) => {
     const quotes = await getQuotes(items.map((i) => i[0]));
     groups[group] = quotes.map((qd, idx) => ({ ...qd, label: items[idx][1] }));
-  }
-  return cacheSet(key, groups, 15000);
+  }));
+  return cacheSet(key, groups, 30000);
 }
 
 // World Bank macro data (free, no key) ---------------------------------------
@@ -352,6 +358,11 @@ async function getCalendar() {
   const fomc = FOMC_SCHEDULE
     .map((m) => ({ ...m, decisionMs: Date.parse(m.end + 'T18:30:00Z') })) // ~14:00 ET, DST-neutral
     .filter((m) => m.decisionMs >= now - 12 * 60 * 60000);
+  if (fomc.length === 0) {
+    // The curated list expired — say so once instead of silently dropping the
+    // FOMC panel. Refresh FOMC_SCHEDULE from federalreserve.gov each December.
+    console.warn('FOMC_SCHEDULE is exhausted (last entry passed). Refresh the list for the new year.');
+  }
   const nextFomc = fomc[0] || null;
   const nextSep = fomc.find((m) => m.sep) || null;
 
@@ -529,8 +540,31 @@ async function buyUnlocked(symbol, quantity, price, dateMs, accountId, base) {
 const buy = (symbol, quantity, price, dateMs, accountId, base) => withLock(() => buyUnlocked(symbol, quantity, price, dateMs, accountId, base));
 
 function sell(symbol, quantity, price, accountId, base) {
+  // Fetch everything remote BEFORE taking the write lock: holding the global
+  // portfolio lock across Yahoo/FX round-trips stalled every other mutation.
+  symbol = String(symbol).toUpperCase();
+  const usdBaseCcy = (base || '').toUpperCase();
+  // Peek at the local position only to learn its currency so the FX round-trips
+  // can run outside the lock. Everything is re-validated under the lock.
+  let peekCurrency = null;
+  try {
+    const pos = findPos(resolveAccount(loadPortfolio(), accountId), symbol);
+    if (pos) peekCurrency = (pos.currency || 'USD').toUpperCase();
+  } catch {}
+  const needPrice = price == null || price === '' || Number.isNaN(Number(price));
+  const pricePromise = needPrice
+    ? getQuote(symbol).then((q) => q.price).catch(() => null)
+    : Promise.resolve(null);
+  const fxPromise = !peekCurrency ? Promise.resolve({}) : (async () => {
+    const out = {};
+    try { out.fxUsdSell = await getFxRate(peekCurrency, 'USD'); } catch {}
+    if (usdBaseCcy && usdBaseCcy !== 'USD') {
+      try { out.usdBaseSell = await getFxRate('USD', usdBaseCcy); } catch {}
+    }
+    return out;
+  })();
+
   return withLock(async () => {
-    symbol = symbol.toUpperCase();
     quantity = Number(quantity);
     const p = loadPortfolio();
     const acc = resolveAccount(p, accountId);
@@ -538,9 +572,10 @@ function sell(symbol, quantity, price, accountId, base) {
     if (!pos) throw new Error(`No position in ${symbol}`);
     if (!(quantity > 0)) throw new Error('Quantity must be > 0');
     if (quantity > pos.quantity + 1e-9) throw new Error(`You only hold ${pos.quantity} ${symbol}`);
-    // If price not supplied, use current market price.
-    if (price == null || price === '' || Number.isNaN(Number(price))) {
-      try { price = (await getQuote(symbol)).price; } catch { throw new Error('Could not fetch price; supply a sell price'); }
+    // If price not supplied, use the market price fetched before locking.
+    if (needPrice) {
+      price = await pricePromise;
+      if (price == null) throw new Error('Could not fetch price; supply a sell price');
     }
     price = Number(price);
     const realized = (price - pos.avgCost) * quantity;
@@ -555,18 +590,11 @@ function sell(symbol, quantity, price, accountId, base) {
       .map((l) => ({ q: l.q * consumed, px: l.px, fxUsd: l.fxUsd ?? null, t: l.t ?? null,
         usdBase: l.usdBase ?? null, usdBaseCcy: l.usdBaseCcy ?? null }))
       .filter((l) => l.q > 1e-12);
-    let fxUsdSell = null; // native -> USD at sell time (anchor for realized-FX split)
-    try { fxUsdSell = await getFxRate(currency, 'USD'); } catch {}
-    // Persist USD->base at sell time too, so the realized stock/FX split is
-    // reproducible and doesn't drift across the 7-day u2b boundary later.
-    let usdBaseSell = null; const usdBaseSellCcy = (base || '').toUpperCase();
-    if (usdBaseSellCcy && usdBaseSellCcy !== 'USD') {
-      try { usdBaseSell = await getFxRate('USD', usdBaseSellCcy); } catch {}
-    }
+    const { fxUsdSell = null, usdBaseSell = null } = await fxPromise;
     pos.lots.forEach((l) => { l.q *= factor; });
     recalcPosition(pos);
     const tx = { type: 'SELL', symbol, quantity, price, realized, currency, fxUsdSell, lotsSold, time: Date.now() };
-    if (usdBaseSell != null) { tx.usdBaseSell = usdBaseSell; tx.usdBaseSellCcy = usdBaseSellCcy; }
+    if (usdBaseSell != null) { tx.usdBaseSell = usdBaseSell; tx.usdBaseSellCcy = usdBaseCcy; }
     acc.transactions.push(tx);
     if (pos.quantity <= 1e-9) acc.positions = acc.positions.filter((x) => x !== pos);
     savePortfolio(p);
@@ -897,11 +925,13 @@ function withLock(fn) { const r = _lock.then(fn, fn); _lock = r.catch(() => {});
 // When doNotify is true (the background timer), also fires a desktop notification
 // once per alert (tracked via notifiedAt) so you're alerted even with the app closed.
 async function evaluateAlerts(doNotify) {
+  // Quote fetches are slow network round-trips — do them BEFORE taking the
+  // global write lock, otherwise every buy/sell/import queues behind Yahoo.
+  const syms = [...new Set(loadPortfolio().alerts.map((a) => a.symbol))];
+  const quotes = syms.length ? await getQuotes(syms) : [];
+  const qmap = Object.fromEntries(quotes.map((q) => [q.symbol, q]));
   return withLock(async () => {
     const p = loadPortfolio();
-    const syms = [...new Set(p.alerts.map((a) => a.symbol))];
-    const quotes = syms.length ? await getQuotes(syms) : [];
-    const qmap = Object.fromEntries(quotes.map((q) => [q.symbol, q]));
     let changed = false;
     const out = p.alerts.map((a) => {
       const q = qmap[a.symbol] || {};
@@ -1194,18 +1224,38 @@ function resetPortfolio(accountId) {
 const AUTH_FILE = path.join(DATA_DIR, 'auth.json');
 const SESSION_TTL = (Number(process.env.LOCK_IDLE_MIN) || 480) * 60 * 1000; // idle timeout
 const sessions = new Map();
-let failCount = 0, lockUntil = 0;
+// Per-IP brute-force throttle. A single shared counter let anyone who could reach
+// the API lock the owner out; keying by source address contains the damage.
+const loginFails = new Map(); // ip -> { n, until }
+function failState(ip) {
+  let f = loginFails.get(ip);
+  if (!f) { f = { n: 0, until: 0 }; loginFails.set(ip, f); }
+  return f;
+}
+// Hourly janitor: expired cache entries and stale sessions used to linger forever
+// in this long-lived process (LaunchAgent runs for months). Sweep them.
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of cache) if (now - v.at >= v.ttl) cache.delete(k);
+  for (const [t, s] of sessions) if (now - s.at > SESSION_TTL) sessions.delete(t);
+  for (const [ip, f] of loginFails) if (now > f.until && f.n === 0) loginFails.delete(ip);
+}, 60 * 60 * 1000).unref();
 function loadAuth() { try { return JSON.parse(fs.readFileSync(AUTH_FILE, 'utf8')); } catch { return null; } }
-function hashPin(pin, salt) { return crypto.scryptSync(String(pin), salt, 32).toString('hex'); }
-function setPin(pin) {
+// Async scrypt keeps the ~50ms KDF off the event loop on the unauthenticated path.
+function hashPin(pin, salt) {
+  return new Promise((resolve, reject) =>
+    crypto.scrypt(String(pin), String(salt), 32, (err, key) => (err ? reject(err) : resolve(key.toString('hex')))));
+}
+async function setPin(pin) {
   const salt = crypto.randomBytes(16).toString('hex');
   fs.mkdirSync(DATA_DIR, { recursive: true });
-  fs.writeFileSync(AUTH_FILE, JSON.stringify({ salt, hash: hashPin(pin, salt), createdAt: Date.now() }, null, 2));
+  fs.writeFileSync(AUTH_FILE, JSON.stringify({ salt, hash: await hashPin(pin, salt), createdAt: Date.now() }, null, 2));
 }
-function verifyPin(pin) {
+async function verifyPin(pin) {
   const a = loadAuth(); if (!a) return false;
-  try { return crypto.timingSafeEqual(Buffer.from(hashPin(pin, a.salt), 'hex'), Buffer.from(a.hash, 'hex')); }
-  catch { return false; }
+  try {
+    return crypto.timingSafeEqual(Buffer.from(await hashPin(pin, a.salt), 'hex'), Buffer.from(a.hash, 'hex'));
+  } catch { return false; }
 }
 function newSession() { const t = crypto.randomBytes(24).toString('hex'); sessions.set(t, { at: Date.now() }); return t; }
 function sessionValid(t) {
@@ -1249,7 +1299,11 @@ const MIME = {
 function serveStatic(req, res, pathname) {
   let rel = pathname === '/' ? '/index.html' : pathname;
   const filePath = path.normalize(path.join(PUBLIC_DIR, rel));
-  if (!filePath.startsWith(PUBLIC_DIR)) { res.writeHead(403); return res.end('Forbidden'); }
+  // Structural containment: a plain prefix check would also accept sibling
+  // directories like <root>/publicx. path.relative leaves only via ".." or an
+  // absolute jump.
+  const relCheck = path.relative(PUBLIC_DIR, filePath);
+  if (relCheck.startsWith('..') || path.isAbsolute(relCheck)) { res.writeHead(403); return res.end('Forbidden'); }
   fs.readFile(filePath, (err, buf) => {
     if (err) { res.writeHead(404); return res.end('Not found'); }
     res.writeHead(200, { 'Content-Type': MIME[path.extname(filePath)] || 'application/octet-stream' });
@@ -1271,15 +1325,17 @@ const server = http.createServer(async (req, res) => {
       if (loadAuth()) return sendJson(res, 400, { error: 'A PIN is already set' });
       const b = await readBody(req); const pin = String(b.pin || '');
       if (!PIN_RE.test(pin)) return sendJson(res, 400, { error: 'PIN must be 4–12 digits' });
-      setPin(pin); setSessionCookie(res, newSession());
+      await setPin(pin); setSessionCookie(res, newSession());
       return sendJson(res, 200, { ok: true });
     }
     if (p === '/api/auth/login' && req.method === 'POST') {
-      if (Date.now() < lockUntil) return sendJson(res, 429, { error: `Too many tries — wait ${Math.ceil((lockUntil - Date.now()) / 1000)}s` });
+      const ip = req.socket.remoteAddress || 'unknown';
+      const f = failState(ip);
+      if (Date.now() < f.until) return sendJson(res, 429, { error: `Too many tries — wait ${Math.ceil((f.until - Date.now()) / 1000)}s` });
       const b = await readBody(req);
-      if (verifyPin(String(b.pin || ''))) { failCount = 0; setSessionCookie(res, newSession()); return sendJson(res, 200, { ok: true }); }
-      failCount++;
-      if (failCount >= 5) lockUntil = Date.now() + Math.min(300, 15 * (failCount - 4)) * 1000;
+      if (await verifyPin(String(b.pin || ''))) { f.n = 0; setSessionCookie(res, newSession()); return sendJson(res, 200, { ok: true }); }
+      f.n++;
+      if (f.n >= 5) f.until = Date.now() + Math.min(300, 15 * (f.n - 4)) * 1000;
       return sendJson(res, 401, { error: 'Wrong PIN' });
     }
     if (p === '/api/auth/logout' && req.method === 'POST') {
@@ -1292,10 +1348,18 @@ const server = http.createServer(async (req, res) => {
       if (!sessionValid(getCookie(req, 'sid'))) return sendJson(res, 401, { error: 'Locked' });
       if (!verifyPin(String(b.current || ''))) return sendJson(res, 401, { error: 'Current PIN is wrong' });
       if (!PIN_RE.test(String(b.pin || ''))) return sendJson(res, 400, { error: 'New PIN must be 4–12 digits' });
-      setPin(String(b.pin)); return sendJson(res, 200, { ok: true });
+      await setPin(String(b.pin));
+      // A PIN rotation must invalidate every existing session (a stolen cookie
+      // would otherwise survive the change). Re-issue one for this client.
+      sessions.clear();
+      setSessionCookie(res, newSession());
+      return sendJson(res, 200, { ok: true });
     }
     // ---- gate everything else under /api/ behind a valid session ----
-    if (p.startsWith('/api/') && loadAuth() && !sessionValid(getCookie(req, 'sid'))) {
+    // NOTE: the gate must fail CLOSED. When no PIN exists yet (fresh install, or
+    // after deleting auth.json to reset a forgotten PIN) every /api route would
+    // otherwise be wide open — so an unauthenticated caller is rejected here too.
+    if (p.startsWith('/api/') && (!loadAuth() || !sessionValid(getCookie(req, 'sid')))) {
       return sendJson(res, 401, { error: 'Locked. Enter your PIN.' });
     }
 
@@ -1424,11 +1488,31 @@ const server = http.createServer(async (req, res) => {
 const ALERT_INTERVAL = Math.max(15, Number(process.env.ALERT_INTERVAL) || 60) * 1000;
 setInterval(() => { evaluateAlerts(true).catch(() => {}); }, ALERT_INTERVAL);
 
-server.listen(PORT, () => {
+server.listen(PORT, HOST, () => {
   console.log(`\n  FINSIGHT // PERSONAL TERMINAL`);
-  console.log(`  running at  http://localhost:${PORT}`);
+  console.log(`  running at  http://localhost:${PORT}  (bound to ${HOST})`);
   console.log(`  portfolio   ${PORTFOLIO_FILE}`);
   console.log(`  data        free / no-key (Yahoo Finance, World Bank, FRED)`);
   console.log(`  alerts      background check every ${ALERT_INTERVAL / 1000}s` +
     (process.env.NOTIFY === '0' ? ' (desktop notifications off)' : ' → macOS notifications') + `\n`);
 });
+
+// A busy port must not crash-loop under launchd KeepAlive; explain and exit cleanly.
+server.on('error', (e) => {
+  if (e.code === 'EADDRINUSE') {
+    console.error(`FINSIGHT failed to start: port ${PORT} is already in use.\n` +
+      `  Is another instance running? Try:  PORT=9000 node server.js`);
+    process.exit(1);
+  }
+  console.error('FINSIGHT server error:', e.message);
+  process.exit(1);
+});
+
+// Graceful shutdown so in-flight requests finish and no temp files are stranded.
+function shutdown(sig) {
+  console.log(`\n${sig} received — closing server…`);
+  server.close(() => process.exit(0));
+  setTimeout(() => process.exit(0), 3000).unref();
+}
+process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));
