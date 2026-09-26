@@ -9,6 +9,7 @@ const path = require('path');
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'finsight-test-'));
 process.env.FINSIGHT_DATA_DIR = dataDir;
 process.env.NOTIFY = '0';
+process.env.FINSIGHT_CACHE_PERSIST = '0';
 
 const DAY = 24 * 60 * 60 * 1000;
 const market = new Map(); // symbol -> { currency, price, prevClose, bars: [{ t, c, h, l }] }

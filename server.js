@@ -17,6 +17,7 @@ const path = require('path');
 const { URL } = require('url');
 
 const { PORT, HOST, PUBLIC_DIR, PORTFOLIO_FILE } = require('./lib/config');
+const { persistNow } = require('./lib/cache');
 const { getQuotes, getHistory, search, getMarkets, getNews, getCategories } = require('./lib/market');
 const { worldBank, getFred, getCalendar } = require('./lib/macro');
 const {
@@ -270,6 +271,7 @@ server.on('error', (e) => {
 // Graceful shutdown so in-flight requests finish and no temp files are stranded.
 function shutdown(sig) {
   console.log(`\n${sig} received — closing server…`);
+  persistNow(); // keep the warm cache for the next start
   server.close(() => process.exit(0));
   setTimeout(() => process.exit(0), 3000).unref();
 }
