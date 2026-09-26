@@ -75,9 +75,14 @@ Or drop in a raw **Interactive Brokers / moomoo / Tiger** statement — FinSight
 | 📅 **Economic calendar** | Next Fed decision + dot-plot, plus this week's CPI / PCE / jobs / GDP |
 | 🏦 **Macro panels** | FRED (CPI, Core PCE, Fed funds, yields), World Bank, VIX, world markets |
 | 📈 **Interactive charts** | Candles/line/area, SMA/EMA/Bollinger, RSI, MACD, volume, drawing tools |
-| 🧮 **Analytics** | Performance over time, allocation donut, sector heatmap |
+| 📐 **Real returns** | Replays your trades: time-weighted return, XIRR, and vs S&P 500 / MSCI World / STI in your currency |
+| 🧮 **Analytics** | Allocation donut, sector heatmap |
+| 📒 **Ledger + undo** | Every trade in one place; fix a buy's date/price; undo any change; realized gains by year (CSV) |
 | 📥 **Broker import** | Interactive Brokers / moomoo / Tiger statements, or plain CSV |
-| 💵 **Dividend tracking** | Income received, trailing-12-month total, per-holding breakdown |
+| 💵 **Dividends** | Received and forward income **net of withholding tax**, yield on cost, next ex-date |
+| 🗓️ **Company dates** | Upcoming earnings and ex-dividend dates for what you hold or watch |
+| 💰 **Cash** | Track uninvested cash per currency — net worth, and foreign cash counts as FX exposure |
+| 📲 **Installable** | Install as its own app window; opens instantly; warm cache survives restarts and Yahoo hiccups |
 | 🔔 **Price alerts** | Desktop notification + toast + beep, even when the browser is closed |
 | 🎨 **Themes & fonts** | Switch accent palette and font; remembered per browser |
 | 🔒 **PIN lock** | Hashed PIN with brute-force throttling; the data API stays locked |
@@ -95,6 +100,8 @@ Because you fund in SGD but hold USD stocks, part of your gain/loss is the **sto
 - **Per-buy FX history** — one row per purchase: USD/SGD then vs now → the S$ you've won/lost on FX alone.
 - **What-if slider** — drag a USD/SGD shock (±%) for the live impact on your book.
 - **1-week FX VaR** — a 1σ weekly move and a 95% value-at-risk from recent USD/SGD volatility.
+- **Target exposure** — set the share you want in foreign currency; see the gap in S$.
+- **Convert now vs later** — what an amount buys at spot, and the typical 1-month range from recent volatility.
 
 **ECON CALENDAR panel** — the next **Fed rate decision** and **dot-plot (FOMC SEP)** date (always shown, from the Fed's published schedule), plus this week's high-impact **CPI / PCE / jobs / GDP** releases with forecast vs previous, in your local time.
 
@@ -121,6 +128,10 @@ Type in the top command bar:
 | `ADD AAPL 10 195.50` | Buy/add 10 AAPL at avg 195.50 (averages in if held) |
 | `SELL AAPL 5 [price]` | Sell 5 AAPL (records realized P&L; price optional → market) |
 | `DEL AAPL` | Remove AAPL from tracking |
+| `UNDO` | Undo the last change (buy, sell, import, edit, cash…) |
+| `LEDGER` | Open all trades — fix a buy's date/price, realized gains by year |
+| `CASH USD 5000` | Set uninvested cash in a currency (`0` clears it) |
+| `WHT US 15` | Dividend withholding rate for a market (default US 30% — Singapore resident) |
 | `Q TSLA` / just `TSLA` | Pull up a security's detail + chart + news |
 | `WATCH NVDA` / `UNWATCH NVDA` | Add / remove from the watchlist |
 | `ALERT AAPL > 320` | Alert when AAPL crosses a target (`<` for below) |
@@ -151,7 +162,9 @@ All free, no key:
 
 ```
 finsight/
-├── server.js              # Zero-dependency Node backend (API proxy + store + alerts)
+├── server.js              # Zero-dependency Node HTTP server (routes only)
+├── lib/                   # Market data, cache, portfolio math, performance, dividends, ledger…
+├── test/                  # npm test — offline, zero-dependency (node:test)
 ├── start.command          # Double-click launcher (macOS)
 ├── DOCS.md                # Developer docs: architecture, config, full API reference
 ├── data/                  # Your data — git-ignored, never leaves your machine
@@ -160,7 +173,8 @@ finsight/
     ├── index.html         # Terminal UI
     ├── styles.css         # Themeable dark "terminal" styles
     ├── chart.js           # Self-contained canvas trading chart
-    └── app.js             # Frontend logic
+    ├── app.js             # Frontend logic
+    └── sw.js              # Service worker (installable app; static files only)
 ```
 
 > **Developers:** see **[DOCS.md](DOCS.md)** for architecture, env-var config, and the full HTTP API reference.
