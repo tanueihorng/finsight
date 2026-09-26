@@ -172,8 +172,8 @@ function renderPortfolio(data) {
   } else {
     body.innerHTML = positions.map((p) => {
       const flash = priceFlash(p.symbol, p.last);
-      return `<tr class="clickable ${state.selected === p.symbol ? 'selected' : ''} ${flash}" data-sym="${p.symbol}">
-        <td><span class="sym">${p.symbol}</span><div class="name">${esc(p.name).slice(0, 20)} · <span class="ccy">${p.currency}</span></div></td>
+      return `<tr class="clickable ${state.selected === p.symbol ? 'selected' : ''} ${flash}" data-sym="${esc(p.symbol)}">
+        <td><span class="sym">${esc(p.symbol)}</span><div class="name">${esc(String(p.name || '').slice(0, 20))} · <span class="ccy">${esc(p.currency)}</span></div></td>
         <td class="r">${fmt(p.quantity, p.quantity % 1 ? 4 : 0)}</td>
         <td class="r">${fmt(p.avgCost)}</td>
         <td class="r">${fmt(p.last)}</td>
@@ -184,8 +184,8 @@ function renderPortfolio(data) {
         <td class="r ${signClass(p.fxPnl)}">${p.currency === base ? '<span class="dim">—</span>' : moneySigned(base, p.fxPnl)}</td>
         <td class="r">${fmt(p.weight, 1)}</td>
         <td><div class="row-actions">
-          <button class="x-btn sell" data-act="sell" data-sym="${p.symbol}" data-qty="${p.quantity}">S</button>
-          <button class="x-btn del"  data-act="del"  data-sym="${p.symbol}">✕</button>
+          <button class="x-btn sell" data-act="sell" data-sym="${esc(p.symbol)}" data-qty="${p.quantity}">S</button>
+          <button class="x-btn del"  data-act="del"  data-sym="${esc(p.symbol)}">✕</button>
         </div></td></tr>`;
     }).join('');
   }
@@ -195,7 +195,7 @@ function renderPortfolio(data) {
     const when = new Date(t.time).toLocaleString('en-US', { month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' });
     let detail = t.type === 'DELETE' ? 'removed'
       : `${fmt(t.quantity, t.quantity % 1 ? 4 : 0)} @ ${fmt(t.price)}` + (t.realized != null ? `  ·  P&L ${signStr(t.realized)}` : '');
-    return `<div class="line"><span class="ts">${when}</span><span class="${cls}">${t.type}</span><span class="sym amber">${t.symbol}</span><span class="muted">${detail}</span></div>`;
+    return `<div class="line"><span class="ts">${when}</span><span class="${cls}">${t.type}</span><span class="sym amber">${esc(t.symbol)}</span><span class="muted">${detail}</span></div>`;
   }).join('') || '<div class="muted small">No transactions yet.</div>';
 
   // charts + heatmap
@@ -260,7 +260,7 @@ function renderFxRisk(data) {
     const note = !l.dated ? '<span class="dim"> no date</span>' : (l.recent ? '<span class="dim"> settling</span>' : '');
     const pair = multi ? `<span class="dim">${l.currency}/${base} </span>` : '';
     return `<tr>
-      <td>${when}</td><td class="sym">${l.symbol}</td>
+      <td>${when}</td><td class="sym">${esc(l.symbol)}</td>
       <td class="r">${pair}${fmt(l.entryRate, 4)}</td><td class="r">${fmt(l.nowRate, 4)}</td>
       <td class="r ${signClass(l.fxPnl)}">${moneySigned(base, l.fxPnl)}${note}</td>
     </tr>`;
@@ -771,7 +771,7 @@ async function loadMarkets() {
         <div class="mkt-h">${name.toUpperCase()}</div>
         ${items.map((q) => {
           if (q.error) return `<div class="mkt-row"><span class="mkt-label">${esc(q.label || q.symbol)}</span><span class="muted small">n/a</span></div>`;
-          return `<div class="mkt-row" data-sym="${q.symbol}">
+          return `<div class="mkt-row" data-sym="${esc(q.symbol)}">
             <span class="mkt-label">${esc(q.label || q.symbol)}</span>
             <span class="mkt-px">${fmt(q.price, q.price < 10 ? 4 : 2)}</span>
             <span class="mkt-chg ${signClass(q.changePct)}">${signStr(q.changePct)}%</span></div>`;
@@ -842,6 +842,55 @@ async function loadFred() {
 }
 $('#fred-go').addEventListener('click', loadFred);
 $('#fred-series').addEventListener('change', loadFred);
+
+// ===========================================================================
+//  US INFLATION GAUGES — official CPI/PCE + trimmed-mean measures (FRED, no key)
+//  ★ = trimmed/median family: Fed Chair Warsh's preferred "underlying inflation"
+//  gauges (they strip outlier price moves instead of fixed food/energy buckets).
+// ===========================================================================
+const INFL_GAUGES = [
+  { s: 'CPIAUCSL', t: 'pc1', name: 'CPI (headline)', src: 'BLS' },
+  { s: 'CPILFESL', t: 'pc1', name: 'Core CPI', src: 'BLS' },
+  { s: 'PCEPI', t: 'pc1', name: 'PCE (headline)', src: 'BEA · Fed 2% target' },
+  { s: 'PCEPILFE', t: 'pc1', name: 'Core PCE', src: 'BEA' },
+  { s: 'PCETRIM12M159SFRBDAL', t: 'lin', name: '★ Trimmed Mean PCE', src: 'Dallas Fed' },
+  { s: 'MEDCPIM159SFRBCLE', t: 'lin', name: '★ Median CPI', src: 'Cleveland Fed' },
+  { s: 'TRMMEANCPIM159SFRBCLE', t: 'lin', name: '★ Trimmed Mean CPI', src: 'Cleveland Fed' },
+];
+function inflClass(v) {
+  const d = v - 2.0;
+  if (d <= 0.3) return 'up';
+  if (d <= 1.0) return 'warn';
+  return 'down';
+}
+async function loadInflation() {
+  const body = $('#infl-body');
+  body.innerHTML = '<span class="muted">Loading inflation gauges…</span>';
+  try {
+    const results = await Promise.all(
+      INFL_GAUGES.map((g) => api(`/api/fred?series=${g.s}&transform=${g.t}`).catch(() => null))
+    );
+    const ff = await api('/api/fred?series=FEDFUNDS&transform=lin').catch(() => null);
+    const rows = INFL_GAUGES.map((g, i) => {
+      const d = results[i];
+      if (!d || !d.points || !d.points.length) return `<div class="infl-row"><span class="infl-name">${esc(g.name)}</span><span class="muted small">n/a</span></div>`;
+      const last = d.points[d.points.length - 1];
+      const prev = d.points[d.points.length - 2];
+      const mom = prev ? last.value - prev.value : 0;
+      const when = new Date(last.date).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+      return `<div class="infl-row" title="${esc(g.src)}">
+        <span class="infl-name">${esc(g.name)} <span class="dim small">${esc(g.src)}</span></span>
+        <span class="infl-mom ${mom > 0.005 ? 'down' : mom < -0.005 ? 'up' : 'dim'}">${mom > 0.005 ? '▲' : mom < -0.005 ? '▼' : '·'} ${fmt(Math.abs(mom), 2)}</span>
+        <span class="infl-val ${inflClass(last.value)}">${fmt(last.value, 2)}%</span>
+        <span class="infl-date dim">${when}</span></div>`;
+    }).join('');
+    const ffLast = ff && ff.points && ff.points.length ? ff.points[ff.points.length - 1].value : null;
+    body.innerHTML = `${rows}
+      <div class="infl-note">Fed target: 2% (PCE)${ffLast != null ? ` · Fed funds: ${fmt(ffLast, 2)}%` : ''} · monthly YoY, latest release
+      <br>★ Trimmed/median gauges — Chair Warsh's preferred read of underlying inflation: rank all price changes, drop the extreme tails (Dallas trims bottom 24% / top 31% of the PCE basket), average the rest. ▲▼ = change vs prior month.</div>`;
+  } catch (e) { body.innerHTML = `<span class="down">Inflation gauges error: ${esc(e.message)}</span>`; }
+}
+$('#infl-go').addEventListener('click', loadInflation);
 
 // ===========================================================================
 //  DIVIDENDS (income received, from broker imports)

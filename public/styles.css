@@ -78,6 +78,7 @@ body {
 .r     { text-align: right; }
 .up    { color: var(--up); }
 .down  { color: var(--down); }
+.warn  { color: var(--amber-2); }
 .hidden { display: none !important; }
 
 /* ---------------- top bar ---------------- */
@@ -309,6 +310,14 @@ body {
 .wb-headline .wb-val { font-size: 22px; font-weight: 700; color: var(--amber-2); }
 .wb-headline .wb-yr { color: var(--muted); font-size: 11px; }
 .wb-label { color: var(--muted); font-size: 11px; margin-bottom: 8px; }
+
+/* ---------------- inflation gauges ---------------- */
+.infl-row { display: flex; align-items: baseline; gap: 8px; padding: 3px 0; border-bottom: 1px solid #11151a; font-size: 11px; font-variant-numeric: tabular-nums; }
+.infl-row .infl-name { flex: 1; color: var(--text); }
+.infl-row .infl-mom { min-width: 52px; text-align: right; font-size: 10px; }
+.infl-row .infl-val { min-width: 52px; text-align: right; font-weight: 700; }
+.infl-row .infl-date { min-width: 48px; text-align: right; font-size: 10px; }
+.infl-note { color: var(--muted); font-size: 10px; margin-top: 8px; line-height: 1.5; }
 
 /* ---------------- footer ---------------- */
 .statusbar { display: flex; justify-content: space-between; gap: 12px; align-items: center;

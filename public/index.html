@@ -259,8 +259,12 @@ try { var d = document.documentElement;
             <option value="T10Y2Y|lin">Yield Curve Spread (10Y–2Y)</option>
             <option value="FEDFUNDS|lin">Fed Funds Rate</option>
             <option value="CPIAUCSL|pc1">Inflation · CPI (YoY %)</option>
+            <option value="CPILFESL|pc1">Inflation · Core CPI (YoY %)</option>
             <option value="PCEPILFE|pc1">Inflation · Core PCE (YoY %)</option>
             <option value="PCEPI|pc1">Inflation · PCE (YoY %)</option>
+            <option value="PCETRIM12M159SFRBDAL|lin">Inflation · Trimmed Mean PCE (Dallas Fed)</option>
+            <option value="MEDCPIM159SFRBCLE|lin">Inflation · Median CPI (Cleveland Fed)</option>
+            <option value="TRMMEANCPIM159SFRBCLE|lin">Inflation · Trimmed Mean CPI (Cleveland Fed)</option>
             <option value="UNRATE|lin">Unemployment Rate</option>
             <option value="MORTGAGE30US|lin">30-Yr Mortgage Rate</option>
             <option value="GDPC1|lin">Real GDP (level)</option>
@@ -268,6 +272,14 @@ try { var d = document.documentElement;
           <button id="fred-go" class="mini-btn">LOAD</button>
         </div>
         <div id="fred-body" class="wb-body muted">Pick a series and press LOAD.</div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <span class="panel-title">US INFLATION · FED GAUGES</span>
+          <button id="infl-go" class="mini-btn">LOAD</button>
+        </div>
+        <div id="infl-body" class="wb-body muted">Press LOAD — official CPI/PCE plus the trimmed-mean gauges Fed Chair Warsh watches.</div>
       </div>
     </section>
   </main>
