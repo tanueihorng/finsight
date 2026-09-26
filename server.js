@@ -21,10 +21,13 @@ const { persistNow } = require('./lib/cache');
 const { getQuotes, getHistory, search, getMarkets, getNews, getCategories } = require('./lib/market');
 const { worldBank, getFred, getCalendar } = require('./lib/macro');
 const {
-  buy, sell, del, listAccounts, accountAdd, accountRename, accountRemove, portfolioWithQuotes, fxRisk,
-  dividendsReport, watchlistWithQuotes, watchAdd, watchRemove, alertAdd, alertRemove, evaluateAlerts,
+  buy, sell, del, listAccounts, accountAdd, accountRename, accountRemove, portfolioWithQuotes, fxRisk, setCash,
+  watchlistWithQuotes, watchAdd, watchRemove, alertAdd, alertRemove, evaluateAlerts,
   alertsWithStatus, importCsv, resetPortfolio,
 } = require('./lib/portfolio');
+const { dividendsReport, upcomingEvents, setWithholding } = require('./lib/dividends');
+const { ledger, editBuy, deleteBuy, realizedReport } = require('./lib/ledger');
+const { undo, undoInfo } = require('./lib/store');
 const { portfolioPerformance } = require('./lib/performance');
 const {
   sessions, failState, loadAuth, setPin, verifyPin, newSession, sessionValid, getCookie, setSessionCookie, PIN_RE,
@@ -226,6 +229,26 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/dividends') {
       return sendJson(res, 200, await dividendsReport(base, acct));
     }
+    if (p === '/api/events') return sendJson(res, 200, await upcomingEvents(acct));
+    if (p === '/api/settings/withholding' && req.method === 'POST') {
+      const b = await readBody(req); return sendJson(res, 200, { withholding: await setWithholding(b.market, b.pct) });
+    }
+    if (p === '/api/cash' && req.method === 'POST') {
+      const b = await readBody(req); await setCash(b.ccy, b.amount, acct);
+      return sendJson(res, 200, await portfolioWithQuotes(base, acct));
+    }
+
+    // ledger, realized report, undo
+    if (p === '/api/ledger' && req.method === 'GET') return sendJson(res, 200, await ledger(base, acct));
+    if (p === '/api/ledger/edit' && req.method === 'POST') {
+      const b = await readBody(req); return sendJson(res, 200, await editBuy(b.id, b, base));
+    }
+    if (p === '/api/ledger/delete' && req.method === 'POST') {
+      const b = await readBody(req); return sendJson(res, 200, await deleteBuy(b.id));
+    }
+    if (p === '/api/realized') return sendJson(res, 200, await realizedReport(base, acct));
+    if (p === '/api/undo' && req.method === 'GET') return sendJson(res, 200, undoInfo());
+    if (p === '/api/undo' && req.method === 'POST') return sendJson(res, 200, await undo());
     if (p === '/api/portfolio/performance') {
       return sendJson(res, 200, await portfolioPerformance(u.searchParams.get('range') || '1y', base, acct, u.searchParams.get('benchmark') || undefined));
     }
