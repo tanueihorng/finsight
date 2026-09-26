@@ -74,7 +74,7 @@ async function runCommand(raw) {
   const cmd = parts[0].toUpperCase();
   try {
     if (cmd === 'HELP' || cmd === '?') {
-      setStatus('ADD <s> <qty> <px> · SELL <s> <qty> [px] · DEL <s> · Q <s> · WATCH/UNWATCH <s> · ALERT <s> > <px> · NEWS [s] · MKT · CLEAR', 'ok');
+      setStatus('ADD <s> <qty> <px> [date] · SELL <s> <qty> [px] · DEL <s> · UNDO · LEDGER · CASH <ccy> <amt> · WHT <mkt> <%> · Q <s> · WATCH/UNWATCH <s> · ALERT <s> > <px> · NEWS [s] · MKT · CLEAR', 'ok');
       return;
     }
     if (cmd === 'ADD' || cmd === 'BUY') {
@@ -132,6 +132,20 @@ async function runCommand(raw) {
       if (sym) { selectSymbol(sym.toUpperCase()); } else { loadNews(''); }
       setStatus('Loading news…', 'ok'); return;
     }
+    if (cmd === 'UNDO') { await doUndo(); return; }
+    if (cmd === 'LEDGER' || cmd === 'TRADES') { openLedger(); return; }
+    if (cmd === 'CASH') {
+      const [, ccy, amt] = parts;
+      if (!ccy || amt == null) return setStatus('Usage: CASH <currency> <amount>   e.g. CASH USD 5000   (0 clears it)', 'err');
+      if (blockIfAll()) return;
+      await setCashBalance(ccy, amt); return;
+    }
+    if (cmd === 'WHT') {
+      const [, mkt, pct] = parts;
+      if (!mkt || pct == null) return setStatus('Usage: WHT <US|SG|HK|UK|EU|JP|AU|CA|OTHER> <percent>   e.g. WHT US 15', 'err');
+      await api('/api/settings/withholding', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ market: mkt, pct }) });
+      setStatus(`Dividend withholding for ${mkt.toUpperCase()} set to ${pct}%`, 'ok'); loadDividends(); return;
+    }
     if (cmd === 'MKT' || cmd === 'MARKETS') { loadMarkets(); setStatus('Refreshing world markets…', 'ok'); return; }
     if (cmd === 'CLEAR') { setStatus(''); return; }
     // Bare symbol → quote it
@@ -161,6 +175,7 @@ function renderPortfolio(data) {
   const { positions, summary, transactions } = data;
   const base = data.base || state.base;
   lastSummary = summary; // for live card re-render
+  lastCash = data.cash || [];
   renderSummary(summary, positions, base);
   // FX coverage note
   if (data.fxMissing && data.fxMissing.length) setFooter(`Note: no FX rate for ${data.fxMissing.join(', ')} → shown unconverted.`);
@@ -215,8 +230,17 @@ async function loadFxRisk() {
   } catch (e) { /* non-fatal — panel just keeps its last state */ }
 }
 
+// Tool inputs survive the 15s re-render; a render is deferred while you type.
+const fxTools = { conv: '', shock: '0' };
+let fxPending = null;
 function renderFxRisk(data) {
   const box = $('#fxrisk'); if (!box) return;
+  const ae = document.activeElement;
+  if (ae && box.contains(ae) && ae.tagName === 'INPUT') {
+    fxPending = data;
+    if (!ae.dataset.fxBlur) { ae.dataset.fxBlur = '1'; ae.addEventListener('blur', () => { const d = fxPending; fxPending = null; if (d) renderFxRisk(d); }, { once: true }); }
+    return;
+  }
   const base = data.base || state.base;
   const exposures = data.exposures || [];
   const head = $('#fxr-spot');
@@ -235,7 +259,7 @@ function renderFxRisk(data) {
 
   // header strip — one block per foreign currency
   const strip = exposures.map((e) => `
-    <div class="fxr-cell"><span class="k">${e.ccy} EXPOSURE</span><span class="v">${moneyBig(base, e.notionalBase)}</span><span class="s">${fmt(e.pct, 0)}% of book · ${money(e.ccy, e.notionalNative, 0)}</span></div>
+    <div class="fxr-cell"><span class="k">${e.ccy} EXPOSURE</span><span class="v">${moneyBig(base, e.notionalBase)}</span><span class="s">${fmt(e.pct, 0)}% of book · ${money(e.ccy, e.notionalNative, 0)}${e.cashBase ? ' · incl. cash' : ''}</span></div>
     <div class="fxr-cell"><span class="k">BLENDED ENTRY</span><span class="v">${fmt(e.blendedEntry, 4)}</span><span class="s">avg ${e.ccy}/${base} cost</span></div>
     <div class="fxr-cell"><span class="k">SPOT</span><span class="v ${signClass(e.driftPct)}">${fmt(e.nowRate, 4)}</span><span class="s ${signClass(e.driftPct)}">${signStr(e.driftPct)}% vs entry</span></div>
     <div class="fxr-cell"><span class="k">FX P&L</span><span class="v ${signClass(e.fxPnl)}">${moneySigned(base, e.fxPnl)}</span><span class="s ${signClass(e.fxPnl)}">${signStr(e.fxPnlPct)}% · currency only</span></div>`).join('');
@@ -279,10 +303,20 @@ function renderFxRisk(data) {
       <input id="fxr-slider" type="range" min="-15" max="15" value="0" step="0.5">
       <div class="fxr-wi-out"><span class="muted">impact on book <b id="fxr-impact">—</b></span><span class="muted">new value <b id="fxr-newval">${money(base, totalExp)}</b></span></div>
     </div>
+    <div class="fxr-tools">
+      <div class="tool"><span class="fxr-sub" style="margin:0">TARGET EXPOSURE</span><br>
+        Keep <input id="fxr-target" type="number" min="0" max="100" step="1" placeholder="e.g. 70"> % in foreign currency
+        <div id="fxr-target-out" class="muted"></div></div>
+      <div class="tool"><span class="fxr-sub" style="margin:0">CONVERT NOW vs LATER · ${dom.ccy}</span><br>
+        Convert <input id="fxr-conv" type="number" min="0" step="100" placeholder="${base} amount"> ${base}
+        <div id="fxr-conv-out" class="muted"></div></div>
+    </div>
     <div class="fxr-note">Currency risk adds volatility with little long-run expected return — it bites most over short horizons and drawdowns. Informational only; no trades are placed.</div>`;
 
   const slider = $('#fxr-slider');
+  slider.value = fxTools.shock;
   const upd = () => {
+    fxTools.shock = slider.value;
     const pct = parseFloat(slider.value);
     const impact = totalExp * pct / 100;
     $('#fxr-shock').textContent = (pct > 0 ? '+' : '') + pct.toFixed(1) + '%';
@@ -290,14 +324,51 @@ function renderFxRisk(data) {
     $('#fxr-newval').textContent = money(base, totalExp + impact);
   };
   slider.addEventListener('input', upd); upd();
+
+  // Target exposure: gap between today's foreign share and the one you want.
+  const total = data.totalValue || 0;
+  const tIn = $('#fxr-target'), tOut = $('#fxr-target-out');
+  try { tIn.value = localStorage.getItem('finsight-fx-target') || ''; } catch {}
+  const updTarget = () => {
+    const pct = parseFloat(tIn.value);
+    try { localStorage.setItem('finsight-fx-target', tIn.value); } catch {}
+    const cur = total ? (totalExp / total) * 100 : 0;
+    if (!Number.isFinite(pct) || !total) { tOut.innerHTML = `Now <b>${fmt(cur, 1)}%</b> foreign (${money(base, totalExp, 0)} of ${money(base, total, 0)}).`; return; }
+    const gap = (pct / 100) * total - totalExp;
+    tOut.innerHTML = `Now <b>${fmt(cur, 1)}%</b>. ` + (Math.abs(gap) < total * 0.005 ? '<span class="up">On target.</span>'
+      : gap > 0 ? `To reach ${fmt(pct, 0)}%: move <b>${money(base, gap, 0)}</b> into foreign currency.`
+        : `To reach ${fmt(pct, 0)}%: bring <b>${money(base, -gap, 0)}</b> back to ${base}.`);
+  };
+  tIn.addEventListener('input', updTarget); updTarget();
+
+  // Convert now vs later: what the amount buys at spot, and the typical 1-month
+  // range from recent volatility (68% band). Shows the spread, not a forecast.
+  const cIn = $('#fxr-conv'), cOut = $('#fxr-conv-out');
+  cIn.value = fxTools.conv;
+  const sigmaM = (dom.sigmaWeeklyPct || 0) / 100 * Math.sqrt(4.345);
+  const updConv = () => {
+    fxTools.conv = cIn.value;
+    const amt = parseFloat(cIn.value);
+    if (!(amt > 0)) { cOut.innerHTML = `Spot ${fmt(dom.nowRate, 4)} · your blended entry ${fmt(dom.blendedEntry, 4)} (${signStr(dom.driftPct)}%).`; return; }
+    const now = amt / dom.nowRate;
+    let html = `Now: <b>${money(dom.ccy, now, 0)}</b> at ${fmt(dom.nowRate, 4)}.`;
+    if (sigmaM > 0) {
+      const lo = dom.nowRate * Math.exp(-sigmaM), hi = dom.nowRate * Math.exp(sigmaM);
+      html += `<br>In a month, 2 in 3 outcomes: <b>${money(dom.ccy, amt / hi, 0)} – ${money(dom.ccy, amt / lo, 0)}</b> (rate ${fmt(lo, 4)}–${fmt(hi, 4)}). Waiting is a ±${money(dom.ccy, now - amt / hi, 0)} coin flip.`;
+    }
+    cOut.innerHTML = html;
+  };
+  cIn.addEventListener('input', updConv); updConv();
 }
 
 // ---- ECON CALENDAR panel ---------------------------------------------------
 async function loadCalendar() {
-  try { renderCalendar(await api('/api/calendar')); }
-  catch (e) { const b = $('#calendar'); if (b) { b.classList.add('muted'); b.textContent = 'Calendar unavailable right now.'; } }
+  try {
+    const [cal, ev] = await Promise.all([api('/api/calendar'), api('/api/events' + baseQS()).catch(() => null)]);
+    renderCalendar(cal, ev);
+  } catch (e) { const b = $('#calendar'); if (b) { b.classList.add('muted'); b.textContent = 'Calendar unavailable right now.'; } }
 }
-function renderCalendar(data) {
+function renderCalendar(data, ev) {
   const box = $('#calendar'); if (!box) return;
   box.classList.remove('muted');
   const dayShort = (s) => new Date(s + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: '2-digit' });
@@ -331,8 +402,21 @@ function renderCalendar(data) {
     </div>`;
   }).join('') || `<div class="muted small">${data.eventsOk ? 'No high-impact USD/SGD events this week.' : 'Live feed unavailable — Fed schedule shown above.'}</div>`;
 
-  box.innerHTML = anchor + `<div class="fxr-sub">THIS WEEK · high-impact (USD/SGD)</div>` + rows;
+  // Earnings + ex-dividend dates for what you hold / watch.
+  let mine = '';
+  if (ev && ev.events) {
+    const d2 = (ms) => new Date(ms).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: '2-digit' });
+    const evRows = ev.events.slice(0, 14).map((e) => `<div class="cal-row" data-sym="${esc(e.symbol)}" style="cursor:pointer">
+      <span class="cal-when">${d2(e.t)}${e.estimated ? ' <span class="dim">~</span>' : ''}</span>
+      <span class="ev-kind ${e.kind === 'EARNINGS' ? 'earn' : 'div'}">${e.kind}</span>
+      <span class="cal-title"><span class="sym amber">${esc(e.symbol)}</span>${e.held ? '' : ' <span class="dim">watch</span>'}</span>
+      ${e.amount ? `<span class="cal-fp">~${fmt(e.amount, 2)}/sh</span>` : ''}</div>`).join('');
+    mine = `<div class="fxr-sub">YOUR HOLDINGS · next 60 days (earnings · ex-dividend)</div>` +
+      (evRows || `<div class="muted small">${ev.ok ? 'No earnings or ex-dividend dates in the next 60 days.' : 'Company dates unavailable right now.'}</div>`);
+  }
+  box.innerHTML = anchor + mine + `<div class="fxr-sub">THIS WEEK · high-impact (USD/SGD)</div>` + rows;
 }
+$('#calendar').addEventListener('click', (e) => { const r = e.target.closest('[data-sym]'); if (r) selectSymbol(r.dataset.sym); });
 
 function card(label, value, sub, signVal) {
   const cls = signVal != null ? signClass(signVal) : '';
@@ -342,9 +426,12 @@ function card(label, value, sub, signVal) {
 
 // ---- customizable summary cards --------------------------------------------
 let lastSummary = null;
+let lastCash = []; // [{ ccy, amount, base }] from the latest /api/portfolio
 let lastFxRisk = null; // populated by loadFxRisk(); feeds the FX EXPOSURE card
 const CARD_DEFS = {
   total_value:  { label: 'TOTAL VALUE',    render: (s, b) => ({ value: moneyBig(b, s.totalValue), sub: 'cost ' + moneyBig(b, s.totalCost) }) },
+  net_worth:    { label: 'NET WORTH',      render: (s, b) => ({ value: moneyBig(b, s.netWorth ?? s.totalValue), sub: s.cashBase ? 'incl. cash ' + moneyBig(b, s.cashBase) : 'holdings (no cash set)' }) },
+  cash:         { label: 'CASH',           render: (s, b) => ({ value: moneyBig(b, s.cashBase || 0), sub: lastCash.length ? lastCash.map((c) => c.ccy).join(' · ') : 'CASH USD 5000 to set' }) },
   day_pnl:      { label: 'DAY P&L',        render: (s, b) => ({ value: moneySigned(b, s.dayPnl), sub: 'today', signVal: s.dayPnl }) },
   unrealized:   { label: 'UNREALIZED P&L', render: (s, b) => ({ value: moneySigned(b, s.totalUnrealized), sub: signStr(s.totalUnrealizedPct) + '%', signVal: s.totalUnrealized }) },
   stock_pnl:    { label: 'STOCK P&L',      render: (s, b) => ({ value: moneySigned(b, s.totalStockPnl), sub: 'price move', signVal: s.totalStockPnl }) },
@@ -453,7 +540,7 @@ $('#cards-list').addEventListener('click', (e) => {
 const PANELS = [
   ['perf-body', 'Performance'], ['alloc-body', 'Allocation'], ['heatmap-body', 'Sector Heatmap'],
   ['fxrisk', 'FX Risk'], ['dividends', 'Dividends'], ['watchlist', 'Watchlist'], ['alerts', 'Price Alerts'], ['activity', 'Recent Activity'],
-  ['news', 'News'], ['markets', 'World Markets'], ['calendar', 'Econ Calendar'], ['wb-body', 'World Bank'], ['fred-body', 'US Fed (FRED)'],
+  ['news', 'News'], ['markets', 'World Markets'], ['calendar', 'Econ Calendar'], ['wb-body', 'World Bank'], ['fred-body', 'US Fed (FRED)'], ['infl-body', 'US Inflation Gauges'],
 ];
 let hiddenPanels = (() => { try { return new Set(JSON.parse(localStorage.getItem('finsight-panels')) || []); } catch { return new Set(); } })();
 const panelEl = (id) => { const e = document.getElementById(id); return e ? e.closest('.panel') : null; };
@@ -477,7 +564,7 @@ $('#panels-list').addEventListener('change', (e) => {
 const PANEL_PIDS = [
   ['#positions', 'positions'], ['#perf-ranges', 'performance'], ['#alloc-mode', 'allocation'],
   ['#heat-metric', 'heatmap'], ['#fxrisk', 'fxrisk'], ['#dividends', 'dividends'], ['#watchlist', 'watchlist'], ['#alerts', 'alerts'], ['#activity', 'activity'],
-  ['#detail-panel', 'detail'], ['#news', 'news'], ['#markets', 'markets'], ['#calendar', 'calendar'], ['#wb-body', 'worldbank'], ['#fred-body', 'fred'],
+  ['#detail-panel', 'detail'], ['#news', 'news'], ['#markets', 'markets'], ['#calendar', 'calendar'], ['#wb-body', 'worldbank'], ['#fred-body', 'fred'], ['#infl-body', 'inflation'],
 ];
 let dragInited = false;
 function initDragLayout() {
@@ -611,6 +698,142 @@ $('#positions-body').addEventListener('click', async (e) => {
   const row = e.target.closest('tr[data-sym]');
   if (row) selectSymbol(row.dataset.sym);
 });
+
+// ===========================================================================
+//  UNDO + CASH
+// ===========================================================================
+async function doUndo() {
+  try {
+    const r = await api('/api/undo', { method: 'POST' });
+    setStatus(`UNDID: ${r.undone}${r.available ? ` · ${r.available} more step(s) available` : ''}`, 'ok');
+    perfSig = '';
+    await loadAccounts();
+    await loadPortfolio();
+    if (!$('#ledger-modal').classList.contains('hidden')) loadLedger();
+  } catch (e) { setStatus('UNDO: ' + e.message, 'err'); }
+}
+$('#undo-btn').addEventListener('click', doUndo);
+$('#undo-btn').addEventListener('mouseenter', async () => {
+  try { const u = await api('/api/undo'); $('#undo-btn').title = u.last ? `Undo: ${u.last.label}` : 'Nothing to undo'; } catch {}
+});
+async function setCashBalance(ccy, amt) {
+  try {
+    const res = await api('/api/cash' + baseQS(), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ccy, amount: amt }) });
+    setStatus(Number(amt) === 0 ? `Cleared ${ccy.toUpperCase()} cash` : `Cash ${ccy.toUpperCase()} set to ${fmt(Number(amt))}`, 'ok');
+    renderPortfolio(res); loadFxRisk();
+  } catch (e) { setStatus('CASH failed: ' + e.message, 'err'); }
+}
+$('#cash-btn').addEventListener('click', () => {
+  if (blockIfAll()) return;
+  const cur = lastCash.length ? lastCash.map((c) => `${c.ccy} ${fmt(c.amount)}`).join(', ') : 'none';
+  const v = prompt(`Uninvested cash in this account (currently: ${cur}).\nEnter currency and amount, e.g. "USD 5000" (0 clears it):`, '');
+  if (!v) return;
+  const [ccy, amt] = v.trim().split(/\s+/);
+  if (!ccy || amt == null) return setStatus('Enter e.g. USD 5000', 'err');
+  setCashBalance(ccy, amt.replace(/,/g, ''));
+});
+
+// ===========================================================================
+//  LEDGER — every trade; fix buys; realized gains by year
+// ===========================================================================
+let ledgerRows = [], ledgerEdit = null, ledgerTab = 'trades', lastRealized = null;
+function setLedgerStatus(m, k) { const el = $('#ledger-status'); el.textContent = m || ''; el.className = 'cmd-status ' + (k || ''); }
+function openLedger() { $('#ledger-modal').classList.remove('hidden'); setLedgerTab(ledgerTab); }
+function closeLedger() { $('#ledger-modal').classList.add('hidden'); ledgerEdit = null; }
+function setLedgerTab(tab) {
+  ledgerTab = tab;
+  $$('#ledger-tabs button').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
+  $('#ledger-trades').classList.toggle('hidden', tab !== 'trades');
+  $('#ledger-realized').classList.toggle('hidden', tab !== 'realized');
+  setLedgerStatus('');
+  if (tab === 'trades') loadLedger(); else loadRealized();
+}
+async function loadLedger() {
+  try { const d = await api('/api/ledger' + baseQS()); ledgerRows = d.rows || []; renderLedger(); }
+  catch (e) { setLedgerStatus(e.message, 'err'); }
+}
+function renderLedger() {
+  const base = state.base, f = ($('#ledger-filter').value || '').trim().toUpperCase();
+  const rows = ledgerRows.filter((r) => !f || (r.symbol || '').toUpperCase().includes(f) || r.type.includes(f));
+  const showAcct = state.account === 'ALL';
+  const d = (ms) => new Date(ms).toLocaleDateString('en-US', { year: '2-digit', month: 'short', day: '2-digit' });
+  $('#ledger-body').innerHTML = rows.map((r) => {
+    const cls = r.type === 'BUY' ? 't-buy' : r.type === 'SELL' ? 't-sell' : 't-del';
+    if (ledgerEdit === r.id) {
+      const iso = new Date(r.time).toISOString().slice(0, 10);
+      return `<tr data-id="${esc(r.id)}"><td><input type="date" class="le-date" value="${iso}"></td><td class="${cls}">${r.type}</td><td class="sym">${esc(r.symbol)}</td>
+        <td class="r"><input type="number" step="any" class="le-qty" value="${r.quantity}"></td><td class="r"><input type="number" step="any" class="le-px" value="${r.price}"></td>
+        <td></td><td></td><td><div class="lg-act"><button class="mini-btn solid" data-act="save">SAVE</button><button class="mini-btn" data-act="cancel">✕</button></div></td></tr>`;
+    }
+    const realized = r.realized != null ? `<span class="${signClass(r.realized)}">${moneySigned(base, r.realized)}</span>` +
+      (r.realizedFx != null && Math.abs(r.realizedFx) > 0.005 ? `<div class="dim small">FX ${moneySigned(base, r.realizedFx)}</div>` : '') : '';
+    const acts = r.editable ? `<div class="lg-act"><button class="x-btn" data-act="edit" title="Fix date / price / quantity">✎</button><button class="x-btn del" data-act="delete" title="Delete this buy">✕</button></div>` : '';
+    return `<tr data-id="${esc(r.id)}"><td>${d(r.time)}${showAcct ? `<div class="dim small">${esc(r.account)}</div>` : ''}</td><td class="${cls}">${r.type}</td><td class="sym">${esc(r.symbol)}</td>
+      <td class="r">${r.quantity != null ? fmt(r.quantity, r.quantity % 1 ? 4 : 0) : ''}</td><td class="r">${r.price != null ? fmt(r.price) + ` <span class="dim">${esc(r.currency || '')}</span>` : ''}</td>
+      <td class="r">${r.valueBase != null ? money(base, r.valueBase, 0) : ''}</td><td class="r">${realized}</td><td>${acts}</td></tr>`;
+  }).join('') || '<tr><td colspan="8" class="empty">No transactions.</td></tr>';
+}
+$('#ledger-filter').addEventListener('input', renderLedger);
+$('#ledger-body').addEventListener('click', async (e) => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const id = b.closest('tr').dataset.id, row = ledgerRows.find((r) => r.id === id);
+  const act = b.dataset.act;
+  if (act === 'edit') { ledgerEdit = id; renderLedger(); return; }
+  if (act === 'cancel') { ledgerEdit = null; renderLedger(); return; }
+  try {
+    if (act === 'save') {
+      const tr = b.closest('tr');
+      const body = { id, date: tr.querySelector('.le-date').value, quantity: tr.querySelector('.le-qty').value, price: tr.querySelector('.le-px').value };
+      setLedgerStatus('Saving… (fetching that day\'s FX)');
+      await api('/api/ledger/edit' + baseQS(), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      setLedgerStatus(`Updated ${row.symbol} buy. UNDO reverts it.`, 'ok');
+    } else if (act === 'delete') {
+      if (!confirm(`Delete this buy of ${row.quantity} ${row.symbol}? Its lot is removed from the position. (UNDO can restore it.)`)) return;
+      await api('/api/ledger/delete' + baseQS(), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
+      setLedgerStatus(`Deleted ${row.symbol} buy. UNDO restores it.`, 'ok');
+    }
+    ledgerEdit = null; perfSig = '';
+    await loadLedger(); loadPortfolio();
+  } catch (err) { setLedgerStatus(err.message, 'err'); }
+});
+async function loadRealized() {
+  const box = $('#ledger-realized');
+  box.innerHTML = '<span class="muted">Loading…</span>';
+  try {
+    const d = await api('/api/realized' + baseQS());
+    lastRealized = d;
+    const base = d.base || state.base;
+    const yrs = d.years.map((y) => `<tr><td><b>${y.year}</b></td><td class="r">${y.trades}</td><td class="r">${money(base, y.proceeds, 0)}</td><td class="r">${money(base, y.cost, 0)}</td>
+      <td class="r ${signClass(y.stock)}">${moneySigned(base, y.stock, 0)}</td><td class="r ${signClass(y.fx)}">${moneySigned(base, y.fx, 0)}</td>
+      <td class="r ${signClass(y.total)}"><b>${moneySigned(base, y.total, 0)}</b></td><td class="r">${y.divNet ? money(base, y.divNet, 0) : '—'}${y.divTax ? `<div class="dim small">−${money(base, y.divTax, 0)} tax</div>` : ''}</td></tr>`).join('')
+      || '<tr><td colspan="8" class="empty">No closed trades or dividends yet.</td></tr>';
+    const dd = (ms) => new Date(ms).toLocaleDateString('en-US', { year: '2-digit', month: 'short', day: '2-digit' });
+    const rows = d.rows.map((r) => `<tr><td>${dd(r.time)}</td><td class="sym">${esc(r.symbol)}</td><td class="r">${fmt(r.quantity, r.quantity % 1 ? 4 : 0)}</td>
+      <td class="r">${money(base, r.proceeds, 0)}</td><td class="r">${money(base, r.cost, 0)}</td>
+      <td class="r ${signClass(r.stock)}">${r.stock != null ? moneySigned(base, r.stock, 0) : '—'}</td><td class="r ${signClass(r.fx)}">${r.fx != null ? moneySigned(base, r.fx, 0) : '—'}</td>
+      <td class="r ${signClass(r.total)}">${moneySigned(base, r.total, 0)}</td><td class="r">${r.heldDays != null ? (r.heldDays >= 365 ? fmt(r.heldDays / 365.25, 1) + 'y' : r.heldDays + 'd') : '—'}</td></tr>`).join('');
+    box.innerHTML = `<div class="rz-head"><span class="muted small">Cost uses the FX rate you actually paid; proceeds use the rate on the sale date. Singapore doesn't tax capital gains — this is for your records.</span>
+        <button id="rz-export" class="mini-btn">EXPORT CSV</button></div>
+      <table class="tbl rz-years"><thead><tr><th>YEAR</th><th class="r">SALES</th><th class="r">PROCEEDS</th><th class="r">COST</th><th class="r">STOCK</th><th class="r">FX</th><th class="r">REALIZED</th><th class="r">DIVIDENDS NET</th></tr></thead><tbody>${yrs}</tbody></table>` +
+      (rows ? `<div class="fxr-sub">CLOSED TRADES</div><div class="table-wrap"><table class="tbl rz-years"><thead><tr><th>SOLD</th><th>SYM</th><th class="r">QTY</th><th class="r">PROCEEDS</th><th class="r">COST</th><th class="r">STOCK</th><th class="r">FX</th><th class="r">TOTAL</th><th class="r">HELD</th></tr></thead><tbody>${rows}</tbody></table></div>` : '');
+  } catch (e) { box.innerHTML = `<span class="down">${esc(e.message)}</span>`; }
+}
+$('#ledger-realized').addEventListener('click', (e) => {
+  if (!e.target.closest('#rz-export') || !lastRealized) return;
+  const b = lastRealized.base.toLowerCase();
+  const head = ['date', 'symbol', 'quantity', 'price', 'currency', `proceeds_${b}`, `cost_${b}`, `stock_pnl_${b}`, `fx_pnl_${b}`, `realized_${b}`, 'held_days'];
+  const lines = lastRealized.rows.map((r) => [new Date(r.time).toISOString().slice(0, 10), r.symbol, r.quantity, r.price, r.currency,
+    r.proceeds.toFixed(2), r.cost.toFixed(2), r.stock != null ? r.stock.toFixed(2) : '', r.fx != null ? r.fx.toFixed(2) : '', r.total.toFixed(2), r.heldDays ?? '']);
+  const csv = [head, ...lines].map((r) => r.join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+  a.download = 'realized-gains.csv'; a.click(); URL.revokeObjectURL(a.href);
+});
+$('#ledger-btn').addEventListener('click', openLedger);
+$('#ledger-close').addEventListener('click', closeLedger);
+$('#ledger-undo').addEventListener('click', doUndo);
+$('#ledger-modal').addEventListener('click', (e) => { if (e.target.id === 'ledger-modal') closeLedger(); });
+$('#ledger-tabs').addEventListener('click', (e) => { const b = e.target.closest('[data-tab]'); if (b) setLedgerTab(b.dataset.tab); });
 
 // ===========================================================================
 //  ADD FORM + SYMBOL SEARCH
@@ -900,11 +1123,32 @@ async function loadDividends() {
   try {
     const d = await api('/api/dividends' + baseQS());
     const base = d.base || state.base;
-    $('#div-ttm').textContent = d.count ? 'TTM ' + money(base, d.ttm) : '';
-    if (!d.count) { box.innerHTML = '<span class="muted">No dividends yet — import a broker statement (IBKR) to track income.</span>'; return; }
-    const top = d.bySymbol.slice(0, 8).map((s) => `<div class="div-row"><span class="ds">${esc(s.symbol)}</span><span>${money(base, s.amount)}</span></div>`).join('');
-    const recent = d.recent.slice(0, 8).map((r) => `<div class="dr"><span>${esc(r.date)}</span><span class="ds">${esc(r.symbol)}</span><span>${money(base, r.baseAmount)}</span></div>`).join('');
-    box.innerHTML = `<div class="div-head"><span class="dv">${money(base, d.ttm)}</span><span class="div-sub">last 12 months · ${money(base, d.total)} all-time</span></div>${top}<div class="div-recent">${recent}</div>`;
+    const rc = d.received || { ttm: { gross: d.ttm, tax: 0, net: d.ttm }, total: { gross: d.total, tax: 0, net: d.total } };
+    const fw = d.forwardTotal || { gross: 0, tax: 0, net: 0 };
+    $('#div-ttm').textContent = fw.net ? 'FWD ' + money(base, fw.net, 0) + '/yr net' : (d.count ? 'TTM ' + money(base, rc.ttm.net) : '');
+    if (!d.count && !(d.forward || []).length) { box.innerHTML = '<span class="muted">No dividends yet — hold dividend payers, or import an IBKR statement to track income received.</span>'; return; }
+    const cell = (k, v, sub, cls) => `<div class="fxr-cell"><span class="k">${k}</span><span class="v ${cls || ''}">${v}</span><span class="s">${sub}</span></div>`;
+    const strip = [
+      fw.gross ? cell('FORWARD / YR', money(base, fw.net, 0), `net · ${money(base, fw.gross, 0)} gross`, 'up') : '',
+      fw.tax ? cell('WITHHOLDING / YR', money(base, fw.tax, 0), 'tax at source (est.)', 'down') : '',
+      d.count ? cell('RECEIVED · 12M', money(base, rc.ttm.net, 0), `net · ${money(base, rc.ttm.tax, 0)} withheld`) : '',
+      d.count ? cell('ALL-TIME', money(base, rc.total.net, 0), `net · ${d.count} payments`) : '',
+    ].join('');
+    const dd = (ms) => ms ? new Date(ms).toLocaleDateString('en-US', { month: 'short', day: '2-digit' }) : '—';
+    const fwdRows = (d.forward || []).map((f) => `<tr>
+      <td class="sym">${esc(f.symbol)}</td>
+      <td class="r">${fmt(f.perShare, 2)} <span class="dim">${esc(f.currency)}</span></td>
+      <td class="r">${f.yieldOnCost != null ? fmt(f.yieldOnCost, 2) + '%' : '—'}</td>
+      <td class="r">${f.currentYield != null ? fmt(f.currentYield, 2) + '%' : '—'}</td>
+      <td class="r up">${money(base, f.annualNet, 0)}</td>
+      <td class="r">${dd(f.nextEx)}${f.nextExEstimated ? '<span class="dim">~</span>' : ''}</td></tr>`).join('');
+    const recent = (d.recent || []).slice(0, 8).map((r) => `<div class="dr"><span>${esc(r.date)}</span><span class="ds">${esc(r.symbol)}</span>` +
+      `<span>${money(base, r.baseNet ?? r.baseAmount)}${r.baseTax ? ` <span class="dim">(−${money(base, r.baseTax)}${r.whtActual ? '' : ' est.'})</span>` : ''}</span></div>`).join('');
+    const w = d.withholding || {};
+    box.innerHTML = `<div class="div-strip">${strip}</div>` +
+      (fwdRows ? `<div class="fxr-sub">FORWARD INCOME · current holdings</div><table class="tbl div-tbl"><thead><tr><th>SYM</th><th class="r">/SHARE·YR</th><th class="r">YOC</th><th class="r">YIELD</th><th class="r">NET/YR</th><th class="r">NEXT EX</th></tr></thead><tbody>${fwdRows}</tbody></table>` : '') +
+      (recent ? `<div class="fxr-sub">RECEIVED · net of withholding</div><div class="div-recent">${recent}</div>` : '') +
+      `<div class="fxr-note">Withholding assumed: US ${w.US ?? 30}% · SG ${w.SG ?? 0}% · HK ${w.HK ?? 0}% · EU ${w.EU ?? 15}% (IBKR statements use the actual tax). Change with <b>WHT US 15</b>. ~ = estimated from payment history. YOC = yield on your cost.</div>`;
   } catch (e) { box.innerHTML = `<span class="down">${esc(e.message)}</span>`; }
 }
 
@@ -1374,6 +1618,7 @@ $('#account-sel').addEventListener('change', async () => {
   if (v === '__manage') { $('#account-sel').value = state.account; renderAccountsList(); return $('#accounts-modal').classList.remove('hidden'); }
   state.account = v; localStorage.setItem('finsight-account', v); perfSig = '';
   await loadPortfolio();
+  loadCalendar(); // holdings' earnings / ex-div dates follow the account
 });
 async function newAccountPrompt() {
   const name = (prompt('New account name (e.g. Crypto, SGX, IBKR):') || '').trim();

@@ -63,7 +63,7 @@ try { var d = document.documentElement;
   <div class="cmdbar">
     <span class="prompt">CMD&nbsp;&gt;</span>
     <input id="cmd" autocomplete="off" spellcheck="false"
-      placeholder="ADD AAPL 10 195.50   |   SELL AAPL 5   |   DEL AAPL   |   Q TSLA   |   HELP" />
+      placeholder="ADD AAPL 10 195.50   |   SELL AAPL 5   |   CASH USD 5000   |   UNDO   |   LEDGER   |   HELP" />
     <button id="cmd-go" class="go">GO</button>
   </div>
   <div id="cmd-status" class="cmd-status"></div>
@@ -80,8 +80,10 @@ try { var d = document.documentElement;
           <span class="panel-title">PORTFOLIO &nbsp;·&nbsp; POSITIONS</span>
           <div class="head-btns">
             <button id="add-toggle" class="mini-btn">+ ADD</button>
+            <button id="cash-btn" class="mini-btn" title="Set uninvested cash per currency (counts toward net worth and FX exposure)">CASH</button>
             <button id="import-btn" class="mini-btn">IMPORT</button>
             <button id="export-btn" class="mini-btn">EXPORT</button>
+            <button id="undo-btn" class="mini-btn" title="Undo the last change">↶ UNDO</button>
           </div>
         </div>
 
@@ -199,7 +201,8 @@ try { var d = document.documentElement;
       </div>
 
       <div class="panel">
-        <div class="panel-head"><span class="panel-title">RECENT ACTIVITY</span></div>
+        <div class="panel-head"><span class="panel-title">RECENT ACTIVITY</span>
+          <button id="ledger-btn" class="mini-btn" title="All trades — fix dates/prices, realized gains by year">LEDGER</button></div>
         <div id="activity" class="activity"></div>
       </div>
     </section>
@@ -421,6 +424,35 @@ MSFT,5,380,2023-11-02
       </div>
       <div class="modal-foot"><span class="muted small">Deleting an account removes its holdings.</span>
         <button id="accounts-done" class="mini-btn solid">DONE</button></div>
+    </div>
+  </div>
+
+  <!-- ledger: all trades + realized gains -->
+  <div id="ledger-modal" class="modal hidden">
+    <div class="modal-box wide">
+      <div class="modal-head">
+        <div class="ranges" id="ledger-tabs">
+          <button data-tab="trades" class="active">TRADES</button>
+          <button data-tab="realized">REALIZED GAINS</button>
+        </div>
+        <div class="head-btns">
+          <button id="ledger-undo" class="mini-btn" title="Undo the last change">↶ UNDO</button>
+          <button id="ledger-close" class="x-btn">✕</button>
+        </div>
+      </div>
+      <div class="modal-body">
+        <div id="ledger-trades">
+          <div class="ledger-tools">
+            <input id="ledger-filter" placeholder="Filter by symbol or type…" autocomplete="off" />
+            <span class="muted small">✎ fix a buy's date / price / quantity (a date re-fetches that day's FX). Sales can be reversed with UNDO.</span>
+          </div>
+          <div class="table-wrap"><table class="tbl ledger-tbl"><thead><tr>
+            <th>DATE</th><th>TYPE</th><th>SYMBOL</th><th class="r">QTY</th><th class="r">PRICE</th><th class="r">VALUE</th><th class="r">REALIZED</th><th></th>
+          </tr></thead><tbody id="ledger-body"></tbody></table></div>
+        </div>
+        <div id="ledger-realized" class="hidden"></div>
+        <div id="ledger-status" class="cmd-status"></div>
+      </div>
     </div>
   </div>
 
