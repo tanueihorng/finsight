@@ -1103,6 +1103,7 @@ setupSearch($('#watch-symbol'), $('#watch-suggest'), (s) => { if (s) $('#watch-s
 // ===========================================================================
 let lastPositions = [];
 let heatMetric = 'day', allocMode = 'holding', perfRange = '1y', perfSig = '';
+let perfBench = (() => { try { return localStorage.getItem('finsight-bench') || '^GSPC'; } catch { return '^GSPC'; } })();
 const catCache = {};
 
 async function ensureCategories(symbols) {
@@ -1233,21 +1234,85 @@ $('#alloc-mode').addEventListener('click', (e) => {
 async function loadPerformance() {
   const box = $('#perf-body');
   if (!lastPositions.length) { box.innerHTML = '<span class="muted">Add positions to see performance over time.</span>'; return; }
-  box.innerHTML = '<span class="muted">Loading…</span>';
+  box.innerHTML = '<span class="muted">Replaying your trades…</span>';
   try {
-    const d = await api('/api/portfolio/performance?range=' + perfRange + baseQS().replace('?', '&'));
+    const d = await api('/api/portfolio/performance?range=' + perfRange + '&benchmark=' + encodeURIComponent(perfBench) + baseQS().replace('?', '&'));
     if (!d.points || !d.points.length) { box.innerHTML = '<span class="muted">No data.</span>'; return; }
-    const base = d.base || state.base, up = (d.changePct || 0) >= 0;
+    const base = d.base || state.base;
+    const b = d.benchmark;
+    const long = d.spanDays >= 365;
+    const pct = (v) => (v == null ? '—' : signStr(v) + '%');
+    const stat = (k, v, cls, title) => `<div class="pf-stat" title="${esc(title)}"><span class="k">${k}</span><span class="v ${cls || ''}">${v}</span></div>`;
+    const stats = [
+      stat('GAIN', moneySigned(base, d.gain), signClass(d.gain), 'Money made in the window: value change minus net money added, plus dividends'),
+      stat(long ? 'TWR p.a.' : 'TWR', pct(long ? d.twrAnnual : d.twr), signClass(d.twr), 'Time-weighted return: how your holdings performed, ignoring when you added or withdrew money. Compare this with the index.'),
+      stat(long ? 'XIRR p.a.' : 'MONEY-WTD', pct(long ? d.xirr : d.mwr), signClass(d.mwr), 'Money-weighted return (XIRR): your personal return including the timing of your buys and sells.'),
+      b ? stat(esc(b.name), pct(long ? b.twrAnnual : b.twr), signClass(b.twr), `${b.name} return in ${base} (price index, FX-adjusted) over the same window`) : '',
+      b ? stat('VS INDEX', pct((long ? d.twrAnnual - b.twrAnnual : d.twr - b.twr)), signClass(d.twr - b.twr), 'Your TWR minus the benchmark TWR') : '',
+    ].join('');
+    const notes = [];
+    if (d.transfers && d.transfers.length) notes.push(`${d.transfers.length} holding(s) entered at market value — no purchase date, so gains before that aren't counted (${d.transfers.slice(0, 6).map(esc).join(', ')}${d.transfers.length > 6 ? '…' : ''}). Add dates on import for full history.`);
+    if (d.approx && d.approx.length) notes.push(`No trade history for ${d.approx.slice(0, 6).map(esc).join(', ')} — treated as held for the whole window.`);
+    if (d.missing && d.missing.length) notes.push(`No price history for ${d.missing.map(esc).join(', ')} — held flat.`);
     box.innerHTML = `<div class="perf-headline"><span class="pv">${money(base, d.end)}</span>` +
-      `<span class="${signClass(d.changePct)}">${signStr(d.changePct)}% · ${perfRange.toUpperCase()}</span></div>` +
-      sparkline(d.points.map((p) => ({ c: p.value })), up) +
-      `<div class="perf-note">Current holdings valued over time (not a replay of past trades).</div>`;
+      `<span class="muted small">net invested ${money(base, d.start + d.netInvested, 0)}</span></div>` +
+      `<div class="pf-stats">${stats}</div>` +
+      perfChart(d.points, base, b) +
+      `<div class="perf-note">Replays your actual buys &amp; sells with historical prices and FX. ${notes.join(' ')}</div>`;
+    bindPerfHover(d.points, base, b);
   } catch (e) { box.innerHTML = `<span class="down">${esc(e.message)}</span>`; }
+}
+// Multi-line SVG chart: portfolio value, net invested (dashed), benchmark shadow.
+function perfChart(points, base, bench) {
+  if (points.length < 2) return '<div class="chart muted small">Not enough history yet.</div>';
+  const W = 600, H = 160, pad = 4;
+  const keys = ['value', 'invested'].concat(bench ? ['bench'] : []);
+  const vals = points.flatMap((p) => keys.map((k) => p[k]).filter((v) => v != null));
+  const min = Math.min(...vals), max = Math.max(...vals), span = (max - min) || 1;
+  const x = (i) => pad + i * (W - pad * 2) / (points.length - 1);
+  const y = (v) => pad + (H - pad * 2) * (1 - (v - min) / span);
+  const path = (k) => points.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p[k]).toFixed(1)}`).join(' ');
+  const last = points[points.length - 1];
+  const up = last.value >= last.invested;
+  const col = up ? 'var(--up)' : 'var(--down)';
+  const area = `${path('value')} L${x(points.length - 1).toFixed(1)},${H - pad} L${x(0).toFixed(1)},${H - pad} Z`;
+  return `<div class="pf-chart-wrap"><svg class="chart pf-chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+    <defs><linearGradient id="pfg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${col}" stop-opacity="0.22"/><stop offset="100%" stop-color="${col}" stop-opacity="0"/></linearGradient></defs>
+    <path d="${area}" fill="url(#pfg)"/>
+    <path d="${path('invested')}" fill="none" stroke="var(--muted)" stroke-width="1" stroke-dasharray="4 3" vector-effect="non-scaling-stroke"/>
+    ${bench ? `<path d="${path('bench')}" fill="none" stroke="var(--cyan)" stroke-width="1.2" vector-effect="non-scaling-stroke"/>` : ''}
+    <path d="${path('value')}" fill="none" stroke="${col}" stroke-width="1.6" vector-effect="non-scaling-stroke"/>
+    <line id="pf-cross" x1="0" x2="0" y1="0" y2="${H}" stroke="var(--dim)" stroke-width="1" vector-effect="non-scaling-stroke" visibility="hidden"/>
+  </svg><div id="pf-tip" class="pf-tip hidden"></div></div>
+  <div class="pf-legend"><span><i style="background:${col}"></i>Portfolio</span><span><i class="dash"></i>Net invested</span>${bench ? `<span><i style="background:var(--cyan)"></i>Same cash in ${esc(bench.name)}</span>` : ''}</div>`;
+}
+function bindPerfHover(points, base, bench) {
+  const svg = $('#perf-body .pf-chart'), tip = $('#pf-tip'), cross = $('#pf-cross');
+  if (!svg || !tip || points.length < 2) return;
+  svg.addEventListener('mousemove', (e) => {
+    const r = svg.getBoundingClientRect();
+    const f = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+    const i = Math.round(f * (points.length - 1)), p = points[i];
+    const xv = 4 + i * (600 - 8) / (points.length - 1);
+    cross.setAttribute('x1', xv); cross.setAttribute('x2', xv); cross.setAttribute('visibility', 'visible');
+    tip.innerHTML = `<b>${new Date(p.t).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit', timeZone: 'UTC' })}</b>` +
+      `<div>Portfolio ${money(base, p.value, 0)}</div><div class="muted">Invested ${money(base, p.invested, 0)}</div>` +
+      (bench && p.bench != null ? `<div class="cyan">${esc(bench.name)} ${money(base, p.bench, 0)}</div>` : '');
+    tip.classList.remove('hidden');
+    tip.style.left = Math.min(r.width - 150, Math.max(0, e.clientX - r.left + 10)) + 'px';
+  });
+  svg.addEventListener('mouseleave', () => { tip.classList.add('hidden'); cross.setAttribute('visibility', 'hidden'); });
 }
 $('#perf-ranges').addEventListener('click', (e) => {
   const b = e.target.closest('button'); if (!b) return;
   $$('#perf-ranges button').forEach((x) => x.classList.remove('active')); b.classList.add('active');
   perfRange = b.dataset.range; loadPerformance();
+});
+$('#perf-bench').value = perfBench;
+$('#perf-bench').addEventListener('change', (e) => {
+  perfBench = e.target.value;
+  try { localStorage.setItem('finsight-bench', perfBench); } catch {}
+  loadPerformance();
 });
 
 // Called from renderPortfolio whenever positions update.

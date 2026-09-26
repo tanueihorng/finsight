@@ -226,7 +226,7 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, await dividendsReport(base, acct));
     }
     if (p === '/api/portfolio/performance') {
-      return sendJson(res, 200, await portfolioPerformance(u.searchParams.get('range') || '1y', base, acct));
+      return sendJson(res, 200, await portfolioPerformance(u.searchParams.get('range') || '1y', base, acct, u.searchParams.get('benchmark') || undefined));
     }
     if (p === '/api/fx-risk') {
       return sendJson(res, 200, await fxRisk(base, acct));

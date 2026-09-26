@@ -115,11 +115,23 @@ try { var d = document.documentElement;
       <div class="panel">
         <div class="panel-head">
           <span class="panel-title">PORTFOLIO PERFORMANCE</span>
-          <div class="ranges" id="perf-ranges">
-            <button data-range="1mo">1M</button>
-            <button data-range="6mo">6M</button>
-            <button data-range="1y" class="active">1Y</button>
-            <button data-range="5y">5Y</button>
+          <div class="head-btns">
+            <select id="perf-bench" class="mini-sel" title="Benchmark — the same cash flows put into this index on the same days">
+              <option value="^GSPC">vs S&amp;P 500</option>
+              <option value="URTH">vs MSCI World</option>
+              <option value="VT">vs All-World</option>
+              <option value="^IXIC">vs Nasdaq</option>
+              <option value="^STI">vs STI</option>
+              <option value="none">no benchmark</option>
+            </select>
+            <div class="ranges" id="perf-ranges">
+              <button data-range="1mo">1M</button>
+              <button data-range="6mo">6M</button>
+              <button data-range="ytd">YTD</button>
+              <button data-range="1y" class="active">1Y</button>
+              <button data-range="5y">5Y</button>
+              <button data-range="max">MAX</button>
+            </div>
           </div>
         </div>
         <div id="perf-body" class="chart-body muted">Add positions to see performance over time.</div>
