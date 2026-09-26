@@ -1346,7 +1346,7 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/auth/change' && req.method === 'POST') {
       const b = await readBody(req);
       if (!sessionValid(getCookie(req, 'sid'))) return sendJson(res, 401, { error: 'Locked' });
-      if (!verifyPin(String(b.current || ''))) return sendJson(res, 401, { error: 'Current PIN is wrong' });
+      if (!(await verifyPin(String(b.current || '')))) return sendJson(res, 401, { error: 'Current PIN is wrong' });
       if (!PIN_RE.test(String(b.pin || ''))) return sendJson(res, 400, { error: 'New PIN must be 4–12 digits' });
       await setPin(String(b.pin));
       // A PIN rotation must invalidate every existing session (a stolen cookie
