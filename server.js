@@ -57,7 +57,7 @@ function readBody(req) {
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.svg': 'image/svg+xml',
-  '.ico': 'image/x-icon', '.png': 'image/png',
+  '.ico': 'image/x-icon', '.png': 'image/png', '.webmanifest': 'application/manifest+json',
 };
 function serveStatic(req, res, pathname) {
   let rel = pathname === '/' ? '/index.html' : pathname;
@@ -69,7 +69,8 @@ function serveStatic(req, res, pathname) {
   if (relCheck.startsWith('..') || path.isAbsolute(relCheck)) { res.writeHead(403); return res.end('Forbidden'); }
   fs.readFile(filePath, (err, buf) => {
     if (err) { res.writeHead(404); return res.end('Not found'); }
-    res.writeHead(200, { 'Content-Type': MIME[path.extname(filePath)] || 'application/octet-stream' });
+    // no-cache = revalidate each load, so UI updates (and sw.js) are never stuck.
+    res.writeHead(200, { 'Content-Type': MIME[path.extname(filePath)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
     res.end(buf);
   });
 }

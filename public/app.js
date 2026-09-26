@@ -13,7 +13,13 @@ try {
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
-const api = (path, opts) => fetch(path, opts).then(async (r) => {
+// A network error (server stopped) re-checks once, which shows the offline screen.
+let netCheckPending = false;
+const onNetError = (e) => {
+  if (!netCheckPending && typeof checkAuth === 'function') { netCheckPending = true; setTimeout(() => { netCheckPending = false; checkAuth(); }, 1500); }
+  throw e;
+};
+const api = (path, opts) => fetch(path, opts).catch(onNetError).then(async (r) => {
   const j = await r.json().catch(() => ({}));
   if (r.status === 401 && !path.startsWith('/api/auth')) showLock('enter'); // session expired -> re-lock
   if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
@@ -1746,10 +1752,29 @@ $('#lock-pin').addEventListener('keydown', (e) => { if (e.key === 'Enter') { if 
 $('#lock-pin2').addEventListener('keydown', (e) => { if (e.key === 'Enter') submitPin(); });
 $('#lock-btn').addEventListener('click', async () => { try { await api('/api/auth/logout', { method: 'POST' }); } catch {} showLock('enter'); });
 
+// Server unreachable (not started, or stopped): say so instead of offering to
+// "create a PIN", and keep retrying so the app comes back by itself.
+let offlineTimer = null;
+function showOffline() {
+  document.body.classList.add('locked');
+  stopPolling();
+  $('#lock-title').textContent = "Can't reach the FinSight server";
+  $('#lock-pin').classList.add('hidden'); $('#lock-pin2').classList.add('hidden'); $('#lock-go').classList.add('hidden');
+  lockMsg('Start it with  node server.js  (or start.command). Retrying…');
+  clearTimeout(offlineTimer);
+  offlineTimer = setTimeout(checkAuth, 5000);
+}
 async function checkAuth() {
   let st;
-  try { st = await api('/api/auth/status'); } catch { st = { pinSet: false, authed: false }; }
+  try {
+    const r = await fetch('/api/auth/status');
+    if (!r.ok) throw new Error();
+    st = await r.json();
+  } catch { return showOffline(); }
+  $('#lock-pin').classList.remove('hidden'); $('#lock-go').classList.remove('hidden');
   if (st.authed) showApp();
-  else showLock(st.pinSet ? 'enter' : 'create');
+  else { lockMsg(''); showLock(st.pinSet ? 'enter' : 'create'); }
 }
 checkAuth();
+// Installable app + instant shell (static files only — see sw.js).
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
