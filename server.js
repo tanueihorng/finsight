@@ -28,6 +28,8 @@ const {
 const { dividendsReport, upcomingEvents, setWithholding } = require('./lib/dividends');
 const { ledger, editBuy, deleteBuy, realizedReport } = require('./lib/ledger');
 const { undo, undoInfo } = require('./lib/store');
+const charts = require('./lib/charts');
+const journal = require('./lib/journal');
 const { portfolioPerformance } = require('./lib/performance');
 const {
   sessions, failState, loadAuth, setPin, verifyPin, newSession, sessionValid, getCookie, setSessionCookie, PIN_RE,
@@ -125,6 +127,39 @@ const server = http.createServer(async (req, res) => {
     // otherwise be wide open — so an unauthenticated caller is rejected here too.
     if (p.startsWith('/api/') && (!loadAuth() || !sessionValid(getCookie(req, 'sid')))) {
       return sendJson(res, 401, { error: 'Locked. Enter your PIN.' });
+    }
+
+    // ---- chart workspace (drawings, layouts) + trade journal ----
+    if (p.startsWith('/api/charts/') || p.startsWith('/api/journal')) {
+      try {
+        if (p === '/api/charts/drawings' && req.method === 'GET') return sendJson(res, 200, { drawings: charts.getDrawings(u.searchParams.get('symbol')) });
+        if (p === '/api/charts/drawings' && req.method === 'POST') { const b = await readBody(req); return sendJson(res, 200, { ok: true, count: charts.putDrawings(b.symbol, b.drawings) }); }
+        if (p === '/api/charts/layouts' && req.method === 'GET') return sendJson(res, 200, charts.getLayouts());
+        if (p === '/api/charts/current' && req.method === 'POST') { const b = await readBody(req); charts.putCurrent(b.cfg); return sendJson(res, 200, { ok: true }); }
+        if (p === '/api/charts/layouts/save' && req.method === 'POST') { const b = await readBody(req); charts.saveLayout(b.name, b.cfg); return sendJson(res, 200, charts.getLayouts()); }
+        if (p === '/api/charts/layouts/delete' && req.method === 'POST') { const b = await readBody(req); charts.deleteLayout(b.name); return sendJson(res, 200, charts.getLayouts()); }
+        if (p === '/api/journal' && req.method === 'GET') {
+          const entries = journal.list(), byKind = {};
+          journal.KINDS.forEach((k) => { byKind[k] = journal.stats(entries.filter((e) => e.kind === k)); });
+          return sendJson(res, 200, { entries, stats: journal.stats(entries), byKind });
+        }
+        if (p === '/api/journal/create' && req.method === 'POST') return sendJson(res, 200, { entry: journal.create(await readBody(req)) });
+        if (p === '/api/journal/update' && req.method === 'POST') { const b = await readBody(req); return sendJson(res, 200, { entry: journal.update(b.id, b.entry) }); }
+        if (p === '/api/journal/delete' && req.method === 'POST') { const b = await readBody(req); return sendJson(res, 200, { ok: journal.remove(b.id) }); }
+        if (p === '/api/journal/image' && req.method === 'POST') { const b = await readBody(req); journal.saveImage(b.id, b.dataUrl); return sendJson(res, 200, { ok: true }); }
+        if (p === '/api/journal/image' && req.method === 'GET') {
+          const f = journal.imagePath(u.searchParams.get('id'));
+          if (!f) return sendJson(res, 404, { error: 'No image' });
+          res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'no-store' });
+          return fs.createReadStream(f).pipe(res);
+        }
+        if (p === '/api/journal/csv' && req.method === 'GET') {
+          res.writeHead(200, { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': 'attachment; filename="finsight-journal.csv"', 'Cache-Control': 'no-store' });
+          return res.end(journal.toCsv(journal.list()));
+        }
+      } catch (err) {
+        return sendJson(res, 400, { error: String(err && err.message || err) });
+      }
     }
 
     if (p === '/api/quote') {

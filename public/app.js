@@ -186,30 +186,10 @@ function renderPortfolio(data) {
   // FX coverage note
   if (data.fxMissing && data.fxMissing.length) setFooter(`Note: no FX rate for ${data.fxMissing.join(', ')} → shown unconverted.`);
 
-  // positions table
-  const body = $('#positions-body');
-  if (!positions.length) {
-    body.innerHTML = `<tr><td colspan="11" class="empty">No positions yet — add one above or type <b>ADD AAPL 10 195.50</b> in the command bar.</td></tr>`;
-  } else {
-    body.innerHTML = positions.map((p) => {
-      const flash = priceFlash(p.symbol, p.last);
-      return `<tr class="clickable ${state.selected === p.symbol ? 'selected' : ''} ${flash}" data-sym="${esc(p.symbol)}">
-        <td><span class="sym">${esc(p.symbol)}</span><div class="name">${esc(String(p.name || '').slice(0, 20))} · <span class="ccy">${esc(p.currency)}</span></div></td>
-        <td class="r">${fmt(p.quantity, p.quantity % 1 ? 4 : 0)}</td>
-        <td class="r">${fmt(p.avgCost)}</td>
-        <td class="r">${fmt(p.last)}</td>
-        <td class="r ${signClass(p.changePct)}">${signStr(p.changePct)}%</td>
-        <td class="r">${money(base, p.marketValue)}</td>
-        <td class="r ${signClass(p.unrealized)}">${moneySigned(base, p.unrealized)}</td>
-        <td class="r ${signClass(p.unrealizedPct)}">${signStr(p.unrealizedPct)}%</td>
-        <td class="r ${signClass(p.fxPnl)}">${p.currency === base ? '<span class="dim">—</span>' : moneySigned(base, p.fxPnl)}</td>
-        <td class="r">${fmt(p.weight, 1)}</td>
-        <td><div class="row-actions">
-          <button class="x-btn sell" data-act="sell" data-sym="${esc(p.symbol)}" data-qty="${p.quantity}">S</button>
-          <button class="x-btn del"  data-act="del"  data-sym="${esc(p.symbol)}">✕</button>
-        </div></td></tr>`;
-    }).join('');
-  }
+  // positions table (filter / sort / group applied client-side; see renderPositionsTable)
+  lastFlash = Object.fromEntries(positions.map((p) => [p.symbol, priceFlash(p.symbol, p.last)]));
+  lastTableData = { positions, base };
+  renderPositionsTable();
   // activity
   $('#activity').innerHTML = (transactions || []).map((t) => {
     const cls = t.type === 'BUY' ? 't-buy' : t.type === 'SELL' ? 't-sell' : 't-del';
@@ -223,7 +203,7 @@ function renderPortfolio(data) {
   renderAnalytics(positions);
 
   // re-select detail if needed
-  if (!state.selected && positions.length) selectSymbol(positions[0].symbol);
+  if (!state.selected && positions.length) selectSymbol((positions.find((p) => p.quoted !== false) || positions[0]).symbol);
 }
 
 // ---- FX RISK panel ---------------------------------------------------------
@@ -435,8 +415,8 @@ let lastSummary = null;
 let lastCash = []; // [{ ccy, amount, base }] from the latest /api/portfolio
 let lastFxRisk = null; // populated by loadFxRisk(); feeds the FX EXPOSURE card
 const CARD_DEFS = {
-  total_value:  { label: 'TOTAL VALUE',    render: (s, b) => ({ value: moneyBig(b, s.totalValue), sub: 'cost ' + moneyBig(b, s.totalCost) }) },
-  net_worth:    { label: 'NET WORTH',      render: (s, b) => ({ value: moneyBig(b, s.netWorth ?? s.totalValue), sub: s.cashBase ? 'incl. cash ' + moneyBig(b, s.cashBase) : 'holdings (no cash set)' }) },
+  total_value:  { label: 'TOTAL VALUE',    render: (s, b) => ({ value: money(b, s.totalValue), sub: 'invested · cost ' + moneyBig(b, s.totalCost) }) },
+  net_worth:    { label: 'NET WORTH',      render: (s, b) => ({ value: money(b, s.netWorth ?? s.totalValue), sub: s.cashBase ? 'incl. cash ' + moneyBig(b, s.cashBase) : 'holdings (no cash set)' }) },
   cash:         { label: 'CASH',           render: (s, b) => ({ value: moneyBig(b, s.cashBase || 0), sub: lastCash.length ? lastCash.map((c) => c.ccy).join(' · ') : 'CASH USD 5000 to set' }) },
   day_pnl:      { label: 'DAY P&L',        render: (s, b) => ({ value: moneySigned(b, s.dayPnl), sub: 'today', signVal: s.dayPnl }) },
   unrealized:   { label: 'UNREALIZED P&L', render: (s, b) => ({ value: moneySigned(b, s.totalUnrealized), sub: signStr(s.totalUnrealizedPct) + '%', signVal: s.totalUnrealized }) },
@@ -457,7 +437,7 @@ const CARD_DEFS = {
   worst:        { label: 'WORST TODAY',    render: (s, b, ps) => { const x = ps.filter(p => p.changePct != null).sort((a, b) => a.changePct - b.changePct)[0]; return x ? { value: x.symbol, sub: signStr(x.changePct) + '%', signVal: x.changePct } : { value: '—', sub: '' }; } },
 };
 const ALL_CARDS = Object.keys(CARD_DEFS);
-const DEFAULT_CARDS = ['total_value', 'day_pnl', 'unrealized', 'stock_pnl', 'fx_pnl', 'fx_exposure', 'realized'];
+const DEFAULT_CARDS = ['net_worth', 'total_value', 'day_pnl', 'unrealized', 'stock_pnl', 'fx_pnl', 'fx_exposure', 'realized'];
 const DEFAULT_ORDER = [...DEFAULT_CARDS, ...ALL_CARDS.filter((id) => !DEFAULT_CARDS.includes(id))];
 let cardPrefs = (() => {
   try {
@@ -467,6 +447,13 @@ let cardPrefs = (() => {
       p.order = p.order.filter((id) => CARD_DEFS[id]);
       p.enabled = p.enabled.filter((id) => CARD_DEFS[id]);
       if (!p.enabled.length) p.enabled = [...DEFAULT_CARDS]; // never render an empty summary
+      // One-time: NET WORTH (holdings + cash) became a default card; surface it first in saved layouts too.
+      if (!p.nwFirst) {
+        p.nwFirst = true;
+        p.order = ['net_worth', ...p.order.filter((id) => id !== 'net_worth')];
+        if (!p.enabled.includes('net_worth')) p.enabled.unshift('net_worth');
+        try { localStorage.setItem('finsight-cards', JSON.stringify(p)); } catch {}
+      }
       return p;
     }
   } catch {}
@@ -477,9 +464,26 @@ function renderSummary(summary, positions, base) {
   const enabled = cardPrefs.order.filter((id) => cardPrefs.enabled.includes(id));
   $('#summary').innerHTML = enabled.map((id) => {
     const r = CARD_DEFS[id].render(summary, base, positions || []);
-    return card(CARD_DEFS[id].label, r.value, r.sub || '', r.signVal);
+    const html = card(CARD_DEFS[id].label, r.value, r.sub || '', r.signVal);
+    // NET WORTH / CASH cards open the cash editor
+    return (id === 'net_worth' || id === 'cash') ? html.replace('class="card', 'title="Click to edit cash" data-cash-card="1" class="card') : html;
   }).join('');
 }
+// ---- PEEK / UNPEEK: blur personal figures, keep public market data ----------
+// Purely visual (CSS on body.unpeek) so screen-sharing is safe; nothing is removed from the page.
+let unpeek = (() => { try { return localStorage.getItem('finsight-unpeek') === '1'; } catch { return false; } })();
+function applyPeek() {
+  document.body.classList.toggle('unpeek', unpeek);
+  const b = $('#peek-btn');
+  if (b) { b.textContent = unpeek ? '◌ PEEK' : '◉ UNPEEK'; b.classList.toggle('active', unpeek); }
+}
+$('#peek-btn').addEventListener('click', () => {
+  unpeek = !unpeek;
+  try { localStorage.setItem('finsight-unpeek', unpeek ? '1' : '0'); } catch {}
+  applyPeek();
+});
+applyPeek();
+
 function applyCards() { if (lastSummary) renderSummary(lastSummary, lastPositions, state.base); }
 
 // cards customiser modal
@@ -568,7 +572,7 @@ $('#panels-list').addEventListener('change', (e) => {
 // Each panel is tagged with a stable pid (via a known child element) so its
 // position can be saved/restored; a ⠿ grip in the header is the drag handle.
 const PANEL_PIDS = [
-  ['#positions', 'positions'], ['#perf-ranges', 'performance'], ['#alloc-mode', 'allocation'],
+  ['#positions', 'positions'], ['#wealth-body', 'wealth'], ['#perf-ranges', 'performance'], ['#alloc-mode', 'allocation'],
   ['#heat-metric', 'heatmap'], ['#fxrisk', 'fxrisk'], ['#dividends', 'dividends'], ['#watchlist', 'watchlist'], ['#alerts', 'alerts'], ['#activity', 'activity'],
   ['#detail-panel', 'detail'], ['#news', 'news'], ['#markets', 'markets'], ['#calendar', 'calendar'], ['#wb-body', 'worldbank'], ['#fred-body', 'fred'], ['#infl-body', 'inflation'],
 ];
@@ -677,8 +681,154 @@ function priceFlash(sym, last) {
   return last > prev ? 'flash-up' : 'flash-down';
 }
 
+// ---- POSITIONS TABLE: filter by asset class, search, sort, group ------------
+const ASSET_CLASSES = ['Stocks', 'ETFs', 'Crypto', 'Funds & Other'];
+let lastFlash = {}, lastTableData = { positions: [], base: 'SGD' };
+const posView = (() => {
+  const d = { filter: 'ALL', group: 'none', sortKey: 'marketValue', sortDir: -1, q: '', collapsed: [] };
+  try { return { ...d, ...JSON.parse(localStorage.getItem('finsight-posview') || '{}') }; } catch { return d; }
+})();
+function savePosView() { try { localStorage.setItem('finsight-posview', JSON.stringify(posView)); } catch {} }
+
+// Yahoo quoteType -> asset class. Unquoted manual holdings (e.g. a unit trust) land in Funds & Other.
+function assetClass(sym) {
+  const t = catCache[sym]?.type;
+  if (t === 'CRYPTOCURRENCY') return 'Crypto';
+  if (t === 'ETF') return 'ETFs';
+  if (t === 'EQUITY') return 'Stocks';
+  return 'Funds & Other';
+}
+// In the combined view a symbol held in several accounts is split into one row per
+// account (value pro rata by quantity, cost by that account's own average cost).
+function splitByAccount(p) {
+  const hs = p.holdings;
+  if (!hs || !hs.length) return [{ ...p, account: accountName() }];
+  if (hs.length === 1) return [{ ...p, account: hs[0].account }];
+  const costNative = p.avgCost * p.quantity || 1;
+  return hs.map((h) => {
+    const qf = h.quantity / (p.quantity || 1), cf = (h.avgCost * h.quantity) / costNative;
+    const marketValue = p.marketValue * qf, cost = p.cost * cf, unrealized = marketValue - cost;
+    return { ...p, account: h.account, quantity: h.quantity, avgCost: h.avgCost, marketValue, cost, unrealized,
+      unrealizedPct: cost ? unrealized / cost * 100 : 0, fxPnl: p.fxPnl * cf, weight: p.weight * qf, dayChange: p.dayChange * qf };
+  });
+}
+function accountName() {
+  return (accountsCache.find((a) => a.id === state.account) || {}).name || 'Account';
+}
+function groupKey(p) {
+  switch (posView.group) {
+    case 'class': return assetClass(p.symbol);
+    case 'account': return p.account || 'Account';
+    case 'sector': return catCache[p.symbol]?.category || 'Other';
+    case 'currency': return p.currency;
+    default: return '';
+  }
+}
+function sortRows(rows) {
+  const k = posView.sortKey, d = posView.sortDir;
+  return rows.sort((a, b) => {
+    const x = a[k], y = b[k];
+    if (k === 'symbol') return d * String(x).localeCompare(String(y));
+    return d * ((x == null ? -Infinity : x) - (y == null ? -Infinity : y));
+  });
+}
+function posRowHtml(p, base) {
+  const acct = posView.group !== 'account' && p.holdings && p.holdings.length > 1 ? ` · ${p.holdings.length} accts` : '';
+  return `<tr class="clickable ${state.selected === p.symbol ? 'selected' : ''} ${lastFlash[p.symbol] || ''}" data-sym="${esc(p.symbol)}">
+    <td><span class="sym">${esc(p.symbol)}</span><div class="name">${esc(String(p.name || '').slice(0, 20))} · <span class="ccy">${esc(p.currency)}</span>${acct}</div></td>
+    <td class="r">${fmt(p.quantity, p.quantity % 1 ? 4 : 0)}</td>
+    <td class="r">${fmt(p.avgCost)}</td>
+    <td class="r">${fmt(p.last)}</td>
+    <td class="r ${signClass(p.changePct)}">${signStr(p.changePct)}%</td>
+    <td class="r">${money(base, p.marketValue)}</td>
+    <td class="r ${signClass(p.unrealized)}">${moneySigned(base, p.unrealized)}</td>
+    <td class="r ${signClass(p.unrealizedPct)}">${signStr(p.unrealizedPct)}%</td>
+    <td class="r ${signClass(p.fxPnl)}">${p.currency === base ? '<span class="dim">—</span>' : moneySigned(base, p.fxPnl)}</td>
+    <td class="r">${fmt(p.weight, 1)}</td>
+    <td><div class="row-actions">
+      <button class="x-btn sell" data-act="sell" data-sym="${esc(p.symbol)}" data-qty="${p.quantity}">S</button>
+      <button class="x-btn del"  data-act="del"  data-sym="${esc(p.symbol)}">✕</button>
+    </div></td></tr>`;
+}
+function sumRows(rows) {
+  const s = { marketValue: 0, cost: 0, unrealized: 0, fxPnl: 0, weight: 0 };
+  rows.forEach((r) => { s.marketValue += r.marketValue; s.cost += r.cost; s.unrealized += r.unrealized; s.fxPnl += r.fxPnl || 0; s.weight += r.weight; });
+  s.unrealizedPct = s.cost ? s.unrealized / s.cost * 100 : 0;
+  return s;
+}
+function renderPosFilter(positions, base) {
+  const total = positions.reduce((s, p) => s + p.marketValue, 0) || 1;
+  const byCls = {}; positions.forEach((p) => { const c = assetClass(p.symbol); byCls[c] = (byCls[c] || 0) + p.marketValue; });
+  const chip = (id, label, v) => `<button data-cls="${esc(id)}" class="${posView.filter === id ? 'active' : ''}" title="${money(base, v)}">${esc(label)}${id === 'ALL' ? '' : ` <span class="dim">${(v / total * 100).toFixed(0)}%</span>`}</button>`;
+  $('#pos-filter').innerHTML = chip('ALL', 'ALL', total) +
+    ASSET_CLASSES.filter((c) => byCls[c] || posView.filter === c).map((c) => chip(c, c.toUpperCase(), byCls[c] || 0)).join('');
+}
+function renderPositionsTable() {
+  const { positions, base } = lastTableData;
+  const body = $('#positions-body'), scope = $('#pos-scope');
+  $$('#pos-head th[data-sort]').forEach((th) => {
+    th.classList.toggle('sorted', th.dataset.sort === posView.sortKey);
+    th.dataset.dir = th.dataset.sort === posView.sortKey ? (posView.sortDir > 0 ? '▲' : '▼') : '';
+  });
+  $('#pos-group').value = posView.group;
+  if (!positions.length) {
+    $('#pos-filter').innerHTML = ''; scope.classList.add('hidden');
+    body.innerHTML = `<tr><td colspan="11" class="empty">No positions yet — add one above or type <b>ADD AAPL 10 195.50</b> in the command bar.</td></tr>`;
+    return;
+  }
+  renderPosFilter(positions, base);
+  const q = posView.q.trim().toUpperCase();
+  let rows = positions.filter((p) => (posView.filter === 'ALL' || assetClass(p.symbol) === posView.filter)
+    && (!q || p.symbol.toUpperCase().includes(q) || String(p.name || '').toUpperCase().includes(q)));
+  if (posView.group === 'account') rows = rows.flatMap(splitByAccount);
+  const filtered = posView.filter !== 'ALL' || q;
+  if (filtered) {
+    const s = sumRows(rows), all = positions.reduce((t, p) => t + p.marketValue, 0) || 1;
+    scope.innerHTML = `SHOWING ${new Set(rows.map((r) => r.symbol)).size} OF ${positions.length} · ${money(base, s.marketValue)} (${(s.marketValue / all * 100).toFixed(1)}% of invested) · P&amp;L <span class="${signClass(s.unrealized)}">${moneySigned(base, s.unrealized)} (${signStr(s.unrealizedPct)}%)</span>`;
+    scope.classList.remove('hidden');
+  } else scope.classList.add('hidden');
+  if (!rows.length) { body.innerHTML = `<tr><td colspan="11" class="empty">No holdings match this filter.</td></tr>`; return; }
+  if (posView.group === 'none') { body.innerHTML = sortRows(rows).map((p) => posRowHtml(p, base)).join(''); return; }
+  const groups = {};
+  rows.forEach((r) => { const k = groupKey(r); (groups[k] || (groups[k] = [])).push(r); });
+  body.innerHTML = Object.entries(groups)
+    .map(([k, rs]) => ({ k, rs, s: sumRows(rs) }))
+    .sort((a, b) => b.s.marketValue - a.s.marketValue)
+    .map(({ k, rs, s }) => {
+      const open = !posView.collapsed.includes(posView.group + ':' + k);
+      return `<tr class="grp-row" data-grp="${esc(k)}">
+        <td colspan="5"><span class="grp-caret">${open ? '▾' : '▸'}</span> ${esc(k.toUpperCase())} <span class="dim">· ${rs.length}</span></td>
+        <td class="r">${money(base, s.marketValue)}</td>
+        <td class="r ${signClass(s.unrealized)}">${moneySigned(base, s.unrealized)}</td>
+        <td class="r ${signClass(s.unrealizedPct)}">${signStr(s.unrealizedPct)}%</td>
+        <td class="r ${signClass(s.fxPnl)}">${moneySigned(base, s.fxPnl)}</td>
+        <td class="r">${fmt(s.weight, 1)}</td><td></td></tr>` +
+        (open ? sortRows(rs).map((p) => posRowHtml(p, base)).join('') : '');
+    }).join('');
+}
+$('#pos-filter').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-cls]'); if (!b) return;
+  posView.filter = b.dataset.cls; savePosView(); renderPositionsTable();
+});
+$('#pos-group').addEventListener('change', (e) => { posView.group = e.target.value; savePosView(); renderPositionsTable(); });
+$('#pos-search').value = posView.q;
+$('#pos-search').addEventListener('input', (e) => { posView.q = e.target.value; savePosView(); renderPositionsTable(); });
+$('#pos-head').addEventListener('click', (e) => {
+  const th = e.target.closest('th[data-sort]'); if (!th) return;
+  const k = th.dataset.sort;
+  if (posView.sortKey === k) posView.sortDir *= -1;
+  else { posView.sortKey = k; posView.sortDir = k === 'symbol' ? 1 : -1; }
+  savePosView(); renderPositionsTable();
+});
+
 // row clicks (event delegation)
 $('#positions-body').addEventListener('click', async (e) => {
+  const grp = e.target.closest('tr.grp-row');
+  if (grp) {
+    const key = posView.group + ':' + grp.dataset.grp, i = posView.collapsed.indexOf(key);
+    if (i >= 0) posView.collapsed.splice(i, 1); else posView.collapsed.push(key);
+    savePosView(); renderPositionsTable(); return;
+  }
   const actBtn = e.target.closest('[data-act]');
   if (actBtn) {
     e.stopPropagation();
@@ -726,17 +876,99 @@ async function setCashBalance(ccy, amt) {
   try {
     const res = await api('/api/cash' + baseQS(), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ccy, amount: amt }) });
     setStatus(Number(amt) === 0 ? `Cleared ${ccy.toUpperCase()} cash` : `Cash ${ccy.toUpperCase()} set to ${fmt(Number(amt))}`, 'ok');
-    renderPortfolio(res); loadFxRisk();
+    wealthSig = ''; renderPortfolio(res); loadFxRisk();
   } catch (e) { setStatus('CASH failed: ' + e.message, 'err'); }
 }
-$('#cash-btn').addEventListener('click', () => {
-  if (blockIfAll()) return;
-  const cur = lastCash.length ? lastCash.map((c) => `${c.ccy} ${fmt(c.amount)}`).join(', ') : 'none';
-  const v = prompt(`Uninvested cash in this account (currently: ${cur}).\nEnter currency and amount, e.g. "USD 5000" (0 clears it):`, '');
-  if (!v) return;
-  const [ccy, amt] = v.trim().split(/\s+/);
-  if (!ccy || amt == null) return setStatus('Enter e.g. USD 5000', 'err');
-  setCashBalance(ccy, amt.replace(/,/g, ''));
+// ---- CASH EDITOR: all accounts × currencies in one place ---------------------
+let cashDraft = [];   // [{ id, name, rows: [{ ccy, amount, orig }] }]
+function setCashStatus(m, k) { const el = $('#cash-status'); el.textContent = m || ''; el.className = 'cmd-status ' + (k || ''); }
+async function openCashEditor() {
+  $('#cash-modal').classList.remove('hidden'); setCashStatus('Loading…');
+  $('#cash-editor').innerHTML = '';
+  try {
+    const ids = state.account === 'ALL' ? accountsCache.map((a) => a.id) : [state.account];
+    cashDraft = await Promise.all(ids.map(async (id) => {
+      const d = await api(`/api/portfolio?base=${encodeURIComponent(state.base)}&account=${encodeURIComponent(id)}`);
+      return { id, name: (accountsCache.find((a) => a.id === id) || {}).name || id,
+        orig: Object.fromEntries((d.cash || []).map((c) => [c.ccy, c.amount])),
+        rows: (d.cash || []).map((c) => ({ ccy: c.ccy, amount: String(c.amount) })) };
+    }));
+    renderCashEditor(); setCashStatus('');
+  } catch (e) { setCashStatus('Could not load cash: ' + e.message, 'err'); }
+}
+function renderCashEditor() {
+  $('#cash-editor').innerHTML = cashDraft.map((a, ai) => `
+    <div class="cash-acct">
+      <div class="cash-acct-name">${esc(a.name)}</div>
+      ${a.rows.map((r, ri) => `<div class="cash-row">
+        <input class="cash-ccy" data-a="${ai}" data-r="${ri}" value="${esc(r.ccy)}" maxlength="3" placeholder="CCY" />
+        <input class="cash-amt" data-a="${ai}" data-r="${ri}" value="${esc(r.amount)}" inputmode="decimal" placeholder="0.00" />
+        <button class="x-btn" data-del-a="${ai}" data-del-r="${ri}" title="Remove">✕</button></div>`).join('')}
+      <button class="mini-btn cash-add" data-add="${ai}">+ CURRENCY</button>
+    </div>`).join('');
+}
+// Auto-save: each edit is saved ~0.7s after you stop typing (Enter / leaving the box saves at once).
+let cashTimer = null, cashSaving = null;
+function queueCashSave(delay = 700) { clearTimeout(cashTimer); cashTimer = setTimeout(() => saveCash(), delay); }
+$('#cash-editor').addEventListener('input', (e) => {
+  const t = e.target; if (!t.dataset || t.dataset.a == null) return;
+  const r = cashDraft[t.dataset.a].rows[t.dataset.r];
+  if (t.classList.contains('cash-ccy')) r.ccy = t.value.toUpperCase(); else r.amount = t.value;
+  setCashStatus('Editing…'); queueCashSave();
+});
+$('#cash-editor').addEventListener('focusout', (e) => { if (e.target.matches && e.target.matches('.cash-row input')) queueCashSave(0); });
+$('#cash-editor').addEventListener('click', (e) => {
+  const add = e.target.closest('[data-add]'), del = e.target.closest('[data-del-a]');
+  if (add) { cashDraft[add.dataset.add].rows.push({ ccy: state.base, amount: '' }); renderCashEditor(); const ins = $$('#cash-editor .cash-amt'); ins.length && ins[ins.length - 1].focus(); }
+  if (del) { cashDraft[del.dataset.delA].rows.splice(+del.dataset.delR, 1); renderCashEditor(); queueCashSave(0); }
+});
+async function saveCash() {
+  clearTimeout(cashTimer);
+  if (cashSaving) { await cashSaving; }          // never run two saves at once
+  cashSaving = (async () => {
+    const calls = [];
+    for (const a of cashDraft) {
+      const next = {};
+      for (const r of a.rows) {
+        const ccy = String(r.ccy || '').trim().toUpperCase(), amt = String(r.amount || '').replace(/[, ]/g, '');
+        if (!ccy && !amt) continue;
+        if (!/^[A-Z]{3}$/.test(ccy)) return setCashStatus(`${a.name}: currency must be a 3-letter code (e.g. SGD)`, 'err');
+        if (amt === '' || amt === '-' || amt === '.') continue;   // still typing
+        const v = Number(amt);
+        if (!Number.isFinite(v)) return setCashStatus(`${a.name}: "${r.amount}" is not a number`, 'err');
+        next[ccy] = (next[ccy] || 0) + v;
+      }
+      for (const ccy of new Set([...Object.keys(a.orig), ...Object.keys(next)])) {
+        const v = next[ccy] || 0;
+        const stillListed = a.rows.some((r) => String(r.ccy || '').trim().toUpperCase() === ccy);
+        if (!(ccy in next) && stillListed) continue;          // row being edited (blank) — leave the saved value alone
+        if (Math.abs(v - (a.orig[ccy] || 0)) > 1e-9) calls.push({ a, ccy, amount: v });
+      }
+    }
+    if (!calls.length) { setCashStatus('All changes saved ✓', 'ok'); return; }
+    setCashStatus('Saving…');
+    try {
+      for (const c of calls) {
+        await api(`/api/cash?base=${encodeURIComponent(state.base)}&account=${encodeURIComponent(c.a.id)}`,
+          { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ccy: c.ccy, amount: c.amount }) });
+        if (c.amount === 0) delete c.a.orig[c.ccy]; else c.a.orig[c.ccy] = c.amount;
+      }
+      setCashStatus(`Saved ✓ · net worth updated`, 'ok');
+      wealthSig = ''; await loadPortfolio(); loadWealth();
+    } catch (e) { setCashStatus('Save failed: ' + e.message, 'err'); }
+  })();
+  try { await cashSaving; } finally { cashSaving = null; }
+}
+async function closeCashEditor() { await saveCash(); $('#cash-modal').classList.add('hidden'); }
+$('#cash-btn').addEventListener('click', openCashEditor);
+$('#wealth-cash-btn').addEventListener('click', openCashEditor);
+$('#cash-save').addEventListener('click', closeCashEditor);
+$('#cash-cancel').addEventListener('click', closeCashEditor);
+$('#cash-close').addEventListener('click', closeCashEditor);
+$('#cash-editor').addEventListener('keydown', (e) => { if (e.key === 'Enter') saveCash(); });
+// The NET WORTH / CASH cards open the editor too.
+$('#summary').addEventListener('click', (e) => {
+  if (e.target.closest('[data-cash-card]')) openCashEditor();
 });
 
 // ===========================================================================
@@ -918,7 +1150,8 @@ async function loadDetail() {
   // Build a persistent skeleton ONCE so the interactive chart (its canvases,
   // ResizeObserver, zoom window and drawings) survives range switches and the
   // 30s background refresh — only the header + stats blocks get re-rendered.
-  if (!body.querySelector('#detail-chart-host')) {
+  // (an expanded chart is temporarily re-parented to <body>; keep using it)
+  if (!body.querySelector('#detail-chart-host') && !(detailChart && detailChart.maxed)) {
     body.innerHTML =
       '<div id="detail-hdr"></div>' +
       '<div id="detail-chart-host"></div>' +
@@ -926,21 +1159,44 @@ async function loadDetail() {
     detailChart = null;
   }
   const hdr = $('#detail-hdr');
+  // Manual holdings (no Yahoo ticker, e.g. a unit trust) have no chart or quote to fetch.
+  const manual = lastTableData.positions.find((p) => p.symbol === symbol && p.quoted === false);
+  if (manual) {
+    detailChart = null; // body is replaced below, so the chart skeleton is rebuilt on the next real symbol
+    body.innerHTML = `<div class="sym amber">${esc(symbol)}</div><div class="muted small">${esc(manual.name || '')}</div>
+      <div class="muted small" style="margin-top:8px">Manual holding · no market data feed. Valued at the price you entered:
+      <b>${esc(manual.currency)} ${fmt(manual.last)}</b> × ${fmt(manual.quantity, 4)} = <b>${money(lastTableData.base, manual.marketValue)}</b>.
+      To update it, edit its price in the ledger.</div>`;
+    return;
+  }
   if (!detailChart) hdr.innerHTML = '<div class="muted">Loading ' + esc(symbol) + '…</div>';
   try {
-    const { range, interval } = state.detailRange;
-    const h = await api(`/api/history?symbol=${encodeURIComponent(symbol)}&range=${range}&interval=${interval}`);
+    const { range, interval, tf } = state.detailRange;
+    // Fetch more history than is shown so moving averages (up to MA200) and other
+    // indicators are fully formed from the first visible bar; the chart opens on `range`.
+    // Chart timeframe buttons (tf) load a long history and open on the latest bars.
+    const fetchRange = tf ? range : (DETAIL_WARMUP[range] || range);
+    const [h, qd] = await Promise.all([
+      api(`/api/history?symbol=${encodeURIComponent(symbol)}&range=${fetchRange}&interval=${interval}`),
+      api('/api/quote?symbols=' + encodeURIComponent(symbol)).catch(() => null),
+    ]);
     if (state.selected !== symbol) return; // user switched symbols while we awaited
-    const m = h.meta || {};
+    const q = (qd && qd.quotes && qd.quotes[0] && !qd.quotes[0].error) ? qd.quotes[0] : {};
+    const m = { ...(h.meta || {}), ...q };
     const pts = h.points || [];
-    const chg = m.change, chgPct = m.changePct;
+    const visibleFrom = tf ? null : visibleStart(pts, range);
+    const vi = Math.max(0, pts.findIndex((p) => p.t >= visibleFrom));
+    const base0 = pts[vi > 0 ? vi - 1 : 0], lastPt = pts[pts.length - 1];
+    const rChg = base0 && lastPt ? lastPt.c - base0.c : null, rPct = rChg != null && base0.c ? rChg / base0.c * 100 : null;
+    const rLabel = { '1d': '1D', '5d': '5D', '1mo': '1M', '6mo': '6M', '1y': '1Y', '5y': '5Y' }[range] || range.toUpperCase();
     hdr.innerHTML = `
       <div class="detail-top">
         <div><span class="detail-sym">${esc(m.symbol || symbol)}</span> <span class="detail-name">${esc(m.name || '')}</span></div>
       </div>
       <div class="detail-top" style="margin-top:4px">
         <span class="detail-price">${fmt(m.price)}</span>
-        <span class="detail-chg ${signClass(chg)}">${signStr(chg)} (${signStr(chgPct)}%)</span>
+        <span class="detail-chg ${signClass(m.change)}">${signStr(m.change)} (${signStr(m.changePct)}%) <span class="muted small">today</span></span>
+        ${!tf && range !== '1d' && rPct != null ? `<span class="small ${signClass(rChg)}">${signStr(rPct)}% <span class="muted">${rLabel}</span></span>` : ''}
         <span class="muted small">${m.currency || ''} · ${esc(m.exchange || '')}</span>
       </div>`;
     $('#detail-stats').innerHTML = `
@@ -950,12 +1206,40 @@ async function loadDetail() {
         ${statRow('52W Low', fmt(m.weekLow52))}
         ${statRow('Volume', fmtBig(m.volume))}
         ${statRow('Type', esc(m.type || '—'))}`;
-    if (!detailChart && window.PriceChart) detailChart = new PriceChart($('#detail-chart-host'));
-    if (detailChart) detailChart.load(symbol, pts, m, { range, interval });
+    if (!detailChart && window.PriceChart) {
+      detailChart = new PriceChart($('#detail-chart-host'));
+      detailChart.onRequest = ({ interval: iv }) => {
+        state.detailRange = { range: CHART_TF_RANGE[iv] || '1y', interval: iv, tf: true };
+        $$('#ranges button').forEach((x) => x.classList.remove('active'));
+        loadDetail();
+      };
+      detailChart.onSymbol = (sym) => { if (detailChart && detailChart.maxed) detailChart.symInput.value = sym; selectSymbol(sym); };
+    }
+    if (detailChart) detailChart.load(symbol, pts, m, { range, interval, visibleFrom });
     else $('#detail-chart-host').innerHTML = sparkline(pts, chg >= 0); // fallback if chart.js absent
   } catch (e) {
     hdr.innerHTML = `<div class="down">Could not load ${esc(symbol)}: ${esc(e.message)}</div>`;
   }
+}
+// Detail chart: history fetched per visible range, with enough extra bars for MA200/MA50.
+// Chart timeframe -> history to fetch (Yahoo caps: 1m ≈ 7 days, 5m/15m ≈ 60 days, 1h ≈ 730 days).
+const CHART_TF_RANGE = { '1m': '5d', '5m': '1mo', '15m': '1mo', '60m': '1y', '1d': '5y', '1wk': 'max', '1mo': 'max' };
+const DETAIL_WARMUP = { '1d': '5d', '5d': '1mo', '1mo': '1y', '6mo': '2y', '1y': '2y', '5y': '10y' };
+// First timestamp of the requested range inside a longer fetched series.
+// Intraday: count trading sessions back via overnight gaps (> 2h); daily/weekly: calendar span.
+function visibleStart(pts, range) {
+  if (!pts.length) return 0;
+  const last = pts[pts.length - 1].t;
+  const sessions = { '1d': 1, '5d': 5 }[range];
+  if (sessions) {
+    let seen = 0;
+    for (let i = pts.length - 1; i > 0; i--) {
+      if (pts[i].t - pts[i - 1].t > 2 * 3600000 && ++seen === sessions) return pts[i].t;
+    }
+    return pts[0].t;
+  }
+  const days = { '1mo': 31, '6mo': 183, '1y': 366, '5y': 5 * 366 }[range];
+  return days ? last - days * 86400000 : pts[0].t;
 }
 function statRow(k, v) { return `<div class="stat-row"><span class="k">${k}</span><span class="v">${v}</span></div>`; }
 
@@ -1441,16 +1725,66 @@ $('#heatmap-body').addEventListener('click', (e) => { const g = e.target.closest
 $('#heat-metric').addEventListener('click', (e) => {
   const b = e.target.closest('button'); if (!b) return;
   $$('#heat-metric button').forEach((x) => x.classList.remove('active')); b.classList.add('active');
-  heatMetric = b.dataset.metric; renderHeatmap(lastPositions);
+  heatMetric = b.dataset.metric; $('#heatmap-body').dataset.metric = heatMetric; renderHeatmap(lastPositions);
 });
+
+// ---- NET WORTH BREAKDOWN: asset classes + cash, overall and per account -----
+const CLASS_COLORS = { Stocks: '#a78bfa', ETFs: '#38bdf8', Crypto: '#facc15', 'Funds & Other': '#f472b6', Cash: '#2ec27e' };
+let wealthSig = '', wealthAt = 0;
+async function loadWealth() {
+  const box = $('#wealth-body'); if (!box) return;
+  const ids = state.account === 'ALL' ? accountsCache.map((a) => a.id) : [state.account];
+  const sig = state.base + '|' + ids.join(',');
+  if (sig === wealthSig && Date.now() - wealthAt < 60000) return; // per-account fetches are cheap but not free
+  wealthSig = sig; wealthAt = Date.now();
+  try {
+    const accts = await Promise.all(ids.map(async (id) => {
+      const d = await api(`/api/portfolio?base=${encodeURIComponent(state.base)}&account=${encodeURIComponent(id)}`);
+      await ensureCategories(d.positions.map((p) => p.symbol));
+      const parts = {};
+      d.positions.forEach((p) => { const c = assetClass(p.symbol); parts[c] = (parts[c] || 0) + p.marketValue; });
+      const cash = (d.cash || []).reduce((s, c) => s + (c.base || 0), 0);
+      if (cash) parts.Cash = cash;
+      return { id, name: (accountsCache.find((a) => a.id === id) || {}).name || id, parts, cash, cashList: d.cash || [],
+        net: Object.values(parts).reduce((s, v) => s + v, 0) };
+    }));
+    renderWealth(accts, state.base);
+  } catch (e) { wealthSig = ''; box.innerHTML = `<span class="muted">Breakdown unavailable: ${esc(e.message)}</span>`; }
+}
+function renderWealth(accts, base) {
+  const box = $('#wealth-body');
+  const order = [...ASSET_CLASSES, 'Cash'];
+  const tot = {}; accts.forEach((a) => Object.entries(a.parts).forEach(([k, v]) => { tot[k] = (tot[k] || 0) + v; }));
+  const net = Object.values(tot).reduce((s, v) => s + v, 0);
+  if (!net) { box.innerHTML = '<span class="muted">Add positions or cash to see your breakdown.</span>'; return; }
+  const seg = (parts, scale) => order.filter((k) => parts[k] > 0).map((k) =>
+    `<span class="w-seg" style="width:${(parts[k] / scale * 100).toFixed(3)}%;background:${CLASS_COLORS[k]}" title="${esc(k)} · ${money(base, parts[k])} (${(parts[k] / net * 100).toFixed(1)}% of net worth)"></span>`).join('');
+  const legend = order.filter((k) => tot[k] > 0).map((k) =>
+    `<div class="w-lg"><span class="sw" style="background:${CLASS_COLORS[k]}"></span><span class="w-lab">${esc(k.toUpperCase())}</span><span class="w-amt">${money(base, tot[k])}</span><span class="pct">${(tot[k] / net * 100).toFixed(1)}%</span></div>`).join('');
+  const cashCcy = {}; accts.forEach((a) => a.cashList.forEach((c) => { cashCcy[c.ccy] = (cashCcy[c.ccy] || 0) + c.amount; }));
+  const cashNote = Object.keys(cashCcy).length ? `<div class="w-note">CASH · ${Object.entries(cashCcy).map(([c, v]) => `${esc(c)} ${fmt(v)}`).join(' · ')}</div>` : '';
+  const maxNet = Math.max(...accts.map((a) => a.net)) || 1;
+  const rows = accts.length > 1 ? accts.filter((a) => a.net > 0).sort((a, b) => b.net - a.net).map((a) =>
+    `<div class="w-row"><span class="w-name" title="${esc(a.name)}">${esc(a.name)}</span>
+      <span class="w-track"><span class="w-bar" style="width:${(a.net / maxNet * 100).toFixed(2)}%">${seg(a.parts, a.net)}</span></span>
+      <span class="w-amt">${money(base, a.net)}</span><span class="pct">${(a.net / net * 100).toFixed(1)}%</span></div>`).join('') : '';
+  box.innerHTML = `<div class="w-head"><span class="muted small">NET WORTH</span><span class="w-total">${money(base, net)}</span></div>
+    <div class="w-stack">${seg(tot, net)}</div><div class="w-legend">${legend}</div>${cashNote}
+    ${rows ? `<div class="fxr-sub">BY ACCOUNT</div><div class="w-rows">${rows}</div>` : ''}`;
+}
 
 const PALETTE = ['#a78bfa', '#38bdf8', '#2ec27e', '#fb7185', '#f472b6', '#facc15', '#34d399', '#60a5fa', '#2dd4bf', '#c084fc', '#94a3b8'];
 function renderAllocation(positions) {
   const box = $('#alloc-body');
   if (!positions || !positions.length) { box.innerHTML = '<span class="muted">Add positions to see allocation.</span>'; return; }
   let items;
-  if (allocMode === 'sector') {
-    const g = {}; positions.forEach((p) => { const c = catCache[p.symbol]?.category || 'Other'; g[c] = (g[c] || 0) + p.marketValue; });
+  if (allocMode === 'sector' || allocMode === 'class' || allocMode === 'account') {
+    const g = {};
+    const rows = allocMode === 'account' ? positions.flatMap(splitByAccount) : positions;
+    rows.forEach((p) => {
+      const c = allocMode === 'sector' ? (catCache[p.symbol]?.category || 'Other') : allocMode === 'class' ? assetClass(p.symbol) : p.account;
+      g[c] = (g[c] || 0) + p.marketValue;
+    });
     items = Object.entries(g).map(([label, value]) => ({ label, value }));
   } else items = positions.map((p) => ({ label: p.symbol, value: p.marketValue }));
   items.sort((a, b) => b.value - a.value);
@@ -1569,7 +1903,7 @@ $('#perf-bench').addEventListener('change', (e) => {
 function renderAnalytics(positions) {
   lastPositions = positions || [];
   renderHeatmap(positions); renderAllocation(positions);
-  ensureCategories(positions.map((p) => p.symbol)).then(() => { renderHeatmap(lastPositions); renderAllocation(lastPositions); });
+  ensureCategories(positions.map((p) => p.symbol)).then(() => { renderHeatmap(lastPositions); renderAllocation(lastPositions); renderPositionsTable(); loadWealth(); });
   const sig = state.base + '|' + positions.map((p) => p.symbol + ':' + p.quantity).join(',');
   if (sig !== perfSig) { perfSig = sig; loadPerformance(); }
 }
