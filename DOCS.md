@@ -41,6 +41,13 @@ never touches your data.
   is a self-contained `window.PriceChart` class (loaded **before** `app.js`) that renders the interactive
   security chart — candles/line/area, SMA/EMA/Bollinger overlays, RSI/MACD/volume panes, a crosshair,
   pan/zoom, and the trendline/H-line/Fibonacci drawing tools — on a two-layer HiDPI `<canvas>`. It's
+  driven by Pointer Events (mouse, pen and touch: one finger pans or draws, two fingers pinch-zoom, a long
+  press opens the crosshair). `chartgrid.js` (`window.ChartGrid`) wraps it for the 2- and 4-chart
+  full-screen workspace (linked symbol, crosshair synced by date, shared per-symbol drawings).
+  Chart extras: compare symbols (as-of joined, % scale), ledger trades/dividends/average cost
+  (`GET /api/chart-trades?symbol=&account=`), alerts drawn on the chart, older history loaded when you pan
+  past the first bar, and a watchlist side panel (↑/↓ steps). NB: Yahoo's `range=max` returns *quarterly*
+  bars for every interval, so the chart asks for explicit years (`10y`, `20y`, `50y`). It's
   wrapped in an IIFE so it shares no globals with `app.js`. Polls the API every 15s for live
   data. User preferences (profile name, base currency, summary-card layout, chart type & indicators)
   live in the browser's `localStorage` (`finsight-profile`, `finsight-base`, `finsight-cards`,
@@ -327,13 +334,27 @@ Body: `{ "symbol": "NVDA" }`. → `{ watchlist }`
 
 #### `GET /api/alerts`
 Alerts with live status.
-→ `{ "alerts": [ { id, symbol, op, price, note, createdAt, triggeredAt, currentPrice, currency, name, met } ] }`
-(`op` is `">"` or `"<"`; `met` is whether the condition currently holds; `triggeredAt`/`notifiedAt` are
-one-shot timestamps.)
+→ `{ "alerts": [ { id, symbol, kind, op, price, line, ind, drawingId, note, createdAt, triggeredAt, label, currentPrice, currentValue, level, currency, name, met } ] }`
+(`op` is `">"` or `"<"`; `met` is whether `currentValue op level` holds now; `triggeredAt`/`notifiedAt` are
+one-shot timestamps. `label` is a readable condition, e.g. `AAPL RSI(14, 1d) ≥ 70`.)
+
+Kinds (`lib/alertmath.js` holds the maths):
+- `price` — live price vs `price`.
+- `line` — live price vs a drawn sloped line `line: { pts: [{t,p},{t,p}], interval, log }`, valued at the
+  latest bar in **bar-index** space exactly as the chart draws it (weekends do not bend the line).
+- `ind` — `ind: { type, length, interval }`: `rsi`/`mfi`/`cci`/`willr` compare the oscillator with
+  `price` (the level); `sma`/`ema` compare the live price with the average.
+History for `line`/`ind` comes from the cached `/api/history`. The background timer evaluates every
+alert each minute and sends one macOS notification per trigger. Alerts never place orders.
 
 #### `POST /api/alerts/add`
-Body: `{ "symbol": "AAPL", "op": ">", "price": 320, "note": "" }` (`op` accepts `>`/`<`/`above`/`below`).
+Body: `{ "symbol": "AAPL", "op": ">", "price": 320, "note": "" }` (`op` accepts `>`/`<`/`above`/`below`),
+or with `kind: "line"` / `kind: "ind"` and the fields above; `drawingId` links an alert to a chart drawing.
 → `{ alerts }`
+
+#### `POST /api/alerts/update`
+Body: `{ "id", ...fields }` — replaces the condition (the chart sends this when a linked line is moved) and
+re-arms the alert. → `{ alerts }`
 
 #### `POST /api/alerts/remove`
 Body: `{ "id": "<alert id>" }`. → `{ alerts }`
@@ -363,11 +384,12 @@ are bucketed by instrument type.
 - **New summary card**: add an entry to `CARD_DEFS` in `public/app.js` — it appears automatically in
   the ⚙ Layout customizer.
 - **New chart indicator/overlay**: add a pure function (aligned 1:1 with bars, `null` during warm-up) to
-  `public/chart.js`, register it in the `OVERLAYS` (price-pane line) or `PANES` (sub-pane) table, and draw
-  it in `_drawPrice`/`_drawPaneRSI`/`_drawPaneMACD`. A new drawing tool: add it to `TOOLS`, handle it in
-  `_onDown`/`_onUp`, `_drawOne`, and `_hitTest`. Indicators are computed once per `PriceChart.prototype.load`
-  and sliced per
-  visible window, so pan/zoom never recompute them.
+  `public/indicators.js` (tested in `test/indicators.test.js` / `test/chartfeatures.test.js`), then register
+  it in the `IND` table in `public/chart.js` (`pane: true` for a sub-pane). `calc(bars, params, ctx, inst)`
+  returns `{ lines, levels?, range?, fill?, cloud?, profile? }`; lines may set `dots`, `step`, `dirs`, `dash`.
+  `ctx.series(sym)` gives another symbol's bars (used by RS). A new drawing tool: add it to `TOOLS` and
+  `GROUPS`, then handle it in `_drawOne`, `_hit` and (if it has unusual handles) `_handles`. Indicators are
+  computed when data or settings change, not on pan/zoom.
 - **Draggable panels**: each panel is tagged with a stable `data-pid` (see `PANEL_PIDS` in `app.js`); a ⠿
   grip in the header drives HTML5 drag-and-drop. Order is saved per column in `localStorage`
   (`finsight-layout`); show/hide in `finsight-panels`; card layout in `finsight-cards`. All layout state

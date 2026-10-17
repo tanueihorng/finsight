@@ -98,6 +98,17 @@
     expand: svg('<path d="M2 7V2h5M16 7V2h-5M2 11v5h5M16 11v5h-5"/>'),
     shrink: svg('<path d="M7 2v5H2M11 2v5h5M7 16v-5H2M11 16v-5h5"/>'),
     journal: svg('<path d="M4 2h10v14H4zM7 6h4M7 9h4M7 12h3"/>'),
+    bell: svg('<path d="M5 12V8a4 4 0 018 0v4l1.5 2h-11zM7.5 15.5a1.6 1.6 0 003 0"/>'),
+    compare: svg('<path d="M2 14l4-5 3 3 7-8"/><path d="M2 10l4-2 4 4 6-3" stroke-dasharray="2 1.6"/>'),
+    list: svg('<path d="M6 4h10M6 9h10M6 14h10"/><circle cx="2.5" cy="4" r=".8"/><circle cx="2.5" cy="9" r=".8"/><circle cx="2.5" cy="14" r=".8"/>'),
+    grid: svg('<rect x="2" y="2" width="6" height="6"/><rect x="10" y="2" width="6" height="6"/><rect x="2" y="10" width="6" height="6"/><rect x="10" y="10" width="6" height="6"/>'),
+    trades: svg('<path d="M4 13l3-4 3 2 5-7"/><path d="M3 16l2-2.5L7 16z" fill="currentColor"/><path d="M13 2l2 2.5L17 2z" fill="currentColor"/>'),
+    pitchfork: svg('<path d="M2 9l6-1M8 8l8-6M8 8l8 2M8 8l8 8"/><circle cx="2" cy="9" r="1.2"/>'),
+    callout: svg('<rect x="6" y="2" width="10" height="7" rx="1"/><path d="M8 9l-5 6"/>'),
+    note: svg('<path d="M4 2h10v10l-4 4H4z"/><path d="M10 16v-4h4"/>'),
+    brush: svg('<path d="M2 14c2-1 3-5 5-5s2 4 4 4 3-6 5-8"/>'),
+    pricerange: svg('<path d="M9 2v14M5 6l4-4 4 4M5 12l4 4 4-4M3 2h12M3 16h12"/>'),
+    daterange: svg('<path d="M2 9h14M6 5l-4 4 4 4M12 5l4 4-4 4M2 3v12M16 3v12"/>'),
   };
 
   // ---- indicator registry ----------------------------------------------------
@@ -131,9 +142,47 @@
       calc: function (b) { return { lines: [{ data: IND_LIB.obv(b) }] }; } },
     adx: { name: 'ADX / DMI', short: 'ADX', pane: true, params: [['length', 'Length', 14]], color: '#ffeb3b',
       calc: function (b, p) { const r = IND_LIB.adx(b, p.length); return { lines: [{ data: r.adx, width: 1.6 }, { data: r.plusDI, color: '#089981' }, { data: r.minusDI, color: '#f23645' }], levels: [25] }; } },
+    ichi: { name: 'Ichimoku Cloud', short: 'Ichimoku', params: [['conv', 'Conversion', 9], ['base', 'Base', 26], ['spanB', 'Span B', 52], ['disp', 'Displacement', 26]], color: '#2962ff',
+      calc: function (b, p) {
+        const r = IND_LIB.ichimoku(b, p.conv, p.base, p.spanB, p.disp);
+        return { lines: [{ data: r.conv, color: '#2962ff' }, { data: r.base, color: '#b71c1c' }, { data: r.spanA, color: '#43a047', width: 1 }, { data: r.spanB, color: '#f23645', width: 1 }, { data: r.lagging, color: '#9c27b0', width: 1 }], cloud: [2, 3] };
+      } },
+    psar: { name: 'Parabolic SAR', short: 'SAR', params: [['step', 'Step', 0.02], ['max', 'Max', 0.2]], color: '#e040fb',
+      calc: function (b, p) { const r = IND_LIB.psar(b, p.step, p.max); return { lines: [{ data: r.sar, dots: true, dirs: r.dir }] }; } },
+    hilo: { name: '52-week high / low (rolling)', short: 'Hi/Lo', params: [['length', 'Bars', 252]], color: '#90a4ae',
+      calc: function (b, p) { const r = IND_LIB.hiLo(b, p.length); return { lines: [{ data: r.upper, dash: true, color: '#26a69a' }, { data: r.lower, dash: true, color: '#ef5350' }] }; } },
+    pivots: { name: 'Pivot points (standard)', short: 'Pivots', params: [], color: '#ffb74d',
+      calc: function (b, p, ctx) {
+        const iv = ctx.interval, off = -new Date().getTimezoneOffset() * 60000;
+        // period: intraday -> previous day, daily -> previous month, weekly/monthly -> previous year
+        const key = isIntraday(iv) ? function (t) { return Math.floor((t + off) / 86400000); }
+          : iv === '1d' ? function (t) { const d = new Date(t); return d.getFullYear() * 12 + d.getMonth(); }
+          : function (t) { return new Date(t).getFullYear(); };
+        const r = IND_LIB.pivots(b, key), col = { p: '#ffb74d', r1: '#ef5350', r2: '#ef5350', r3: '#ef5350', s1: '#26a69a', s2: '#26a69a', s3: '#26a69a' };
+        return { lines: ['p', 'r1', 'r2', 'r3', 's1', 's2', 's3'].map(function (k) { return { data: r[k], step: true, label: k.toUpperCase(), color: col[k], width: k === 'p' ? 1.4 : 1 }; }), noScale: true };
+      } },
+    vp: { name: 'Volume profile (visible range)', short: 'VPVR', params: [['rows', 'Rows', 24], ['va', 'Value area %', 70]], color: '#5c6bc0',
+      calc: function (b, p) { return { lines: [], profile: 'visible', rows: Math.max(4, Math.min(200, Math.round(p.rows))), va: Math.min(99, p.va) / 100 }; } },
+    vps: { name: 'Volume profile (per session, intraday)', short: 'VP session', params: [['rows', 'Rows', 16], ['va', 'Value area %', 70]], color: '#7e57c2', intradayOnly: true,
+      calc: function (b, p) { return { lines: [], profile: 'session', rows: Math.max(4, Math.min(100, Math.round(p.rows))), va: Math.min(99, p.va) / 100 }; } },
+    cci: { name: 'CCI', pane: true, params: [['length', 'Length', 20]], color: '#26c6da',
+      calc: function (b, p) { return { lines: [{ data: IND_LIB.cci(b, p.length) }], levels: [100, 0, -100] }; } },
+    mfi: { name: 'Money Flow Index', short: 'MFI', pane: true, params: [['length', 'Length', 14]], color: '#ab47bc',
+      calc: function (b, p) { return { lines: [{ data: IND_LIB.mfi(b, p.length) }], levels: [80, 50, 20], range: [0, 100] }; } },
+    willr: { name: 'Williams %R', short: '%R', pane: true, params: [['length', 'Length', 14]], color: '#7e57c2',
+      calc: function (b, p) { return { lines: [{ data: IND_LIB.willr(b, p.length) }], levels: [-20, -50, -80], range: [-100, 0] }; } },
+    rs: { name: 'Relative strength vs benchmark', short: 'RS', pane: true, sym: true, params: [['ma', 'MA length', 50]], color: '#ffca28',
+      calc: function (b, p, ctx, inst) {
+        const bench = ctx.series(inst.sym || 'SPY');
+        if (!bench) return { lines: [], wait: true };
+        const rs = IND_LIB.relStrength(b, bench);
+        return { lines: [{ data: rs, width: 1.4 }].concat(p.ma > 0 ? [{ data: IND_LIB.sma(rs, p.ma), color: '#90a4ae', dash: true }] : []), levels: [100] };
+      } },
   };
   function defaultParams(type) { const o = {}; IND[type].params.forEach(function (p) { o[p[0]] = p[2]; }); return o; }
-  function newInd(type, params) { return { id: uid(), type: type, params: Object.assign(defaultParams(type), params || {}), color: IND[type].color, hidden: false }; }
+  function newInd(type, params) { const i = { id: uid(), type: type, params: Object.assign(defaultParams(type), params || {}), color: IND[type].color, hidden: false }; if (IND[type].sym) i.sym = 'SPY'; return i; }
+  const SYM_RE = /^[A-Za-z0-9.^=\-_:]{1,24}$/;
+  const CMP_COLORS = ['#ff9800', '#e040fb', '#00bcd4', '#ffeb3b'];
 
   // ---- drawing tools ---------------------------------------------------------
   const TOOLS = {
@@ -155,18 +204,34 @@
     short: { n: 2, name: 'Short position (click entry, then stop)', key: 'KeyS' },
     measure: { n: 2, name: 'Price / date range', key: 'KeyM' },
     avwap: { n: 1, name: 'Anchored VWAP (click a bar)', key: 'KeyA' },
+    pitchfork: { n: 3, name: 'Pitchfork (Andrews: pivot, then two swings)', key: 'KeyP' },
+    callout: { n: 2, name: 'Callout (point, then label)', key: 'KeyO' },
+    note: { n: 1, name: 'Note pin', key: 'KeyI' },
+    brush: { n: 2, name: 'Brush (drag to draw)', key: 'KeyB', free: true },
+    pricerange: { n: 2, name: 'Price range', key: 'KeyY' },
+    daterange: { n: 2, name: 'Date range', key: 'KeyD' },
   };
   const GROUPS = [
     ['cursor', ['cursor']],
-    ['lines', ['trend', 'ray', 'ext', 'hline', 'hray', 'vline', 'channel']],
+    ['lines', ['trend', 'ray', 'ext', 'hline', 'hray', 'vline', 'channel', 'pitchfork']],
     ['fib', ['fib', 'fibext']],
-    ['shapes', ['rect', 'text', 'arrowup', 'arrowdn']],
-    ['measure', ['long', 'short', 'measure']],
+    ['shapes', ['rect', 'text', 'callout', 'note', 'brush', 'arrowup', 'arrowdn']],
+    ['measure', ['long', 'short', 'measure', 'pricerange', 'daterange']],
     ['avwap', ['avwap']],
   ];
   const DEFAULT_COLOR = { trend: '#2962ff', ray: '#2962ff', ext: '#2962ff', hline: '#ff9800', hray: '#ff9800', vline: '#787b86', channel: '#2962ff',
     fib: '#787b86', fibext: '#787b86', rect: '#9c27b0', text: '#ffffff', arrowup: '#089981', arrowdn: '#f23645', long: '#089981', short: '#f23645',
-    measure: '#2962ff', avwap: '#fb923c' };
+    measure: '#2962ff', avwap: '#fb923c', pitchfork: '#00bcd4', callout: '#ffeb3b', note: '#ff9800', brush: '#e040fb', pricerange: '#2962ff', daterange: '#2962ff' };
+  // drawing types an alert can follow: flat ones become price alerts, sloped ones line alerts
+  const ALERT_FLAT = { hline: 1, hray: 1 }, ALERT_SLOPED = { trend: 1, ray: 1, ext: 1 };
+  const ALERT_IVS = { '1m': 1, '5m': 1, '15m': 1, '60m': 1, '1d': 1, '1wk': 1 };
+  const ALERT_IND = [['rsi', 'RSI'], ['mfi', 'MFI'], ['cci', 'CCI'], ['willr', 'Williams %R'], ['sma', 'Price vs SMA'], ['ema', 'Price vs EMA']];
+  // Older history to request when panning past the first bar (Yahoo caps intraday depth).
+  const HIST_LADDER = {
+    '1m': ['1d', '5d'], '5m': ['5d', '1mo'], '15m': ['5d', '1mo'], '60m': ['1mo', '3mo', '6mo', '1y', '2y'],
+    '1d': ['1mo', '3mo', '6mo', '1y', '2y', '5y', '10y', '20y', '50y'], '1wk': ['1y', '2y', '5y', '10y', '20y', '50y'], '1mo': ['2y', '5y', '10y', '30y', '50y'],
+  };
+  // NB: Yahoo's range=max silently returns quarterly bars for any interval; use explicit years.
   const TIMEFRAMES = [['1m', '1m'], ['5m', '5m'], ['15m', '15m'], ['60m', '1H'], ['1d', 'D'], ['1wk', 'W'], ['1mo', 'M']];
   const CHART_TYPES = [['candles', 'Candles'], ['hollow', 'Hollow candles'], ['heikin', 'Heikin Ashi'], ['bars', 'OHLC bars'], ['line', 'Line'], ['area', 'Area']];
   const ST_COL = { setup: '#38bdf8' };
@@ -178,7 +243,16 @@
     const s50 = newInd('sma', { length: 50 }); s50.color = '#38bdf8';
     return { chartType: 'candles', scale: 'linear', pct: false, magnet: false, strategy: '',
       sizer: { equity: '', risk: 0.5, fee: 1 },
-      indicators: [newInd('sma', { length: 20 }), s50, newInd('vol')] };
+      indicators: [newInd('sma', { length: 20 }), s50, newInd('vol')],
+      compare: [], showTrades: true, showList: false, templates: {}, toolDefaults: {} };
+  }
+  function cleanStyle(st) {
+    const o = {};
+    if (!st || typeof st !== 'object') return o;
+    if (typeof st.color === 'string' && /^#[0-9a-f]{6}$/i.test(st.color)) o.color = st.color;
+    if ([1, 2, 3, 4].indexOf(st.width) >= 0) o.width = st.width;
+    if (['solid', 'dash', 'dot'].indexOf(st.dash) >= 0) o.dash = st.dash;
+    return o;
   }
   function migrateOldCfg() {
     // v1 kept {mode, overlays:{sma20,...}, panes:{vol,rsi,macd}, strat, sizer}
@@ -215,16 +289,52 @@
         IND[x.type].params.forEach(function (p) { const v = Number(x.params && x.params[p[0]]); if (isFinite(v) && v > 0 && v < 1000) i.params[p[0]] = v; });
         if (typeof x.color === 'string' && /^#[0-9a-f]{6}$/i.test(x.color)) i.color = x.color;
         i.hidden = !!x.hidden; if (typeof x.id === 'string') i.id = x.id.slice(0, 24);
+        if (IND[x.type].sym && typeof x.sym === 'string' && SYM_RE.test(x.sym)) i.sym = x.sym.toUpperCase();
         return i;
       });
     }
+    if (Array.isArray(raw.compare)) {
+      c.compare = raw.compare.filter(function (x) { return x && typeof x.sym === 'string' && SYM_RE.test(x.sym); }).slice(0, 4).map(function (x, k) {
+        return { sym: x.sym.toUpperCase(), color: typeof x.color === 'string' && /^#[0-9a-f]{6}$/i.test(x.color) ? x.color : CMP_COLORS[k % CMP_COLORS.length] };
+      });
+    }
+    if (raw.showTrades === false) c.showTrades = false;
+    c.showList = !!raw.showList;
+    // drawing style templates {type: {name: style}} and per-tool defaults {type: style}
+    if (raw.templates && typeof raw.templates === 'object') {
+      Object.keys(raw.templates).forEach(function (t) {
+        if (!TOOLS[t] || typeof raw.templates[t] !== 'object') return;
+        const m = {};
+        Object.keys(raw.templates[t]).slice(0, 20).forEach(function (n) { if (/^[\w .\-()&+]{1,30}$/.test(n)) m[n] = cleanStyle(raw.templates[t][n]); });
+        c.templates[t] = m;
+      });
+    }
+    if (raw.toolDefaults && typeof raw.toolDefaults === 'object') Object.keys(raw.toolDefaults).forEach(function (t) { if (TOOLS[t]) c.toolDefaults[t] = cleanStyle(raw.toolDefaults[t]); });
     return c;
   }
-  function loadLocalCfg() {
-    try { const raw = JSON.parse(localStorage.getItem(CFG_KEY) || 'null'); if (raw) return sanitizeCfg(raw); } catch (e) { /* ignore */ }
-    return migrateOldCfg() || defaultCfg();
+  function loadLocalCfg(key) {
+    try { const raw = JSON.parse(localStorage.getItem(key || CFG_KEY) || 'null'); if (raw) return sanitizeCfg(raw); } catch (e) { /* ignore */ }
+    return (!key && migrateOldCfg()) || defaultCfg();
   }
-  function cfgForSave(cfg) { return { chartType: cfg.chartType, scale: cfg.scale, pct: cfg.pct, magnet: cfg.magnet, strategy: cfg.strategy, sizer: cfg.sizer, indicators: cfg.indicators }; }
+  function cfgForSave(cfg) {
+    return { chartType: cfg.chartType, scale: cfg.scale, pct: cfg.pct, magnet: cfg.magnet, strategy: cfg.strategy, sizer: cfg.sizer, indicators: cfg.indicators,
+      compare: cfg.compare, showTrades: cfg.showTrades, showList: cfg.showList, templates: cfg.templates, toolDefaults: cfg.toolDefaults };
+  }
+  // History shared by every chart on the page (compare lines, RS benchmark, watchlist sparklines).
+  const SERIES = new Map(); // key -> {bars, err, waiters[]}
+  function fetchSeries(sym, range, interval) {
+    const key = sym + '|' + range + '|' + interval;
+    const hit = SERIES.get(key);
+    if (hit && (hit.bars || hit.err) && Date.now() - hit.at < (isIntraday(interval) ? 60000 : 10 * 60000)) return Promise.resolve(hit.bars);
+    if (hit && hit.p) return hit.p;
+    const ent = { at: Date.now() };
+    ent.p = api('/api/history?symbol=' + encodeURIComponent(sym) + '&range=' + encodeURIComponent(range) + '&interval=' + encodeURIComponent(interval))
+      .then(function (r) { ent.bars = (r.points || []).filter(function (b) { return b && b.c != null && isFinite(b.c); }); ent.p = null; ent.at = Date.now(); return ent.bars; })
+      .catch(function (e) { ent.err = e; ent.bars = null; ent.p = null; ent.at = Date.now(); return null; });
+    SERIES.set(key, ent);
+    return ent.p;
+  }
+  function cachedSeries(sym, range, interval) { const h = SERIES.get(sym + '|' + range + '|' + interval); return h ? h.bars : null; }
 
   async function api(path, body) {
     const r = await fetch(path, body === undefined ? { credentials: 'same-origin' } : { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -236,11 +346,20 @@
   // =========================================================================
   //  PriceChart
   // =========================================================================
-  function PriceChart(root) {
+  // opts: { cfgKey } — a secondary chart (multi-chart grid) keeps its settings in
+  // its own browser key and does not overwrite the main chart's server copy.
+  function PriceChart(root, opts) {
+    this.opts = opts || {};
+    this.primary = !this.opts.cfgKey;
     this.root = root;
     root.__priceChart = this;
     root.classList.add('pc-root');
-    this.cfg = loadLocalCfg();
+    this.cfg = loadLocalCfg(this.opts.cfgKey);
+    this.alerts = window.__finAlerts || [];
+    this.tradeData = null; this.watch = [];
+    this.histRange = null; this._older = []; this._olderBusy = false; this._olderDone = false;
+    this.ptrs = new Map();
+    this.extX = null; // crosshair time pushed from a linked chart
     this.tool = 'cursor';
     this.groupLast = {};
     this.symbol = null; this.interval = '1d'; this.range = '1y';
@@ -254,13 +373,14 @@
     this.yManual = null;
     this._rsOn = false; this._roOn = false; this._lastAreaH = 0;
     this.onRequest = null; this.onSymbol = null; this.onLog = null; this.onJournal = null;
+    this.onCrosshair = null; this.onGrid = null; this.onMax = null; this.onWatchStep = null;
     this._build();
     const self = this;
     this.ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(function () { self.resize(); }) : null;
     if (this.ro) this.ro.observe(this.area);
     this._bind();
     this.resize();
-    this._syncServerCfg();
+    if (this.primary) this._syncServerCfg(); else this.layouts = {};
   }
 
   // ---- DOM ---------------------------------------------------------------
@@ -317,6 +437,22 @@
       else if (window.FinJournal) window.FinJournal.openList({ onOpenChart: self.onSymbol });
     });
     tb.appendChild(this.journalBtn);
+    tb.appendChild(el('span', 'sep'));
+    this.cmpBtn = btn(ICON.compare + ' Compare', 'Compare with other symbols (percent change from the first visible bar)');
+    this.cmpBtn.addEventListener('click', function (e) { e.stopPropagation(); self._toggleMenu('cmp'); });
+    tb.appendChild(this.cmpBtn);
+    this.alertBtn = btn(ICON.bell + ' Alert', 'Price, trend-line and indicator alerts for this symbol (desktop notifications; nothing trades)');
+    this.alertBtn.addEventListener('click', function (e) { e.stopPropagation(); self._toggleMenu('alert'); });
+    tb.appendChild(this.alertBtn);
+    this.tradesBtn = btn(ICON.trades, 'Show my trades, dividends and average cost from the ledger', 'tool');
+    this.tradesBtn.addEventListener('click', function () { self.cfg.showTrades = !self.cfg.showTrades; self._cfgChanged(false); self._dirty(); });
+    tb.appendChild(this.tradesBtn);
+    this.listBtn = btn(ICON.list, 'Watchlist and holdings beside the chart (↑ / ↓ to step through)', 'tool');
+    this.listBtn.addEventListener('click', function () { self.cfg.showList = !self.cfg.showList; self._cfgChanged(false); self._renderWatch(); self.resize(); });
+    tb.appendChild(this.listBtn);
+    this.gridBtn = btn(ICON.grid, 'Multi-chart layout: 1, 2 or 4 charts', 'tool');
+    this.gridBtn.addEventListener('click', function (e) { e.stopPropagation(); self._toggleMenu('grid'); });
+    tb.appendChild(this.gridBtn);
     this.snapBtn = btn(ICON.camera, 'Save chart image (PNG)', 'tool');
     this.snapBtn.addEventListener('click', function () { self.downloadSnapshot(); });
     tb.appendChild(this.snapBtn);
@@ -331,7 +467,7 @@
     this.autoBtn.addEventListener('click', function () { self.yManual = null; self._dirty(); });
     tb.appendChild(this.logScaleBtn); tb.appendChild(this.pctBtn); tb.appendChild(this.autoBtn);
     this.maxBtn = btn(ICON.expand, 'Expand chart (Esc to exit)', 'tool');
-    this.maxBtn.addEventListener('click', function () { self.toggleMax(); });
+    this.maxBtn.addEventListener('click', function () { if (self.onMax) self.onMax(); else self.toggleMax(); });
     tb.appendChild(this.maxBtn);
     this.root.appendChild(tb);
 
@@ -433,6 +569,9 @@
     this.menu.style.display = 'none';
     [this.staticCv, this.overlayCv, this.legend, this.paneLegends, this.styleBar, this.menu].forEach(function (x) { area.appendChild(x); });
     body.appendChild(area);
+    this.watchEl = el('div', 'pc-watch');
+    this.watchEl.style.display = 'none';
+    body.appendChild(this.watchEl);
     this.root.appendChild(body);
 
     this.ctx = this.staticCv.getContext('2d');
@@ -449,6 +588,12 @@
     this.stratBtn.classList.toggle('on', !!sd);
     this.stratBtn.textContent = sd ? '◆ ' + sd.short + ' ▾' : 'Strategy ▾';
     this.magnetBtn.classList.toggle('on', !!c.magnet);
+    this.tradesBtn.classList.toggle('on', !!c.showTrades);
+    this.listBtn.classList.toggle('on', !!c.showList);
+    this.cmpBtn.classList.toggle('on', !!(c.compare && c.compare.length));
+    const mine = this._myAlerts();
+    this.alertBtn.classList.toggle('on', mine.length > 0);
+    this.alertBtn.innerHTML = ICON.bell + ' Alert' + (mine.length ? ' <b>' + mine.length + '</b>' : '');
     for (const k in this.tfBtns) this.tfBtns[k].classList.toggle('on', k === this.interval);
     this.stratBar.querySelectorAll('input').forEach(function (inp) { if (document.activeElement !== inp) inp.value = self.cfg.sizer[inp.dataset.k]; });
     for (const g in this.groupBtns) {
@@ -463,10 +608,11 @@
 
   // ---- settings persistence -------------------------------------------------
   PriceChart.prototype._cfgChanged = function (recompute) {
-    try { localStorage.setItem(CFG_KEY, JSON.stringify(cfgForSave(this.cfg))); } catch (e) { /* ignore */ }
+    try { localStorage.setItem(this.opts.cfgKey || CFG_KEY, JSON.stringify(cfgForSave(this.cfg))); } catch (e) { /* ignore */ }
     const self = this;
     clearTimeout(this._cfgTimer);
-    this._cfgTimer = setTimeout(function () { api('/api/charts/current', { cfg: cfgForSave(self.cfg) }).catch(function () { /* offline: local copy kept */ }); }, 800);
+    if (this.primary) this._cfgTimer = setTimeout(function () { api('/api/charts/current', { cfg: cfgForSave(self.cfg) }).catch(function () { /* offline: local copy kept */ }); }, 800);
+    this._ensureExt();
     this._syncControls();
     if (recompute) { this._computeIndicators(); this.resize(); } else this.requestOverlay();
   };
@@ -483,15 +629,25 @@
   // ---- events --------------------------------------------------------------
   PriceChart.prototype._bind = function () {
     const self = this, ov = this.overlayCv;
-    ov.addEventListener('mousemove', function (e) { if (!self.drag) self._onMove(e); });
-    ov.addEventListener('mousedown', function (e) { self._onDown(e); });
-    this._onUpWin = function (e) { self._onUp(e); };
-    window.addEventListener('mouseup', this._onUpWin);
-    this._onMoveWin = function (e) { if (self.drag) self._onMove(e); };
-    window.addEventListener('mousemove', this._onMoveWin);
-    ov.addEventListener('mouseleave', function () { if (!self.drag) { self.inside = false; self.requestOverlay(); } });
-    ov.addEventListener('mouseenter', function () { self.inside = true; });
+    // Pointer events cover mouse, pen and touch. Touch: one finger pans (or
+    // draws with a tool), two fingers pinch-zoom, a long press shows the crosshair.
+    ov.style.touchAction = 'none';
+    ov.addEventListener('pointerdown', function (e) { self._ptrDown(e); });
+    ov.addEventListener('pointermove', function (e) { self._ptrMove(e); });
+    ov.addEventListener('pointerup', function (e) { self._ptrUp(e); });
+    ov.addEventListener('pointercancel', function (e) { self._ptrUp(e, true); });
+    ov.addEventListener('pointerleave', function (e) { if (e.pointerType === 'mouse' && !self.drag) { self.inside = false; if (self.onCrosshair) self.onCrosshair(null); self.requestOverlay(); } });
+    ov.addEventListener('pointerenter', function (e) { if (e.pointerType === 'mouse') self.inside = true; });
     ov.addEventListener('wheel', function (e) { self._onWheel(e); }, { passive: false });
+    this._onAlertsEvt = function (e) { self.alerts = (e.detail && e.detail.alerts) || []; self._syncControls(); if (self.menuKind === 'alert') { const l = self.menu.querySelector('.pc-alist'); if (l) l.innerHTML = self._alertListHtml(self._myAlerts()); } self.requestOverlay(); };
+    window.addEventListener('finsight:alerts', this._onAlertsEvt);
+    // another chart on the page saved drawings for the same symbol
+    this._onDrawEvt = function (e) {
+      const d = e.detail || {};
+      if (d.source === self || d.symbol !== self.symbol || self.drag) return;
+      self.drawings = convertDrawings(d.drawings); self.sel = -1; self._renderStyleBar(); self.requestOverlay();
+    };
+    window.addEventListener('finsight:drawings', this._onDrawEvt);
     ov.addEventListener('dblclick', function (e) { self._onDblClick(e); });
     ov.addEventListener('contextmenu', function (e) { e.preventDefault(); if (self.pending || self.tool !== 'cursor') { self.pending = null; self.setTool('cursor'); } });
     this._onKey = function (e) { self._key(e); };
@@ -505,13 +661,15 @@
   PriceChart.prototype._key = function (e) {
     const tag = (e.target && e.target.tagName) || '';
     if (/INPUT|TEXTAREA|SELECT/.test(tag) || (e.target && e.target.isContentEditable)) return;
-    if (!(this.maxed || this.inside || document.activeElement === this.overlayCv)) return;
+    if (!(this.maxed || this.fit || this.inside || document.activeElement === this.overlayCv)) return;
+    if (this.fit && !this.inside && document.activeElement !== this.overlayCv && e.key !== 'Escape') return; // grid: keys go to the chart under the mouse
     const mod = e.metaKey || e.ctrlKey;
     if (e.key === 'Escape') {
       if (this.pending || this.tool !== 'cursor') { this.pending = null; this.setTool('cursor'); }
       else if (this.replay.picking) this.stopReplay();
       else if (this.sel >= 0) this.select(-1);
       else if (this.maxed) this.toggleMax(false);
+      else if (this.onEscape) this.onEscape();
       e.preventDefault(); return;
     }
     if (mod && e.code === 'KeyZ') { e.preventDefault(); if (e.shiftKey) this.redo(); else this.undo(); return; }
@@ -523,19 +681,29 @@
       else if (e.key === 'ArrowLeft') { e.preventDefault(); this.replayStep(-1); }
       else if (e.key === ' ') { e.preventDefault(); this.replayToggle(); }
     }
+    if (!mod && !e.altKey && (e.key === 'ArrowDown' || e.key === 'ArrowUp') && this.cfg.showList && this.watch.length) { e.preventDefault(); this.watchStep(e.key === 'ArrowDown' ? 1 : -1); }
   };
 
   // ---- data load -----------------------------------------------------------
   PriceChart.prototype.load = function (symbol, bars, meta, ctx) {
     const sameSym = symbol === this.symbol;
     const sameView = sameSym && ctx && this.interval === ctx.interval && this.range === ctx.range;
+    const sameSeries = sameSym && ctx && this.interval === ctx.interval;
     this.symbol = symbol;
     this.meta = meta || {};
     this.interval = (ctx && ctx.interval) || '1d';
     this.range = (ctx && ctx.range) || '1y';
     if (document.activeElement !== this.symInput) this.symInput.value = symbol;
-    this.allBars = (Array.isArray(bars) ? bars : []).filter(function (b) { return b && b.c != null && isFinite(b.c); });
-    if (!sameSym) { this.sel = -1; this._renderStyleBar(); this.pending = null; this.tool = 'cursor'; this.undoStack = []; this.redoStack = []; this.yManual = null; this._loadDrawings(symbol); }
+    let fresh = (Array.isArray(bars) ? bars : []).filter(function (b) { return b && b.c != null && isFinite(b.c); });
+    // Older bars fetched by scrolling left survive the host's periodic refresh.
+    if (!sameSeries) { this._older = []; this._olderDone = false; this.histRange = (ctx && ctx.fetchRange) || this.range; }
+    else if (ctx && ctx.fetchRange && !this._older.length) this.histRange = ctx.fetchRange;
+    if (this._older.length && fresh.length) { const f0 = fresh[0].t; fresh = this._older.filter(function (b) { return b.t < f0; }).concat(fresh); }
+    this.allBars = fresh;
+    if (!sameSym) { this.sel = -1; this._renderStyleBar(); this.pending = null; this.tool = 'cursor'; this.undoStack = []; this.redoStack = []; this.yManual = null; this._loadDrawings(symbol); this.tradeData = null; }
+    if (!sameSeries) this._ensureExt();
+    if (!sameSym && this.onTrades) this.onTrades(symbol);
+    this._renderWatch(true);
     if (!sameView && (this.replay.active || this.replay.picking)) this.stopReplay(true);
     this._applyReplaySlice();
     this._computeIndicators();
@@ -563,11 +731,340 @@
   };
 
   PriceChart.prototype._minBars = function () { return Math.min(this.bars.length || 1, 10); };
-  PriceChart.prototype.setRange = function (i0, i1) {
+  // user = a pan / zoom: reaching the first bar asks for older history.
+  PriceChart.prototype.setRange = function (i0, i1, user) {
     const n = this.bars.length;
     this.i1 = Math.min(n, Math.max(1, Math.round(i1)));
     this.i0 = Math.max(0, Math.min(Math.round(i0), this.i1 - this._minBars()));
     this._dirty();
+    if (user && this.i0 <= 2) this._loadOlder();
+  };
+
+  // ---- older history (scroll back) -------------------------------------------------
+  PriceChart.prototype._loadOlder = function () {
+    if (this._olderBusy || this._olderDone || this.replay.active || this.replay.picking || !this.symbol || !this.allBars.length) return;
+    const ladder = HIST_LADDER[this.interval] || [], at = ladder.indexOf(this.histRange);
+    const next = at >= 0 ? ladder[at + 1] : ladder.find(function (r, k) { return k > 0 && r !== '1d'; });
+    if (!next) { this._olderDone = true; this._flash('Start of available history (' + this._tfLabel() + ')'); return; }
+    const self = this, sym = this.symbol, iv = this.interval;
+    this._olderBusy = true; this._flash('Loading older bars…');
+    api('/api/history?symbol=' + encodeURIComponent(sym) + '&range=' + next + '&interval=' + iv).then(function (r) {
+      self._olderBusy = false;
+      if (self.symbol !== sym || self.interval !== iv) return;
+      self.histRange = next;
+      const first = self.allBars[0].t;
+      const older = (r.points || []).filter(function (b) { return b && b.c != null && isFinite(b.c) && b.t < first; });
+      if (!older.length) { if (next === ladder[ladder.length - 1]) self._olderDone = true; self._flash('No older bars for this timeframe'); if (!self._olderDone) self._loadOlder(); return; }
+      // never splice in a coarser series (e.g. a provider downsampling a long range)
+      if (older.length > 3) {
+        const st = [];
+        for (let i = Math.max(1, older.length - 10); i < older.length; i++) st.push(older[i].t - older[i - 1].t);
+        st.sort(function (x, y) { return x - y; });
+        if (st[st.length >> 1] > self._step() * 2.5) { self._olderDone = true; self._flash('Older history only available at a coarser interval', true); return; }
+      }
+      self._older = older.concat(self._older.filter(function (b) { return b.t >= first; }));
+      self.allBars = older.concat(self.allBars);
+      const k = older.length;
+      self._applyReplaySlice(); self._computeIndicators();
+      self.i0 += k; self.i1 += k; self._prevN = self.bars.length;
+      self._dirty(); self._ensureExt();
+      self._flash('+' + k + ' older bars (' + next + ')');
+    }).catch(function (e) { self._olderBusy = false; self._flash('Older history: ' + e.message, true); });
+  };
+
+  // ---- external series: compare symbols and the RS benchmark -----------------------
+  PriceChart.prototype._extRange = function () { return this.histRange || this.range; };
+  PriceChart.prototype._ensureExt = function () {
+    if (!this.symbol) return;
+    const self = this, want = {};
+    (this.cfg.compare || []).forEach(function (c) { want[c.sym] = 1; });
+    this.cfg.indicators.forEach(function (i) { if (IND[i.type].sym && !i.hidden) want[i.sym || 'SPY'] = 1; });
+    // fetch a range covering the loaded bars (older ones included)
+    const range = this._extRange();
+    Object.keys(want).forEach(function (sym) {
+      if (cachedSeries(sym, range, self.interval)) return;
+      fetchSeries(sym, range, self.interval).then(function () { self._computeIndicators(); self._dirty(); });
+    });
+  };
+  PriceChart.prototype._series = function (sym) { return cachedSeries(sym, this._extRange(), this.interval); };
+
+  // ---- alerts --------------------------------------------------------------------------
+  PriceChart.prototype._myAlerts = function () { const s = this.symbol; return (this.alerts || []).filter(function (a) { return a.symbol === s; }); };
+  PriceChart.prototype._alertApi = function (path, body, okMsg) {
+    const self = this;
+    return api(path, body).then(function (r) {
+      self.alerts = r.alerts || [];
+      window.__finAlerts = self.alerts;
+      window.dispatchEvent(new CustomEvent('finsight:alerts', { detail: { alerts: self.alerts, from: 'chart' } }));
+      if (okMsg) self._flash(okMsg);
+      if ('Notification' in window && Notification.permission === 'default') { try { Notification.requestPermission(); } catch (e) { /* ignore */ } }
+      return r;
+    }).catch(function (e) { self._flash(e.message, true); throw e; });
+  };
+  // value of a sloped drawing at bar index k (straight in log space on a log chart)
+  PriceChart.prototype._lineAt = function (pts, k) {
+    const i0 = this.idxOfTime(pts[0].t), i1 = this.idxOfTime(pts[1].t);
+    if (Math.abs(i1 - i0) < 1e-9) return null;
+    const f = this._f.bind(this), slope = (f(pts[1].p) - f(pts[0].p)) / (i1 - i0);
+    return this._finv(f(pts[0].p) + slope * (k - i0));
+  };
+  PriceChart.prototype._alertFromDrawing = function (d) {
+    const last = this.bars[this.bars.length - 1]; if (!last || !d) return;
+    let body;
+    if (ALERT_FLAT[d.type]) {
+      body = { symbol: this.symbol, kind: 'price', price: +d.pts[0].p.toFixed(decimalsFor(d.pts[0].p)), op: last.c < d.pts[0].p ? '>' : '<', drawingId: d.id };
+    } else if (ALERT_SLOPED[d.type]) {
+      const v = this._lineAt(d.pts, this.bars.length - 1);
+      if (v == null) return this._flash('Vertical line — cannot alert', true);
+      body = { symbol: this.symbol, kind: 'line', op: last.c < v ? '>' : '<', drawingId: d.id,
+        line: { pts: d.pts.slice(0, 2), interval: ALERT_IVS[this.interval] ? this.interval : '1d', log: this.cfg.scale === 'log' } };
+      if (!ALERT_IVS[this.interval]) this._flash('Line alerts run on 1m–W bars; using daily', true);
+    } else return;
+    this._alertApi('/api/alerts/add', body, 'Alert set: price ' + (body.op === '>' ? 'crosses above' : 'crosses below') + ' this line');
+  };
+  // a drawing with alerts was moved: move the alerts with it (re-armed)
+  PriceChart.prototype._syncDrawingAlerts = function (d) {
+    const self = this, last = this.bars[this.bars.length - 1];
+    this._myAlerts().filter(function (a) { return a.drawingId === d.id; }).forEach(function (a) {
+      const body = { id: a.id };
+      let v;
+      if (a.kind === 'line' && ALERT_SLOPED[d.type]) { body.line = { pts: d.pts.slice(0, 2), interval: a.line.interval, log: self.cfg.scale === 'log' }; v = self._lineAt(d.pts, self.bars.length - 1); }
+      else if (a.kind === 'price' && ALERT_FLAT[d.type]) { body.price = +d.pts[0].p.toFixed(decimalsFor(d.pts[0].p)); v = body.price; }
+      else return;
+      // the line moved past price: alert on the cross from where price is now
+      if (last && v != null) body.op = last.c < v ? '>' : '<';
+      self._alertApi('/api/alerts/update', body, 'Alert moved with the line');
+    });
+  };
+  PriceChart.prototype._alertListHtml = function (mine) {
+    return mine.length ? mine.map(function (a) {
+      return '<div class="pc-mrow"><span class="pc-mname' + (a.met ? ' up' : '') + '">' + esc((a.label || '').replace(a.symbol + ' ', '')) + '</span>' +
+        '<span class="muted small">' + (a.met ? 'TRIGGERED' : 'armed') + (a.currentValue != null ? ' · now ' + fmtPrice(a.currentValue) : '') + (a.level != null && a.kind !== 'price' ? ' · level ' + fmtPrice(a.level) : '') + '</span>' +
+        '<button type="button" class="ctbtn tool" data-del="' + esc(a.id) + '" title="Remove alert">' + ICON.close + '</button></div>';
+    }).join('') : '<div class="pc-mempty">No alerts on ' + esc(this.symbol || '') + '</div>';
+  };
+  PriceChart.prototype._renderAlertMenu = function () {
+    const self = this, m = this.menu, last = this.bars[this.bars.length - 1], mine = this._myAlerts();
+    const ivOk = !!ALERT_IVS[this.interval], iv = ivOk ? this.interval : '1d';
+    const px = last ? +last.c.toFixed(decimalsFor(last.c)) : '';
+    let html = '<div class="pc-mh">Alerts — ' + esc(this.symbol || '') + '</div>' +
+      '<div class="pc-mrow"><span class="pc-mname">Price</span><select data-f="pop"><option value=">">rises to ≥</option><option value="<">falls to ≤</option></select>' +
+      '<input type="number" step="any" min="0" data-f="pval" value="' + px + '"><button type="button" class="ctbtn pc-accent" data-a="price">Set</button></div>' +
+      '<div class="pc-mrow"><span class="pc-mname">Indicator</span><select data-f="itype">' + ALERT_IND.map(function (x) { return '<option value="' + x[0] + '">' + x[1] + '</option>'; }).join('') + '</select>' +
+      '<label>Length <input type="number" min="1" max="500" data-f="ilen" value="14"></label>' +
+      '<select data-f="iop"><option value=">">≥</option><option value="<">≤</option></select>' +
+      '<label class="pc-ilvl">Level <input type="number" step="any" data-f="ilvl" value="70"></label>' +
+      '<button type="button" class="ctbtn pc-accent" data-a="ind">Set</button></div>' +
+      '<div class="pc-mnote">Indicator alerts read ' + esc(iv === '1d' ? 'daily' : iv) + ' bars' + (ivOk ? '' : ' (this timeframe is not supported)') + '. For a trend line or horizontal line, select it and press the bell in its toolbar.</div>' +
+      '<div class="pc-mh">On this symbol</div><div class="pc-alist">' + this._alertListHtml(mine) + '</div>';
+    html += '<div class="pc-mnote">Checked by the FinSight server every minute while it runs; a macOS notification fires once. Nothing trades.</div>';
+    m.innerHTML = html; m.style.display = 'block';
+    const q = function (f) { return m.querySelector('[data-f=' + f + ']'); };
+    const syncInd = function () { const t = q('itype').value, ma = t === 'sma' || t === 'ema'; m.querySelector('.pc-ilvl').style.display = ma ? 'none' : ''; q('ilen').value = ma ? 50 : t === 'cci' ? 20 : 14; q('ilvl').value = t === 'cci' ? 100 : t === 'willr' ? -20 : 70; };
+    syncInd();
+    m.onkeydown = function (e) { e.stopPropagation(); };
+    m.onchange = function (e) { if (e.target.dataset.f === 'itype') syncInd(); };
+    m.onclick = function (e) {
+      e.stopPropagation();
+      const del = e.target.closest('[data-del]');
+      if (del) { self._alertApi('/api/alerts/remove', { id: del.dataset.del }, 'Alert removed'); return; }
+      const b = e.target.closest('[data-a]'); if (!b) return;
+      if (b.dataset.a === 'price') self._alertApi('/api/alerts/add', { symbol: self.symbol, kind: 'price', op: q('pop').value, price: Number(q('pval').value) }, 'Price alert set');
+      else self._alertApi('/api/alerts/add', { symbol: self.symbol, kind: 'ind', op: q('iop').value, price: Number(q('ilvl').value), ind: { type: q('itype').value, length: Number(q('ilen').value), interval: iv } }, 'Indicator alert set');
+    };
+  };
+
+  // ---- compare menu --------------------------------------------------------------------
+  PriceChart.prototype._renderCmpMenu = function () {
+    const self = this, m = this.menu, list = this.cfg.compare || [];
+    let html = '<div class="pc-mh">Compare with</div>' +
+      '<div class="pc-mrow"><input class="pc-cmpin" maxlength="24" placeholder="Symbol, e.g. SPY, QQQ, ^STI"><button type="button" class="ctbtn pc-accent" data-a="add">Add</button></div>' +
+      '<div class="pc-mrow">' + ['SPY', 'QQQ', '^STI', 'ES3.SI'].map(function (s) { return '<button type="button" class="ctbtn" data-q="' + s + '">' + s + '</button>'; }).join('') + '</div>';
+    html += list.length ? list.map(function (c, k) {
+      const ok = !!self._series(c.sym);
+      return '<div class="pc-mrow" data-k="' + k + '"><input type="color" value="' + c.color + '" data-f="color"><span class="pc-mname">' + esc(c.sym) + '</span><span class="muted small">' + (ok ? '' : 'loading / unavailable') + '</span>' +
+        '<button type="button" class="ctbtn tool" data-del="' + k + '" title="Remove">' + ICON.close + '</button></div>';
+    }).join('') : '<div class="pc-mempty">Nothing compared</div>';
+    html += '<div class="pc-mnote">Lines show % change from the first visible bar (the price scale switches to %). Each compared bar is the last one at or before the chart bar, so nothing from the future leaks in. Saved with the layout.</div>';
+    m.innerHTML = html; m.style.display = 'block';
+    const inp = m.querySelector('.pc-cmpin');
+    const add = function (s) {
+      s = String(s || '').trim().toUpperCase();
+      if (!SYM_RE.test(s) || s === self.symbol) { inp.focus(); return; }
+      if (self.cfg.compare.some(function (c) { return c.sym === s; })) return;
+      if (self.cfg.compare.length >= 4) { self._flash('Up to 4 compare symbols', true); return; }
+      const used = self.cfg.compare.map(function (c) { return c.color; });
+      self.cfg.compare.push({ sym: s, color: CMP_COLORS.find(function (c) { return used.indexOf(c) < 0; }) || CMP_COLORS[0] });
+      self._cfgChanged(true); self._renderCmpMenu();
+    };
+    inp.addEventListener('keydown', function (e) { e.stopPropagation(); if (e.key === 'Enter') add(inp.value); });
+    m.onkeydown = null;
+    m.onchange = function (e) { const row = e.target.closest('[data-k]'); if (row && e.target.dataset.f === 'color') { self.cfg.compare[Number(row.dataset.k)].color = e.target.value; self._cfgChanged(true); } };
+    m.onclick = function (e) {
+      e.stopPropagation();
+      const d = e.target.closest('[data-del]'); if (d) { self.cfg.compare.splice(Number(d.dataset.del), 1); self._cfgChanged(true); self._renderCmpMenu(); return; }
+      const qb = e.target.closest('[data-q]'); if (qb) { add(qb.dataset.q); return; }
+      if (e.target.closest('[data-a=add]')) add(inp.value);
+    };
+  };
+
+  // ---- grid menu (host decides what 1 / 2 / 4 means) -----------------------------------
+  PriceChart.prototype._renderGridMenu = function () {
+    const self = this, m = this.menu, g = this.gridState || { n: 1, linkSym: true, syncCross: true };
+    m.innerHTML = '<div class="pc-mh">Multi-chart layout</div><div class="pc-mrow">' +
+      [[1, '1 chart'], [2, '2 side by side'], [4, '2 × 2 grid']].map(function (x) { return '<button type="button" class="ctbtn' + (g.n === x[0] ? ' on' : '') + '" data-n="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>' +
+      '<div class="pc-mrow"><label><input type="checkbox" data-f="linkSym"' + (g.linkSym ? ' checked' : '') + '> Same symbol in every chart</label></div>' +
+      '<div class="pc-mrow"><label><input type="checkbox" data-f="syncCross"' + (g.syncCross ? ' checked' : '') + '> Sync crosshair by date</label></div>' +
+      '<div class="pc-mnote">2 and 4 open full screen. Each chart keeps its own timeframe and indicators; drawings are shared per symbol. Esc or the 1-chart button returns.</div>';
+    m.style.display = 'block';
+    m.onkeydown = null;
+    m.onchange = function (e) { const f = e.target.dataset.f; if (f && self.onGrid) self.onGrid({ [f]: e.target.checked }); };
+    m.onclick = function (e) { e.stopPropagation(); const b = e.target.closest('[data-n]'); if (b && self.onGrid) { self._closeMenus(); self.onGrid({ n: Number(b.dataset.n) }); } };
+  };
+  PriceChart.prototype._toggleMenu = function (kind) {
+    if (this.menuKind === kind) { this._closeMenus(); return; }
+    this._closeMenus(); this.menuKind = kind;
+    if (kind === 'alert') this._renderAlertMenu();
+    else if (kind === 'cmp') this._renderCmpMenu();
+    else if (kind === 'grid') this._renderGridMenu();
+  };
+
+  // ---- watchlist side panel -------------------------------------------------------------
+  // items: [{symbol, name, price, changePct, group}] from the host (holdings first)
+  PriceChart.prototype.setWatchlist = function (items) {
+    this.watch = (items || []).filter(function (x) { return x && x.symbol; });
+    this._renderWatch();
+  };
+  PriceChart.prototype.watchStep = function (d) {
+    const w = this.watch; if (!w.length || !this.onSymbol) return;
+    const k = w.findIndex(function (x) { return x.symbol === this.symbol; }, this);
+    const next = w[(k < 0 ? (d > 0 ? 0 : w.length - 1) : (k + d + w.length) % w.length)];
+    if (next) this.onSymbol(next.symbol);
+  };
+  const SPARK_Q = []; let sparkBusy = 0;
+  function sparkPump() {
+    while (sparkBusy < 4 && SPARK_Q.length) {
+      const job = SPARK_Q.shift(); sparkBusy++;
+      fetchSeries(job.sym, '3mo', '1d').then(function (b) { sparkBusy--; job.cb(b); sparkPump(); });
+    }
+  }
+  function drawSpark(cv, bars) {
+    const c = cv.getContext('2d'), dpr = window.devicePixelRatio || 1, W = 64, H = 18;
+    cv.width = W * dpr; cv.height = H * dpr; c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, W, H);
+    const v = (bars || []).slice(-40).map(function (b) { return b.c; });
+    if (v.length < 2) return;
+    const lo = Math.min.apply(null, v), hi = Math.max.apply(null, v), sp = (hi - lo) || 1;
+    c.strokeStyle = v[v.length - 1] >= v[0] ? '#2ec27e' : '#ff4d4d'; c.lineWidth = 1.2; c.beginPath();
+    v.forEach(function (x, i) { const px = i / (v.length - 1) * (W - 2) + 1, py = H - 2 - (x - lo) / sp * (H - 4); if (i) c.lineTo(px, py); else c.moveTo(px, py); });
+    c.stroke();
+  }
+  PriceChart.prototype._renderWatch = function (activeOnly) {
+    const el = this.watchEl, self = this;
+    if (!el) return;
+    if (!this.cfg.showList) { if (el.style.display !== 'none') { el.style.display = 'none'; } return; }
+    el.style.display = '';
+    const sig = this.watch.map(function (x) { return x.group + x.symbol + x.price + x.changePct; }).join('|');
+    if (!activeOnly || sig !== this._watchSig) {
+      this._watchSig = sig;
+      let html = '<div class="pc-wh">↑ ↓ to step · click to open</div>', grp = null;
+      if (!this.watch.length) html += '<div class="pc-mempty">No holdings or watchlist yet</div>';
+      this.watch.forEach(function (x) {
+        if (x.group !== grp) { grp = x.group; html += '<div class="pc-wg">' + esc(grp || '') + '</div>'; }
+        const ch = x.changePct;
+        html += '<div class="pc-wr" data-sym="' + esc(x.symbol) + '" title="' + esc(x.name || x.symbol) + '"><span class="pc-ws">' + esc(x.symbol) + '</span><canvas class="pc-wsp" width="64" height="18"></canvas>' +
+          '<span class="pc-wp">' + (x.price != null ? fmtPrice(x.price) : '—') + '</span><span class="pc-wc ' + (ch > 0 ? 'up' : ch < 0 ? 'down' : '') + '">' + (ch != null ? (ch > 0 ? '+' : '') + ch.toFixed(2) + '%' : '') + '</span></div>';
+      });
+      el.innerHTML = html;
+      el.onclick = function (e) { const r = e.target.closest('.pc-wr'); if (r && self.onSymbol) self.onSymbol(r.dataset.sym); };
+      el.querySelectorAll('.pc-wr').forEach(function (r) {
+        const cv = r.querySelector('canvas'), sym = r.dataset.sym, hit = cachedSeries(sym, '3mo', '1d');
+        if (hit) drawSpark(cv, hit); else { SPARK_Q.push({ sym: sym, cb: function (b) { if (cv.isConnected) drawSpark(cv, b); } }); }
+      });
+      sparkPump();
+    }
+    el.querySelectorAll('.pc-wr').forEach(function (r) {
+      const on = r.dataset.sym === self.symbol;
+      r.classList.toggle('on', on);
+      if (on && activeOnly) { const top = r.offsetTop - el.scrollTop; if (top < 20 || top > el.clientHeight - 24) el.scrollTop = r.offsetTop - el.clientHeight / 2; }
+    });
+  };
+
+  // ---- ledger trades + average cost (host supplies them) -------------------------------
+  PriceChart.prototype.setTrades = function (symbol, data) {
+    if (symbol !== this.symbol) return;
+    this.tradeData = data || null; this._dirty();
+  };
+  // chart bar index for a ledger timestamp: same local calendar date on daily
+  // bars, the bar containing it otherwise
+  PriceChart.prototype._barForTime = function (t) {
+    const b = this.bars, n = b.length; if (!n || t < b[0].t - 86400000 * 3) return -1;
+    if (this.interval === '1d') {
+      const d = new Date(t), key = d.getFullYear() * 10000 + d.getMonth() * 100 + d.getDate();
+      let lo = 0, hi = n - 1;
+      while (lo < hi) { const mid = (lo + hi) >> 1; const x = new Date(b[mid].t); if (x.getFullYear() * 10000 + x.getMonth() * 100 + x.getDate() < key) lo = mid + 1; else hi = mid; }
+      const x = new Date(b[lo].t), k2 = x.getFullYear() * 10000 + x.getMonth() * 100 + x.getDate();
+      if (k2 >= key) return lo;
+      // after the last bar (weekend, or a time zone ahead of the exchange): mark the latest bar
+      return t - b[n - 1].t < 4 * 86400000 ? n - 1 : -1;
+    }
+    const k = Math.floor(this.idxOfTime(t));
+    return k >= 0 && k < n ? k : (k >= n && t - b[n - 1].t < this._step() * 1.5 ? n - 1 : -1);
+  };
+  PriceChart.prototype._tradeMarks = function () {
+    const td = this.tradeData;
+    if (!td || !this.cfg.showTrades) return null;
+    if (this._tmCache && this._tmCache.td === td && this._tmCache.bars === this.bars) return this._tmCache.m;
+    const self = this, m = {};
+    const add = function (x, kind) { const i = self._barForTime(x.t); if (i < 0) return; (m[i] = m[i] || []).push(Object.assign({ kind: kind }, x)); };
+    (td.trades || []).forEach(function (x) { add(x, x.side); });
+    (td.dividends || []).forEach(function (x) { add(x, 'div'); });
+    this._tmCache = { td: td, bars: this.bars, m: m };
+    return m;
+  };
+  PriceChart.prototype._drawTrades = function () {
+    const m = this._tradeMarks(); if (!m) return;
+    const c = this.ctx, P = this.panes.price, self = this;
+    c.save(); c.beginPath(); c.rect(P.x, P.y, P.w, P.h); c.clip();
+    c.font = 'bold 9px ' + this.fontFamily; c.textAlign = 'center';
+    for (let i = this.i0; i < this.i1; i++) {
+      const list = m[i]; if (!list) continue;
+      const x = this.xFromIndex(i), b = this.bars[i];
+      let below = 0, above = 0;
+      list.forEach(function (t) {
+        if (t.kind === 'div') {
+          const y = P.y + P.h - 8;
+          c.fillStyle = '#a78bfa'; c.beginPath(); c.arc(x, y, 5.5, 0, Math.PI * 2); c.fill();
+          c.fillStyle = '#0b0e14'; c.textBaseline = 'middle'; c.fillText('D', x, y + 0.5);
+          return;
+        }
+        const buy = t.kind === 'buy', col = buy ? '#2962ff' : '#ff6d00';
+        const y = buy ? self.yPrice(b.l) + 8 + below * 16 : self.yPrice(b.h) - 8 - above * 16;
+        if (buy) below++; else above++;
+        c.fillStyle = col; c.beginPath();
+        if (buy) { c.moveTo(x, y); c.lineTo(x - 6, y + 9); c.lineTo(x + 6, y + 9); }
+        else { c.moveTo(x, y); c.lineTo(x - 6, y - 9); c.lineTo(x + 6, y - 9); }
+        c.closePath(); c.fill();
+        c.fillStyle = '#fff'; c.textBaseline = buy ? 'top' : 'bottom';
+        c.fillText(buy ? 'B' : 'S', x, buy ? y + 1 : y - 1);
+      });
+    }
+    c.restore();
+    const pos = this.tradeData.position, last = this.bars[this.bars.length - 1];
+    if (pos && pos.avgCost > 0 && last) {
+      const y = Math.round(this.yPrice(pos.avgCost)) + 0.5;
+      if (y >= P.y && y <= P.y + P.h) {
+        const pl = (last.c / pos.avgCost - 1) * 100;
+        c.save(); c.strokeStyle = '#ffd54f'; c.setLineDash([6, 3]); c.lineWidth = 1;
+        c.beginPath(); c.moveTo(P.x, y); c.lineTo(P.x + P.w, y); c.stroke(); c.setLineDash([]);
+        const txt = 'AVG COST ' + fmtPrice(pos.avgCost) + ' · ' + (+pos.quantity.toFixed(4)) + ' sh · ' + (pl >= 0 ? '+' : '') + pl.toFixed(1) + '%';
+        c.font = this.font; const w = c.measureText(txt).width + 10;
+        c.fillStyle = 'rgba(255,213,79,0.92)'; c.fillRect(P.x + 4, y - 8, w, 15);
+        c.fillStyle = '#1a1300'; c.textAlign = 'left'; c.textBaseline = 'middle'; c.fillText(txt, P.x + 9, y);
+        c.fillStyle = '#ffd54f'; c.fillRect(P.x + P.w + 1, y - 7, this.axisR - 2, 14);
+        c.fillStyle = '#1a1300'; c.fillText(this._axisLabel(pos.avgCost), P.x + P.w + 5, y);
+        c.restore();
+      }
+    }
   };
   PriceChart.prototype._dirty = function () { this._dirtyStatic = true; this.requestRender(); };
 
@@ -576,13 +1073,19 @@
     const b = this.bars, self = this;
     this.disp = this.cfg.chartType === 'heikin' && b.length ? IND_LIB.heikinAshi(b) : b;
     const intraday = isIntraday(this.interval);
+    const ictx = { interval: this.interval, series: function (sym) { return self._series(sym); } };
     this.indOut = this.cfg.indicators.map(function (inst) {
       const def = IND[inst.type];
       let out = { lines: [] };
       if (b.length && !inst.hidden && !(def.intradayOnly && !intraday)) {
-        try { out = def.calc(b, inst.params); } catch (e) { out = { lines: [] }; }
+        try { out = def.calc(b, inst.params, ictx, inst); } catch (e) { out = { lines: [] }; }
       }
       return { inst: inst, def: def, out: out };
+    });
+    // compare symbols aligned to this chart's bars (as-of: never a later bar)
+    this.cmpOut = (this.cfg.compare || []).map(function (c) {
+      const s = self._series(c.sym);
+      return { sym: c.sym, color: c.color, data: s && b.length ? IND_LIB.asOf(b, s) : null };
     });
     this._avCache = null;
     this.strat = null; this._stMap = null;
@@ -734,6 +1237,7 @@
       const def = IND[inst.type];
       html += '<div class="pc-mrow" data-k="' + k + '"><input type="color" value="' + inst.color + '" data-f="color" title="Colour">' +
         '<span class="pc-mname">' + esc(def.name) + '</span>' +
+        (def.sym ? '<label>vs <input class="pc-symin" maxlength="24" data-f="sym" value="' + esc(inst.sym || 'SPY') + '"></label>' : '') +
         def.params.map(function (p) { return '<label>' + esc(p[1]) + ' <input type="number" step="any" min="0" data-f="' + p[0] + '" value="' + inst.params[p[0]] + '"></label>'; }).join('') +
         '<button type="button" class="ctbtn tool' + (inst.hidden ? '' : ' on') + '" data-f="hide" title="Show / hide">' + ICON.eye + '</button>' +
         '<button type="button" class="ctbtn tool" data-f="del" title="Remove">' + ICON.close + '</button></div>';
@@ -757,6 +1261,7 @@
       const inp = e.target, row = inp.closest('.pc-mrow'); if (!row) return;
       const inst = self.cfg.indicators[Number(row.dataset.k)];
       if (inp.dataset.f === 'color') inst.color = inp.value;
+      else if (inp.dataset.f === 'sym') { const v = inp.value.trim().toUpperCase(); if (SYM_RE.test(v)) inst.sym = v; else inp.value = inst.sym; }
       else { const v = Number(inp.value); if (isFinite(v) && v > 0 && v < 1000) inst.params[inp.dataset.f] = v; else inp.value = inst.params[inp.dataset.f]; }
       self._cfgChanged(true);
     };
@@ -815,6 +1320,10 @@
   PriceChart.prototype._paneInds = function () { return (this.indOut || []).filter(function (x) { return x.def.pane && !x.inst.hidden; }); };
   PriceChart.prototype._desiredHeight = function () {
     const panes = this._paneInds();
+    if (this.fit) {
+      const used = this.toolbar.offsetHeight + (this.cfg.strategy ? this.stratBar.offsetHeight : 0) + (this.replay.active ? this.replayBar.offsetHeight : 0) + 2;
+      return Math.max(160, (this.root.parentNode ? this.root.parentNode.clientHeight : 400) - used);
+    }
     if (this.maxed) {
       const used = this.toolbar.offsetHeight + (this.cfg.strategy ? this.stratBar.offsetHeight : 0) + (this.replay.active ? this.replayBar.offsetHeight : 0) + 34;
       return Math.max(380, window.innerHeight - used);
@@ -870,7 +1379,16 @@
     const D = this.disp, self = this;
     for (let i = this.i0; i < this.i1; i++) { const b = D[i]; if (!b) continue; const h = b.h != null ? b.h : b.c, l = b.l != null ? b.l : b.c; if (l < lo) lo = l; if (h > hi) hi = h; }
     const consider = function (v) { if (v != null && isFinite(v)) { if (v < lo) lo = v; if (v > hi) hi = v; } };
-    (this.indOut || []).forEach(function (x) { if (x.def.pane) return; x.out.lines.forEach(function (l) { for (let i = self.i0; i < self.i1; i++) consider(l.data[i]); }); });
+    (this.indOut || []).forEach(function (x) { if (x.def.pane || x.out.noScale) return; x.out.lines.forEach(function (l) { for (let i = self.i0; i < self.i1; i++) consider(l.data[i]); }); });
+    // compare lines in this chart's price space: same % change from the first visible bar
+    this.pctBase = this.bars[this.i0] ? this.bars[this.i0].c : null;
+    this.cmpMain = (this.cmpOut || []).map(function (c) {
+      if (!c.data || !self.pctBase) return null;
+      let base = null; const out = new Array(self.i1).fill(null);
+      for (let i = self.i0; i < self.i1; i++) { const v = c.data[i]; if (v == null || !(v > 0)) continue; if (base == null) base = v; out[i] = self.pctBase * v / base; consider(out[i]); }
+      return out;
+    });
+    this.pctOn = !!this.cfg.pct || this.cmpMain.some(function (x) { return !!x; });
     if (this.strat) {
       // strategy averages close to price shape the scale; far-away long averages (200-day) do not
       this.strat.lines.forEach(function (l) { if (/200|150/.test(l.key)) return; for (let i = self.i0; i < self.i1; i++) consider(l.data[i]); });
@@ -885,7 +1403,6 @@
     this.fLo = fLo; this.fHi = fHi;
     this.yLo = this._finv(fLo); this.yHi = this._finv(fHi);
     this.priceK = this.panes.price.h / ((fHi - fLo) || 1);
-    this.pctBase = this.bars[this.i0] ? this.bars[this.i0].c : null;
   };
   PriceChart.prototype.xFromIndex = function (i) { return this.padL + (i - this.i0 + 0.5) * this.slotW; };
   PriceChart.prototype.yPrice = function (v) { return this.panes.price.y + (this.fHi - this._f(v)) * this.priceK; };
@@ -992,7 +1509,7 @@
   };
 
   PriceChart.prototype._axisLabel = function (v, dec) {
-    if (this.cfg.pct && this.pctBase) { const p = (v / this.pctBase - 1) * 100; return (p >= 0 ? '+' : '') + p.toFixed(Math.abs(p) < 10 ? 2 : 1) + '%'; }
+    if (this.pctOn && this.pctBase) { const p = (v / this.pctBase - 1) * 100; return (p >= 0 ? '+' : '') + p.toFixed(Math.abs(p) < 10 ? 2 : 1) + '%'; }
     return fmtPrice(v, dec);
   };
   PriceChart.prototype._drawGrid = function () {
@@ -1039,7 +1556,8 @@
     const c = this.ctx, P = this.panes.price, self = this;
     c.save();
     c.beginPath(); c.rect(P.x, P.y, P.w, P.h); c.clip();
-    (this.indOut || []).forEach(function (x) { if (!x.def.pane && x.out.fill) self._drawFill(x); });
+    (this.indOut || []).forEach(function (x) { if (!x.def.pane && x.out.fill) self._drawFill(x); if (!x.def.pane && x.out.cloud) self._drawCloud(x); });
+    (this.indOut || []).forEach(function (x) { if (!x.def.pane && x.out.profile) self._drawProfile(x); });
     const t = this.cfg.chartType;
     if (t === 'line' || t === 'area' || this.slotW < 2.2) this._drawLineArea(t === 'area');
     else if (t === 'bars') this._drawOHLC();
@@ -1047,13 +1565,97 @@
     (this.indOut || []).forEach(function (x) {
       if (x.def.pane) return;
       x.out.lines.forEach(function (l) {
-        if (l.dirs) self._polylineDir(l.data, l.dirs, l.width || 1.4);
+        if (l.dots) self._dots(l.data, l.dirs);
+        else if (l.step) self._stepLine(l.data, l.color || x.inst.color, l.width || 1, l.label);
+        else if (l.dirs) self._polylineDir(l.data, l.dirs, l.width || 1.4);
         else self._polyline(l.data, l.color || x.inst.color, l.width || 1.25, l.dash);
       });
     });
+    (this.cmpMain || []).forEach(function (d, k) { if (d) self._polyline(d, self.cmpOut[k].color, 1.6); });
     if (this.strat) this._drawStrategy();
     c.restore();
+    this._drawTrades();
     this._drawLastPrice();
+  };
+  // last index a series may be drawn to: past the last bar into the right
+  // margin for forward-displaced data (Ichimoku cloud)
+  PriceChart.prototype._iEnd = function (data) { return this.i1 === this.bars.length ? Math.min(data.length, this.i1 + this.padBars) : this.i1; };
+  PriceChart.prototype._dots = function (data, dirs) {
+    const c = this.ctx, r = clamp(this.slotW * 0.18, 1.2, 2.6);
+    for (let i = this.i0; i < this.i1; i++) {
+      const v = data[i]; if (v == null) continue;
+      c.fillStyle = dirs && dirs[i] < 0 ? this.DN : this.UP;
+      c.beginPath(); c.arc(this.xFromIndex(i), this.yPrice(v), r, 0, Math.PI * 2); c.fill();
+    }
+  };
+  // stepped levels (pivots): flat per period, no diagonal joins, label at the right
+  PriceChart.prototype._stepLine = function (data, color, width, label) {
+    const c = this.ctx, half = this.slotW / 2;
+    c.strokeStyle = color; c.lineWidth = width; c.setLineDash([]);
+    c.beginPath();
+    let prev = null, lastX = null, lastV = null;
+    for (let i = this.i0; i < this.i1; i++) {
+      const v = data[i];
+      if (v == null) { prev = null; continue; }
+      const x = this.xFromIndex(i), y = Math.round(this.yPrice(v)) + 0.5;
+      if (prev !== v) c.moveTo(x - half, y);
+      c.lineTo(x + half, y); prev = v; lastX = x + half; lastV = v;
+    }
+    c.stroke();
+    if (label && lastV != null) { c.fillStyle = color; c.textAlign = 'right'; c.textBaseline = 'bottom'; c.font = this.font; c.fillText(label, lastX - 2, this.yPrice(lastV) - 1); c.textBaseline = 'middle'; }
+  };
+  // Ichimoku cloud: green where span A is above span B, red where below
+  PriceChart.prototype._drawCloud = function (x) {
+    const c = this.ctx, a = x.out.lines[x.out.cloud[0]].data, b = x.out.lines[x.out.cloud[1]].data, end = this._iEnd(a);
+    for (let i = Math.max(this.i0, 1); i < end; i++) {
+      if (a[i] == null || b[i] == null || a[i - 1] == null || b[i - 1] == null) continue;
+      const x0 = this.xFromIndex(i - 1), x1 = this.xFromIndex(i);
+      c.fillStyle = a[i] >= b[i] ? 'rgba(67,160,71,0.16)' : 'rgba(242,54,69,0.16)';
+      c.beginPath(); c.moveTo(x0, this.yPrice(a[i - 1])); c.lineTo(x1, this.yPrice(a[i])); c.lineTo(x1, this.yPrice(b[i])); c.lineTo(x0, this.yPrice(b[i - 1])); c.closePath(); c.fill();
+    }
+  };
+  // Volume profile: visible range (right edge) or one per intraday session.
+  PriceChart.prototype._drawProfile = function (x) {
+    const o = x.out, self = this, P = this.panes.price, col = x.inst.color;
+    if (o.profile === 'visible') this._profileBox(IND_LIB.volumeProfile(this.bars, this.i0, this.i1, o.rows, o.va), P.x + P.w, P.w * 0.24, -1, col, true);
+    else {
+      const off = -new Date().getTimezoneOffset() * 60000;
+      let s = this.i0;
+      for (let i = this.i0 + 1; i <= this.i1; i++) {
+        const newDay = i === this.i1 || Math.floor((this.bars[i].t + off) / 86400000) !== Math.floor((this.bars[i - 1].t + off) / 86400000);
+        if (!newDay) continue;
+        if (i - s >= 3) {
+          const x0 = this.xFromIndex(s) - this.slotW / 2, w = (i - s) * this.slotW;
+          self._profileBox(IND_LIB.volumeProfile(this.bars, s, i, o.rows, o.va), x0, w * 0.7, 1, col, false, x0 + w);
+        }
+        s = i;
+      }
+    }
+  };
+  // dir -1: bars grow leftwards from x0 (right-anchored); +1: rightwards
+  PriceChart.prototype._profileBox = function (vp, x0, maxW, dir, col, labels, pocEnd) {
+    if (!vp) return;
+    const c = this.ctx, P = this.panes.price;
+    let mx = 0; for (let r = 0; r < vp.up.length; r++) mx = Math.max(mx, vp.up[r] + vp.dn[r]);
+    if (!mx) return;
+    for (let r = 0; r < vp.up.length; r++) {
+      const yTop = this.yPrice(vp.lo + (r + 1) * vp.step), yBot = this.yPrice(vp.lo + r * vp.step), h = Math.max(1, yBot - yTop - 1);
+      const inVa = r >= vp.vaLo && r <= vp.vaHi, wu = maxW * vp.up[r] / mx, wd = maxW * vp.dn[r] / mx;
+      c.fillStyle = this._rgba(this.UP, inVa ? 0.38 : 0.18);
+      c.fillRect(dir < 0 ? x0 - wu : x0, yTop, wu, h);
+      c.fillStyle = this._rgba(this.DN, inVa ? 0.38 : 0.18);
+      c.fillRect(dir < 0 ? x0 - wu - wd : x0 + wu, yTop, wd, h);
+    }
+    const yp = Math.round(this.yPrice(vp.pocPrice)) + 0.5;
+    c.strokeStyle = col; c.lineWidth = 1.2; c.setLineDash([]);
+    c.beginPath(); c.moveTo(dir < 0 ? P.x : x0, yp); c.lineTo(dir < 0 ? x0 : (pocEnd || x0 + maxW), yp); c.stroke();
+    if (labels) {
+      c.font = this.font; c.textAlign = 'left'; c.textBaseline = 'bottom'; c.fillStyle = col;
+      c.fillText('POC ' + fmtPrice(vp.pocPrice), P.x + 4, yp - 2);
+      c.setLineDash([2, 3]); c.strokeStyle = this._rgba(col, 0.7); c.lineWidth = 1;
+      [vp.vah, vp.val].forEach(function (v, k) { const y = Math.round(this.yPrice(v)) + 0.5; c.beginPath(); c.moveTo(x0 - maxW, y); c.lineTo(x0, y); c.stroke(); c.fillText((k ? 'VAL ' : 'VAH ') + fmtPrice(v), x0 - maxW + 2, y - 2); }, this);
+      c.setLineDash([]); c.textBaseline = 'middle';
+    }
   };
 
   PriceChart.prototype._drawCandles = function (hollow) {
@@ -1101,7 +1703,8 @@
     const c = this.ctx, y = yFn || this.yPrice.bind(this);
     c.beginPath(); c.lineWidth = width || 1.2; c.strokeStyle = color; c.setLineDash(dash ? [4, 3] : []);
     let started = false;
-    for (let i = this.i0; i < this.i1; i++) {
+    const end = yFn ? this.i1 : this._iEnd(data);
+    for (let i = this.i0; i < end; i++) {
       const v = data[i]; if (v == null || !isFinite(v)) { started = false; continue; }
       const x = this.xFromIndex(i), yy = y(v);
       if (!started) { c.moveTo(x, yy); started = true; } else c.lineTo(x, yy);
@@ -1285,7 +1888,7 @@
     (this.paneList || []).forEach(function (P) {
       if (!P.ind) return;
       const inst = P.ind.inst, def = P.ind.def;
-      const params = def.params.map(function (p) { return inst.params[p[0]]; }).join(', ');
+      const params = (def.sym ? [inst.sym || 'SPY'] : []).concat(def.params.map(function (p) { return inst.params[p[0]]; })).join(', ');
       html += '<div class="pc-pl" style="top:' + Math.round(P.y + 1) + 'px" data-id="' + esc(inst.id) + '"><span style="color:' + inst.color + '">' + esc(def.short || def.name) + (params ? ' ' + esc(params) : '') + '</span><span class="pc-plv"></span>' +
         '<button type="button" data-a="cfg" title="Settings">' + ICON.gear + '</button><button type="button" data-a="rm" title="Remove">' + ICON.close + '</button></div>';
     });
@@ -1318,9 +1921,19 @@
     if (this.strat) {
       html += '<div><span class="k">◆ ' + esc(this.strat.short) + '</span> ' + this.strat.lines.map(function (l) { return '<span style="color:' + l.color + '">' + esc(l.key) + ' ' + fmtPrice(l.data[i], dec) + '</span>'; }).join(' ') + '</div>';
     }
+    const self = this;
+    (this.cmpOut || []).forEach(function (c, k) {
+      const d = self.cmpMain && self.cmpMain[k], v = d && d[i], raw = c.data && c.data[i];
+      html += '<div><span style="color:' + c.color + '">' + esc(c.sym) + '</span> ' + (v != null && self.pctBase ? ((v / self.pctBase - 1) * 100 >= 0 ? '+' : '') + ((v / self.pctBase - 1) * 100).toFixed(2) + '% <span class="k">' + fmtPrice(raw) + '</span>' : c.data ? '—' : '<span class="k">loading…</span>') + '</div>';
+    });
+    const tm = this._tradeMarks(), here = tm && tm[i];
+    if (here) here.forEach(function (t) {
+      html += '<div class="pc-ltrade">' + (t.kind === 'div' ? 'Dividend ' + (t.amount != null ? fmtPrice(t.amount, 2) + ' ' + esc(t.currency || '') : '')
+        : (t.kind === 'buy' ? 'Bought ' : 'Sold ') + (t.qty != null ? +(+t.qty).toFixed(4) : '') + ' @ ' + fmtPrice(t.price)) + ' <span class="k">' + esc(t.account || '') + '</span></div>';
+    });
     if (html !== this._legendHtml) { this.legend.innerHTML = html; this._legendHtml = html; }
     this.legend.style.display = 'block';
-    const self = this;
+
     this.paneLegends.querySelectorAll('.pc-pl').forEach(function (el) {
       const P = self.panes[el.dataset.id]; if (!P) return;
       const out = P.ind.out, vals = [];
@@ -1347,9 +1960,11 @@
     this._visibleDrawing = visible;
     if (!this.hideAll) for (let k = 0; k < this.drawings.length; k++) if (visible(this.drawings[k])) this._drawOne(c, this.drawings[k], k === this.sel, false);
     if (this.pending) this._drawOne(c, this._pendingDrawing(), true, true);
+    this._drawAlerts(c);
     if (this.replay.picking && this.inside) this._drawReplayPick(c);
     if (this.inside && !(this.drag && this.drag.kind === 'pan') && this.mx >= 0) this._drawCrosshair(c);
-    const li = this.inside && this.hoverIdx >= 0 ? this.hoverIdx : this.bars.length - 1;
+    else if (this.extX != null) this._drawExtCrosshair(c);
+    const li = this.inside && this.hoverIdx >= 0 ? this.hoverIdx : this.extIdx != null ? this.extIdx : this.bars.length - 1;
     this._updateLegend(clamp(li, 0, this.bars.length - 1));
     this._positionStyleBar();
   };
@@ -1382,6 +1997,42 @@
     c.restore();
   };
 
+  // crosshair time from a linked chart (multi-chart sync)
+  PriceChart.prototype.setExtCrosshair = function (t) {
+    if (t == null || !this.bars.length) { this.extX = null; this.extIdx = null; this.requestOverlay(); return; }
+    const k = Math.round(this.idxOfTime(t));
+    this.extIdx = k >= 0 && k < this.bars.length ? (this.bars[k].t > t && k > 0 ? k - 1 : k) : null;
+    this.extX = this.extIdx != null ? this.xFromIndex(this.extIdx) : null;
+    this.requestOverlay();
+  };
+  PriceChart.prototype._drawExtCrosshair = function (c) {
+    if (this.extIdx == null || this.extIdx < this.i0 || this.extIdx >= this.i1) return;
+    const x = Math.round(this.xFromIndex(this.extIdx)) + 0.5;
+    c.save(); c.strokeStyle = this._rgba(this.AMBER, 0.55); c.setLineDash([3, 3]); c.lineWidth = 1;
+    c.beginPath(); c.moveTo(x, this.panes.price.y); c.lineTo(x, this.bottomY); c.stroke(); c.restore();
+  };
+  // price alerts as dashed levels with a bell tag; line alerts tag the line's current value
+  PriceChart.prototype._drawAlerts = function (c) {
+    const mine = this._myAlerts(); if (!mine.length) return;
+    const P = this.panes.price, self = this, k = this.bars.length - 1;
+    c.save(); c.font = this.font; c.textBaseline = 'middle';
+    mine.forEach(function (a) {
+      let v = null;
+      if (a.kind === 'price') v = a.price;
+      else if (a.kind === 'line') v = self._lineAt(a.line.pts, k);
+      else if (a.kind === 'ind' && (a.ind.type === 'sma' || a.ind.type === 'ema') && a.level != null) v = a.level;
+      if (v == null || !(v > 0)) return;
+      const y = Math.round(self.yPrice(v)) + 0.5;
+      if (y < P.y || y > P.y + P.h) return;
+      const col = a.met ? '#26a69a' : '#ffb300';
+      if (a.kind === 'price' && !a.drawingId) { c.strokeStyle = self._rgba(col, 0.75); c.setLineDash([2, 4]); c.lineWidth = 1; c.beginPath(); c.moveTo(P.x, y); c.lineTo(P.x + P.w, y); c.stroke(); c.setLineDash([]); }
+      const txt = '🔔 ' + (a.op === '>' ? '≥ ' : '≤ ') + fmtPrice(v) + (a.kind === 'ind' ? ' ' + a.ind.type.toUpperCase() + a.ind.length : '') + (a.met ? ' ✓' : '');
+      const w = c.measureText(txt).width + 10, x = P.x + P.w - w - 2;
+      c.fillStyle = self._rgba(col, 0.92); c.fillRect(x, y - 8, w, 15);
+      c.fillStyle = '#111'; c.textAlign = 'left'; c.fillText(txt, x + 5, y);
+    });
+    c.restore();
+  };
   PriceChart.prototype._drawReplayPick = function (c) {
     const x = Math.round(this.mx) + 0.5, P = this.panes.price;
     c.save();
@@ -1489,10 +2140,93 @@
       case 'long': case 'short': this._drawPosition(c, d); break;
       case 'measure': this._drawMeasure(c, d); break;
       case 'avwap': this._drawAvwap(c, d); break;
+      case 'pitchfork': {
+        if (!pts[1]) break;
+        const a = [X(pts[0]), Y(pts[0])], b = [X(pts[1]), Y(pts[1])];
+        if (!pts[2]) { seg(a, b); break; }
+        const g = this._forkGeom(pts);
+        seg(b, g.c);
+        c.fillStyle = this._rgba(col, 0.07);
+        c.beginPath(); c.moveTo(g.b[0], g.b[1]); c.lineTo(g.bEnd[0], g.bEnd[1]); c.lineTo(g.cEnd[0], g.cEnd[1]); c.lineTo(g.c[0], g.c[1]); c.closePath(); c.fill();
+        seg(g.a, g.mEnd); seg(g.b, g.bEnd); seg(g.c, g.cEnd);
+        break;
+      }
+      case 'callout': {
+        if (!pts[1]) break;
+        const ax = X(pts[0]), ay = Y(pts[0]), bx = X(pts[1]), by = Y(pts[1]), lines = (d.text || 'Callout').split('\n');
+        c.font = 'bold 12px ' + this.fontFamily;
+        const w = Math.max.apply(null, lines.map(function (l) { return c.measureText(l).width; })) + 14, h = lines.length * 15 + 8;
+        seg([ax, ay], [bx, by]);
+        c.fillStyle = col; c.beginPath(); c.arc(ax, ay, 3, 0, Math.PI * 2); c.fill();
+        c.fillStyle = this._rgba(col, 0.92); c.fillRect(bx, by - h / 2, w, h);
+        c.fillStyle = '#111'; c.textAlign = 'left';
+        lines.forEach(function (l, k) { c.fillText(l, bx + 7, by - h / 2 + 11 + k * 15); });
+        break;
+      }
+      case 'note': {
+        const x = X(pts[0]), y = Y(pts[0]);
+        c.fillStyle = col; c.beginPath(); c.moveTo(x, y); c.lineTo(x - 7, y - 10); c.lineTo(x - 7, y - 22); c.lineTo(x + 7, y - 22); c.lineTo(x + 7, y - 10); c.closePath(); c.fill();
+        c.fillStyle = '#111'; c.fillRect(x - 4, y - 19, 8, 1.4); c.fillRect(x - 4, y - 16, 8, 1.4); c.fillRect(x - 4, y - 13, 5, 1.4);
+        if (sel || this._hoverNote === d) {
+          const lines = (d.text || 'Note').split('\n');
+          c.font = '12px ' + this.fontFamily;
+          const w = Math.min(320, Math.max.apply(null, lines.map(function (l) { return c.measureText(l).width; })) + 14), h = lines.length * 15 + 8;
+          const bx = clamp(x + 10, P.x, P.x + P.w - w), by = clamp(y - 22 - h, P.y, P.y + P.h - h);
+          c.fillStyle = 'rgba(20,24,32,0.96)'; c.fillRect(bx, by, w, h); c.strokeStyle = col; c.setLineDash([]); c.lineWidth = 1; c.strokeRect(bx + 0.5, by + 0.5, w - 1, h - 1);
+          c.fillStyle = this.TXT; c.textAlign = 'left';
+          lines.forEach(function (l, k) { c.fillText(l, bx + 7, by + 11 + k * 15); });
+        }
+        break;
+      }
+      case 'brush': {
+        if (pts.length < 2) break;
+        c.lineJoin = 'round'; c.lineCap = 'round'; c.setLineDash([]);
+        c.beginPath(); c.moveTo(X(pts[0]), Y(pts[0]));
+        for (let k = 1; k < pts.length; k++) c.lineTo(X(pts[k]), Y(pts[k]));
+        c.stroke();
+        break;
+      }
+      case 'pricerange': case 'daterange': this._drawRange(c, d); break;
     }
     c.setLineDash([]);
     c.restore();
     if (sel && !preview) this._drawHandles(c, d);
+  };
+
+  // Andrews pitchfork in screen space: median from the pivot through the midpoint
+  // of the two swings, tines parallel to it through each swing, all to the right edge.
+  PriceChart.prototype._forkGeom = function (pts) {
+    const P = this.panes.price, self = this;
+    const S = function (q) { return [self.xFromTime(q.t), self.yPrice(q.p)]; };
+    const a = S(pts[0]), b = S(pts[1]), c = S(pts[2]), m = [(b[0] + c[0]) / 2, (b[1] + c[1]) / 2];
+    let dx = m[0] - a[0], dy = m[1] - a[1];
+    if (Math.abs(dx) < 1e-6) dx = 1e-6;
+    const xr = P.x + P.w, to = function (p) { const xe = dx > 0 ? Math.max(xr, p[0]) : Math.min(P.x, p[0]); return [xe, p[1] + dy / dx * (xe - p[0])]; };
+    return { a: a, b: b, c: c, m: m, mEnd: to(a), bEnd: to(b), cEnd: to(c) };
+  };
+  // Price range (vertical) and date range (horizontal) measures.
+  PriceChart.prototype._drawRange = function (c, d) {
+    const pts = d.pts; if (!pts[1]) return;
+    const x0 = this.xFromTime(pts[0].t), x1 = this.xFromTime(pts[1].t), y0 = this.yPrice(pts[0].p), y1 = this.yPrice(pts[1].p);
+    const col = (d.style && d.style.color) || DEFAULT_COLOR[d.type];
+    c.fillStyle = this._rgba(col, 0.13); c.fillRect(Math.min(x0, x1), Math.min(y0, y1), Math.abs(x1 - x0), Math.abs(y1 - y0));
+    c.setLineDash([]); c.lineWidth = 1; c.strokeStyle = col;
+    let txt, tx, ty;
+    if (d.type === 'pricerange') {
+      const mx = (x0 + x1) / 2, dp = pts[1].p - pts[0].p, pc = dp / pts[0].p * 100;
+      c.beginPath(); c.moveTo(Math.min(x0, x1), y0); c.lineTo(Math.max(x0, x1), y0); c.moveTo(Math.min(x0, x1), y1); c.lineTo(Math.max(x0, x1), y1);
+      c.moveTo(mx, y0); c.lineTo(mx, y1); c.stroke();
+      const s = y1 < y0 ? 1 : -1; c.beginPath(); c.moveTo(mx, y1); c.lineTo(mx - 4, y1 + s * 6); c.moveTo(mx, y1); c.lineTo(mx + 4, y1 + s * 6); c.stroke();
+      txt = (dp >= 0 ? '+' : '') + fmtPrice(dp) + ' (' + (pc >= 0 ? '+' : '') + pc.toFixed(2) + '%)'; tx = mx; ty = y1 < y0 ? y1 - 12 : y1 + 12;
+    } else {
+      const my = (y0 + y1) / 2, bars = Math.round(this.idxOfTime(pts[1].t) - this.idxOfTime(pts[0].t)), days = Math.round((pts[1].t - pts[0].t) / 86400000);
+      c.beginPath(); c.moveTo(x0, Math.min(y0, y1)); c.lineTo(x0, Math.max(y0, y1)); c.moveTo(x1, Math.min(y0, y1)); c.lineTo(x1, Math.max(y0, y1));
+      c.moveTo(x0, my); c.lineTo(x1, my); c.stroke();
+      const s = x1 > x0 ? -1 : 1; c.beginPath(); c.moveTo(x1, my); c.lineTo(x1 + s * 6, my - 4); c.moveTo(x1, my); c.lineTo(x1 + s * 6, my + 4); c.stroke();
+      txt = bars + ' bars · ' + days + 'd'; tx = (x0 + x1) / 2; ty = Math.max(y0, y1) + 12;
+    }
+    c.font = this.font; const w = c.measureText(txt).width + 12;
+    c.fillStyle = col; c.fillRect(tx - w / 2, ty - 8, w, 16); c.fillStyle = '#fff'; c.textAlign = 'center'; c.fillText(txt, tx, ty);
   };
 
   PriceChart.prototype._drawFibLevels = function (c, d, levels, base, span, xStart) {
@@ -1592,6 +2326,7 @@
     if (d.type === 'hline') return [[P.x + P.w / 2, this.yPrice(d.pts[0].p)]];
     if (d.type === 'vline') return [[this.xFromTime(d.pts[0].t), P.y + P.h / 2]];
     if (d.type === 'avwap') { const r = this._avwapData(d); return r ? [[this.xFromIndex(r.from), this.yPrice(r.data[r.from])]] : []; }
+    if (d.type === 'brush') return [];
     if (d.type === 'long' || d.type === 'short') {
       const g = this._posGeom(d);
       return [[g.xa, this.yPrice(d.pts[0].p)], [g.xa, this.yPrice(d.pts[1].p)], [g.xa, this.yPrice(d.pts[2].p)], [g.xe, this.yPrice(d.pts[0].p)]];
@@ -1653,6 +2388,25 @@
           hit = px >= g.xa - TH && px <= g.xe + TH && py >= Math.min.apply(null, ys) - TH && py <= Math.max.apply(null, ys) + TH;
           break;
         }
+        case 'pitchfork': {
+          if (!pts[2]) break;
+          const g = this._forkGeom(pts);
+          hit = distToSeg(px, py, g.a[0], g.a[1], g.mEnd[0], g.mEnd[1]) <= TH || distToSeg(px, py, g.b[0], g.b[1], g.bEnd[0], g.bEnd[1]) <= TH ||
+            distToSeg(px, py, g.c[0], g.c[1], g.cEnd[0], g.cEnd[1]) <= TH || distToSeg(px, py, g.b[0], g.b[1], g.c[0], g.c[1]) <= TH;
+          break;
+        }
+        case 'callout': {
+          const bx = X(pts[1]), by = Y(pts[1]), n = (d.text || 'Callout').split('\n').length;
+          hit = (px >= bx - 2 && px <= bx + 220 && Math.abs(py - by) <= n * 7.5 + 6) || distToSeg(px, py, X(pts[0]), Y(pts[0]), bx, by) <= TH;
+          break;
+        }
+        case 'note': hit = Math.abs(px - X(pts[0])) <= 8 && py <= Y(pts[0]) + 2 && py >= Y(pts[0]) - 24; break;
+        case 'brush': for (let j = 1; j < pts.length && !hit; j++) hit = distToSeg(px, py, X(pts[j - 1]), Y(pts[j - 1]), X(pts[j]), Y(pts[j])) <= TH; break;
+        case 'pricerange': case 'daterange': {
+          const x0 = Math.min(X(pts[0]), X(pts[1])), x1 = Math.max(X(pts[0]), X(pts[1])), y0 = Math.min(Y(pts[0]), Y(pts[1])), y1 = Math.max(Y(pts[0]), Y(pts[1]));
+          hit = px >= x0 - TH && px <= x1 + TH && py >= y0 - TH && py <= y1 + TH;
+          break;
+        }
         case 'avwap': {
           const r = this._avwapData(d), i = this.indexAt(px);
           hit = !!(r && i >= r.from && r.data[i] != null && Math.abs(py - this.yPrice(r.data[i])) <= TH);
@@ -1680,8 +2434,20 @@
       html += '<span class="sep"></span>' + [1, 2, 3, 4].map(function (w) { return '<button type="button" class="ctbtn' + ((st.width || 1) === w ? ' on' : '') + '" data-w="' + w + '">' + w + 'px</button>'; }).join('');
       html += [['solid', '━'], ['dash', '╍'], ['dot', '┉']].map(function (s) { return '<button type="button" class="ctbtn' + ((st.dash || 'solid') === s[0] ? ' on' : '') + '" data-dash="' + s[0] + '" title="' + s[0] + '">' + s[1] + '</button>'; }).join('');
     }
-    if (d.type === 'text' || d.type === 'arrowup' || d.type === 'arrowdn') html += '<span class="sep"></span><textarea class="pc-stext" rows="1" maxlength="500" placeholder="Text">' + esc(d.text || '') + '</textarea>';
+    if (d.type === 'text' || d.type === 'arrowup' || d.type === 'arrowdn' || d.type === 'callout' || d.type === 'note') html += '<span class="sep"></span><textarea class="pc-stext" rows="1" maxlength="500" placeholder="Text">' + esc(d.text || '') + '</textarea>';
     if (d.type === 'long' || d.type === 'short') html += '<button type="button" class="ctbtn pc-accent" data-act="log" title="Log this position to the journal">' + ICON.journal + ' Log</button>';
+    if (ALERT_FLAT[d.type] || ALERT_SLOPED[d.type]) {
+      const has = this._myAlerts().some(function (a) { return a.drawingId === d.id; });
+      html += '<span class="sep"></span><button type="button" class="ctbtn tool' + (has ? ' on' : '') + '" data-act="alert" title="' + (has ? 'Remove this line\'s alert' : 'Alert when price crosses this line') + '">' + ICON.bell + '</button>';
+    }
+    if (d.type !== 'long' && d.type !== 'short' && d.type !== 'measure') {
+      const tpl = (this.cfg.templates || {})[d.type] || {}, names = Object.keys(tpl);
+      html += '<span class="sep"></span><select class="pc-select pc-tpl" title="Style templates for this tool"><option value="">Template…</option>' +
+        names.map(function (n) { return '<option value="a:' + esc(n) + '">Apply “' + esc(n) + '”</option>'; }).join('') +
+        '<option value="save">Save style as template…</option><option value="default">Use as default for new ' + esc((TOOLS[d.type].name || d.type).split(' (')[0].toLowerCase()) + 's</option>' +
+        (names.length ? names.map(function (n) { return '<option value="d:' + esc(n) + '">Delete “' + esc(n) + '”</option>'; }).join('') : '') +
+        ((this.cfg.toolDefaults || {})[d.type] ? '<option value="nodefault">Reset default style</option>' : '') + '</select>';
+    }
     html += '<span class="sep"></span>' +
       '<button type="button" class="ctbtn tool' + (d.locked ? ' on' : '') + '" data-act="lock" title="Lock">' + ICON.lock + '</button>' +
       '<button type="button" class="ctbtn tool" data-act="clone" title="Clone">' + ICON.clone + '</button>' +
@@ -1695,6 +2461,12 @@
       const cur = self.drawings[self.sel]; if (!cur) return;
       if (b.dataset.act === 'del') { self.deleteSelected(); return; }
       if (b.dataset.act === 'log') { self.logTrade(); return; }
+      if (b.dataset.act === 'alert') {
+        const linked = self._myAlerts().filter(function (a) { return a.drawingId === cur.id; });
+        if (linked.length) linked.forEach(function (a) { self._alertApi('/api/alerts/remove', { id: a.id }, 'Alert removed').then(function () { self._renderStyleBar(); }); });
+        else self._alertFromDrawing(cur);
+        return;
+      }
       self._pushUndo();
       if (b.dataset.c) cur.style = Object.assign({}, cur.style, { color: b.dataset.c });
       else if (b.dataset.w) cur.style = Object.assign({}, cur.style, { width: Number(b.dataset.w) });
@@ -1708,6 +2480,20 @@
       }
       self._saveDrawings(); self._renderStyleBar(); self.requestOverlay();
     };
+    const tplSel = sb.querySelector('.pc-tpl');
+    if (tplSel) tplSel.addEventListener('change', function () {
+      const v = tplSel.value, cur = self.drawings[self.sel]; tplSel.value = ''; if (!cur || !v) return;
+      const T = self.cfg.templates || (self.cfg.templates = {}), D = self.cfg.toolDefaults || (self.cfg.toolDefaults = {});
+      if (v === 'save') {
+        const name = (window.prompt('Template name (style: colour, width, line)', '') || '').trim();
+        if (!/^[\w .\-()&+]{1,30}$/.test(name)) { if (name) self._flash('Name: 1–30 letters, numbers, spaces', true); return; }
+        (T[cur.type] = T[cur.type] || {})[name] = cleanStyle(cur.style); self._cfgChanged(false); self._flash('Template “' + name + '” saved');
+      } else if (v === 'default') { D[cur.type] = cleanStyle(cur.style); self._cfgChanged(false); self._flash('New drawings of this tool use this style'); }
+      else if (v === 'nodefault') { delete D[cur.type]; self._cfgChanged(false); }
+      else if (v.slice(0, 2) === 'a:') { const st = (T[cur.type] || {})[v.slice(2)]; if (st) { self._pushUndo(); cur.style = Object.assign({}, st); self._saveDrawings(); self.requestOverlay(); } }
+      else if (v.slice(0, 2) === 'd:') { delete (T[cur.type] || {})[v.slice(2)]; self._cfgChanged(false); }
+      self._renderStyleBar();
+    });
     const ta = sb.querySelector('.pc-stext');
     if (ta) {
       ta.addEventListener('keydown', function (e) { e.stopPropagation(); if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ta.blur(); } });
@@ -1739,7 +2525,9 @@
   };
   PriceChart.prototype.deleteSelected = function () {
     if (this.sel < 0) return;
+    const d = this.drawings[this.sel], self = this;
     this._pushUndo(); this.drawings.splice(this.sel, 1); this.select(-1); this._saveDrawings();
+    this._myAlerts().filter(function (a) { return d && a.drawingId === d.id; }).forEach(function (a) { self._alertApi('/api/alerts/remove', { id: a.id }, 'Line and its alert removed'); });
   };
   PriceChart.prototype.clearDrawings = function () {
     if (!this.drawings.length) return;
@@ -1761,7 +2549,8 @@
         if (typeof d.text === 'string') out.text = d.text;
         if (d.locked) out.locked = true;
         if ((out.type === 'long' || out.type === 'short') && out.pts.length < 3) return null;
-        if ((out.type === 'channel' || out.type === 'fibext') && out.pts.length < 3) return null;
+        if ((out.type === 'channel' || out.type === 'fibext' || out.type === 'pitchfork') && out.pts.length < 3) return null;
+        if ((out.type === 'callout' || out.type === 'brush' || out.type === 'pricerange' || out.type === 'daterange') && out.pts.length < 2) return null;
         return out;
       }
       if (d.type === 'hline' && typeof d.price === 'number') return { id: uid(), type: 'hline', pts: [{ t: 0, p: d.price }], style: {} };
@@ -1790,6 +2579,7 @@
     if (!this.symbol) return;
     this._cacheLocal();
     const self = this, sym = this.symbol, data = JSON.parse(JSON.stringify(this.drawings));
+    window.dispatchEvent(new CustomEvent('finsight:drawings', { detail: { symbol: sym, drawings: data, source: this } }));
     this._setSaveState('saving');
     clearTimeout(this._saveT);
     this._saveT = setTimeout(function () {
@@ -1820,14 +2610,24 @@
         if (ni0 < 0) { ni0 = 0; ni1 = span; }
         if (ni1 > n) { ni1 = n; ni0 = Math.max(0, n - span); }
         if (dr.manualY) { const df = (p.y - dr.y) / this.priceK; this.yManual = { lo: dr.lo + df, hi: dr.hi + df }; }
-        this.setRange(ni0, ni1);
+        this.setRange(ni0, ni1, true);
       } else if (dr.kind === 'yaxis') {
         const f = Math.exp((p.y - dr.y) / 200), mid = (dr.lo + dr.hi) / 2, half = (dr.hi - dr.lo) / 2 * f;
         this.yManual = { lo: mid - half, hi: mid + half }; this._dirty();
       } else if (dr.kind === 'xaxis') {
         const f = Math.exp((p.x - dr.x) / 250), n = this.bars.length;
         const newN = clamp(Math.round(dr.span / f), this._minBars(), n);
-        this.setRange(dr.i1 - newN, dr.i1);
+        this.setRange(dr.i1 - newN, dr.i1, true);
+      } else if (dr.kind === 'brush') {
+        const pd = this.pending; if (!pd) return;
+        const lastPt = pd.pts[pd.pts.length - 1], lx = this.xFromTime(lastPt.t), ly = this.yPrice(lastPt.p);
+        if (Math.hypot(p.x - lx, p.y - ly) >= 4 && pd.pts.length < 400) {
+          // brush points keep sub-bar x precision as fractional time
+          const k = this.i0 + (p.x - this.padL) / this.slotW - 0.5, k0 = Math.floor(k);
+          const t = this.timeAtIdx(k0) + (this.timeAtIdx(k0 + 1) - this.timeAtIdx(k0)) * (k - k0);
+          pd.pts.push({ t: t, p: this.invYPrice(p.y) });
+        }
+        this.requestOverlay();
       } else if (dr.kind === 'handle' || dr.kind === 'move') {
         const d = this.drawings[dr.k];
         if (!d || d.locked) return;
@@ -1856,9 +2656,12 @@
     }
     if (this.pending) { this.pending.hover = this._pointAt(p.x, p.y); this.requestOverlay(); return; }
     this.hoverIdx = this.indexAt(p.x);
+    if (this.onCrosshair) this.onCrosshair(this.bars[this.hoverIdx] ? this.bars[this.hoverIdx].t : null);
     if (this.tool === 'cursor' && !this.replay.picking) {
       const z = this._zone(p.x, p.y), h = z === 'plot' ? this._hit(p.x, p.y) : null;
       this.overlayCv.style.cursor = z === 'yaxis' ? 'ns-resize' : z === 'xaxis' ? 'ew-resize' : h ? (h.handle >= 0 ? 'grab' : 'pointer') : 'crosshair';
+      const hn = h && this.drawings[h.k] && this.drawings[h.k].type === 'note' ? this.drawings[h.k] : null;
+      this._hoverNote = hn;
     }
     this.requestOverlay();
   };
@@ -1875,8 +2678,12 @@
     if (this.tool !== 'cursor') {
       if (this._zone(p.x, p.y) !== 'plot') return;
       const pt = this._pointAt(p.x, p.y), need = TOOLS[this.tool].n;
+      if (TOOLS[this.tool].free) {
+        this.pending = { type: this.tool, pts: [{ t: pt.t, p: this.invYPrice(p.y) }], style: this._toolStyle(this.tool), downX: p.x, downY: p.y };
+        this.drag = { kind: 'brush' }; this.requestOverlay(); return;
+      }
       if (!this.pending) {
-        this.pending = { type: this.tool, pts: [pt], style: { color: DEFAULT_COLOR[this.tool] }, downX: p.x, downY: p.y, hover: pt };
+        this.pending = { type: this.tool, pts: [pt], style: this._toolStyle(this.tool), downX: p.x, downY: p.y, hover: pt };
         if (need === 1) this._commitPending();
       } else {
         this.pending.pts.push(pt); this.pending.downX = p.x; this.pending.downY = p.y;
@@ -1902,6 +2709,11 @@
 
   PriceChart.prototype._onUp = function (e) {
     const p = this._evtXY(e);
+    if (this.drag && this.drag.kind === 'brush') {
+      this.drag = null;
+      if (this.pending && this.pending.pts.length >= 2) this._commitPending(); else { this.pending = null; this.requestOverlay(); }
+      return;
+    }
     if (this.pending && this.pending.pts.length === 1 && TOOLS[this.pending.type].n >= 2 && Math.hypot(p.x - this.pending.downX, p.y - this.pending.downY) > 6) {
       // drag-to-place: release adds the second point
       this.pending.pts.push(this._pointAt(p.x, p.y));
@@ -1911,7 +2723,7 @@
     }
     if (!this.drag) return;
     const dr = this.drag; this.drag = null;
-    if ((dr.kind === 'handle' || dr.kind === 'move') && dr.moved) { this._saveDrawings(); this._syncControls(); }
+    if ((dr.kind === 'handle' || dr.kind === 'move') && dr.moved) { this._saveDrawings(); this._syncControls(); if (this.drawings[dr.k]) this._syncDrawingAlerts(this.drawings[dr.k]); }
     this.overlayCv.style.cursor = this.tool === 'cursor' ? 'crosshair' : 'cell';
     this.inside = p.x >= 0 && p.y >= 0 && p.x <= this.cssW && p.y <= this.cssH;
     this.requestOverlay();
@@ -1919,9 +2731,10 @@
 
   PriceChart.prototype._commitPending = function () {
     const pd = this.pending; this.pending = null;
-    const d = this._finalizeShape({ id: uid(), type: pd.type, pts: pd.pts.slice(0, TOOLS[pd.type].n), style: pd.style });
-    if (d.type === 'text') d.text = 'Note';
-    if (d.pts.length >= 2 && d.type !== 'long' && d.type !== 'short') {
+    const d = this._finalizeShape({ id: uid(), type: pd.type, pts: TOOLS[pd.type].free ? pd.pts.slice(0, 400) : pd.pts.slice(0, TOOLS[pd.type].n), style: pd.style });
+    if (d.type === 'text' || d.type === 'note') d.text = 'Note';
+    if (d.type === 'callout') d.text = 'Callout';
+    if (d.pts.length >= 2 && d.type !== 'long' && d.type !== 'short' && d.type !== 'brush') {
       const a = d.pts[0], b = d.pts[1];
       if (a.t === b.t && Math.abs(this.yPrice(a.p) - this.yPrice(b.p)) < 2) { this.setTool('cursor'); return; }
     }
@@ -1938,7 +2751,7 @@
     this._saveDrawings();
     this.setTool('cursor');
     this.select(this.drawings.length - 1);
-    if (d.type === 'text') { const ta = this.styleBar.querySelector('.pc-stext'); if (ta) { ta.focus(); ta.select(); } }
+    if (d.type === 'text' || d.type === 'note' || d.type === 'callout') { const ta = this.styleBar.querySelector('.pc-stext'); if (ta) { ta.focus(); ta.select(); } }
   };
 
   PriceChart.prototype._onWheel = function (e) {
@@ -1947,7 +2760,7 @@
     const p = this._evtXY(e), n = this.i1 - this.i0, N = this.bars.length;
     if (Math.abs(e.deltaX) > Math.abs(e.deltaY) && !e.ctrlKey) {
       const d = Math.round(e.deltaX / Math.max(2, this.slotW));
-      if (d) { const a = clamp(this.i0 + d, 0, Math.max(0, N - n)); this.setRange(a, a + n); }
+      if (d) { const a = clamp(this.i0 + d, 0, Math.max(0, N - n)); this.setRange(a, a + n, true); }
       return;
     }
     const anchorFrac = clamp((p.x - this.padL) / this.plotW, 0, 1), anchorIdx = this.i0 + anchorFrac * n;
@@ -1955,7 +2768,81 @@
     let ni0 = Math.round(anchorIdx - anchorFrac * newN), ni1 = ni0 + newN;
     if (ni0 < 0) { ni0 = 0; ni1 = newN; }
     if (ni1 > N) { ni1 = N; ni0 = N - newN; }
-    this.setRange(ni0, ni1);
+    this.setRange(ni0, ni1, true);
+  };
+  PriceChart.prototype._toolStyle = function (t) { return Object.assign({ color: DEFAULT_COLOR[t] }, (this.cfg.toolDefaults || {})[t] || {}); };
+
+  // ---- pointer routing: mouse / pen / touch ------------------------------------------------
+  PriceChart.prototype._ptrDown = function (e) {
+    const ov = this.overlayCv;
+    try { ov.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+    if (e.pointerType !== 'touch') { this._onDown(e); return; }
+    e.preventDefault();
+    const p = this._evtXY(e);
+    this.ptrs.set(e.pointerId, p);
+    clearTimeout(this._lpT);
+    if (this.ptrs.size === 2) {
+      // second finger: abandon the one-finger gesture and pinch instead
+      if (this.drag && this.drag.kind === 'brush') this.pending = null;
+      const a = Array.from(this.ptrs.values());
+      this.touchCross = false; this.inside = false;
+      this.drag = { kind: 'pinch', d0: Math.max(20, Math.abs(a[0].x - a[1].x)), mid: (a[0].x + a[1].x) / 2, i0: this.i0, i1: this.i1 };
+      return;
+    }
+    if (this.ptrs.size > 2) return;
+    const now = Date.now();
+    if (this._lastTap && now - this._lastTap.t < 320 && Math.hypot(p.x - this._lastTap.x, p.y - this._lastTap.y) < 24) { this._lastTap = null; this._onDblClick(e); return; }
+    this._lastTap = { t: now, x: p.x, y: p.y };
+    if (this.touchCross) { this.touchCross = false; this.inside = false; if (this.onCrosshair) this.onCrosshair(null); }
+    this._tStart = p;
+    const self = this;
+    // long press (no movement) switches to crosshair inspection
+    if (this.tool === 'cursor') this._lpT = setTimeout(function () {
+      if (self.drag && self.drag.kind !== 'pan') return;
+      self.drag = null; self.touchCross = true; self.inside = true; self.mx = p.x; self.my = p.y;
+      self.hoverIdx = self.indexAt(p.x); self.requestOverlay();
+      if (self.onCrosshair) self.onCrosshair(self.bars[self.hoverIdx] ? self.bars[self.hoverIdx].t : null);
+    }, 420);
+    this._onDown(e);
+  };
+  PriceChart.prototype._ptrMove = function (e) {
+    if (e.pointerType !== 'touch') { this._onMove(e); return; }
+    e.preventDefault();
+    const p = this._evtXY(e);
+    if (!this.ptrs.has(e.pointerId)) return;
+    this.ptrs.set(e.pointerId, p);
+    if (this._tStart && Math.hypot(p.x - this._tStart.x, p.y - this._tStart.y) > 8) clearTimeout(this._lpT);
+    const dr = this.drag;
+    if (dr && dr.kind === 'pinch') {
+      const a = Array.from(this.ptrs.values()); if (a.length < 2) return;
+      const dist = Math.max(20, Math.abs(a[0].x - a[1].x)), mid = (a[0].x + a[1].x) / 2, N = this.bars.length;
+      const span0 = dr.i1 - dr.i0, newN = clamp(Math.round(span0 * dr.d0 / dist), this._minBars(), N);
+      const frac = clamp((dr.mid - this.padL) / this.plotW, 0, 1), anchor = dr.i0 + frac * span0;
+      const shift = Math.round((dr.mid - mid) / Math.max(1, this.plotW / newN));
+      let ni0 = Math.round(anchor - frac * newN) + shift, ni1 = ni0 + newN;
+      if (ni0 < 0) { ni0 = 0; ni1 = newN; }
+      if (ni1 > N) { ni1 = N; ni0 = N - newN; }
+      this.setRange(ni0, ni1, true);
+      return;
+    }
+    if (this.touchCross) {
+      this.mx = p.x; this.my = p.y; this.hoverIdx = this.indexAt(p.x);
+      if (this.onCrosshair) this.onCrosshair(this.bars[this.hoverIdx] ? this.bars[this.hoverIdx].t : null);
+      this.requestOverlay(); return;
+    }
+    this._onMove(e);
+  };
+  PriceChart.prototype._ptrUp = function (e, cancel) {
+    try { this.overlayCv.releasePointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+    if (e.pointerType !== 'touch') { this._onUp(e); return; }
+    clearTimeout(this._lpT);
+    this.ptrs.delete(e.pointerId);
+    if (this.drag && this.drag.kind === 'pinch') { if (this.ptrs.size < 2) this.drag = null; return; }
+    if (this.touchCross) return; // crosshair stays until the next tap
+    if (cancel) { this.drag = null; this.pending = null; this.requestOverlay(); return; }
+    this._onUp(e);
+    if (!this.pending) this.inside = false;
+    this.requestOverlay();
   };
   PriceChart.prototype._onDblClick = function (e) {
     const p = this._evtXY(e), z = this._zone(p.x, p.y);
@@ -2093,10 +2980,11 @@
   };
   PriceChart.prototype.destroy = function () {
     if (this.ro) this.ro.disconnect();
-    window.removeEventListener('mouseup', this._onUpWin);
-    window.removeEventListener('mousemove', this._onMoveWin);
     window.removeEventListener('keydown', this._onKey);
     window.removeEventListener('resize', this._onWinResize);
+    window.removeEventListener('finsight:alerts', this._onAlertsEvt);
+    window.removeEventListener('finsight:drawings', this._onDrawEvt);
+    clearTimeout(this._lpT);
     document.removeEventListener('click', this._onDocClick);
     clearInterval(this.replay.timer);
     cancelAnimationFrame(this._rsRaf); cancelAnimationFrame(this._roRaf);

@@ -190,6 +190,7 @@ function renderPortfolio(data) {
   lastFlash = Object.fromEntries(positions.map((p) => [p.symbol, priceFlash(p.symbol, p.last)]));
   lastTableData = { positions, base };
   renderPositionsTable();
+  pushChartWatch();
   // activity
   $('#activity').innerHTML = (transactions || []).map((t) => {
     const cls = t.type === 'BUY' ? 't-buy' : t.type === 'SELL' ? 't-sell' : 't-del';
@@ -1151,7 +1152,7 @@ async function loadDetail() {
   // ResizeObserver, zoom window and drawings) survives range switches and the
   // 30s background refresh — only the header + stats blocks get re-rendered.
   // (an expanded chart is temporarily re-parented to <body>; keep using it)
-  if (!body.querySelector('#detail-chart-host') && !(detailChart && detailChart.maxed)) {
+  if (!body.querySelector('#detail-chart-host') && !(detailChart && (detailChart.maxed || detailChart.fit))) {
     body.innerHTML =
       '<div id="detail-hdr"></div>' +
       '<div id="detail-chart-host"></div>' +
@@ -1162,6 +1163,7 @@ async function loadDetail() {
   // Manual holdings (no Yahoo ticker, e.g. a unit trust) have no chart or quote to fetch.
   const manual = lastTableData.positions.find((p) => p.symbol === symbol && p.quoted === false);
   if (manual) {
+    if (chartGrid && chartGrid.active()) chartGrid.set({ n: 1 });
     detailChart = null; // body is replaced below, so the chart skeleton is rebuilt on the next real symbol
     body.innerHTML = `<div class="sym amber">${esc(symbol)}</div><div class="muted small">${esc(manual.name || '')}</div>
       <div class="muted small" style="margin-top:8px">Manual holding · no market data feed. Valued at the price you entered:
@@ -1214,16 +1216,51 @@ async function loadDetail() {
         loadDetail();
       };
       detailChart.onSymbol = (sym) => { if (detailChart && detailChart.maxed) detailChart.symInput.value = sym; selectSymbol(sym); };
+      setupChartHost(detailChart);
+      if (chartGrid) chartGrid.attach(detailChart);
     }
-    if (detailChart) detailChart.load(symbol, pts, m, { range, interval, visibleFrom });
+    if (detailChart) {
+      detailChart.load(symbol, pts, m, { range, interval, visibleFrom, fetchRange });
+      loadChartTrades(detailChart, symbol);
+      if (chartGrid) chartGrid.syncSymbols();
+    }
     else $('#detail-chart-host').innerHTML = sparkline(pts, chg >= 0); // fallback if chart.js absent
   } catch (e) {
     hdr.innerHTML = `<div class="down">Could not load ${esc(symbol)}: ${esc(e.message)}</div>`;
   }
 }
+// ---- chart host hooks: ledger trades, watchlist feed, multi-chart grid ----
+let lastWatch = [];
+function chartWatchItems() {
+  const held = (lastTableData.positions || []).filter((p) => p.quoted !== false);
+  const seen = new Set();
+  const items = [];
+  held.forEach((p) => { if (seen.has(p.symbol)) return; seen.add(p.symbol); items.push({ symbol: p.symbol, name: p.name, price: p.last, changePct: p.changePct, group: 'Holdings' }); });
+  (lastWatch || []).forEach((w) => { if (w.error || seen.has(w.symbol)) return; seen.add(w.symbol); items.push({ symbol: w.symbol, name: w.name, price: w.price, changePct: w.changePct, group: 'Watchlist' }); });
+  return items;
+}
+function allCharts() { return chartGrid && chartGrid.active() ? chartGrid.charts() : (detailChart ? [detailChart] : []); }
+function pushChartWatch() { const items = chartWatchItems(); allCharts().forEach((c) => c.setWatchlist(items)); }
+async function loadChartTrades(chart, symbol) {
+  try {
+    const d = await api(`/api/chart-trades?symbol=${encodeURIComponent(symbol)}&account=${encodeURIComponent(state.account || '')}`);
+    chart.setTrades(symbol, d);
+  } catch { /* trades are an overlay; the chart works without them */ }
+}
+function setupChartHost(chart) {
+  chart.onTrades = (sym) => loadChartTrades(chart, sym);
+  chart.setWatchlist(chartWatchItems());
+}
+const chartGrid = window.ChartGrid ? new ChartGrid({
+  loader: (sym, iv, range) => api(`/api/history?symbol=${encodeURIComponent(sym)}&range=${range}&interval=${iv}`),
+  onMainSymbol: (sym) => selectSymbol(sym),
+  setupChart: (c) => setupChartHost(c),
+}) : null;
+
 // Detail chart: history fetched per visible range, with enough extra bars for MA200/MA50.
 // Chart timeframe -> history to fetch (Yahoo caps: 1m ≈ 7 days, 5m/15m ≈ 60 days, 1h ≈ 730 days).
-const CHART_TF_RANGE = { '1m': '5d', '5m': '1mo', '15m': '1mo', '60m': '1y', '1d': '5y', '1wk': 'max', '1mo': 'max' };
+// Yahoo's range=max returns quarterly bars for every interval, so W / M ask for explicit years.
+const CHART_TF_RANGE = { '1m': '5d', '5m': '1mo', '15m': '1mo', '60m': '1y', '1d': '5y', '1wk': '10y', '1mo': '30y' };
 const DETAIL_WARMUP = { '1d': '5d', '5d': '1mo', '1mo': '1y', '6mo': '2y', '1y': '2y', '5y': '10y' };
 // First timestamp of the requested range inside a longer fetched series.
 // Intraday: count trading sessions back via overnight gaps (> 2h); daily/weekly: calendar span.
@@ -1449,6 +1486,7 @@ async function loadWatchlist() {
   try { renderWatchlist((await api('/api/watchlist')).watchlist); } catch {}
 }
 function renderWatchlist(list) {
+  lastWatch = list || []; pushChartWatch();
   $('#watchlist').innerHTML = (list && list.length) ? list.map((w) => {
     if (w.error) return `<div class="wl-row"><span class="wl-sym">${esc(w.symbol)}</span><span class="muted small">n/a</span><span></span><button class="wl-x" data-sym="${esc(w.symbol)}">✕</button></div>`;
     return `<div class="wl-row" data-sym="${esc(w.symbol)}">
@@ -1485,7 +1523,7 @@ let notifiedAlerts = null; // seeded on first load so pre-existing triggers don'
 async function loadAlerts() {
   try { renderAlerts((await api('/api/alerts')).alerts); } catch {}
 }
-function renderAlerts(alerts) {
+function renderAlerts(alerts, fromChart) {
   alerts = alerts || [];
   if (notifiedAlerts === null) {
     notifiedAlerts = new Set(alerts.filter((a) => a.triggeredAt).map((a) => a.id));
@@ -1493,18 +1531,22 @@ function renderAlerts(alerts) {
     alerts.forEach((a) => {
       if (a.met && a.triggeredAt && !notifiedAlerts.has(a.id)) {
         notifiedAlerts.add(a.id);
-        notify('PRICE ALERT', `${a.symbol} ${a.op === '>' ? '≥' : '≤'} ${fmt(a.price)} — now ${fmt(a.currentPrice)}`);
+        notify('ALERT', `${a.label || a.symbol} — now ${a.currentValue != null ? fmt(a.currentValue) : fmt(a.currentPrice)}`);
       }
     });
   }
+  // charts draw their symbol's alerts; they also post here after adding one
+  window.__finAlerts = alerts;
+  if (!fromChart) window.dispatchEvent(new CustomEvent('finsight:alerts', { detail: { alerts, from: 'app' } }));
   $('#alerts').innerHTML = alerts.length ? alerts.map((a) => `
     <div class="al-row ${a.met ? 'met' : ''}">
-      <div><span class="al-sym">${esc(a.symbol)}</span> <span class="al-cond">${a.op === '>' ? '≥' : '≤'} ${fmt(a.price)}</span>
-        <span class="muted small">now ${a.currentPrice != null ? fmt(a.currentPrice) : '—'}</span></div>
+      <div><span class="al-sym" data-sym="${esc(a.symbol)}">${esc(a.symbol)}</span> <span class="al-cond">${esc((a.label || '').replace(a.symbol + ' ', ''))}</span>
+        <span class="muted small">now ${a.currentValue != null ? fmt(a.currentValue) : '—'}${a.level != null && a.kind !== 'price' ? ' · level ' + fmt(a.level) : ''}</span></div>
       <span class="al-badge">${a.met ? 'TRIGGERED' : 'armed'}</span>
       <button class="al-x" data-id="${esc(a.id)}">✕</button></div>`).join('')
-    : '<div class="al-empty">No alerts — add one above, or type <b>ALERT AAPL > 320</b>.</div>';
+    : '<div class="al-empty">No alerts — add one above, type <b>ALERT AAPL > 320</b>, or use the bell on the chart (price, trend line, RSI, moving average).</div>';
 }
+window.addEventListener('finsight:alerts', (e) => { if (e.detail && e.detail.from === 'chart') renderAlerts(e.detail.alerts, true); });
 $('#alert-toggle').addEventListener('click', () => { $('#alert-form').classList.toggle('hidden'); $('#alert-symbol').focus(); requestNotify(); });
 $('#alert-form').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -1518,6 +1560,7 @@ $('#alert-form').addEventListener('submit', async (e) => {
   } catch (err) { setStatus('Alert failed: ' + err.message, 'err'); }
 });
 $('#alerts').addEventListener('click', async (e) => {
+  const sy = e.target.closest('.al-sym'); if (sy) return selectSymbol(sy.dataset.sym);
   const x = e.target.closest('.al-x'); if (!x) return;
   const res = await api('/api/alerts/remove', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: x.dataset.id }) });
   renderAlerts(res.alerts);

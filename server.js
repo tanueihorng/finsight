@@ -22,11 +22,11 @@ const { getQuotes, getHistory, search, getMarkets, getNews, getCategories } = re
 const { worldBank, getFred, getCalendar } = require('./lib/macro');
 const {
   buy, sell, del, listAccounts, accountAdd, accountRename, accountRemove, portfolioWithQuotes, fxRisk, setCash,
-  watchlistWithQuotes, watchAdd, watchRemove, alertAdd, alertRemove, evaluateAlerts,
+  watchlistWithQuotes, watchAdd, watchRemove, alertAdd, alertUpdate, alertRemove, evaluateAlerts,
   alertsWithStatus, importCsv, resetPortfolio,
 } = require('./lib/portfolio');
 const { dividendsReport, upcomingEvents, setWithholding } = require('./lib/dividends');
-const { ledger, editBuy, deleteBuy, realizedReport } = require('./lib/ledger');
+const { chartTrades, ledger, editBuy, deleteBuy, realizedReport } = require('./lib/ledger');
 const { undo, undoInfo } = require('./lib/store');
 const charts = require('./lib/charts');
 const journal = require('./lib/journal');
@@ -248,6 +248,10 @@ const server = http.createServer(async (req, res) => {
       const b = await readBody(req); await alertAdd(b);
       return sendJson(res, 200, { alerts: await alertsWithStatus() });
     }
+    if (p === '/api/alerts/update' && req.method === 'POST') {
+      const b = await readBody(req); await alertUpdate(b);
+      return sendJson(res, 200, { alerts: await alertsWithStatus() });
+    }
     if (p === '/api/alerts/remove' && req.method === 'POST') {
       const b = await readBody(req); await alertRemove(b.id);
       return sendJson(res, 200, { alerts: await alertsWithStatus() });
@@ -275,6 +279,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     // ledger, realized report, undo
+    if (p === '/api/chart-trades' && req.method === 'GET') return sendJson(res, 200, chartTrades(u.searchParams.get('symbol'), acct));
     if (p === '/api/ledger' && req.method === 'GET') return sendJson(res, 200, await ledger(base, acct));
     if (p === '/api/ledger/edit' && req.method === 'POST') {
       const b = await readBody(req); return sendJson(res, 200, await editBuy(b.id, b, base));
