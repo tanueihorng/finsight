@@ -70,3 +70,26 @@ test('holdings without transactions are treated as held all along', async () => 
   assert.deepEqual(d.approx, ['AAA']);
   close(d.twr, 5);
 });
+
+test('long spans ask Yahoo for explicit year ranges, never range=max', async () => {
+  reset();
+  setSymbol('AAA', { bars: dailyBars([100, 100, 110]) });
+  setSymbol('IDX', { bars: dailyBars([50, 50, 55]) });
+  setSymbol('USDSGD=X', { currency: 'SGD', price: 1.3, bars: dailyBars([1.3, 1.3, 1.3]) });
+  await pf.buy('AAA', 10, 100, daysAgo(15 * 365), undefined, 'SGD'); // > 10y span
+  const ranges = [];
+  const realFetch = global.fetch;
+  global.fetch = async (url) => {
+    const u = new URL(String(url));
+    if (u.pathname.includes('/v8/finance/chart/')) ranges.push(u.searchParams.get('range'));
+    return realFetch(url);
+  };
+  try {
+    const d = await portfolioPerformance('max', 'SGD', undefined, 'IDX');
+    assert.equal(d.range, 'max');
+    assert.equal(d.interval, '1wk');
+    assert.ok(d.points.length > 0);
+  } finally { global.fetch = realFetch; }
+  assert.ok(ranges.includes('20y'), `ranges: ${ranges}`);
+  assert.ok(!ranges.includes('max'), `ranges: ${ranges}`);
+});
