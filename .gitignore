@@ -14,3 +14,5 @@ finsight-handoff.md
 agent/node_modules/
 agent/scratch/
 node_modules/
+test-results/
+playwright-report/
