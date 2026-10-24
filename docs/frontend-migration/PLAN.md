@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Approved direction (2026-10-25). Plan v1. Phase 0 merged to main (2026-10-25); Phase 1 next |
+| Status | Approved direction (2026-10-25). Plan v1. Phase 0 merged to main (2026-10-25); Phase 1 in progress (F1 done) |
 | Goal | A sustainable, typed, component-based codebase with **no behaviour change for the user** |
 | Stack decided | React 19 + TypeScript (frontend), esbuild (build, output committed), TanStack Query (server data), Zustand (UI state), CSS Modules + existing theme variables, Playwright (E2E), server moved to TypeScript (Node 24 runs `.ts` directly, as `agent/` does) |
 | Written for | Implementing agents of any capability. Every task card is self-contained; **read only §0, §1 and your own card** |
@@ -332,7 +332,8 @@ Each card is one branch and one merge commit. `git revert <merge>` restores the 
 | P0-1 | 0 | done (merged 2026-10-25) | mig/P0-safety-net | Claude | @playwright/test 1.64.0; `npm run e2e` |
 | P0-2 | 0 | done (merged 2026-10-25) | mig/P0-safety-net | Claude | `lib/fakemarket.js` replaces global fetch; non-loopback hosts blocked |
 | P0-3 | 0 | done (merged 2026-10-25) | mig/P0-safety-net | Claude | 9 baseline specs, 36/36 over 3 repeats |
-| F1–F6 | 1 | todo | | | |
+| F1 | 1 | done (not merged) | mig/F1-toolchain | Claude | CSS Modules via `scripts/css-modules.mjs` (names `fs-<File>-<hash>_<class>`), not esbuild `local-css`: its minified names (`.r`) collide with legacy classes. React + Query alone bundle to ~250 KB minified (79 KB gz), the H1 budget |
+| F2–F6 | 1 | todo | | | |
 | S1, S2 | 2 | todo | | | |
 | A1–A3 | A | todo | | | |
 | B1–B3 | B | todo | | | |
