@@ -25,7 +25,7 @@ Card = the migration card(s) that must keep the row green (`docs/frontend-migrat
 | Export | download `portfolio.csv`, header and values | `baseline/import-export` | D4 | pass |
 | Export | `csvCell` neutralises `= + - @` and quotes `, "` | `baseline/import-export` | D4 | pass |
 | Accounts | add, switch (empty account), All Accounts, rename, delete | `baseline/accounts` | F8, D1 | pass |
-| Accounts | slow response for the previous account must not overwrite the new one | `baseline/accounts` › a slow response… | F3, PILOT-2 | **known bug**: `loadPortfolio()` has no request sequencing |
+| Accounts | slow response for the previous account must not overwrite the new one | `baseline/accounts` › a slow response… | F3, PILOT-2 | pass |
 | Base currency | switch converts every value; persists after reload | `baseline/accounts` › switching base currency… | F8, C1, D1 | pass |
 | Detail | clicking a position sets the detail title; chart canvas exists | `baseline/detail` | E1, E2 | pass |
 | Chart | range buttons refetch history and move the active state | `baseline/chart` | E1 | pass |

@@ -48,13 +48,8 @@ const money = (c, n, d = 2) => (n == null || Number.isNaN(n)) ? '—' : csym(c) 
 const moneyBig = (c, n) => (n == null || Number.isNaN(n)) ? '—' : csym(c) + fmtBig(n);
 const moneySigned = (c, n, d = 2) => (n == null || Number.isNaN(n)) ? '—' : (n < 0 ? '-' : '+') + csym(c) + fmt(Math.abs(n), d);
 
-let state = {
-  selected: null,
-  detailRange: { range: '1mo', interval: '1d' },
-  lastPrices: {},
-  base: (localStorage.getItem('finsight-base') || 'SGD').toUpperCase(),
-  account: localStorage.getItem('finsight-account') || '',
-};
+// Reads always use the current store snapshot; top-level writes notify React.
+const state = window.FinSight.legacyState;
 let accountsCache = [];
 
 // ===========================================================================
@@ -173,9 +168,12 @@ const baseQS = (extra = '') => `?base=${encodeURIComponent(state.base)}&account=
 // at most every 2 minutes otherwise.
 let sideSig = '', sideAt = 0;
 const SIDE_MAX_AGE = 120000;
+let portfolioRequest = 0;
 async function loadPortfolio() {
+  const request = ++portfolioRequest, query = baseQS();
   try {
-    const data = await api('/api/portfolio' + baseQS());
+    const data = await api('/api/portfolio' + query);
+    if (request !== portfolioRequest || query !== baseQS()) return;
     renderPortfolio(data);
     const sig = state.account + '|' + state.base + '|' + (data.positions || []).map((p) => p.symbol + ':' + p.quantity).join(',') + '|' + JSON.stringify(data.cash || []);
     if (sig !== sideSig || Date.now() - sideAt > SIDE_MAX_AGE) {
@@ -183,7 +181,7 @@ async function loadPortfolio() {
       loadDividends(); // keep dividend panel in sync with the active account/base
       loadFxRisk();    // keep FX-risk panel + exposure card in sync too
     }
-  } catch (e) { setFooter('Portfolio load failed: ' + e.message); }
+  } catch (e) { if (request === portfolioRequest && query === baseQS()) setFooter('Portfolio load failed: ' + e.message); }
 }
 
 function renderPortfolio(data) {
@@ -481,15 +479,15 @@ function renderSummary(summary, positions, base) {
 }
 // ---- PEEK / UNPEEK: blur personal figures, keep public market data ----------
 // Purely visual (CSS on body.unpeek) so screen-sharing is safe; nothing is removed from the page.
-let unpeek = (() => { try { return localStorage.getItem('finsight-unpeek') === '1'; } catch { return false; } })();
+
 function applyPeek() {
-  document.body.classList.toggle('unpeek', unpeek);
+  document.body.classList.toggle('unpeek', !state.peek);
   const b = $('#peek-btn');
-  if (b) { b.textContent = unpeek ? '◌ PEEK' : '◉ UNPEEK'; b.classList.toggle('active', unpeek); }
+  if (b) { b.textContent = !state.peek ? '◌ PEEK' : '◉ UNPEEK'; b.classList.toggle('active', !state.peek); }
 }
 $('#peek-btn').addEventListener('click', () => {
-  unpeek = !unpeek;
-  try { localStorage.setItem('finsight-unpeek', unpeek ? '1' : '0'); } catch {}
+  state.peek = !state.peek;
+  try { localStorage.setItem('finsight-unpeek', !state.peek ? '1' : '0'); } catch {}
   applyPeek();
 });
 applyPeek();
@@ -686,7 +684,7 @@ document.querySelector('.setup-choices').addEventListener('click', (e) => {
 
 function priceFlash(sym, last) {
   const prev = state.lastPrices[sym];
-  state.lastPrices[sym] = last;
+  window.FinSight.setLastPrice(sym, last);
   if (prev == null || prev === last) return '';
   return last > prev ? 'flash-up' : 'flash-down';
 }
@@ -2004,6 +2002,7 @@ async function loadAccounts(selectId) {
     if (!exists(state.account)) state.account = exists(localStorage.getItem('finsight-account')) ? localStorage.getItem('finsight-account') : d.activeId;
     localStorage.setItem('finsight-account', state.account);
     renderAccountSelector();
+    state.accountReady = true;
   } catch {}
 }
 function renderAccountSelector() {
@@ -2133,6 +2132,7 @@ function showLock(mode) {
   lockMode = mode;
   document.body.classList.add('locked');
   stopPolling(); // no background 401s while locked
+  window.FinSight.auth.lock();
   $('#lock-title').textContent = mode === 'create' ? 'Create a PIN (4–12 digits)' : 'Enter your PIN';
   $('#lock-pin2').classList.toggle('hidden', mode !== 'create');
   $('#lock-go').textContent = mode === 'create' ? 'SET PIN' : 'UNLOCK';
@@ -2144,9 +2144,12 @@ function showLock(mode) {
 }
 function showApp() {
   document.body.classList.remove('locked');
+  window.FinSight.auth.unlock();
   if (!booted) { booted = true; boot(); }
   else startPolling(); // resume polling after unlocking
 }
+window.addEventListener('finsight:locked', () => { if (!document.body.classList.contains('locked')) showLock('enter'); });
+window.addEventListener('finsight:unlocked', () => { if (document.body.classList.contains('locked')) showApp(); });
 function lockMsg(m) { $('#lock-msg').textContent = m || ''; }
 async function submitPin() {
   const pin = $('#lock-pin').value.trim();
