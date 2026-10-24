@@ -1,0 +1,28 @@
+{
+  "apiVersion": 1,
+  "kind": "brain",
+  "id": "gpt-6-sol",
+  "label": "GPT-6 Sol",
+  "transport": "openai-compatible",
+  "model": "gpt-6-sol",
+  "baseUrl": "https://api.openai.com/v1",
+  "keyRef": "OPENAI_API_KEY",
+  "pricing": {
+    "inputPerM": 2,
+    "outputPerM": 10,
+    "cacheReadPerM": 0.2,
+    "version": "openai-standard-2026-10-25 (<=272K prompt); https://developers.openai.com/api/docs/models/gpt-6-sol"
+  },
+  "capabilities": {
+    "tools": true,
+    "streaming": true,
+    "nativeSearch": false,
+    "vision": true,
+    "contextTokens": 272000
+  },
+  "costTier": "$$",
+  "maxOutputTokens": 4000,
+  "options": {
+    "reasoning_effort": "none"
+  }
+}

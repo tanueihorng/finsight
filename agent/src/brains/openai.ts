@@ -32,11 +32,17 @@ export function openAiBrain(manifest: BrainManifest, apiKey: string, fetchImpl: 
   return {
     kind: 'api', manifest,
     async step(req: StepRequest): Promise<StepResult> {
+      // OpenAI's newer models reject max_tokens; compatible providers such as
+      // DeepSeek still use it. Keep this a transport detail, not a UI setting.
+      const openai = url.hostname === 'api.openai.com';
+      const options = { ...manifest.options };
+      delete options.max_tokens; delete options.max_completion_tokens;
       const body = {
-        model: manifest.model, stream: true, stream_options: { include_usage: true }, max_tokens: manifest.maxOutputTokens,
+        model: manifest.model, stream: true, stream_options: { include_usage: true },
+        ...(openai ? { max_completion_tokens: manifest.maxOutputTokens } : { max_tokens: manifest.maxOutputTokens }),
         messages: toOpenAiMessages(req.system, req.messages),
         ...(req.tools.length ? { tools: toTools(req.tools), tool_choice: 'auto' } : {}),
-        ...(manifest.options as object),
+        ...options,
       };
       let res: Response;
       try {

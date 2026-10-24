@@ -34,6 +34,20 @@ security add-generic-password -U -s finsight-agent -a ANTHROPIC_API_KEY -w
 - **Haiku** needs `ANTHROPIC_API_KEY`.
 - **Claude Code** uses your `claude` CLI login. If it says the OAuth session expired, run `claude` in a terminal and log in again.
 
+## Search providers and GPT models
+
+Search and model choice are independent. Defaults stay Tavily search and local page reading. To opt into DeepSeek, merge these fields into your private agent config and restart FinSight:
+
+```json
+{ "searchProvider": "deepseek", "fetchProvider": "deepseek" }
+```
+
+Both use `DEEPSEEK_API_KEY` through the existing secret store. `fetchProvider: "local"` keeps the free local reader while using DeepSeek search. `searchProvider: "none"` disables the shared search tool. DeepSeek queries, including domain/date filters, must fit 128 Unicode characters; longer queries return a validation error. Search/fetch caches are separate per provider and retain the original retrieval time. Remote fetch first passes through the existing local URL/DNS/redirect checks; this deliberately adds a local fetch before DeepSeek's Markdown extraction. DeepSeek performs its own remote retrieval, whose redirects and DNS are controlled by that service.
+
+[DeepSeek's published price](https://api-docs.deepseek.com/guides/search/) is US$0.75 per 1,000 successful non-empty requests for each API, with billing starting 1 November 2026 at 00:00 Singapore time. The cost ledger and tool traces record request counts and estimated fees (zero before that date); cache hits do not add fees. These are published-rate estimates, not provider invoices. Search/fetch fees appear separately from model-token costs in `/cost`; the existing turn-finished token summary is unchanged.
+
+GPT-6 Luna and GPT-6 Sol are discovered from brain manifests and appear in the existing model picker. They need `OPENAI_API_KEY` in the existing Keychain/environment secret store. No key is bundled. These presets use Chat Completions with `reasoning_effort: "none"` for function calling, vision input and streaming; web search remains the shared provider selected above. Their context budgets are conservatively capped at 272K to stay within the published standard price band. Pricing references and observation date are in each manifest. Other processing tiers, account discounts and regional premiums are not estimated. No default model or personal config is changed by installing this code.
+
 ## Skills
 
 Type `/` in the chat to see them. Bundled skills: `pre-trade-check`, `position-review`, `earnings-review`, `why-did-it-move`, `strategy-scan`. The agent also picks a skill on its own when your question matches one.
