@@ -1,0 +1,106 @@
+<svg xmlns="http://www.w3.org/2000/svg" xml:space="preserve" style="white-space:pre" viewBox="0 0 1280 600" width="1280" height="600" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" role="img" aria-label="Kestrel, the AI research agent inside FinSight: a chat running a pre-trade check with tool calls, a verdict table and sources">
+  <defs>
+    <linearGradient id="glow" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#a78bfa" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#a78bfa" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#a78bfa" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="area" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#a78bfa" stop-opacity="0.30"/>
+      <stop offset="1" stop-color="#a78bfa" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="shimmer" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#a78bfa"/>
+      <stop offset="0.5" stop-color="#e9e2ff"/>
+      <stop offset="1" stop-color="#a78bfa"/>
+      <animateTransform attributeName="gradientTransform" type="translate" from="-1 0" to="1 0" dur="2.4s" repeatCount="indefinite"/>
+    </linearGradient>
+  </defs>
+
+  <!-- backdrop -->
+  <rect width="1280" height="600" fill="#08080f"/>
+  <rect x="8" y="8" width="1264" height="584" rx="14" fill="none" stroke="#20203a"/>
+
+  <!-- ===================== left: the terminal (dimmed) ===================== -->
+  <g opacity="0.55">
+    <rect x="44" y="35" width="13" height="13" rx="2" fill="#a78bfa"/>
+    <text x="66" y="48" font-size="18" font-weight="700" fill="#ece8fb">FINSIGHT<tspan fill="#a78bfa" font-weight="400"> // TERMINAL</tspan></text>
+    <line x1="44" y1="66" x2="676" y2="66" stroke="#20203a"/>
+    <rect x="44" y="84" width="200" height="78" rx="8" fill="#12121f" stroke="#20203a"/>
+    <text x="60" y="108" font-size="11" letter-spacing="1" fill="#7e7e96">NET WORTH</text>
+    <text x="60" y="140" font-size="24" font-weight="700" fill="#e8ecf0">S$168.7K</text>
+    <rect x="260" y="84" width="200" height="78" rx="8" fill="#12121f" stroke="#20203a"/>
+    <text x="276" y="108" font-size="11" letter-spacing="1" fill="#7e7e96">DAY P&amp;L</text>
+    <text x="276" y="140" font-size="24" font-weight="700" fill="#2ec27e">+S$665</text>
+    <rect x="476" y="84" width="200" height="78" rx="8" fill="#12121f" stroke="#20203a"/>
+    <text x="492" y="108" font-size="11" letter-spacing="1" fill="#7e7e96">FX EXPOSURE</text>
+    <text x="492" y="140" font-size="24" font-weight="700" fill="#e8ecf0">59% USD</text>
+    <rect x="44" y="180" width="632" height="250" rx="8" fill="#0d0d18" stroke="#20203a"/>
+    <text x="60" y="206" font-size="12" letter-spacing="1" fill="#a78bfa">NVDA · DETAIL</text>
+    <path d="M60 390 L110 372 L160 380 L210 350 L260 360 L310 322 L360 334 L410 300 L460 312 L510 268 L560 282 L610 244 L660 256 L660 414 L60 414 Z" fill="url(#area)"/>
+    <path d="M60 390 L110 372 L160 380 L210 350 L260 360 L310 322 L360 334 L410 300 L460 312 L510 268 L560 282 L610 244 L660 256" fill="none" stroke="#a78bfa" stroke-width="2.5"/>
+    <rect x="44" y="448" width="632" height="112" rx="8" fill="#0d0d18" stroke="#20203a"/>
+    <text y="476" font-size="12" letter-spacing="1" fill="#7e7e96"><tspan x="60">SYMBOL</tspan><tspan x="200">QTY</tspan><tspan x="300">LAST</tspan><tspan x="420">WEIGHT</tspan></text>
+    <text y="502" font-size="13" fill="#d7dadf"><tspan x="60">NVDA</tspan><tspan x="200">60</tspan><tspan x="300">210.96</tspan><tspan x="420">12.0%</tspan></text>
+    <text y="524" font-size="13" fill="#d7dadf"><tspan x="60">TSM</tspan><tspan x="200">40</tspan><tspan x="300">418.51</tspan><tspan x="420">15.7%</tspan></text>
+    <text y="546" font-size="13" fill="#d7dadf"><tspan x="60">VOO</tspan><tspan x="200">22</tspan><tspan x="300">698.58</tspan><tspan x="420">14.5%</tspan></text>
+  </g>
+
+  <!-- seam glow between terminal and panel -->
+  <rect x="698" y="24" width="2" height="552" fill="url(#glow)"/>
+
+  <!-- ===================== right: Kestrel panel ===================== -->
+  <rect x="712" y="24" width="544" height="552" rx="10" fill="#0b0b14" stroke="#2d2d4d"/>
+  <text x="732" y="54" font-size="15" font-weight="700" fill="#a78bfa">✻ Kestrel <tspan font-size="11" font-weight="400" fill="#4b4b63">research agent</tspan></text>
+  <text y="54" font-size="12" fill="#7e7e96"><tspan x="1186">☰</tspan><tspan x="1204">＋</tspan><tspan x="1224">✕</tspan></text>
+  <line x1="712" y1="68" x2="1256" y2="68" stroke="#20203a"/>
+
+  <!-- user prompt -->
+  <rect x="732" y="82" width="504" height="30" fill="#12121f"/>
+  <rect x="732" y="82" width="2" height="30" fill="#2d2d4d"/>
+  <text x="744" y="102" font-size="13" fill="#d7dadf"><tspan fill="#4b4b63">&gt; </tspan><tspan fill="#c4b5fd">/pre-trade-check</tspan> adding 20 more NVDA?</text>
+
+  <!-- tool calls -->
+  <g font-size="12.5">
+    <text x="732" y="140" fill="#2ec27e">⏺</text><text x="750" y="140" fill="#e8ecf0"><tspan font-weight="700">get_policy</tspan><tspan fill="#7e7e96">()</tspan></text>
+    <text x="750" y="158" fill="#4b4b63">⎿ limits are proposals until accepted · 4 ms</text>
+    <text x="732" y="182" fill="#2ec27e">⏺</text><text x="750" y="182" fill="#e8ecf0"><tspan font-weight="700">query_positions</tspan><tspan fill="#7e7e96">(sector: Technology)</tspan></text>
+    <text x="750" y="200" fill="#4b4b63">⎿ 4 holdings · 36.0% of net worth · 11 ms</text>
+    <text x="732" y="224" fill="#2ec27e">⏺</text><text x="750" y="224" fill="#e8ecf0"><tspan font-weight="700">size_position</tspan><tspan fill="#7e7e96">(NVDA, entry: 210.96, stop: 190)</tspan></text>
+    <text x="750" y="242" fill="#4b4b63">⎿ cost S$5,392 · weight → 12.9% · earnings 18 Nov</text>
+    <text x="732" y="266" fill="#2ec27e">⏺</text><text x="750" y="266" fill="#e8ecf0"><tspan font-weight="700">edgar_financials</tspan><tspan fill="#7e7e96">(NVDA)</tspan></text>
+    <text x="750" y="284" fill="#4b4b63">⎿ revenue, EPS, cash flow · 6 quarters · SEC</text>
+  </g>
+
+  <!-- answer -->
+  <text x="732" y="314" font-size="10" fill="#d7dadf">⏺</text>
+  <text x="750" y="316" font-size="13" fill="#d7dadf"><tspan font-weight="700" fill="#ece8fb">Verdict: not yet.</tspan> Cash and size are fine; the gap is</text>
+  <text x="750" y="334" font-size="13" fill="#d7dadf">a written reason to add before earnings.</text>
+  <g font-size="12">
+    <rect x="750" y="346" width="486" height="22" fill="#0b0e14" stroke="#20203a"/>
+    <text y="361" fill="#7e7e96"><tspan x="760">CHECK</tspan><tspan x="880">VERDICT</tspan><tspan x="960">EVIDENCE</tspan></text>
+    <rect x="750" y="368" width="486" height="66" fill="none" stroke="#20203a"/>
+    <text y="386" fill="#d7dadf"><tspan x="760">Size</tspan><tspan x="900" fill="#2ec27e">✓</tspan><tspan x="960">1% risk = 7 shares, fits cash</tspan></text>
+    <text y="406" fill="#d7dadf"><tspan x="760">Concentration</tspan><tspan x="900" fill="#f5c46b">⚠</tspan><tspan x="960">tech 36% vs 45% placeholder</tspan></text>
+    <text y="426" fill="#d7dadf"><tspan x="760">Event risk</tspan><tspan x="900" fill="#f87171">✗</tspan><tspan x="960">earnings inside holding window</tspan></text>
+  </g>
+  <rect x="750" y="446" width="96" height="18" rx="9" fill="none" stroke="#2d2d4d"/>
+  <text x="760" y="459" font-size="10" fill="#7e7e96"><tspan fill="#2ec27e" font-weight="700">P</tspan> sec.gov</text>
+  <rect x="854" y="446" width="118" height="18" rx="9" fill="none" stroke="#2d2d4d"/>
+  <text x="864" y="459" font-size="10" fill="#7e7e96"><tspan fill="#38bdf8" font-weight="700">S</tspan> reuters.com</text>
+  <text x="750" y="482" font-size="10" fill="#4b4b63">DeepSeek Flash · $0.0065 · 15.1s · copy · trace</text>
+
+  <!-- live status line -->
+  <text x="732" y="510" font-size="13" fill="#a78bfa">
+    <tspan>✻<animate attributeName="opacity" values="1;0.35;1" dur="1.2s" repeatCount="indefinite"/></tspan>
+    <tspan dx="6" fill="url(#shimmer)">Pricing it in…</tspan>
+    <tspan dx="6" fill="#4b4b63">(6s · ↓ ~340 tokens · esc to interrupt)</tspan>
+  </text>
+
+  <!-- prompt box -->
+  <rect x="732" y="524" width="504" height="38" rx="8" fill="#0d0d18" stroke="#a78bfa" stroke-opacity="0.75"/>
+  <text x="746" y="548" font-size="13" fill="#a78bfa">&gt;</text>
+  <text x="764" y="548" font-size="13" fill="#4b4b63">Ask Kestrel anything…  (/ for skills)</text>
+  <rect x="1046" y="536" width="2" height="16" fill="#c4b5fd"><animate attributeName="opacity" values="1;0;1" dur="1s" repeatCount="indefinite"/></rect>
+  <text y="548" font-size="12" fill="#7e7e96"><tspan x="1192">⊕</tspan><tspan x="1212">⏎</tspan></text>
+</svg>

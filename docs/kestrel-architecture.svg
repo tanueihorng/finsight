@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" xml:space="preserve" style="white-space:pre" viewBox="0 0 1280 470" width="1280" height="470" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" role="img" aria-label="How Kestrel fits into FinSight: the chat panel talks to FinSight, which proxies to the Kestrel agent; Kestrel uses any model and read-only tools over your data, the web and SEC filings">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#4b4b63"/></marker>
+    <marker id="arrA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#a78bfa"/></marker>
+  </defs>
+  <rect width="1280" height="470" fill="#08080f"/>
+  <rect x="8" y="8" width="1264" height="454" rx="14" fill="none" stroke="#20203a"/>
+  <text x="44" y="50" font-size="15" letter-spacing="2" fill="#7e7e96">HOW IT FITS TOGETHER <tspan fill="#4b4b63">· everything runs on your machine</tspan></text>
+
+  <!-- column 1: browser -->
+  <rect x="44" y="80" width="250" height="150" rx="10" fill="#12121f" stroke="#2d2d4d"/>
+  <text x="62" y="108" font-size="14" font-weight="700" fill="#ece8fb">Browser</text>
+  <text x="62" y="134" font-size="12" fill="#d7dadf">FinSight terminal</text>
+  <text x="62" y="156" font-size="12" fill="#a78bfa">✻ Kestrel chat panel</text>
+  <text x="62" y="180" font-size="11" fill="#7e7e96">page-aware · ⌘/ toggle</text>
+  <text x="62" y="200" font-size="11" fill="#7e7e96">streams over SSE</text>
+
+  <!-- column 2: FinSight -->
+  <rect x="352" y="80" width="276" height="150" rx="10" fill="#12121f" stroke="#2d2d4d"/>
+  <text x="370" y="108" font-size="14" font-weight="700" fill="#ece8fb">FinSight server <tspan font-weight="400" font-size="11" fill="#4b4b63">:8001</tspan></text>
+  <text x="370" y="134" font-size="12" fill="#d7dadf">PIN session · data owner</text>
+  <text x="370" y="156" font-size="12" fill="#d7dadf">/api/agent/* proxy</text>
+  <text x="370" y="180" font-size="11" fill="#7e7e96">starts · restarts · stops</text>
+  <text x="370" y="200" font-size="11" fill="#7e7e96">the agent (supervisor)</text>
+
+  <!-- column 3: Kestrel -->
+  <rect x="686" y="80" width="300" height="150" rx="10" fill="#141026" stroke="#a78bfa"/>
+  <text x="704" y="108" font-size="14" font-weight="700" fill="#a78bfa">✻ Kestrel agent <tspan font-weight="400" font-size="11" fill="#4b4b63">:8100 loopback</tspan></text>
+  <text x="704" y="134" font-size="12" fill="#d7dadf">chat engine · tool loop</text>
+  <text x="704" y="156" font-size="12" fill="#d7dadf">skills · attachments</text>
+  <text x="704" y="180" font-size="11" fill="#7e7e96">limits · cost ledger</text>
+  <text x="704" y="200" font-size="11" fill="#7e7e96">full interaction log</text>
+
+  <!-- column 4: models -->
+  <rect x="1044" y="80" width="192" height="150" rx="10" fill="#12121f" stroke="#2d2d4d"/>
+  <text x="1062" y="108" font-size="14" font-weight="700" fill="#ece8fb">Any model</text>
+  <text x="1062" y="134" font-size="12" fill="#d7dadf">DeepSeek</text>
+  <text x="1062" y="156" font-size="12" fill="#d7dadf">Claude Haiku</text>
+  <text x="1062" y="178" font-size="12" fill="#d7dadf">Claude Code</text>
+  <text x="1062" y="200" font-size="11" fill="#7e7e96">+ add a manifest</text>
+
+  <!-- arrows row 1 -->
+  <line x1="296" y1="155" x2="348" y2="155" stroke="#a78bfa" stroke-width="2" marker-end="url(#arrA)" marker-start="url(#arrA)"/>
+  <line x1="630" y1="155" x2="682" y2="155" stroke="#a78bfa" stroke-width="2" marker-end="url(#arrA)" marker-start="url(#arrA)"/>
+  <line x1="988" y1="155" x2="1040" y2="155" stroke="#a78bfa" stroke-width="2" marker-end="url(#arrA)" marker-start="url(#arrA)"/>
+
+  <!-- tools row -->
+  <line x1="836" y1="232" x2="836" y2="276" stroke="#4b4b63" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="852" y="260" font-size="11" fill="#7e7e96">read-only tools · also over MCP for Claude Code / Codex</text>
+
+  <g font-size="12">
+    <rect x="352" y="284" width="210" height="120" rx="10" fill="#0d0d18" stroke="#20203a"/>
+    <text x="370" y="310" font-weight="700" fill="#ece8fb">Your portfolio</text>
+    <text x="370" y="334" fill="#7e7e96">holdings · cash · P/L</text>
+    <text x="370" y="354" fill="#7e7e96">exposure · events</text>
+    <text x="370" y="374" fill="#7e7e96">GET-only token</text>
+
+    <rect x="580" y="284" width="210" height="120" rx="10" fill="#0d0d18" stroke="#20203a"/>
+    <text x="598" y="310" font-weight="700" fill="#ece8fb">Strategy library</text>
+    <text x="598" y="334" fill="#7e7e96">same engines as chart</text>
+    <text x="598" y="354" fill="#7e7e96">scan · size · backtest</text>
+    <text x="598" y="374" fill="#7e7e96">sandboxed plugins</text>
+
+    <rect x="808" y="284" width="210" height="120" rx="10" fill="#0d0d18" stroke="#20203a"/>
+    <text x="826" y="310" font-weight="700" fill="#ece8fb">Research</text>
+    <text x="826" y="334" fill="#7e7e96">SEC EDGAR filings</text>
+    <text x="826" y="354" fill="#7e7e96">web search · fetch</text>
+    <text x="826" y="374" fill="#7e7e96">SSRF-guarded, cited</text>
+
+    <rect x="1036" y="284" width="200" height="120" rx="10" fill="#0d0d18" stroke="#20203a"/>
+    <text x="1054" y="310" font-weight="700" fill="#ece8fb">Your records</text>
+    <text x="1054" y="334" fill="#7e7e96">policy · decisions</text>
+    <text x="1054" y="354" fill="#7e7e96">notes · past chats</text>
+    <text x="1054" y="374" fill="#7e7e96">proposals only</text>
+  </g>
+  <path d="M836 276 L457 276 L457 284 M836 276 L685 276 L685 284 M836 276 L913 276 L913 284 M836 276 L1136 276 L1136 284" fill="none" stroke="#4b4b63" stroke-width="1.5"/>
+
+  <!-- guarantees -->
+  <rect x="44" y="284" width="270" height="120" rx="10" fill="#0d0d18" stroke="#20203a"/>
+  <text x="62" y="310" font-size="12" font-weight="700" fill="#2ec27e">Guardrails</text>
+  <text x="62" y="334" font-size="12" fill="#7e7e96">never trades or moves money</text>
+  <text x="62" y="354" font-size="12" fill="#7e7e96">numbers come from code</text>
+  <text x="62" y="374" font-size="12" fill="#7e7e96">keys in macOS Keychain</text>
+
+  <text x="44" y="436" font-size="12" fill="#4b4b63">Data, chats, logs and keys stay in your data folder · nothing personal lives in this repo</text>
+</svg>
