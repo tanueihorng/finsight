@@ -509,6 +509,8 @@ MSFT,5,380,2023-11-02
   <!-- alert/notification toasts -->
   <div id="toasts" class="toasts"></div>
 
+  <!-- startup order: bootstrap -> legacy scripts -> island modules (see web/src/bootstrap.ts) -->
+  <script src="/app/bootstrap.js"></script>
   <script src="/indicators.js"></script>
   <script src="/strategy.js"></script>
   <script src="/strategies.js"></script>

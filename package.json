@@ -6,7 +6,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node --test test/*.test.js",
+    "test": "node --test \"test/*.test.js\" \"web/src/**/*.test.ts\"",
     "demo": "node scripts/demo.js",
     "demo:reset": "node scripts/demo.js --reset",
     "agent:install": "npm --prefix agent ci --no-audit --no-fund",
@@ -14,7 +14,9 @@
     "e2e": "playwright test",
     "build": "node scripts/build-web.mjs",
     "dev": "node scripts/build-web.mjs --watch",
-    "typecheck": "tsc -p web && tsc -p ."
+    "typecheck": "tsc -p web && tsc -p web/tsconfig.test.json && tsc -p .",
+    "check:web": "node scripts/build-web.mjs --check",
+    "verify": "npm run typecheck && npm test && npm run check:web && npm run e2e"
   },
   "engines": {
     "node": ">=18"

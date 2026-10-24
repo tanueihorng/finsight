@@ -3,10 +3,14 @@
    are never stored in the browser: they stay behind the PIN on the server. */
 'use strict';
 const SHELL = 'finsight-shell-v13';
-const FILES = ['/', '/index.html', '/styles.css', '/app.js', '/chart.js', '/chartgrid.js', '/strategy.js', '/strategies.js', '/indicators.js', '/journal.js', '/agent-panel.js', '/agent-panel.css', '/app/main.js', '/app/main.css', '/icon.png', '/icon-192.png', '/manifest.webmanifest'];
+const FILES = ['/', '/index.html', '/styles.css', '/app.js', '/chart.js', '/chartgrid.js', '/strategy.js', '/strategies.js', '/indicators.js', '/journal.js', '/agent-panel.js', '/agent-panel.css', '/app/manifest.json', '/icon.png', '/icon-192.png', '/manifest.webmanifest'];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(SHELL).then((c) => c.addAll(FILES)).then(() => self.skipWaiting()));
+  // Island files (bootstrap, main.js/css, lazy chunks) come from the build manifest.
+  const islandFiles = () => fetch('/app/manifest.json', { cache: 'no-cache' }).then((r) => r.json()).then((m) => m.files);
+  e.waitUntil(caches.open(SHELL)
+    .then(async (c) => c.addAll([...FILES, ...(await islandFiles())]))
+    .then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', (e) => {
   e.waitUntil(caches.keys()

@@ -1,0 +1,4 @@
+{
+  "//": "Browser source is ES modules (lets node:test run colocated *.test.ts files). Not a separate package.",
+  "type": "module"
+}
