@@ -7,6 +7,7 @@
 // url() are left untouched.
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
+import { realpathSync } from 'node:fs';
 import path from 'node:path';
 
 const CLASS = /\.(-?[_a-zA-Z][\w-]*)/y;
@@ -33,18 +34,25 @@ export function scopeCss(source, relPath) {
 }
 
 export function cssModules(root) {
+  // esbuild resolves file paths through symlinks (e.g. macOS /var -> /private/var).
+  root = realpathSync(root);
   return {
     name: 'finsight-css-modules',
     setup(build) {
       build.onLoad({ filter: /\.module\.css$/, namespace: 'file' }, async (args) => {
         const rel = path.relative(root, args.path);
         const { classes } = scopeCss(await fs.readFile(args.path, 'utf8'), rel);
-        return { contents: `import ${JSON.stringify(args.path + '?scoped')};\nexport default ${JSON.stringify(classes)};`, loader: 'js', resolveDir: path.dirname(args.path) };
+        return { contents: `import ${JSON.stringify('./' + path.basename(args.path) + '?scoped')};\nexport default ${JSON.stringify(classes)};`, loader: 'js', resolveDir: path.dirname(args.path) };
       });
-      build.onResolve({ filter: /\.module\.css\?scoped$/ }, (args) => ({ path: args.path.replace(/\?scoped$/, ''), namespace: 'scoped-css' }));
+      // Virtual namespace paths are written into source maps. Keep them
+      // checkout-relative so committed output is reproducible in any worktree.
+      build.onResolve({ filter: /\.module\.css\?scoped$/ }, (args) => ({
+        path: path.relative(root, path.resolve(args.resolveDir, args.path.replace(/\?scoped$/, ''))).split(path.sep).join('/'),
+        namespace: 'scoped-css',
+      }));
       build.onLoad({ filter: /.*/, namespace: 'scoped-css' }, async (args) => {
-        const rel = path.relative(root, args.path);
-        return { contents: scopeCss(await fs.readFile(args.path, 'utf8'), rel).css, loader: 'css', resolveDir: path.dirname(args.path), watchFiles: [args.path] };
+        const absolute = path.resolve(root, args.path);
+        return { contents: scopeCss(await fs.readFile(absolute, 'utf8'), args.path).css, loader: 'css', resolveDir: path.dirname(absolute), watchFiles: [absolute] };
       });
     },
   };
