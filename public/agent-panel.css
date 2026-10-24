@@ -1,7 +1,7 @@
 /* ===========================================================================
    Agent chat panel: a terminal-style conversation modelled on Claude Code
    (⏺ bullets for replies and tool calls, ⎿ result lines, an animated
-   "✻ Crunching numbers… (12s · esc to interrupt)" status, a bordered prompt
+   "Pricing it in… (12s · esc to interrupt)" status with rising candles, a bordered prompt
    box with a slash menu) inside a collapsible drawer that reflows the page.
    Uses the active FinSight theme tokens.
    =========================================================================== */
@@ -115,10 +115,17 @@ body.locked .agent-panel, body.locked .agent-toggle { display: none !important; 
 .agent-trace div b { color: var(--text); font-weight: 600; }
 .agent-trace .bad { color: var(--down); }
 
-/* live status line: ✻ Crunching numbers… (12s · ↓ ~340 tokens · esc to interrupt) */
+/* live status line: [rising candles + $] Pricing it in… (12s · ↓ ~340 tokens · esc to interrupt) */
 .agent-status { display: flex; align-items: baseline; gap: 8px; color: var(--amber); padding: 2px 0; }
 .agent-status[hidden] { display: none; }
-.agent-status .glyph { width: 12px; text-align: center; display: inline-block; }
+.agent-status .candles { display: inline-flex; align-items: flex-end; gap: 3px; height: 18px; width: 52px; flex: none; }
+.agent-status .candles i { display: block; width: 5px; background: var(--up); border-radius: 1px; position: relative; transform-origin: bottom; transform: scaleY(0); animation: agent-candle 2.4s ease-out infinite; }
+.agent-status .candles i::after { content: ''; position: absolute; left: 2px; width: 1px; top: -3px; bottom: -2px; background: inherit; opacity: .7; }
+.agent-status .candles i.dn { background: var(--down); }
+.agent-status .candles .money { color: #f5c46b; font-weight: 700; line-height: 1; opacity: 0; animation: agent-money 2.4s ease-out infinite; }
+@keyframes agent-candle { 0% { transform: scaleY(0); } 30%, 92% { transform: scaleY(1); } 100% { transform: scaleY(0); } }
+@keyframes agent-money { 0%, 62% { opacity: 0; transform: translateY(4px) scale(.6); } 74% { opacity: 1; transform: translateY(-2px) scale(1.25); } 90% { opacity: 1; transform: translateY(-2px) scale(1); } 100% { opacity: 0; } }
+.agent-title .mark, .agent-toggle .mark { color: var(--up); font-weight: 700; }
 .agent-status .verb { background: linear-gradient(90deg, var(--amber) 0%, var(--amber-2) 40%, var(--amber) 80%); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: agent-shimmer 2.2s linear infinite; }
 .agent-status .sub { color: var(--dim); }
 @keyframes agent-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
@@ -173,6 +180,7 @@ body.locked .agent-panel, body.locked .agent-toggle { display: none !important; 
 }
 @media (prefers-reduced-motion: reduce) {
   .agent-status .verb { animation: none; color: var(--amber); background: none; }
+  .agent-status .candles i, .agent-status .candles .money { animation: none; transform: none; opacity: 1; }
   .agent-tool.running::before { animation: none; }
 }
 .agent-hints > span:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }

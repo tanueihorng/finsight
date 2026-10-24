@@ -13,7 +13,7 @@ Kestrel is part of FinSight: **FinSight starts it, restarts it if it crashes, an
 npm run agent:install
 ```
 
-Then start FinSight as usual. For your personal setup, double-click `~/FinSightData/start-finsight-personal.command`. Press **✻ KESTREL** (or ⌘/).
+Then start FinSight as usual. For your personal setup, double-click `~/FinSightData/start-finsight-personal.command`. Press **↗ KESTREL** (or ⌘/).
 
 - **Agent output:** `~/FinSightData/agent/agent.log`.
 - **Status:** `GET /api/agent-status` (the panel shows it when Kestrel is offline).

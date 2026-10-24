@@ -11,7 +11,7 @@
   <rect x="44" y="80" width="250" height="150" rx="10" fill="#12121f" stroke="#2d2d4d"/>
   <text x="62" y="108" font-size="14" font-weight="700" fill="#ece8fb">Browser</text>
   <text x="62" y="134" font-size="12" fill="#d7dadf">FinSight terminal</text>
-  <text x="62" y="156" font-size="12" fill="#a78bfa">✻ Kestrel chat panel</text>
+  <text x="62" y="156" font-size="12" fill="#a78bfa">↗ Kestrel chat panel</text>
   <text x="62" y="180" font-size="11" fill="#7e7e96">page-aware · ⌘/ toggle</text>
   <text x="62" y="200" font-size="11" fill="#7e7e96">streams over SSE</text>
 
@@ -25,7 +25,7 @@
 
   <!-- column 3: Kestrel -->
   <rect x="686" y="80" width="300" height="150" rx="10" fill="#141026" stroke="#a78bfa"/>
-  <text x="704" y="108" font-size="14" font-weight="700" fill="#a78bfa">✻ Kestrel agent <tspan font-weight="400" font-size="11" fill="#4b4b63">:8100 loopback</tspan></text>
+  <text x="704" y="108" font-size="14" font-weight="700" fill="#a78bfa">↗ Kestrel agent <tspan font-weight="400" font-size="11" fill="#4b4b63">:8100 loopback</tspan></text>
   <text x="704" y="134" font-size="12" fill="#d7dadf">chat engine · tool loop</text>
   <text x="704" y="156" font-size="12" fill="#d7dadf">skills · attachments</text>
   <text x="704" y="180" font-size="11" fill="#7e7e96">limits · cost ledger</text>

@@ -20,7 +20,7 @@
 
   <rect width="1600" height="1120" fill="#08080f"/>
   <rect x="8" y="8" width="1584" height="1104" rx="14" fill="none" stroke="#20203a"/>
-  <text x="32" y="44" font-size="20" font-weight="700" fill="#ece8fb">FinSight + <tspan fill="#a78bfa">✻ Kestrel</tspan> <tspan font-size="13" font-weight="400" fill="#6b6b85">— full component architecture · everything below the dashed line runs on your Mac</tspan></text>
+  <text x="32" y="44" font-size="20" font-weight="700" fill="#ece8fb">FinSight + <tspan fill="#a78bfa">↗ Kestrel</tspan> <tspan font-size="13" font-weight="400" fill="#6b6b85">— full component architecture · everything below the dashed line runs on your Mac</tspan></text>
 
   <!-- ================= ZONES ================= -->
   <rect x="24" y="66" width="270" height="660" rx="10" fill="none" stroke="#20203a" stroke-dasharray="4 4"/>
@@ -44,7 +44,7 @@
   <text x="52" y="214" class="m">fetch /api/* (cookie session)</text>
 
   <rect x="38" y="238" width="242" height="140" rx="8" class="boxv"/>
-  <text x="52" y="260" class="tv">✻ Kestrel chat panel</text>
+  <text x="52" y="260" class="tv">↗ Kestrel chat panel</text>
   <text x="52" y="280" class="s">agent-panel.js · .css</text>
   <text x="52" y="298" class="s">EventSource (SSE stream)</text>
   <text x="52" y="316" class="s">/ menu · model picker</text>

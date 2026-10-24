@@ -80,16 +80,23 @@
   const S = { name: 'Kestrel', thread: null, version: 0, brains: [], skills: [], defaultBrain: null, es: null, lastEventId: 0, turns: new Map(), running: null, offline: false, stick: true, files: [] };
 
   // ------------------------------------------------------------- DOM
+  // Thinking indicator: green candles climb one by one (one red dip), then a gold $ pops. CSS-animated.
+  function candles() {
+    const c = h('span', { class: 'candles', 'aria-hidden': 'true' });
+    [[6, ''], [5, 'dn'], [10, ''], [14, ''], [18, '']].forEach(([px, cls], i) => c.append(h('i', { class: cls, style: `height:${px}px;animation-delay:${i * 0.15}s` })));
+    c.append(h('b', { class: 'money' }, '$'));
+    return c;
+  }
   const panel = h('aside', { class: 'agent-panel', id: 'agent-panel', role: 'complementary', 'aria-label': 'Agent chat' });
   const resize = h('div', { class: 'agent-resize', title: 'Drag to resize', 'aria-hidden': 'true' });
-  const titleEl = h('span', { class: 'agent-title' }, '✻ ', h('span', { class: 'nm' }, S.name), h('small', {}, 'research agent'));
+  const titleEl = h('span', { class: 'agent-title' }, h('span', { class: 'mark' }, '↗'), ' ', h('span', { class: 'nm' }, S.name), h('small', {}, 'research agent'));
   const threadsBtn = h('button', { class: 'agent-icon-btn', title: 'Chats', 'aria-label': 'Show chats', 'aria-expanded': 'false', 'aria-controls': 'agent-threads' }, '☰');
   const newBtn = h('button', { class: 'agent-icon-btn', title: 'New chat (/new)', 'aria-label': 'New chat' }, '＋');
   const closeBtn = h('button', { class: 'agent-icon-btn', title: 'Close (Esc)', 'aria-label': 'Close chat' }, '✕');
   const threadsEl = h('div', { class: 'agent-threads', id: 'agent-threads', hidden: true, role: 'listbox', 'aria-label': 'Chats' });
   const log = h('div', { class: 'agent-log', role: 'log', 'aria-live': 'polite', 'aria-relevant': 'additions' });
   const jump = h('button', { class: 'agent-jump', hidden: true }, '↓ latest');
-  const status = h('div', { class: 'agent-status', hidden: true, 'aria-live': 'off' }, h('span', { class: 'glyph' }, '✻'), h('span', { class: 'verb' }, 'Thinking…'), h('span', { class: 'sub' }, ''));
+  const status = h('div', { class: 'agent-status', hidden: true, 'aria-live': 'off' }, candles(), h('span', { class: 'verb' }, 'Thinking…'), h('span', { class: 'sub' }, ''));
   const menu = h('div', { class: 'agent-menu', hidden: true, role: 'listbox', 'aria-label': 'Commands and skills' });
   const attachRow = h('div', { class: 'agent-attach-row' });
   const fileInput = h('input', { type: 'file', multiple: true, hidden: true, accept: 'image/png,image/jpeg,image/gif,image/webp,application/pdf,.docx,.txt,.md,.csv,.json' });
@@ -109,7 +116,7 @@
   function mount() {
     document.body.append(panel);
     const bar = document.querySelector('.topbar-right');
-    if (bar) bar.prepend(h('button', { id: 'agent-toggle', class: 'topbar-btn agent-toggle', title: 'Ask the agent (⌘/)', 'aria-controls': 'agent-panel', 'aria-expanded': 'false', onclick: () => toggle() }, '✻ ', h('span', { class: 'tname' }, 'ASK'), h('span', { class: 'kbd' }, '⌘/')));
+    if (bar) bar.prepend(h('button', { id: 'agent-toggle', class: 'topbar-btn agent-toggle', title: 'Ask the agent (⌘/)', 'aria-controls': 'agent-panel', 'aria-expanded': 'false', onclick: () => toggle() }, h('span', { class: 'mark' }, '↗'), ' ', h('span', { class: 'tname' }, 'ASK'), h('span', { class: 'kbd' }, '⌘/')));
     const w = Number(ls.get(LS.width, 440)); if (w >= 320) document.documentElement.style.setProperty('--agent-w', Math.min(w, window.innerWidth * 0.5) + 'px');
     if (ls.get(LS.open, '0') === '1') toggle(true);
   }
@@ -252,7 +259,6 @@
   }
 
   // ------------------------------------------------------------- status line (Claude Code style)
-  const GLYPHS = ['·', '✢', '✳', '✶', '✻', '✽', '✻', '✶', '✳', '✢'];
   const VERBS = ['Crunching numbers', 'Reading the tape', 'Consulting the ledger', 'Squinting at filings', 'Pricing it in', 'Checking the 200-day',
     'Marking to market', 'Counting basis points', 'Asking the bond market', 'Tallying dividends', 'Hedging my words', 'Sniffing out the catalyst',
     'Rebalancing thoughts', 'Reconciling the books', 'Scanning for setups', 'Weighing the evidence', 'Discounting cash flows', 'Waiting for the close'];
@@ -267,7 +273,6 @@
     clearInterval(stTimer); stTimer = setInterval(() => { stTick++; if (stTick % 25 === 0) stVerb = VERBS[Math.floor(Math.random() * VERBS.length)]; paintStatus(); }, 120);
   }
   function paintStatus() {
-    $('.glyph', status).textContent = GLYPHS[stTick % GLYPHS.length];
     $('.verb', status).textContent = stVerb + '…';
     const secs = Math.floor((Date.now() - stStart) / 1000);
     $('.sub', status).textContent = `(${secs}s${stChars ? ` · ↓ ~${Math.round(stChars / 4)} tokens` : ''} · esc to interrupt)`;
@@ -279,7 +284,7 @@
   // ------------------------------------------------------------- rendering
   function showWelcome() {
     log.replaceChildren(h('div', { class: 'agent-welcome' },
-      h('div', { class: 'hi' }, h('span', { class: 'star' }, '✻ '), `Welcome to ${S.name}`),
+      h('div', { class: 'hi' }, h('span', { class: 'star' }, '↗ '), `Welcome to ${S.name}`),
       h('div', {}, 'Your research agent inside FinSight. Answers use your live data, strategy library, records and the web, with sources and data times. It never trades.'),
       h('ul', {}, h('li', {}, h('code', {}, '/'), ' shows skills and commands (', h('code', {}, '/pre-trade-check'), ', ', h('code', {}, '/earnings-review'), ' …)'),
         h('li', {}, 'paste or drop images, PDFs, DOCX or CSV to analyse them'),

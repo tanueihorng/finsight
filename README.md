@@ -6,7 +6,7 @@
 
 <p><b>A free, Bloomberg-style portfolio terminal that runs entirely on your own machine.</b><br>
 Live market data, FX-risk tracking, and an economic calendar — no accounts, no API keys, no build step.<br>
-Now with <b>✻ Kestrel</b>, a built-in AI research agent that knows your portfolio.</p>
+Now with <b>↗ Kestrel</b>, a built-in AI research agent that knows your portfolio.</p>
 
 <p>
 <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-a78bfa">
@@ -14,12 +14,12 @@ Now with <b>✻ Kestrel</b>, a built-in AI research agent that knows your portfo
 <img alt="API keys: none" src="https://img.shields.io/badge/API%20keys-none-38bdf8">
 <img alt="Dependencies: zero" src="https://img.shields.io/badge/dependencies-zero-a78bfa">
 <img alt="Runs 100% local" src="https://img.shields.io/badge/runs-100%25%20local-2ec27e">
-<img alt="AI agent: Kestrel" src="https://img.shields.io/badge/AI%20agent-%E2%9C%BB%20Kestrel-c4b5fd">
+<img alt="AI agent: Kestrel" src="https://img.shields.io/badge/AI%20agent-%E2%86%97%20Kestrel-2ec27e">
 <img alt="Models: any" src="https://img.shields.io/badge/models-DeepSeek%20%C2%B7%20Claude%20%C2%B7%20more-38bdf8">
 </p>
 
 <p>
-<a href="#-meet-kestrel--your-ai-research-agent">✻ Kestrel AI agent</a> ·
+<a href="#-meet-kestrel--your-ai-research-agent">↗ Kestrel AI agent</a> ·
 <a href="#-quick-start">Quick start</a> ·
 <a href="#-features">Features</a> ·
 <a href="#-fx-risk--macro">FX risk &amp; macro</a> ·
@@ -40,7 +40,7 @@ It's built for the investor who **funds in one currency and invests in another**
 
 <div align="center"><img src="docs/hero.svg" alt="FinSight terminal — a glimpse of the UI" width="100%"></div>
 
-## ✻ Meet Kestrel — your AI research agent
+## ↗ Meet Kestrel — your AI research agent
 
 <div align="center"><img src="docs/kestrel.svg" alt="Kestrel chat panel running a pre-trade check inside FinSight" width="100%"></div>
 
@@ -56,7 +56,7 @@ Press **⌘/** anywhere in FinSight and a chat panel slides in. **Kestrel** is a
 | 🔎 **Researches** | SEC EDGAR filings and XBRL financials, web search and page reading. Every fact carries a source and a date |
 | 🧩 **Skills** | `/pre-trade-check`, `/position-review`, `/earnings-review`, `/why-did-it-move`, `/strategy-scan` — or drop in your own [Agent Skills](https://github.com/anthropics/skills)-format playbooks |
 | 📎 **Files & pictures** | Paste or drop PDFs, Word docs, CSVs or chart screenshots and ask about them |
-| 🖥️ **Terminal-style chat** | Inspired by Claude Code: streamed answers, live tool calls (`⏺ get_portfolio ⎿ 6 positions`), a "✻ Pricing it in…" status line, `/` command menu, per-answer cost and trace |
+| 🖥️ **Terminal-style chat** | Inspired by Claude Code: streamed answers, live tool calls (`⏺ get_portfolio ⎿ 6 positions`), a "Pricing it in…" status line with rising green candles and a $, `/` command menu, per-answer cost and trace |
 | 🔍 **Fully traceable** | Every model call, tool call and data request is logged locally, so any answer can be traced end to end |
 
 <div align="center"><img src="docs/kestrel-architecture.svg" alt="How Kestrel fits into FinSight" width="100%"></div>
@@ -75,7 +75,7 @@ export DEEPSEEK_API_KEY=...    # or add it to the macOS Keychain (see agent/READ
 node server.js                 # FinSight starts, supervises and stops Kestrel for you
 ```
 
-Then press **⌘/** (or the **✻ KESTREL** button). FinSight works exactly as before without it. Full guide: **[agent/README.md](agent/README.md)** · spec: **[agent/docs/SPEC.md](agent/docs/SPEC.md)**.
+Then press **⌘/** (or the **↗ KESTREL** button). FinSight works exactly as before without it. Full guide: **[agent/README.md](agent/README.md)** · spec: **[agent/docs/SPEC.md](agent/docs/SPEC.md)**.
 
 
 ## 🚀 Quick start
@@ -222,7 +222,7 @@ Every component, how they talk to each other, and where data lives. FinSight own
 
 | Layer | Pieces |
 |---|---|
-| **Browser** | Terminal UI (`public/app.js`, `chart.js`), ✻ Kestrel panel (`agent-panel.js`, SSE stream), service worker (static files only), PIN lock |
+| **Browser** | Terminal UI (`public/app.js`, `chart.js`), ↗ Kestrel panel (`agent-panel.js`, SSE stream), service worker (static files only), PIN lock |
 | **FinSight server** (`:8001`) | `server.js` router with security headers and Host check · `lib/auth` PIN sessions · `lib/agentlink` GET-only agent token and `/api/agent/*` proxy · `lib/agentproc` agent supervisor · domain logic in `lib/` (portfolio, ledger, dividends, performance, market, macro, charts, journal, cache) |
 | **Kestrel agent** (`127.0.0.1:8100`) | HTTP API (`/v1`, loopback and secret gate) · chat engine (tool loop, limits, retries, SSE events) · model adapters (OpenAI-compatible, Anthropic SDK, Claude Code CLI) · 35 read-only tools · MCP server (stdio) · strategy sandbox · SSRF-guarded fetch · uploads · skills · interaction log |
 | **Storage** | `~/FinSightData`: portfolio and app JSON files (0600) · `agent/agent.db` SQLite (threads, messages, turns, events, traces, cost, cache, proposals, FTS) · logs, uploads, skills, config · macOS Keychain for API keys |
@@ -236,7 +236,7 @@ finsight/
 ├── server.js              # Zero-dependency Node HTTP server (routes only)
 ├── lib/                   # Market data, cache, portfolio math, performance, dividends, ledger…
 ├── test/                  # npm test — offline, zero-dependency (node:test)
-├── agent/                 # ✻ Kestrel AI agent (TypeScript, own deps: npm run agent:install)
+├── agent/                 # ↗ Kestrel AI agent (TypeScript, own deps: npm run agent:install)
 │   ├── src/               #   chat engine, model adapters, tools, MCP server, sandbox
 │   ├── skills/            #   bundled playbooks (/pre-trade-check …)
 │   └── plugins/brains/    #   one manifest per model (DeepSeek, Claude…)

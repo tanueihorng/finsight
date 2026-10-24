@@ -16,7 +16,7 @@
   <rect width="1280" height="660" fill="#08080f"/>
   <rect x="8" y="8" width="1264" height="644" rx="14" fill="none" stroke="#20203a"/>
 
-  <text x="40" y="50" font-size="22" font-weight="700" fill="#ece8fb">How <tspan fill="#a78bfa">✻ Kestrel</tspan> works inside FinSight</text>
+  <text x="40" y="50" font-size="22" font-weight="700" fill="#ece8fb">How <tspan fill="#a78bfa">↗ Kestrel</tspan> works inside FinSight</text>
   <text x="40" y="76" font-size="14" fill="#7e7e96">You ask → Kestrel gathers real facts with tools → the AI model writes the answer → it streams back to you</text>
 
   <!-- step 6: answer back (over the top) -->
@@ -38,7 +38,7 @@
   <text x="380" y="248" class="b">to Kestrel</text>
 
   <rect x="680" y="150" width="260" height="120" rx="12" fill="#161130" stroke="#a78bfa" stroke-width="2"/>
-  <text x="700" y="182" class="hv">✻ Kestrel</text>
+  <text x="700" y="182" class="hv">↗ Kestrel</text>
   <text x="700" y="208" class="b">the agent: runs the</text>
   <text x="700" y="228" class="b">steps, calls tools,</text>
   <text x="700" y="248" class="b">keeps time/cost limits</text>
