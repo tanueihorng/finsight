@@ -330,7 +330,7 @@ Two esbuild builds (`bootstrap.js` IIFE; `main.js` ESM with splitting), `manifes
 
 ### Phase 2: Panels (after the gate; each card follows `web/src/features/README.md`)
 
-> Every card: create `web/src/features/<name>/`, port the logic, register the island, replace the panel's **body** markup, make the caller edits from `COUPLING.md`, delete the listed legacy symbols and their `boot()`/polling calls, and add `web/e2e/<card>.spec.ts` covering its `COVERAGE.md` rows. Line ranges below are **hints at `6d9a740`**; `COUPLING.md` symbols are authoritative.
+> Every card: create `web/src/features/<name>/`, port the logic, register the island, replace the panel's **body** markup, make the caller edits from `COUPLING.md`, delete the listed legacy symbols and their `boot()`/polling calls, and add `web/e2e/<card>.spec.ts` covering its `COVERAGE.md` rows. Line ranges below are **hints at `6d9a740`**. **`COUPLING.md` Part A is authoritative**: §A7 lists each card's exact symbols, caller edits and dependencies, §A4 the adapters, §A6 the invalidation map. Merge order follows §A7, not "any order".
 
 **Lane A · Read-only market panels** (small model)
 | Card | Panel | Legacy hint (app.js) | Body/host | Endpoint | Notes |
@@ -461,7 +461,8 @@ Two esbuild builds (`bootstrap.js` IIFE; `main.js` ESM with splitting), `manifes
 | P0-5 | 0 | todo | | | added in v2 |
 | F1 | 1 | done (merged 2026-10-25, e255e56) | mig/F1-toolchain | Claude | splitting + manifest, bootstrap order, tracked `check:web`, colocated tests, scoped CSS Modules plugin |
 | F2–F6 | 1 | todo | | | revised in v2 |
-| I1, PILOT-1, PILOT-2 | 1.5 | todo | | | added in v2; gate for Phase 2 |
+| I1 | 1.5 | done (not merged) | mig/I1-coupling | Claude | `COUPLING.md` (baseline `31437a0`) + `scripts/coupling-inventory.mjs`; found 4 misplaced helpers and the C1↔C2, C3↔D1, E2↔B1/A3 couplings |
+| PILOT-1, PILOT-2 | 1.5 | todo | | | gate for Phase 2 |
 | A1–A3 | A | todo | | | A1 is PILOT-1 |
 | B1–B3 | B | todo | | | |
 | C1–C3 | C | todo | | | C1 is PILOT-2 |
