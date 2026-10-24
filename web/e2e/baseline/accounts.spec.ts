@@ -47,11 +47,7 @@ test('switching base currency converts every value', async ({ page }) => {
   await expect(summary).toContainText('S$92,967.48');
 });
 
-// KNOWN LEGACY BUG (recorded, not endorsed): loadPortfolio() has no request
-// sequencing, so a slow poll for the previous account renders over the new
-// account. test.fail() keeps this running; when PILOT-2/F3 fix it (query keys
-// include the account), this starts "unexpectedly passing": flip it to test().
-test.fail('a slow response for the previous account does not overwrite the new one', async ({ page }) => {
+test('a slow response for the previous account does not overwrite the new one', async ({ page }) => {
   await page.request.post('/api/accounts/add', { data: { name: 'Empty' } });
   await page.reload();
   const sel = page.locator('#account-sel');
