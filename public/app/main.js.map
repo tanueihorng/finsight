@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../../web/src/main.tsx"],
+  "sourcesContent": ["// React islands entry (ES module: runs after the legacy scripts). The island\n// runtime (registry + mounting) arrives in F6; lazy panels load as chunks.\nimport './main.css';\nimport type {} from './bootstrap.ts';\n\nwindow.FinSight.markIslandsReady();\n"],
+  "mappings": "AAKA,OAAO,SAAS,iBAAiB",
+  "names": []
+}

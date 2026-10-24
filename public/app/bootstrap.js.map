@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../../web/src/bootstrap.ts"],
+  "sourcesContent": ["// Startup contract between legacy code and React islands. Built as a classic\n// script (public/app/bootstrap.js) and loaded before every legacy script, so\n// window.FinSight exists before app.js runs. Module scripts (main.js) run\n// later, after the legacy scripts: they must never be needed for startup.\n// Order: bootstrap.js -> legacy scripts (app.js boots the page) -> main.js mounts islands.\n// F3/F4 add the shared store, refresh bus and lock state here.\n\nexport type FinSightGlobal = {\n  contract: 1;\n  // Resolves once main.js has started (islands may still be mounting).\n  islandsReady: Promise<void>;\n  markIslandsReady(): void;\n};\n\ndeclare global {\n  interface Window { FinSight: FinSightGlobal }\n}\n\nlet markIslandsReady = () => {};\nconst islandsReady = new Promise<void>((resolve) => {\n  markIslandsReady = () => { resolve(); window.dispatchEvent(new Event('finsight:islands-ready')); };\n});\nwindow.FinSight = { contract: 1, islandsReady, markIslandsReady: () => markIslandsReady() };\n"],
+  "mappings": "mBAkBA,IAAIA,EAAmB,IAAM,CAAC,EACxBC,EAAe,IAAI,QAAeC,GAAY,CAClDF,EAAmB,IAAM,CAAEE,EAAQ,EAAG,OAAO,cAAc,IAAI,MAAM,wBAAwB,CAAC,CAAG,CACnG,CAAC,EACD,OAAO,SAAW,CAAE,SAAU,EAAG,aAAAD,EAAc,iBAAkB,IAAMD,EAAiB,CAAE",
+  "names": ["markIslandsReady", "islandsReady", "resolve"]
+}

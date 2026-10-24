@@ -6,12 +6,17 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node --test test/*.test.js",
+    "test": "node --test \"test/*.test.js\" \"web/src/**/*.test.ts\"",
     "demo": "node scripts/demo.js",
     "demo:reset": "node scripts/demo.js --reset",
     "agent:install": "npm --prefix agent ci --no-audit --no-fund",
     "agent:test": "npm --prefix agent run check",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "build": "node scripts/build-web.mjs",
+    "dev": "node scripts/build-web.mjs --watch",
+    "typecheck": "tsc -p web && tsc -p web/tsconfig.test.json && tsc -p .",
+    "check:web": "node scripts/build-web.mjs --check",
+    "verify": "npm run typecheck && npm test && npm run check:web && npm run e2e"
   },
   "engines": {
     "node": ">=18"
@@ -33,6 +38,15 @@
     "no-dependencies"
   ],
   "devDependencies": {
-    "@playwright/test": "1.64.0"
+    "@playwright/test": "1.64.0",
+    "@tanstack/react-query": "5.104.1",
+    "@types/node": "24.19.2",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "esbuild": "0.28.2",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "typescript": "7.0.2",
+    "zustand": "5.0.15"
   }
 }
