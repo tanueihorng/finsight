@@ -53,16 +53,6 @@ const state = window.FinSight.legacyState;
 let accountsCache = [];
 
 // ===========================================================================
-//  CLOCK
-// ===========================================================================
-function tick() {
-  const d = new Date();
-  $('#clock').textContent = d.toLocaleTimeString('en-US', { hour12: false }) + ' ' +
-    d.toLocaleDateString('en-US', { month: 'short', day: '2-digit' }).toUpperCase();
-}
-setInterval(tick, 1000); tick();
-
-// ===========================================================================
 //  COMMAND BAR
 // ===========================================================================
 function setStatus(msg, kind = '') { const el = $('#cmd-status'); el.textContent = msg; el.className = 'cmd-status ' + kind; }

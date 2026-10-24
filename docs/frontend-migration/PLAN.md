@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | **Plan v2 (2026-10-25)**, revised after the plan audit (`harness/runs/20261025-FRONTEND-AUDIT-8a6d80f1/AUDIT.md`). Phase 0 (P0-1–P0-3) merged; F1 merged (e255e56). v1 is in git history (`6d9a740`) |
+| Status | **Plan v2 (2026-10-25)**, revised after the plan audit (`harness/runs/20261025-FRONTEND-AUDIT-8a6d80f1/AUDIT.md`). Phase 0 (P0-1–P0-5) merged; foundation F1–F6 complete. Stop before I1 and the two pilots. v1 is in git history (`6d9a740`) |
 | Goal | A sustainable, typed, component-based codebase with **no behaviour change for the user** |
 | Stack decided | React 19 + TypeScript (frontend), esbuild (build, output committed), TanStack Query (server data), Zustand (UI state), CSS Modules (scoped by our plugin) + existing theme variables, Playwright (E2E). The server moves to TypeScript **last**, as its own migration (Phase 6) |
 | Written for | Implementing agents of any capability. Every task card is self-contained; **read §0–§2 and your own card** |
@@ -457,10 +457,14 @@ Two esbuild builds (`bootstrap.js` IIFE; `main.js` ESM with splitting), `manifes
 | P0-1 | 0 | done (merged 2026-10-25) | mig/P0-safety-net | Claude | @playwright/test 1.64.0; `npm run e2e` |
 | P0-2 | 0 | done (merged 2026-10-25) | mig/P0-safety-net | Claude | `lib/fakemarket.js` replaces global fetch; non-loopback hosts blocked |
 | P0-3 | 0 | done (merged 2026-10-25) | mig/P0-safety-net | Claude | 9 baseline specs, 36/36 over 3 repeats |
-| P0-4 | 0 | done (merged 2026-10-25, c49ca7d) | mig/P0-4-coverage | Claude | 43 scenarios; SSE regression fixed in 31437a0; stale account remains for F4 |
-| P0-5 | 0 | done (verified 2026-10-25) | mig/P0-5 | Codex | BASELINE.md; eight snapshots, three consecutive comparison passes |
+| P0-4 | 0 | done (merged 2026-10-25, c49ca7d) | mig/P0-4-coverage | Claude | 43 scenarios; SSE regression fixed in 31437a0; stale account regression fixed in add0f47 |
+| P0-5 | 0 | done (merged 2026-10-25, 353ed94) | mig/P0-5 | Codex | BASELINE.md; eight snapshots, three consecutive comparison passes |
 | F1 | 1 | done (merged 2026-10-25, e255e56) | mig/F1-toolchain | Claude | splitting + manifest, bootstrap order, tracked `check:web`, colocated tests, scoped CSS Modules plugin |
-| F2–F6 | 1 | todo | | | revised in v2 |
+| F2 | 1 | done (merged 2026-10-25, 0f47cad) | mig/F2 | Codex | producer-derived types; 11 real fake-market HTTP responses type-assigned |
+| F3 | 1 | done (merged 2026-10-25, ab329ea) | mig/F3 | Codex | typed client/hooks, refresh bus, Query defaults; 115 unit + 47 E2E |
+| F4 | 1 | done (merged 2026-10-25, add0f47) | mig/F4 | Codex | store/auth bridge, sequenced legacy loader, test-only subscribed island; 118 unit + 49 E2E |
+| F5 | 1 | done (merged 2026-10-25, db26138) | mig/F5 | Codex | 20-value legacy format comparisons and UI primitives; 119 unit + 49 E2E |
+| F6 | 1 | done (verified 2026-10-25; integrated by card merge) | mig/F6 | Codex | 119 unit + 52 E2E; lazy clock, move/unmount lifecycle, failure isolation; stop before I1/pilots |
 | I1, PILOT-1, PILOT-2 | 1.5 | todo | | | added in v2; gate for Phase 2 |
 | A1–A3 | A | todo | | | A1 is PILOT-1 |
 | B1–B3 | B | todo | | | |
