@@ -458,13 +458,13 @@ Two esbuild builds (`bootstrap.js` IIFE; `main.js` ESM with splitting), `manifes
 | P0-2 | 0 | done (merged 2026-10-25) | mig/P0-safety-net | Claude | `lib/fakemarket.js` replaces global fetch; non-loopback hosts blocked |
 | P0-3 | 0 | done (merged 2026-10-25) | mig/P0-safety-net | Claude | 9 baseline specs, 36/36 over 3 repeats |
 | P0-4 | 0 | done (merged 2026-10-25, c49ca7d) | mig/P0-4-coverage | Claude | 43 scenarios; SSE regression fixed in 31437a0; stale account regression fixed in add0f47 |
-| P0-5 | 0 | done (merged 2026-10-25, 353ed94) | mig/P0-5 | Codex | BASELINE.md; eight snapshots, three consecutive comparison passes |
-| F1 | 1 | done (merged 2026-10-25, e255e56) | mig/F1-toolchain | Claude | splitting + manifest, bootstrap order, tracked `check:web`, colocated tests, scoped CSS Modules plugin |
+| P0-5 | 0 | done (merged 2026-10-25, 353ed94) | mig/P0-5 | Codex | BASELINE.md; eight snapshots, three consecutive comparison passes; rolling-date/FX masks |
+| F1 | 1 | done (merged 2026-10-25, e255e56) | mig/F1-toolchain | Claude | splitting + manifest, bootstrap order, tracked `check:web`, colocated tests, scoped CSS Modules plugin; portable maps verified in follow-up 0becbcb |
 | F2 | 1 | done (merged 2026-10-25, 0f47cad) | mig/F2 | Codex | producer-derived types; 11 real fake-market HTTP responses type-assigned |
 | F3 | 1 | done (merged 2026-10-25, ab329ea) | mig/F3 | Codex | typed client/hooks, refresh bus, Query defaults; 115 unit + 47 E2E |
 | F4 | 1 | done (merged 2026-10-25, add0f47) | mig/F4 | Codex | store/auth bridge, sequenced legacy loader, test-only subscribed island; 118 unit + 49 E2E |
 | F5 | 1 | done (merged 2026-10-25, db26138) | mig/F5 | Codex | 20-value legacy format comparisons and UI primitives; 119 unit + 49 E2E |
-| F6 | 1 | done (verified 2026-10-25; integrated by card merge) | mig/F6 | Codex | 119 unit + 52 E2E; lazy clock, move/unmount lifecycle, failure isolation; stop before I1/pilots |
+| F6 | 1 | done (merged 2026-10-25, c43c7a9) | mig/F6 | Codex | 119 unit + 52 E2E; lazy clock, move/unmount lifecycle, failure isolation; stop before I1/pilots |
 | I1, PILOT-1, PILOT-2 | 1.5 | todo | | | added in v2; gate for Phase 2 |
 | A1–A3 | A | todo | | | A1 is PILOT-1 |
 | B1–B3 | B | todo | | | |
