@@ -27,6 +27,7 @@ before(async () => {
   fsPort = await freePort(); agentPort = await freePort();
   agent = http.createServer((q, s) => {
     agentHits.push({ method: q.method, url: q.url, secret: q.headers['x-agent-secret'], origin: q.headers.origin, host: q.headers.host });
+    if (q.url === '/v1/threads/th_cut/events') { s.writeHead(200, { 'Content-Type': 'text/event-stream' }); s.write('id: 1\ndata: partial\n\n'); setTimeout(() => s.destroy(), 50); return; }
     if (q.url.startsWith('/v1/threads/th_x/events')) { s.writeHead(200, { 'Content-Type': 'text/event-stream' }); s.write('id: 1\nevent: turn.started\ndata: {}\n\n'); setTimeout(() => s.end('id: 2\nevent: turn.finished\ndata: {}\n\n'), 50); return; }
     s.writeHead(200, { 'Content-Type': 'application/json' }); s.end(JSON.stringify({ ok: true, url: q.url }));
   });
@@ -84,6 +85,12 @@ test('proxy: needs a session, adds the secret, drops browser Origin, enforces sa
   const sse = await req(fsPort, 'GET', '/api/agent/threads/th_x/events', { cookie, accept: 'text/event-stream' });
   assert.match(sse.headers['content-type'], /event-stream/);
   assert.match(sse.body, /turn\.started[\s\S]*turn\.finished/);
+  const cut = await Promise.race([
+    req(fsPort, 'GET', '/api/agent/threads/th_cut/events', { cookie, accept: 'text/event-stream' }),
+    new Promise((_, reject) => { const timer = setTimeout(() => reject(new Error('browser stream never ended')), 2000); timer.unref(); }),
+  ]);
+  assert.equal(cut.status, 200);
+  assert.equal(cut.body, 'id: 1\ndata: partial\n\n');
   agent.close();
   await new Promise((r) => setTimeout(r, 50));
   const off = await req(fsPort, 'GET', '/api/agent/threads', { cookie });

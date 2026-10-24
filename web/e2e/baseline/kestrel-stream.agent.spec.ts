@@ -57,12 +57,7 @@ test('the stream reconnects after the agent closes it, without duplicates', asyn
   await dropMidTurn(page, 'end');
 });
 
-// KNOWN LEGACY BUG (recorded, not endorsed): when the agent's socket dies
-// mid-stream (crash, kill -9), lib/agentlink.js proxy() never ends the
-// browser's response (no 'aborted'/'error' handler on the upstream response),
-// so EventSource never reconnects and the turn freezes until a reload. When
-// fixed, this "unexpectedly passes": flip it to test().
-test.fail('the stream reconnects after the agent connection is cut', async ({ page }) => {
+test('the stream reconnects after the agent connection is cut', async ({ page }) => {
   test.setTimeout(45_000);
   await dropMidTurn(page, 'destroy');
 });
