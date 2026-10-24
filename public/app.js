@@ -168,12 +168,21 @@ $('#cmd').addEventListener('keydown', (e) => { if (e.key === 'Enter') { runComma
 // ===========================================================================
 const baseQS = (extra = '') => `?base=${encodeURIComponent(state.base)}&account=${encodeURIComponent(state.account || '')}${extra}`;
 
+// Dividends and FX risk move with holdings, cash and slow FX rates, not every
+// 15s quote tick: refetch them when the holdings/cash/account/base change, or
+// at most every 2 minutes otherwise.
+let sideSig = '', sideAt = 0;
+const SIDE_MAX_AGE = 120000;
 async function loadPortfolio() {
   try {
     const data = await api('/api/portfolio' + baseQS());
     renderPortfolio(data);
-    loadDividends(); // keep dividend panel in sync with the active account/base
-    loadFxRisk();    // keep FX-risk panel + exposure card in sync too
+    const sig = state.account + '|' + state.base + '|' + (data.positions || []).map((p) => p.symbol + ':' + p.quantity).join(',') + '|' + JSON.stringify(data.cash || []);
+    if (sig !== sideSig || Date.now() - sideAt > SIDE_MAX_AGE) {
+      sideSig = sig; sideAt = Date.now();
+      loadDividends(); // keep dividend panel in sync with the active account/base
+      loadFxRisk();    // keep FX-risk panel + exposure card in sync too
+    }
   } catch (e) { setFooter('Portfolio load failed: ' + e.message); }
 }
 
@@ -1143,7 +1152,11 @@ async function selectSymbol(symbol) {
 
 let detailChart = null; // singleton PriceChart instance (chart.js); survives refreshes
 
-async function loadDetail() {
+// The 30s background refresh re-reads the quote; bar history for daily and
+// longer timeframes changes slowly, so it is re-downloaded at most every 5 min.
+let detailHist = { key: '', at: 0, h: null };
+async function loadDetail(opts) {
+  const periodic = !!(opts && opts.periodic);
   const symbol = state.selected;
   if (!symbol) return;
   $('#detail-title').textContent = symbol + ' · DETAIL';
@@ -1178,11 +1191,14 @@ async function loadDetail() {
     // indicators are fully formed from the first visible bar; the chart opens on `range`.
     // Chart timeframe buttons (tf) load a long history and open on the latest bars.
     const fetchRange = tf ? range : (DETAIL_WARMUP[range] || range);
+    const hKey = symbol + '|' + fetchRange + '|' + interval;
+    const reuse = periodic && detailHist.key === hKey && detailHist.h && !/m$|h$/.test(interval) && Date.now() - detailHist.at < 300000;
     const [h, qd] = await Promise.all([
-      api(`/api/history?symbol=${encodeURIComponent(symbol)}&range=${fetchRange}&interval=${interval}`),
+      reuse ? detailHist.h : api(`/api/history?symbol=${encodeURIComponent(symbol)}&range=${fetchRange}&interval=${interval}`),
       api('/api/quote?symbols=' + encodeURIComponent(symbol)).catch(() => null),
     ]);
     if (state.selected !== symbol) return; // user switched symbols while we awaited
+    if (!reuse) detailHist = { key: hKey, at: Date.now(), h };
     const q = (qd && qd.quotes && qd.quotes[0] && !qd.quotes[0].error) ? qd.quotes[0] : {};
     const m = { ...(h.meta || {}), ...q };
     const pts = h.points || [];
@@ -1220,8 +1236,8 @@ async function loadDetail() {
       if (chartGrid) chartGrid.attach(detailChart);
     }
     if (detailChart) {
-      detailChart.load(symbol, pts, m, { range, interval, visibleFrom, fetchRange });
-      loadChartTrades(detailChart, symbol);
+      if (!reuse) detailChart.load(symbol, pts, m, { range, interval, visibleFrom, fetchRange });
+      if (!periodic || sideAt > (detailChart._tradesAt || 0)) { detailChart._tradesAt = Date.now(); loadChartTrades(detailChart, symbol); }
       if (chartGrid) chartGrid.syncSymbols();
     }
     else $('#detail-chart-host').innerHTML = sparkline(pts, chg >= 0); // fallback if chart.js absent
@@ -2072,21 +2088,38 @@ async function boot() {
 // Live polling, startable/stoppable so it pauses while the app is locked (otherwise
 // each poll 401s and re-triggers the lock screen, wiping the PIN being typed).
 let pollTimers = [];
+// Polling also pauses while the tab or installed app is hidden and catches up
+// on return; price alerts keep firing from the server's own timer meanwhile.
+let pollWanted = false, hiddenAt = 0;
 function startPolling() {
-  stopPolling();
+  pollWanted = true;
+  stopTimers();
+  if (document.hidden) return;
   pollTimers.push(
     setInterval(loadPortfolio, 15000),
     setInterval(loadMarkets, 15000),
     setInterval(loadWatchlist, 15000),
-    setInterval(loadAlerts, 15000), // evaluates + fires notifications
-    setInterval(() => { if (state.selected) loadDetail(); }, 30000),
+    setInterval(loadAlerts, 30000), // the server also evaluates alerts every minute and notifies
+    setInterval(() => { if (state.selected) loadDetail({ periodic: true }); }, 30000),
     // macro panels change slowly — auto-refresh every 15 min (the LOAD buttons still work)
     setInterval(loadWorldBank, 15 * 60000),
     setInterval(loadFred, 15 * 60000),
     setInterval(loadCalendar, 15 * 60000),
   );
 }
-function stopPolling() { pollTimers.forEach(clearInterval); pollTimers = []; }
+function stopTimers() { pollTimers.forEach(clearInterval); pollTimers = []; }
+function stopPolling() { pollWanted = false; stopTimers(); }
+document.addEventListener('visibilitychange', () => {
+  if (!pollWanted) return;
+  if (document.hidden) { hiddenAt = Date.now(); stopTimers(); return; }
+  // back in view: refresh what went stale, then resume the timers
+  if (Date.now() - hiddenAt > 10000) {
+    loadPortfolio(); loadMarkets(); loadWatchlist(); loadAlerts();
+    if (state.selected) loadDetail({ periodic: true });
+    if (Date.now() - hiddenAt > 15 * 60000) { loadWorldBank(); loadFred(); loadCalendar(); }
+  }
+  startPolling();
+});
 // ===========================================================================
 //  PIN LOCK
 // ===========================================================================

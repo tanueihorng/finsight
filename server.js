@@ -69,11 +69,18 @@ function serveStatic(req, res, pathname) {
   // absolute jump.
   const relCheck = path.relative(PUBLIC_DIR, filePath);
   if (relCheck.startsWith('..') || path.isAbsolute(relCheck)) { res.writeHead(403); return res.end('Forbidden'); }
-  fs.readFile(filePath, (err, buf) => {
-    if (err) { res.writeHead(404); return res.end('Not found'); }
-    // no-cache = revalidate each load, so UI updates (and sw.js) are never stuck.
-    res.writeHead(200, { 'Content-Type': MIME[path.extname(filePath)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
-    res.end(buf);
+  fs.stat(filePath, (serr, st) => {
+    if (serr || !st.isFile()) { res.writeHead(404); return res.end('Not found'); }
+    // no-cache = revalidate each load, so UI updates (and sw.js) are never stuck;
+    // the ETag lets an unchanged file answer 304 with no body.
+    const etag = 'W/"' + st.size.toString(36) + '-' + Math.floor(st.mtimeMs).toString(36) + '"';
+    const head = { 'Content-Type': MIME[path.extname(filePath)] || 'application/octet-stream', 'Cache-Control': 'no-cache', ETag: etag };
+    if (req.headers['if-none-match'] === etag) { res.writeHead(304, head); return res.end(); }
+    fs.readFile(filePath, (err, buf) => {
+      if (err) { res.writeHead(404); return res.end('Not found'); }
+      res.writeHead(200, head);
+      res.end(buf);
+    });
   });
 }
 
