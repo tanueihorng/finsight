@@ -1,0 +1,126 @@
+import { test, after, before } from 'node:test';
+import assert from 'node:assert/strict';
+import { fakeFinsight, testConfig } from './helpers.ts';
+import type { Fake } from './helpers.ts';
+import { openDb } from '../src/store/db.ts';
+import * as store from '../src/store/db.ts';
+import { buildRegistry } from '../src/tools/index.ts';
+import { finsightClient } from '../src/tools/finsight.ts';
+import { EventBus } from '../src/chat/bus.ts';
+import { ChatEngine } from '../src/chat/engine.ts';
+import { mockBrain } from '../src/brains/mock.ts';
+import type { Script } from '../src/brains/mock.ts';
+import { BrainManifest } from '../src/brains/types.ts';
+import { toOpenAiMessages } from '../src/brains/openai.ts';
+import { toAnthropicMessages } from '../src/brains/anthropic.ts';
+import type { Msg } from '../src/types.ts';
+
+let fake: Fake;
+before(async () => { fake = await fakeFinsight(); });
+after(async () => { await fake.close(); });
+
+const manifest = BrainManifest.parse({ apiVersion: 1, kind: 'brain', id: 'mock', label: 'Mock', transport: 'mock', model: 'm',
+  pricing: { inputPerM: 1, outputPerM: 2, version: 't' }, capabilities: { tools: true, streaming: true, contextTokens: 100000 }, costTier: '$' });
+
+function setup(script: Script, limits = {}) {
+  const cfg = testConfig(fake); Object.assign(cfg.limits, limits); cfg.defaultBrain = 'mock';
+  const db = openDb(':memory:'); const bus = new EventBus(db);
+  const engine = new ChatEngine({ cfg, db, tools: buildRegistry(), brains: new Map(), finsight: finsightClient(cfg.finsightUrl, cfg.finsightDataDir), bus });
+  engine.setBrain('mock', mockBrain(manifest, script));
+  return { cfg, db, bus, engine };
+}
+async function waitTurn(db: any, turnId: string) {
+  for (let i = 0; i < 400; i++) { const t = db.prepare('SELECT status FROM turns WHERE id = ?').get(turnId); if (t && t.status !== 'running') return t.status; await new Promise((r) => setTimeout(r, 10)); }
+  throw new Error('turn did not finish');
+}
+
+test('tool loop: brain calls a tool, gets the real result, answers; events + trace + cost recorded', async () => {
+  let sawResult = '';
+  const { db, engine } = setup((req, step) => {
+    if (step === 0) return [{ type: 'text', text: 'Checking. ' }, { type: 'tool_call', id: 'c1', name: 'get_cash', args: {} }];
+    const last = req.messages[req.messages.length - 1]!;
+    sawResult = (last.blocks[0] as any).content;
+    return [{ type: 'text', text: 'You have S$4,350 cash.' }];
+  });
+  const t = store.createThread(db);
+  const r = engine.send({ threadId: t.id, content: 'How much cash?', idempotencyKey: 'idem-000001' });
+  assert.equal(await waitTurn(db, r.turnId), 'succeeded');
+  assert.match(sawResult, /"totalBase":4350/);
+  const types = store.eventsAfter(db, t.id, 0).map((e) => e.type);
+  for (const ty of ['turn.started', 'message.delta', 'tool.started', 'tool.finished', 'turn.finished']) assert.ok(types.includes(ty), ty);
+  assert.ok(store.getTrace(db, r.turnId).length >= 3);
+  assert.ok(store.spendSince(db, 0) > 0);
+  const msgs = store.listMessages(db, t.id);
+  assert.ok(msgs.some((m) => m.blocks.some((b) => b.type === 'notice' && b.kind === 'context_pack')), 'context snapshot attached');
+  // same idempotency key: no second turn
+  const again = engine.send({ threadId: t.id, content: 'How much cash?', idempotencyKey: 'idem-000001' });
+  assert.equal(again.existing, true); assert.equal(again.turnId, r.turnId);
+});
+
+test('one running turn per thread; stale version is rejected', async () => {
+  const { db, engine } = setup(async () => { await new Promise((r) => setTimeout(r, 150)); return [{ type: 'text', text: 'done' }]; });
+  const t = store.createThread(db);
+  const r = engine.send({ threadId: t.id, content: 'a', expectedVersion: 0 });
+  assert.throws(() => engine.send({ threadId: t.id, content: 'b' }), (e: any) => e.code === 'CONFLICT');
+  await waitTurn(db, r.turnId);
+  assert.throws(() => engine.send({ threadId: t.id, content: 'c', expectedVersion: 0 }), (e: any) => e.code === 'CONFLICT' && /changed/.test(e.message));
+});
+
+test('step limit forces a tool-free final answer', async () => {
+  let toolsOffered: number[] = [];
+  const { db, engine } = setup((req) => {
+    toolsOffered.push(req.tools.length);
+    return req.tools.length ? [{ type: 'tool_call', id: 'x' + Math.random(), name: 'get_accounts', args: {} }] : [{ type: 'text', text: 'Final answer with what I have.' }];
+  }, { turnSteps: 3 });
+  const t = store.createThread(db);
+  const r = engine.send({ threadId: t.id, content: 'loop forever' });
+  assert.equal(await waitTurn(db, r.turnId), 'succeeded');
+  assert.deepEqual(toolsOffered.map((n) => n > 0), [true, true, true, false]);
+  assert.ok(store.eventsAfter(db, t.id, 0).some((e) => e.type === 'budget.warning'));
+});
+
+test('stop aborts the turn and keeps the partial reply', async () => {
+  const { db, engine } = setup(async (req) => { req.onText('partial '); await new Promise((r, j) => { const id = setTimeout(r, 2000); req.signal.addEventListener('abort', () => { clearTimeout(id); j(Object.assign(new Error('aborted'), { name: 'AbortError' })); }); }); return []; });
+  const t = store.createThread(db);
+  const r = engine.send({ threadId: t.id, content: 'long one' });
+  await new Promise((res) => setTimeout(res, 100));
+  assert.equal(engine.stop(t.id), true);
+  assert.equal(await waitTurn(db, r.turnId), 'stopped');
+  const last = store.listMessages(db, t.id).pop()!;
+  assert.ok(last.blocks.some((b) => b.type === 'notice' && b.kind === 'stopped'));
+});
+
+test('daily cap blocks API brains', () => {
+  const { db, engine, cfg } = setup(() => [{ type: 'text', text: 'x' }]);
+  store.addCost(db, { brain: 'mock', kind: 'tokens', units: 1, usd: cfg.limits.dayUsd + 0.01 });
+  const t = store.createThread(db);
+  assert.throws(() => engine.send({ threadId: t.id, content: 'hi' }), (e: any) => e.code === 'BUDGET_EXCEEDED');
+});
+
+test('SSE replay ordering: events have increasing ids and replay from any point', async () => {
+  const { db, engine } = setup(() => [{ type: 'text', text: 'hello world, this is streamed' }]);
+  const t = store.createThread(db);
+  const r = engine.send({ threadId: t.id, content: 'hi' });
+  await waitTurn(db, r.turnId);
+  const all = store.eventsAfter(db, t.id, 0);
+  const ids = all.map((e) => e.id);
+  assert.deepEqual(ids, [...ids].sort((a, b) => a - b));
+  const tail = store.eventsAfter(db, t.id, ids[1]!);
+  assert.equal(tail.length, all.length - 2);
+  const text = all.filter((e) => e.type === 'message.delta').map((e) => (e.payload as any).text).join('');
+  assert.equal(text, 'hello world, this is streamed', 'coalesced deltas reassemble exactly');
+});
+
+test('provider-neutral history translates to OpenAI and Anthropic shapes (model switch keeps context)', () => {
+  const h: Msg[] = [
+    { role: 'user', blocks: [{ type: 'text', text: 'cash?' }] },
+    { role: 'assistant', blocks: [{ type: 'tool_call', id: 'call:1/x', name: 'get_cash', args: {} }] },
+    { role: 'tool', blocks: [{ type: 'tool_result', callId: 'call:1/x', name: 'get_cash', ok: true, content: '{"totalBase":1}' }] },
+    { role: 'assistant', blocks: [{ type: 'text', text: 'S$1' }] },
+  ];
+  const o = toOpenAiMessages('sys', h);
+  assert.equal(o[2].tool_calls[0].id, o[3].tool_call_id);
+  const a = toAnthropicMessages('haiku', h) as any[];
+  assert.equal(a[1].content[0].id, a[2].content[0].tool_use_id);
+  assert.match(a[1].content[0].id, /^[A-Za-z0-9_-]+$/);
+});

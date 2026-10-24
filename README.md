@@ -144,6 +144,14 @@ US: `AAPL` · Indices: `^GSPC` `^DJI` `^IXIC` `^VIX` · FX: `EURUSD=X` `USDSGD=X
 Commodities: `GC=F` (gold) `CL=F` (oil) · Non-US suffixes: `0700.HK` `D05.SI` `BMW.DE` `RELIANCE.NS`
 </details>
 
+## 🤖 Optional AI agent panel &nbsp;·&nbsp; 🎭 demo mode
+
+- **Kestrel, the built-in agent** (`agent/`): a model-agnostic research chat (DeepSeek, Claude Haiku, Claude Code…) in a collapsible panel (⌘/). It answers from your portfolio, strategy library and the web, with sources, and never trades.
+  - **Setup:** run `npm run agent:install` once. After that FinSight starts, supervises and stops it automatically.
+  - **Security:** it reads data with a GET-only token from `DATA_DIR/agent-link.json` (0600). FinSight proxies `/api/agent/*` to it on loopback, behind your PIN.
+  - **No secrets in the repo:** keys, chats, logs and records stay in your data folder and Keychain. Details: `agent/README.md`.
+- **Demo mode.** Double-click `start-demo.command` or run `npm run demo`. It starts a second FinSight on `http://127.0.0.1:8003` with a made-up portfolio in `~/FinSightDemo` (PIN `2468`), with its own agent instance. Your real data folder is never used, and `npm run demo:reset` reseeds it.
+
 ## 🔌 Data sources &nbsp;·&nbsp; ⚠️ disclaimer
 
 All free, no key:

@@ -1,0 +1,73 @@
+{
+  "_note": "Status and headline evidence for the built-in FinSight strategies (public/strategies.js). Only the user may set status to \"accepted\". Figures from a 2026-10-15 cross-NDX check (survivorship-biased, 10 bps + 5 bps costs). Moves into per-strategy manifests when the strategy plugin migration (spec FS-3) lands.",
+  "pullback": {
+    "version": "1.0.0",
+    "status": "backtested",
+    "evidence": [
+      {
+        "metric": "R_per_trade",
+        "value": -0.16,
+        "universe": "NDX (survivorship-biased)",
+        "date": "2026-10-15",
+        "source": "FinSight strategy library cross-check, NDX universe (2026-10-15)"
+      }
+    ],
+    "weaknesses": "Negative expectancy in the frozen daily-proxy test; held-name results were selection-biased."
+  },
+  "breakout": {
+    "version": "1.0.0",
+    "status": "backtested",
+    "evidence": [
+      {
+        "metric": "R_per_trade",
+        "value": 0.05,
+        "universe": "NDX (survivorship-biased)",
+        "date": "2026-10-15",
+        "source": "FinSight strategy library cross-check, NDX universe (2026-10-15)"
+      }
+    ],
+    "weaknesses": "Thin edge; sensitive to base-detection rules."
+  },
+  "matrend": {
+    "version": "1.0.0",
+    "status": "backtested",
+    "evidence": [
+      {
+        "metric": "pct_per_trade",
+        "value": 4.9,
+        "universe": "NDX (survivorship-biased)",
+        "date": "2026-10-15",
+        "source": "FinSight strategy library cross-check, NDX universe (2026-10-15)"
+      }
+    ],
+    "weaknesses": "Reported in % (no stop); long holding periods; large give-backs before the 200-day exit."
+  },
+  "rsi2": {
+    "version": "1.0.0",
+    "status": "backtested",
+    "evidence": [
+      {
+        "metric": "R_per_trade",
+        "value": 0.0,
+        "universe": "NDX (survivorship-biased)",
+        "date": "2026-10-15",
+        "source": "FinSight strategy library cross-check, NDX universe (2026-10-15)"
+      }
+    ],
+    "weaknesses": "No measured edge after costs; 2.5 ATR catastrophe stop is our addition to Connors' rules."
+  },
+  "dcazones": {
+    "version": "1.0.0",
+    "status": "backtested",
+    "evidence": [
+      {
+        "metric": "fwd63_pct_tranche_vs_anyday",
+        "value": "+5.1% vs +4.0%",
+        "universe": "NDX (survivorship-biased)",
+        "date": "2026-10-15",
+        "source": "FinSight strategy library cross-check, NDX universe (2026-10-15)"
+      }
+    ],
+    "weaknesses": "Zones use playbook placeholder settings, not accepted policy."
+  }
+}

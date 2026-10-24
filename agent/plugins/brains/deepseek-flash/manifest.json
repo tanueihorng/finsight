@@ -1,0 +1,25 @@
+{
+  "apiVersion": 1,
+  "kind": "brain",
+  "id": "deepseek-flash",
+  "label": "DeepSeek Flash",
+  "transport": "openai-compatible",
+  "model": "deepseek-flash",
+  "baseUrl": "https://api.deepseek.com/v1",
+  "keyRef": "DEEPSEEK_API_KEY",
+  "pricing": {
+    "inputPerM": 0.3,
+    "outputPerM": 1.2,
+    "cacheReadPerM": 0.006,
+    "version": "deepseek-peak-2026-10-24 (off-peak is half; api-docs.deepseek.com/quick_start/pricing)"
+  },
+  "capabilities": {
+    "tools": true,
+    "streaming": true,
+    "nativeSearch": false,
+    "contextTokens": 1000000,
+    "vision": false
+  },
+  "costTier": "$",
+  "maxOutputTokens": 8000
+}

@@ -6,7 +6,11 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "demo": "node scripts/demo.js",
+    "demo:reset": "node scripts/demo.js --reset",
+    "agent:install": "npm --prefix agent ci --no-audit --no-fund",
+    "agent:test": "npm --prefix agent run check"
   },
   "engines": {
     "node": ">=18"

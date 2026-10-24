@@ -34,6 +34,8 @@ const { portfolioPerformance } = require('./lib/performance');
 const {
   sessions, failState, loadAuth, setPin, verifyPin, newSession, sessionValid, getCookie, setSessionCookie, PIN_RE,
 } = require('./lib/auth');
+const agentlink = require('./lib/agentlink');
+const agentproc = require('./lib/agentproc');
 
 // --------------------------------------------------------------------------
 // HTTP server
@@ -153,9 +155,18 @@ const server = http.createServer(async (req, res) => {
     // NOTE: the gate must fail CLOSED. When no PIN exists yet (fresh install, or
     // after deleting auth.json to reset a forgotten PIN) every /api route would
     // otherwise be wide open — so an unauthenticated caller is rejected here too.
-    if (p.startsWith('/api/') && (!loadAuth() || !sessionValid(getCookie(req, 'sid')))) {
+    // The local agent's bearer token may read a fixed GET allowlist without a
+    // session; a token on any other method or path is refused outright.
+    const agentToken = p.startsWith('/api/') ? agentlink.tokenCheck(req, p) : 'none';
+    if (agentToken === 'deny') return sendJson(res, 403, { error: 'Agent token not allowed here' });
+    // Fails closed before a PIN exists, for the token too.
+    if (p.startsWith('/api/') && (!loadAuth() || (agentToken !== 'ok' && !sessionValid(getCookie(req, 'sid'))))) {
       return sendJson(res, 401, { error: 'Locked. Enter your PIN.' });
     }
+
+    if (p === '/api/agent-status' && req.method === 'GET') return sendJson(res, 200, agentproc.status());
+    // ---- chat panel -> local agent service (session-gated proxy, SSE passthrough) ----
+    if (p.startsWith('/api/agent/')) return agentlink.proxy(req, res, p, u.search);
 
     // ---- chart workspace (drawings, layouts) + trade journal ----
     if (p.startsWith('/api/charts/') || p.startsWith('/api/journal')) {
@@ -199,6 +210,22 @@ const server = http.createServer(async (req, res) => {
       const symbol = u.searchParams.get('symbol');
       if (!symbol) return sendJson(res, 400, { error: 'symbol required' });
       return sendJson(res, 200, await getHistory(symbol, u.searchParams.get('range') || '1mo', u.searchParams.get('interval') || '1d'));
+    }
+    // Many symbols in one call (strategy scans): shares the history cache, bounded fan-out.
+    if (p === '/api/history/batch') {
+      const symbols = [...new Set((u.searchParams.get('symbols') || '').split(',').map((s) => s.trim()).filter(Boolean))];
+      if (!symbols.length) return sendJson(res, 400, { error: 'symbols required' });
+      if (symbols.length > 200) return sendJson(res, 400, { error: 'at most 200 symbols' });
+      const range = u.searchParams.get('range') || '1y', interval = u.searchParams.get('interval') || '1d';
+      const results = {}; let i = 0;
+      await Promise.all(Array.from({ length: Math.min(6, symbols.length) }, async () => {
+        while (i < symbols.length) {
+          const s = symbols[i++];
+          try { results[s.toUpperCase()] = await getHistory(s, range, interval); }
+          catch (e) { results[s.toUpperCase()] = { error: String(e && e.message || e) }; }
+        }
+      }));
+      return sendJson(res, 200, { range, interval, results });
     }
     if (p === '/api/search') {
       const q = u.searchParams.get('q') || '';
@@ -340,13 +367,18 @@ const server = http.createServer(async (req, res) => {
 const ALERT_INTERVAL = Math.max(15, Number(process.env.ALERT_INTERVAL) || 60) * 1000;
 setInterval(() => { evaluateAlerts(true).catch(() => {}); }, ALERT_INTERVAL);
 
+agentlink.ensureLink(); // creates DATA_DIR/agent-link.json (0600) for the optional local agent
 server.listen(PORT, HOST, () => {
   console.log(`\n  FINSIGHT // PERSONAL TERMINAL`);
   console.log(`  running at  http://localhost:${PORT}  (bound to ${HOST})`);
   console.log(`  portfolio   ${PORTFOLIO_FILE}`);
   console.log(`  data        free / no-key (Yahoo Finance, World Bank, FRED)`);
   console.log(`  alerts      background check every ${ALERT_INTERVAL / 1000}s` +
-    (process.env.NOTIFY === '0' ? ' (desktop notifications off)' : ' → macOS notifications') + `\n`);
+    (process.env.NOTIFY === '0' ? ' (desktop notifications off)' : ' → macOS notifications'));
+  agentproc.start(PORT).then((s) => {
+    const msg = { running: `started (log: ${agentproc.status().logFile})`, external: s.message, disabled: 'off (AGENT_AUTOSTART=0)', 'not-installed': 'not installed: run  npm run agent:install' }[s.status] || s.message;
+    console.log(`  agent       ${msg}\n`);
+  }).catch((e) => console.log(`  agent       failed to start: ${e.message}\n`));
 });
 
 // A busy port must not crash-loop under launchd KeepAlive; explain and exit cleanly.
@@ -364,8 +396,9 @@ server.on('error', (e) => {
 function shutdown(sig) {
   console.log(`\n${sig} received — closing server…`);
   persistNow(); // keep the warm cache for the next start
-  server.close(() => process.exit(0));
-  setTimeout(() => process.exit(0), 3000).unref();
+  agentproc.stop().finally(() => server.close(() => process.exit(0)));
+  setTimeout(() => process.exit(0), 4000).unref();
 }
 process.on('SIGINT', () => shutdown('SIGINT'));
 process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGHUP', () => shutdown('SIGHUP')); // Terminal window closed: stop the agent too

@@ -1,0 +1,38 @@
+{
+  "name": "finsight-agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Private, model-agnostic investment agent behind the FinSight chat panel.",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "bin": {
+    "agent": "src/cli.ts"
+  },
+  "scripts": {
+    "start": "node src/cli.ts start",
+    "doctor": "node src/cli.ts doctor",
+    "mcp": "node src/cli.ts mcp",
+    "logs": "node src/cli.ts logs",
+    "skills": "node src/cli.ts skills",
+    "test": "node --test --test-concurrency=1 test/*.test.ts",
+    "typecheck": "tsc --noEmit -p .",
+    "check": "npm run typecheck && npm test && node scripts/secret-scan.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "0.133.0",
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "@mozilla/readability": "0.6.0",
+    "better-sqlite3": "13.0.3",
+    "linkedom": "0.18.13",
+    "mammoth": "1.13.0",
+    "unpdf": "1.8.1",
+    "zod": "4.6.6"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "9.6.0",
+    "@types/node": "24.19.2",
+    "typescript": "7.0.2"
+  }
+}

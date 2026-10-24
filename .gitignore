@@ -9,3 +9,7 @@ finsight-handoff.md
 
 # macOS
 .DS_Store
+
+# Bundled agent: dependencies and any local scratch (personal data lives in ~/FinSightData)
+agent/node_modules/
+agent/scratch/
