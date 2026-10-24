@@ -32,8 +32,42 @@ export async function unlock(page: Page, { wizard = false } = {}): Promise<void>
   await expect(page.locator('body')).not.toHaveClass(/\blocked\b/);
 }
 
-// Replace the active account's holdings with the demo portfolio (base SGD).
+// Replace holdings with the demo portfolio (base SGD) in a single account, so
+// specs that add accounts can't leak into later specs.
 export async function seed(page: Page): Promise<void> {
+  const { accounts, activeId } = await (await page.request.get('/api/accounts')).json();
+  for (const a of accounts.slice(1)) await page.request.post('/api/accounts/remove', { data: { id: a.id } });
+  if (activeId !== accounts[0].id) expect((await (await page.request.get('/api/accounts')).json()).activeId).toBe(accounts[0].id);
+  for (const ccy of ['USD', 'SGD', 'EUR']) await page.request.post('/api/cash?base=SGD', { data: { ccy, amount: 0 } });
   const res = await page.request.post('/api/portfolio/import?base=SGD', { data: { csv: DEMO_CSV, replace: true } });
   expect(res.ok(), await res.text()).toBe(true);
+}
+
+// Fresh page on the seeded demo portfolio.
+export async function seeded(page: Page): Promise<void> {
+  await unlock(page);
+  await seed(page);
+  await page.reload();
+  await expect(page.locator('#positions-body tr[data-sym]')).toHaveCount(9);
+}
+
+// Run a command-bar command.
+export async function cmd(page: Page, text: string): Promise<void> {
+  await page.fill('#cmd', text);
+  await page.press('#cmd', 'Enter');
+}
+
+// The quantity cell of a position row.
+export const qtyCell = (page: Page, sym: string) => page.locator(`#positions-body tr[data-sym="${sym}"] td`).nth(1);
+
+// Drag a panel by its ⠿ grip into a column (stepped moves so HTML5 dragover fires).
+export async function dragPanel(page: Page, pid: string, column: '.col-left' | '.col-right'): Promise<void> {
+  const grip = page.locator(`.panel[data-pid="${pid}"] .drag-grip`);
+  await grip.scrollIntoViewIfNeeded();
+  const g = (await grip.boundingBox())!, c = (await page.locator(column).boundingBox())!;
+  const from = { x: g.x + g.width / 2, y: g.y + g.height / 2 }, to = { x: c.x + 100, y: Math.max(c.y, 0) + 300 };
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  for (let i = 1; i <= 10; i++) await page.mouse.move(from.x + (to.x - from.x) * i / 10, from.y + (to.y - from.y) * i / 10);
+  await page.mouse.up();
 }

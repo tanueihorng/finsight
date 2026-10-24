@@ -228,7 +228,7 @@ Phase 0 safety net ─► Phase 1 foundation ─► Phase 1.5 inventory + pilots
 `web/e2e/baseline/*.spec.ts`: lock, summary + peek, positions, ADD/UNDO, detail, panels, layout (hide), Kestrel offline, themes.
 
 #### P0-4 · Coverage matrix and missing scenarios
-- **Owns:** `web/e2e/COVERAGE.md`, `web/e2e/baseline/*.spec.ts` (new files only), `web/e2e/helpers.ts` (append), `test/fixtures/agent/*` and a fake agent server for E2E (`web/e2e/fake-agent.ts`).
+- **Owns:** `web/e2e/COVERAGE.md`, `web/e2e/baseline/*.spec.ts` (new files only), `web/e2e/helpers.ts` (append), `test/fixtures/agent/*` and a fake agent server for E2E (`web/e2e/fake-agent.mjs`).
 - **Do:**
   1. `COVERAGE.md`: one row per behaviour, with columns for its spec and the card that must keep it green.
   2. Add baseline specs for:
@@ -457,7 +457,8 @@ Two esbuild builds (`bootstrap.js` IIFE; `main.js` ESM with splitting), `manifes
 | P0-1 | 0 | done (merged 2026-10-25) | mig/P0-safety-net | Claude | @playwright/test 1.64.0; `npm run e2e` |
 | P0-2 | 0 | done (merged 2026-10-25) | mig/P0-safety-net | Claude | `lib/fakemarket.js` replaces global fetch; non-loopback hosts blocked |
 | P0-3 | 0 | done (merged 2026-10-25) | mig/P0-safety-net | Claude | 9 baseline specs, 36/36 over 3 repeats |
-| P0-4, P0-5 | 0 | todo | | | added in v2 |
+| P0-4 | 0 | done (not merged) | mig/P0-4-coverage | Claude | `web/e2e/COVERAGE.md`: 43 tests in 3 projects (chromium, agent → `fake-agent.mjs`, sw → temp app copy). 2 known legacy bugs recorded with `test.fail()`: stale account overwrite (F3/PILOT-2 must fix), agent proxy freezes the stream when the agent connection is cut (`lib/agentlink.js`) |
+| P0-5 | 0 | todo | | | added in v2 |
 | F1 | 1 | done (merged 2026-10-25, e255e56) | mig/F1-toolchain | Claude | splitting + manifest, bootstrap order, tracked `check:web`, colocated tests, scoped CSS Modules plugin |
 | F2–F6 | 1 | todo | | | revised in v2 |
 | I1, PILOT-1, PILOT-2 | 1.5 | todo | | | added in v2; gate for Phase 2 |

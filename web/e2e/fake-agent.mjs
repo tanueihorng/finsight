@@ -1,0 +1,107 @@
+#!/usr/bin/env node
+// Fake Kestrel agent for E2E (no model, no network, no data on disk). Speaks
+// the /v1 API the chat panel uses through FinSight's /api/agent/* proxy:
+// threads, messages, an SSE event stream with ids + replay, stop, uploads.
+// Replies echo the prompt word by word; a prompt containing "slow" streams
+// for ~10 s so a test can stop it or drop the connection mid-turn.
+// Test hook: POST /v1/__test/drop[?mode=end] closes every open event stream.
+import http from 'node:http';
+
+const PORT = Number(process.env.FAKE_AGENT_PORT || 8097);
+let seq = 0, ids = 0;
+const threads = new Map(); // id -> { id, title, version, defaultBrain, updatedAt, events, messages, running }
+const streams = new Map(); // thread id -> Set<res>
+const uploads = new Map();
+
+const json = (res, status, body) => { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(body)); };
+const readBody = (req) => new Promise((resolve) => { let b = ''; req.on('data', (c) => { b += c; }); req.on('end', () => { try { resolve(b ? JSON.parse(b) : {}); } catch { resolve({}); } }); });
+const publicThread = (t) => ({ id: t.id, title: t.title, version: t.version, defaultBrain: t.defaultBrain, updatedAt: t.updatedAt });
+
+function emit(t, type, data) {
+  const ev = { id: ++seq, type, data };
+  t.events.push(ev);
+  for (const res of streams.get(t.id) || []) res.write(`id: ${ev.id}\nevent: ${type}\ndata: ${JSON.stringify(data)}\n\n`);
+}
+
+function runTurn(t, turnId, content, attachments) {
+  const words = `Echo: ${content}${attachments ? ` (${attachments} attachment${attachments > 1 ? 's' : ''})` : ''}`.split(' ');
+  const slow = /\bslow\b/i.test(content);
+  const chunks = slow ? Array.from({ length: 40 }, (_, i) => (i ? ' ' : '') + `w${i + 1}`) : words.map((w, i) => (i ? ' ' : '') + w);
+  const started = Date.now();
+  t.running = turnId;
+  emit(t, 'turn.started', { turnId, label: 'Fake model' });
+  let i = 0, text = '';
+  const tick = () => {
+    if (t.running !== turnId) return; // stopped
+    if (i < chunks.length) { text += chunks[i]; emit(t, 'message.delta', { turnId, text: chunks[i++] }); setTimeout(tick, slow ? 250 : 20); return; }
+    t.running = null;
+    t.messages.push({ id: `m${++ids}`, role: 'assistant', turnId, blocks: [{ type: 'text', text }] });
+    emit(t, 'turn.finished', { turnId, costUsd: 0, ms: Date.now() - started });
+  };
+  setTimeout(tick, 20);
+}
+
+const server = http.createServer(async (req, res) => {
+  const u = new URL(req.url, 'http://x');
+  const p = u.pathname.replace(/^\/v1/, '');
+  const m = p.match(/^\/threads\/([^/]+)(\/[a-z]+)?$/);
+  const t = m && threads.get(m[1]);
+
+  if (req.method === 'GET' && p === '/info') return json(res, 200, { name: 'Kestrel', version: 'fake' });
+  if (req.method === 'GET' && p === '/brains') return json(res, 200, { brains: [{ id: 'fake', label: 'Fake model', costTier: '$', available: true }], default: 'fake' });
+  if (req.method === 'GET' && p === '/skills') return json(res, 200, { skills: [] });
+  if (req.method === 'GET' && p === '/threads') return json(res, 200, { threads: [...threads.values()].map(publicThread).reverse() });
+  if (req.method === 'POST' && p === '/threads') {
+    const b = await readBody(req);
+    const th = { id: `t${++ids}`, title: 'New chat', version: 1, defaultBrain: b.brain || 'fake', updatedAt: Date.now(), events: [], messages: [], running: null };
+    threads.set(th.id, th);
+    return json(res, 200, { thread: publicThread(th) });
+  }
+  if (req.method === 'POST' && p === '/uploads') {
+    const b = await readBody(req);
+    const up = { id: `u${++ids}`, name: b.name, kind: /\.(png|jpe?g|gif|webp)$/i.test(b.name || '') ? 'image' : 'document', chars: Buffer.from(b.dataBase64 || '', 'base64').length };
+    uploads.set(up.id, up);
+    return json(res, 200, { upload: up });
+  }
+  // ?mode=end closes streams cleanly (agent shutting down); default destroys
+  // the sockets (agent crash / network cut).
+  if (req.method === 'POST' && p === '/__test/drop') {
+    let n = 0;
+    for (const set of streams.values()) for (const r of set) { if (u.searchParams.get('mode') === 'end') r.end(); else r.destroy(); n++; }
+    return json(res, 200, { dropped: n });
+  }
+  if (m && !t) return json(res, 404, { error: { code: 'NOT_FOUND', message: 'No such chat' } });
+  if (t && !m[2] && req.method === 'GET') {
+    return json(res, 200, { thread: publicThread(t), messages: t.messages, citations: [], lastEventId: seq, runningTurn: t.running });
+  }
+  if (t && !m[2] && req.method === 'DELETE') { threads.delete(t.id); return json(res, 200, { ok: true }); }
+  if (t && m[2] === '/messages' && req.method === 'POST') {
+    const b = await readBody(req);
+    const turnId = `turn${++ids}`;
+    const files = (b.attachmentIds || []).map((id) => uploads.get(id)).filter(Boolean);
+    t.messages.push({ id: `m${++ids}`, role: 'user', turnId, blocks: [{ type: 'text', text: b.content }, ...files.map((f) => ({ type: 'attachment', name: f.name, kind: f.kind }))] });
+    t.version++; t.updatedAt = Date.now();
+    if (t.title === 'New chat') t.title = String(b.content || '').slice(0, 40);
+    json(res, 200, { turnId, version: t.version });
+    return runTurn(t, turnId, b.content || '', files.length);
+  }
+  if (t && m[2] === '/stop' && req.method === 'POST') {
+    const turnId = t.running;
+    t.running = null;
+    if (turnId) emit(t, 'turn.stopped', { turnId });
+    return json(res, 200, { ok: true });
+  }
+  if (t && m[2] === '/events' && req.method === 'GET') {
+    const after = Math.max(Number(u.searchParams.get('after')) || 0, Number(req.headers['last-event-id']) || 0);
+    res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
+    res.write('retry: 300\n\n');
+    for (const ev of t.events) if (ev.id > after) res.write(`id: ${ev.id}\nevent: ${ev.type}\ndata: ${JSON.stringify(ev.data)}\n\n`);
+    if (!streams.has(t.id)) streams.set(t.id, new Set());
+    streams.get(t.id).add(res);
+    req.on('close', () => streams.get(t.id).delete(res));
+    return;
+  }
+  json(res, 404, { error: { code: 'NOT_FOUND', message: `fake agent: no route ${req.method} ${u.pathname}` } });
+});
+
+server.listen(PORT, '127.0.0.1', () => console.log(`fake agent on http://127.0.0.1:${PORT}`));
