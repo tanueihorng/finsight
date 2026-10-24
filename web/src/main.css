@@ -1,0 +1,3 @@
+/* Global island styles. Per-panel rules live in each feature's *.module.css,
+   bundled into this file's output (public/app/main.css). Theme variables stay
+   in public/styles.css. */
