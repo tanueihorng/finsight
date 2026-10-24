@@ -1,0 +1,15 @@
+{
+  "_note": "Fake headlines for FINSIGHT_FAKE_MARKET=1. ageHours is relative to the current hour.",
+  "items": [
+    { "title": "Stocks edge higher as investors weigh rate outlook", "publisher": "Fake Wire", "ageHours": 1, "tickers": [] },
+    { "title": "Chipmakers rally on data-centre demand", "publisher": "Fake Wire", "ageHours": 2, "tickers": ["NVDA", "AMD", "TSM", "AVGO"] },
+    { "title": "Apple unveils new devices ahead of holiday quarter", "publisher": "Example Times", "ageHours": 3, "tickers": ["AAPL"] },
+    { "title": "Microsoft cloud growth beats estimates", "publisher": "Example Times", "ageHours": 5, "tickers": ["MSFT"] },
+    { "title": "Singapore banks hold margins steady", "publisher": "Sample Straits", "ageHours": 6, "tickers": ["D05.SI", "O39.SI"] },
+    { "title": "Treasury yields slip after inflation data", "publisher": "Fake Wire", "ageHours": 8, "tickers": [] },
+    { "title": "Alphabet search revenue steady as AI features expand", "publisher": "Example Times", "ageHours": 9, "tickers": ["GOOGL"] },
+    { "title": "Index funds see record inflows", "publisher": "Sample Straits", "ageHours": 12, "tickers": ["VOO", "ES3.SI"] },
+    { "title": "Oil steadies as supply concerns ease", "publisher": "Fake Wire", "ageHours": 20, "tickers": [] },
+    { "title": "Singapore Airlines lifts capacity for year-end travel", "publisher": "Sample Straits", "ageHours": 26, "tickers": ["C6L.SI"] }
+  ]
+}

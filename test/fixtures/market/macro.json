@@ -1,0 +1,21 @@
+{
+  "_note": "Levels for the fake FRED / World Bank series (FINSIGHT_FAKE_MARKET=1). Unlisted ids get a generic seeded series.",
+  "fred": {
+    "DGS10": 4.2, "DGS2": 3.9, "T10Y2Y": 0.3, "FEDFUNDS": 4.33, "UNRATE": 4.1, "MORTGAGE30US": 6.6, "GDPC1": 23500,
+    "CPIAUCSL": 315, "CPILFESL": 322, "PCEPI": 125, "PCEPILFE": 124,
+    "PCETRIM12M159SFRBDAL": 2.7, "MEDCPIM159SFRBCLE": 3.4, "TRMMEANCPIM159SFRBCLE": 3.1
+  },
+  "worldbank": {
+    "countries": { "US": "United States", "SG": "Singapore", "GB": "United Kingdom", "DE": "Germany", "JP": "Japan", "CN": "China", "IN": "India", "WLD": "World" },
+    "indicators": {
+      "NY.GDP.MKTP.CD": { "label": "GDP (current US$)", "level": 2.1e13 },
+      "NY.GDP.MKTP.KD.ZG": { "label": "GDP growth (annual %)", "level": 2.4 },
+      "NY.GDP.PCAP.CD": { "label": "GDP per capita (current US$)", "level": 65000 },
+      "FP.CPI.TOTL.ZG": { "label": "Inflation, consumer prices (annual %)", "level": 3.1 },
+      "SL.UEM.TOTL.ZS": { "label": "Unemployment, total (% of total labor force) (modeled ILO estimate)", "level": 4.0 },
+      "SP.POP.TOTL": { "label": "Population, total", "level": 3.3e8 },
+      "GC.DOD.TOTL.GD.ZS": { "label": "Central government debt, total (% of GDP)", "level": 98 },
+      "NE.EXP.GNFS.ZS": { "label": "Exports of goods and services (% of GDP)", "level": 11 }
+    }
+  }
+}

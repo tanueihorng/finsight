@@ -1,0 +1,11 @@
+{
+  "_note": "Fake Forex Factory week for FINSIGHT_FAKE_MARKET=1. dayOffset/hourUtc are relative to today (UTC).",
+  "events": [
+    { "title": "CPI m/m", "country": "USD", "impact": "High", "dayOffset": 1, "hourUtc": 12.5, "forecast": "0.3%", "previous": "0.2%" },
+    { "title": "Unemployment Claims", "country": "USD", "impact": "High", "dayOffset": 2, "hourUtc": 12.5, "forecast": "221K", "previous": "218K" },
+    { "title": "Core PCE Price Index m/m", "country": "USD", "impact": "High", "dayOffset": 3, "hourUtc": 12.5, "forecast": "0.2%", "previous": "0.3%" },
+    { "title": "Retail Sales m/m", "country": "USD", "impact": "Medium", "dayOffset": 2, "hourUtc": 12.5, "forecast": "0.4%", "previous": "0.1%" },
+    { "title": "CPI y/y", "country": "SGD", "impact": "Low", "dayOffset": 2, "hourUtc": 5, "forecast": "1.8%", "previous": "2.0%" },
+    { "title": "German ZEW Economic Sentiment", "country": "EUR", "impact": "High", "dayOffset": 1, "hourUtc": 9, "forecast": "10.5", "previous": "8.2" }
+  ]
+}
