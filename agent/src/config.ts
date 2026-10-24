@@ -19,7 +19,8 @@ const FileConfig = z.object({
   assistantName: z.string().min(1).max(24).optional(),
   timezone: z.string().max(64).optional(),
   logRetentionDays: z.number().int().min(1).max(365).optional(),
-  searchProvider: z.enum(['tavily', 'brave', 'none']).optional(),
+  searchProvider: z.enum(['tavily', 'brave', 'deepseek', 'none']).optional(),
+  fetchProvider: z.enum(['local', 'deepseek']).optional(),
   edgarUserAgent: z.string().optional(),
   limits: z.object({
     turnSteps: z.number().int().min(1).max(50).optional(),
@@ -35,7 +36,7 @@ export type Limits = { turnSteps: number; turnSeconds: number; turnUsd: number; 
 export type Config = {
   home: string; dbPath: string; port: number; finsightUrl: string; finsightDataDir: string; finsightRepo: string;
   recordsDir: string; pluginsDir: string; privateStrategiesDir: string; defaultBrain: string;
-  searchProvider: 'tavily' | 'brave' | 'none'; edgarUserAgent: string; limits: Limits; scratchDir: string;
+  searchProvider: 'tavily' | 'brave' | 'deepseek' | 'none'; fetchProvider: 'local' | 'deepseek'; edgarUserAgent: string; limits: Limits; scratchDir: string;
   timezone: string; assistantName: string; skillsDirs: { dir: string; source: 'bundled' | 'installed' }[]; logsDir: string; logRetentionDays: number;
 };
 
@@ -63,6 +64,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     privateStrategiesDir: path.join(finsightDataDir, 'strategies'),
     defaultBrain: env.AGENT_BRAIN || file.defaultBrain || 'deepseek-flash',
     searchProvider: file.searchProvider || 'tavily',
+    fetchProvider: file.fetchProvider || 'local',
     edgarUserAgent: file.edgarUserAgent || 'FinSight-Agent personal research (contact: set edgarUserAgent in config.json)',
     limits: {
       turnSteps: file.limits?.turnSteps ?? 12,
