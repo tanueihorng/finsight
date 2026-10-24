@@ -1072,7 +1072,7 @@ $('#ledger-realized').addEventListener('click', (e) => {
   const head = ['date', 'symbol', 'quantity', 'price', 'currency', `proceeds_${b}`, `cost_${b}`, `stock_pnl_${b}`, `fx_pnl_${b}`, `realized_${b}`, 'held_days'];
   const lines = lastRealized.rows.map((r) => [new Date(r.time).toISOString().slice(0, 10), r.symbol, r.quantity, r.price, r.currency,
     r.proceeds.toFixed(2), r.cost.toFixed(2), r.stock != null ? r.stock.toFixed(2) : '', r.fx != null ? r.fx.toFixed(2) : '', r.total.toFixed(2), r.heldDays ?? '']);
-  const csv = [head, ...lines].map((r) => r.join(',')).join('\n');
+  const csv = [head, ...lines].map((r) => r.map(csvCell).join(',')).join('\n');
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
   a.download = 'realized-gains.csv'; a.click(); URL.revokeObjectURL(a.href);
@@ -1240,7 +1240,7 @@ async function loadDetail(opts) {
       if (!periodic || sideAt > (detailChart._tradesAt || 0)) { detailChart._tradesAt = Date.now(); loadChartTrades(detailChart, symbol); }
       if (chartGrid) chartGrid.syncSymbols();
     }
-    else $('#detail-chart-host').innerHTML = sparkline(pts, chg >= 0); // fallback if chart.js absent
+    else $('#detail-chart-host').innerHTML = sparkline(pts, pts.length > 1 ? pts[pts.length - 1].c >= pts[0].c : true); // fallback if chart.js absent
   } catch (e) {
     hdr.innerHTML = `<div class="down">Could not load ${esc(symbol)}: ${esc(e.message)}</div>`;
   }
@@ -1662,7 +1662,7 @@ $('#export-btn').addEventListener('click', async () => {
     if (!data.positions.length) return setFooter('Nothing to export — portfolio is empty.');
     const head = ['symbol', 'quantity', 'avg_price', 'currency', 'last', 'market_value_' + (data.base || state.base).toLowerCase(), 'unrealized_pnl'];
     const rows = data.positions.map((p) => [p.symbol, p.quantity, p.avgCost, p.currency, p.last, p.marketValue.toFixed(2), p.unrealized.toFixed(2)]);
-    const csv = [head, ...rows].map((r) => r.join(',')).join('\n');
+    const csv = [head, ...rows].map((r) => r.map(csvCell).join(',')).join('\n');
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
     a.download = 'portfolio.csv'; a.click(); URL.revokeObjectURL(a.href);
@@ -1971,6 +1971,10 @@ function renderAnalytics(positions) {
 //  UTIL + BOOT + POLLING
 // ===========================================================================
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+
+// CSV cell: quote when needed and neutralise spreadsheet formula characters
+// (= + - @) the same way the journal CSV export does (lib/journal.js toCsv).
+const csvCell = (v) => { if (typeof v === 'number') return String(v); const s = v == null ? '' : String(v); return /[",\n]/.test(s) || /^[=+\-@]/.test(s) ? '"' + s.replace(/"/g, '""').replace(/^([=+\-@])/, "'$1") + '"' : s; };
 
 // base-currency selector
 function initBaseSelector() {

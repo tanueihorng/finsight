@@ -34,6 +34,15 @@ test('buy records lots, quantity and average cost', async () => {
   close(pos.lots[1].usdBase, 1.30);
 });
 
+test('buy rejects symbols that could smuggle spreadsheet formulas or break CSV', async () => {
+  setupMarket();
+  await assert.rejects(() => pf.buy('=HYPERLINK("http://x","y")', 1, 1), /valid symbol/);
+  await assert.rejects(() => pf.buy('A,B,C', 1, 1), /valid symbol/);
+  await assert.rejects(() => pf.buy('TOOLONGSYMBOLWELL_OVER_24CHARS', 1, 1), /valid symbol/);
+  await assert.rejects(() => pf.buy('  ', 1, 1), /valid symbol/);
+  assert.equal(loadPortfolio().accounts[0].positions.length, 0);
+});
+
 test('unrealized P&L splits into stock move + FX move', async () => {
   setupMarket();
   await pf.buy('AAPL', 10, 100, BOUGHT, undefined, 'SGD');

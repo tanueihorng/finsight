@@ -45,11 +45,17 @@ function sendJson(res, status, obj) {
 }
 function readBody(req) {
   return new Promise((resolve) => {
-    let data = '', done = false;
+    // Collect Buffers, not strings: a multi-byte UTF-8 character split across
+    // two chunks would be corrupted if each chunk were decoded on its own.
+    const chunks = [];
+    let size = 0, done = false;
     const finish = (v) => { if (!done) { done = true; resolve(v); } }; // always settle, even on teardown
     const MAX = 25e6; // big enough for full broker statements
-    req.on('data', (c) => { data += c; if (data.length > MAX) { req.destroy(); finish({}); } });
-    req.on('end', () => { try { finish(data ? JSON.parse(data) : {}); } catch { finish({}); } });
+    req.on('data', (c) => { chunks.push(c); size += c.length; if (size > MAX) { req.destroy(); finish({}); } });
+    req.on('end', () => {
+      try { const body = Buffer.concat(chunks).toString('utf8'); finish(body ? JSON.parse(body) : {}); }
+      catch { finish({}); }
+    });
     req.on('aborted', () => finish({}));
     req.on('error', () => finish({}));
     req.on('close', () => finish({}));
@@ -85,6 +91,21 @@ function serveStatic(req, res, pathname) {
 }
 
 const server = http.createServer(async (req, res) => {
+  // Applied to every response: the terminal must not be framed or MIME-sniffed.
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  // DNS-rebinding defense: when bound to loopback, only answer requests whose
+  // Host is this machine (a rebound origin would not carry the session cookie,
+  // but rejecting the host outright closes the class). HOST=0.0.0.0 is a
+  // deliberate LAN exposure and opts out of this check.
+  if (HOST === '127.0.0.1' || HOST === '::1' || HOST === 'localhost') {
+    const h = String(req.headers.host || '').toLowerCase();
+    const name = h.startsWith('[') ? h.slice(0, h.indexOf(']') + 1) : h.split(':')[0];
+    if (name !== 'localhost' && name !== '127.0.0.1' && name !== '[::1]' && name !== '::1') {
+      res.writeHead(403);
+      return res.end('Forbidden');
+    }
+  }
   const u = new URL(req.url, `http://${req.headers.host}`);
   const p = u.pathname;
   try {
