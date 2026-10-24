@@ -1,6 +1,8 @@
 {
   "files": [
     "/app/bootstrap.js",
+    "/app/chunks/ClockIsland-4RFURDPR.js",
+    "/app/chunks/chunk-JH3F6H34.js",
     "/app/main.css",
     "/app/main.js"
   ]

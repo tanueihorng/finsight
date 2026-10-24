@@ -1,0 +1,2 @@
+import{b as n,c as l,d as r}from"./chunk-JH3F6H34.js";var e=n(l(),1),o=n(r(),1),a=()=>{let t=new Date;return t.toLocaleTimeString("en-US",{hour12:!1})+" "+t.toLocaleDateString("en-US",{month:"short",day:"2-digit"}).toUpperCase()};function i(){let[t,c]=(0,e.useState)(a);return(0,e.useEffect)(()=>{let s=setInterval(()=>c(a()),1e3);return()=>clearInterval(s)},[]),(0,o.jsx)(o.Fragment,{children:t})}export{i as default};
+//# sourceMappingURL=ClockIsland-4RFURDPR.js.map
