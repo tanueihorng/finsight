@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | **Plan v2 (2026-10-25)**, revised after the plan audit (`harness/runs/20261025-FRONTEND-AUDIT-8a6d80f1/AUDIT.md`). Phase 0 (P0-1–P0-3) merged; F1 done with audit fixes, awaiting merge. v1 is in git history (`6d9a740`) |
+| Status | **Plan v2 (2026-10-25)**, revised after the plan audit (`harness/runs/20261025-FRONTEND-AUDIT-8a6d80f1/AUDIT.md`). Phase 0 (P0-1–P0-3) merged; F1 merged (e255e56). v1 is in git history (`6d9a740`) |
 | Goal | A sustainable, typed, component-based codebase with **no behaviour change for the user** |
 | Stack decided | React 19 + TypeScript (frontend), esbuild (build, output committed), TanStack Query (server data), Zustand (UI state), CSS Modules (scoped by our plugin) + existing theme variables, Playwright (E2E). The server moves to TypeScript **last**, as its own migration (Phase 6) |
 | Written for | Implementing agents of any capability. Every task card is self-contained; **read §0–§2 and your own card** |
@@ -458,7 +458,7 @@ Two esbuild builds (`bootstrap.js` IIFE; `main.js` ESM with splitting), `manifes
 | P0-2 | 0 | done (merged 2026-10-25) | mig/P0-safety-net | Claude | `lib/fakemarket.js` replaces global fetch; non-loopback hosts blocked |
 | P0-3 | 0 | done (merged 2026-10-25) | mig/P0-safety-net | Claude | 9 baseline specs, 36/36 over 3 repeats |
 | P0-4, P0-5 | 0 | todo | | | added in v2 |
-| F1 | 1 | done (not merged) | mig/F1-toolchain | Claude | splitting + manifest, bootstrap order, tracked `check:web`, colocated tests, scoped CSS Modules plugin |
+| F1 | 1 | done (merged 2026-10-25, e255e56) | mig/F1-toolchain | Claude | splitting + manifest, bootstrap order, tracked `check:web`, colocated tests, scoped CSS Modules plugin |
 | F2–F6 | 1 | todo | | | revised in v2 |
 | I1, PILOT-1, PILOT-2 | 1.5 | todo | | | added in v2; gate for Phase 2 |
 | A1–A3 | A | todo | | | A1 is PILOT-1 |
