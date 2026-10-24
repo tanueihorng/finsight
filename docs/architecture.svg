@@ -1,0 +1,326 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1120" width="1600" height="1120" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" role="img" aria-label="FinSight and Kestrel full architecture: browser, FinSight server, Kestrel agent, model providers, tools, MCP, databases and external data services">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#6b6b85"/></marker>
+    <marker id="v" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#a78bfa"/></marker>
+    <marker id="g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#2ec27e"/></marker>
+    <marker id="c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#38bdf8"/></marker>
+  </defs>
+  <style>
+    .t  { font-size: 13px; font-weight: 700; fill: #ece8fb; }
+    .tv { font-size: 13px; font-weight: 700; fill: #a78bfa; }
+    .s  { font-size: 11px; fill: #b8bacb; }
+    .m  { font-size: 10px; fill: #7e7e96; }
+    .lb { font-size: 10px; fill: #8f8fa8; }
+    .zone { font-size: 11px; letter-spacing: 2px; fill: #6b6b85; }
+    .box  { fill: #12121f; stroke: #2d2d4d; }
+    .boxv { fill: #161130; stroke: #a78bfa; }
+    .boxd { fill: #0d0d18; stroke: #20203a; }
+    .ext  { fill: #0f1419; stroke: #23303d; }
+  </style>
+
+  <rect width="1600" height="1120" fill="#08080f"/>
+  <rect x="8" y="8" width="1584" height="1104" rx="14" fill="none" stroke="#20203a"/>
+  <text x="32" y="44" font-size="20" font-weight="700" fill="#ece8fb">FinSight + <tspan fill="#a78bfa">✻ Kestrel</tspan> <tspan font-size="13" font-weight="400" fill="#6b6b85">— full component architecture · everything below the dashed line runs on your Mac</tspan></text>
+
+  <!-- ================= ZONES ================= -->
+  <rect x="24" y="66" width="270" height="660" rx="10" fill="none" stroke="#20203a" stroke-dasharray="4 4"/>
+  <text x="38" y="86" class="zone">BROWSER</text>
+  <rect x="310" y="66" width="370" height="660" rx="10" fill="none" stroke="#20203a" stroke-dasharray="4 4"/>
+  <text x="324" y="86" class="zone">FINSIGHT SERVER · node · :8001</text>
+  <rect x="696" y="66" width="600" height="660" rx="10" fill="none" stroke="#3b2f6b" stroke-dasharray="4 4"/>
+  <text x="710" y="86" class="zone" fill="#a78bfa">KESTREL AGENT · node/TS · 127.0.0.1:8100</text>
+  <rect x="1312" y="66" width="264" height="660" rx="10" fill="none" stroke="#20203a" stroke-dasharray="4 4"/>
+  <text x="1326" y="86" class="zone">INTERNET SERVICES</text>
+  <line x1="24" y1="742" x2="1576" y2="742" stroke="#20203a" stroke-dasharray="2 6"/>
+  <text x="38" y="766" class="zone">LOCAL STORAGE · ~/FinSightData (outside the repo) · macOS Keychain</text>
+
+  <!-- ================= BROWSER ================= -->
+  <rect x="38" y="100" width="242" height="124" rx="8" class="box"/>
+  <text x="52" y="122" class="t">Terminal UI</text>
+  <text x="52" y="142" class="s">app.js · index.html</text>
+  <text x="52" y="160" class="s">chart.js · chartgrid.js</text>
+  <text x="52" y="178" class="s">strategies.js (engines)</text>
+  <text x="52" y="196" class="s">journal.js · indicators.js</text>
+  <text x="52" y="214" class="m">fetch /api/* (cookie session)</text>
+
+  <rect x="38" y="238" width="242" height="140" rx="8" class="boxv"/>
+  <text x="52" y="260" class="tv">✻ Kestrel chat panel</text>
+  <text x="52" y="280" class="s">agent-panel.js · .css</text>
+  <text x="52" y="298" class="s">EventSource (SSE stream)</text>
+  <text x="52" y="316" class="s">/ menu · model picker</text>
+  <text x="52" y="334" class="s">uploads · trace · page ctx</text>
+  <text x="52" y="352" class="m">markdown sanitised (XSS-safe)</text>
+  <text x="52" y="368" class="m">⌘/ toggle · reflows the page</text>
+
+  <rect x="38" y="392" width="242" height="72" rx="8" class="box"/>
+  <text x="52" y="414" class="t">Service worker</text>
+  <text x="52" y="434" class="s">sw.js · static shell only</text>
+  <text x="52" y="452" class="m">/api/* never cached</text>
+
+  <rect x="38" y="478" width="242" height="72" rx="8" class="box"/>
+  <text x="52" y="500" class="t">PIN lock screen</text>
+  <text x="52" y="520" class="s">session cookie</text>
+  <text x="52" y="538" class="m">HttpOnly · SameSite=Strict</text>
+
+  <!-- ================= FINSIGHT ================= -->
+  <rect x="324" y="100" width="342" height="92" rx="8" class="box"/>
+  <text x="338" y="122" class="t">HTTP router · server.js</text>
+  <text x="338" y="142" class="s">security headers · Host check (anti-rebinding)</text>
+  <text x="338" y="160" class="s">42+ /api routes · static files</text>
+  <text x="338" y="178" class="m">/api/history/batch for scans</text>
+
+  <rect x="324" y="204" width="166" height="96" rx="8" class="box"/>
+  <text x="338" y="226" class="t">Auth</text>
+  <text x="338" y="246" class="s">lib/auth.js</text>
+  <text x="338" y="264" class="s">scrypt PIN · sessions</text>
+  <text x="338" y="282" class="m">brute-force throttle</text>
+
+  <rect x="500" y="204" width="166" height="96" rx="8" class="box"/>
+  <text x="514" y="226" class="t">Token gate</text>
+  <text x="514" y="246" class="s">lib/agentlink.js</text>
+  <text x="514" y="264" class="s">GET-only allowlist</text>
+  <text x="514" y="282" class="m">fails closed w/o PIN</text>
+
+  <rect x="324" y="312" width="342" height="92" rx="8" class="boxv"/>
+  <text x="338" y="334" class="tv">Agent proxy · /api/agent/* → /v1/*</text>
+  <text x="338" y="354" class="s">PIN session + same-origin writes</text>
+  <text x="338" y="372" class="s">adds x-agent-secret · SSE passthrough</text>
+  <text x="338" y="390" class="m">64 KB body (22 MB for uploads) · 503 if offline</text>
+
+  <rect x="324" y="416" width="342" height="92" rx="8" class="boxv"/>
+  <text x="338" y="438" class="tv">Agent supervisor · lib/agentproc.js</text>
+  <text x="338" y="458" class="s">spawn on start · restart w/ backoff (5/10 min)</text>
+  <text x="338" y="476" class="s">stop on SIGINT/TERM/HUP · /api/agent-status</text>
+  <text x="338" y="494" class="m">reuses an agent already on :8100</text>
+
+  <rect x="324" y="520" width="342" height="128" rx="8" class="box"/>
+  <text x="338" y="542" class="t">Domain logic · lib/</text>
+  <text x="338" y="562" class="s">portfolio · store (lock + undo) · ledger</text>
+  <text x="338" y="580" class="s">dividends · performance · returns · csv</text>
+  <text x="338" y="598" class="s">market (Yahoo) · macro (FRED/WB/FF)</text>
+  <text x="338" y="616" class="s">charts · journal · alerts · cache</text>
+  <text x="338" y="636" class="m">all money maths lives here</text>
+
+  <rect x="324" y="660" width="342" height="54" rx="8" class="box"/>
+  <text x="338" y="682" class="t">Demo mode · scripts/demo.js</text>
+  <text x="338" y="700" class="m">:8003 + :8103 on ~/FinSightDemo (made-up data)</text>
+
+  <!-- ================= KESTREL ================= -->
+  <rect x="710" y="100" width="280" height="110" rx="8" class="boxv"/>
+  <text x="724" y="122" class="tv">HTTP API · src/api</text>
+  <text x="724" y="142" class="s">gate: loopback Host · no Origin</text>
+  <text x="724" y="160" class="s">      · proxy secret (timing-safe)</text>
+  <text x="724" y="178" class="s">/v1 threads · messages · events</text>
+  <text x="724" y="196" class="m">uploads · skills · logs · cost · trace</text>
+
+  <rect x="1002" y="100" width="280" height="110" rx="8" class="box"/>
+  <text x="1016" y="122" class="t">MCP server · stdio</text>
+  <text x="1016" y="142" class="s">src/mcp · @modelcontextprotocol/sdk</text>
+  <text x="1016" y="160" class="s">same 35 tools, same schemas</text>
+  <text x="1016" y="178" class="s">agent cli.ts mcp</text>
+  <text x="1016" y="196" class="m">for Claude Code / Codex sessions</text>
+
+  <rect x="710" y="222" width="280" height="150" rx="8" class="boxv"/>
+  <text x="724" y="244" class="tv">Chat engine · src/chat</text>
+  <text x="724" y="264" class="s">turn loop: model ⇄ tools</text>
+  <text x="724" y="282" class="s">1 turn/thread · optimistic version</text>
+  <text x="724" y="300" class="s">limits: 12 steps · 120 s · $0.05</text>
+  <text x="724" y="318" class="s">retry 429/5xx · backoff + jitter</text>
+  <text x="724" y="336" class="s">context pack (15 min) · /skill preload</text>
+  <text x="724" y="356" class="m">EventBus → SSE (40 ms delta coalescing)</text>
+
+  <rect x="1002" y="222" width="280" height="150" rx="8" class="box"/>
+  <text x="1016" y="244" class="t">Brain registry · src/brains</text>
+  <text x="1016" y="264" class="s">plugins/brains/*/manifest.json</text>
+  <text x="1016" y="282" class="s">provider-neutral messages</text>
+  <text x="1016" y="300" class="s">▸ openai-compatible  (DeepSeek…)</text>
+  <text x="1016" y="318" class="s">▸ anthropic SDK      (Haiku)</text>
+  <text x="1016" y="336" class="s">▸ claude-code CLI    (whole turn)</text>
+  <text x="1016" y="356" class="m">pricing → cost ledger · vision flag</text>
+
+  <rect x="710" y="384" width="572" height="150" rx="8" class="box"/>
+  <text x="724" y="406" class="t">Tool registry · 35 read-only tools · zod schemas → JSON Schema</text>
+  <g class="s">
+    <text x="724" y="430">Portfolio (19)</text>
+    <text x="724" y="446" class="m">get_portfolio · query_positions</text>
+    <text x="724" y="460" class="m">get_exposures · get_cash</text>
+    <text x="724" y="474" class="m">events · history · context…</text>
+    <text x="960" y="430">Strategies (5)</text>
+    <text x="960" y="446" class="m">list · get · run_strategy</text>
+    <text x="960" y="460" class="m">scan_strategies</text>
+    <text x="960" y="474" class="m">size_position</text>
+    <text x="1130" y="430">Research (4)</text>
+    <text x="1130" y="446" class="m">web_search</text>
+    <text x="1130" y="460" class="m">fetch_url</text>
+    <text x="1130" y="474" class="m">edgar_filings/financials</text>
+    <text x="724" y="496">Records (4)</text>
+    <text x="724" y="512" class="m">policy · profile · decisions · memory</text>
+    <text x="960" y="496">Skills (2) · Proposals (1)</text>
+    <text x="960" y="512" class="m">use_skill · read_skill_file · propose…</text>
+  </g>
+  <text x="724" y="528" class="m" fill="#2ec27e">no tool can trade, move money, message anyone or edit FinSight data</text>
+
+  <rect x="710" y="546" width="184" height="96" rx="8" class="box"/>
+  <text x="724" y="568" class="t">Strategy sandbox</text>
+  <text x="724" y="588" class="s">child process</text>
+  <text x="724" y="604" class="s">node --permission</text>
+  <text x="724" y="622" class="m">no net/fs/spawn · 10 s</text>
+
+  <rect x="904" y="546" width="184" height="96" rx="8" class="box"/>
+  <text x="918" y="568" class="t">Net guard</text>
+  <text x="918" y="588" class="s">SSRF: private IPs,</text>
+  <text x="918" y="604" class="s">redirects, DNS pinned</text>
+  <text x="918" y="622" class="m">10 MB · 20 s · types</text>
+
+  <rect x="1098" y="546" width="184" height="96" rx="8" class="box"/>
+  <text x="1112" y="568" class="t">Uploads</text>
+  <text x="1112" y="588" class="s">magic-byte sniffing</text>
+  <text x="1112" y="604" class="s">unpdf · mammoth</text>
+  <text x="1112" y="622" class="m">images → vision models</text>
+
+  <rect x="710" y="654" width="280" height="60" rx="8" class="box"/>
+  <text x="724" y="676" class="t">Interaction log · src/obs</text>
+  <text x="724" y="696" class="m">every model/tool/API call · turnId via ALS</text>
+
+  <rect x="1002" y="654" width="280" height="60" rx="8" class="box"/>
+  <text x="1016" y="676" class="t">Skills loader · src/skills</text>
+  <text x="1016" y="696" class="m">SKILL.md · hot reload · install from GitHub</text>
+
+  <!-- ================= EXTERNAL ================= -->
+  <rect x="1326" y="100" width="236" height="96" rx="8" class="ext"/>
+  <text x="1340" y="122" class="t">LLM providers</text>
+  <text x="1340" y="142" class="s">DeepSeek API (Flash, V4 Pro)</text>
+  <text x="1340" y="160" class="s">Anthropic API (Haiku 5.5)</text>
+  <text x="1340" y="178" class="m">HTTPS · streaming · tool calls</text>
+
+  <rect x="1326" y="208" width="236" height="82" rx="8" class="ext"/>
+  <text x="1340" y="230" class="t">claude CLI</text>
+  <text x="1340" y="250" class="s">claude -p · scratch cwd</text>
+  <text x="1340" y="268" class="m">tools: our MCP + Web + Read(./)</text>
+
+  <rect x="1326" y="302" width="236" height="82" rx="8" class="ext"/>
+  <text x="1340" y="324" class="t">MCP clients</text>
+  <text x="1340" y="344" class="s">Claude Code · Codex</text>
+  <text x="1340" y="362" class="m">interactive sessions</text>
+
+  <rect x="1326" y="396" width="236" height="82" rx="8" class="ext"/>
+  <text x="1340" y="418" class="t">Web research</text>
+  <text x="1340" y="438" class="s">Tavily · Brave search</text>
+  <text x="1340" y="456" class="m">any public page (guarded)</text>
+
+  <rect x="1326" y="490" width="236" height="68" rx="8" class="ext"/>
+  <text x="1340" y="512" class="t">SEC EDGAR</text>
+  <text x="1340" y="532" class="s">submissions · XBRL facts</text>
+
+  <rect x="1326" y="570" width="236" height="144" rx="8" class="ext"/>
+  <text x="1340" y="592" class="t">Market &amp; macro data</text>
+  <text x="1340" y="612" class="s">Yahoo Finance (quotes,</text>
+  <text x="1340" y="628" class="s">  history, news, search)</text>
+  <text x="1340" y="646" class="s">FRED · World Bank</text>
+  <text x="1340" y="664" class="s">Forex Factory calendar</text>
+  <text x="1340" y="684" class="m">free · no API keys</text>
+  <text x="1340" y="700" class="m">fetched by FinSight only</text>
+
+  <!-- ================= STORAGE ================= -->
+  <rect x="38" y="780" width="370" height="180" rx="8" class="boxd"/>
+  <text x="52" y="802" class="t">FinSight data · JSON files (0600)</text>
+  <text x="52" y="824" class="s">portfolio.json  accounts · lots · cash</text>
+  <text x="52" y="842" class="s">auth.json       PIN hash + salt</text>
+  <text x="52" y="860" class="s">charts.json     drawings · layouts</text>
+  <text x="52" y="878" class="s">journal.json    trades · R stats</text>
+  <text x="52" y="896" class="s">cache.json      market-data cache</text>
+  <text x="52" y="914" class="s">undo.json       change history</text>
+  <text x="52" y="932" class="s">agent-link.json token + proxy secret</text>
+  <text x="52" y="950" class="m">atomic write-rename · single write lock</text>
+
+  <rect x="424" y="780" width="430" height="180" rx="8" class="boxd"/>
+  <text x="438" y="802" class="tv">agent.db · SQLite (WAL, single writer)</text>
+  <text x="438" y="824" class="s">threads     version · default model</text>
+  <text x="438" y="842" class="s">messages    append-only, neutral blocks</text>
+  <text x="438" y="860" class="s">turns       status · idempotency key</text>
+  <text x="438" y="878" class="s">events      SSE replay (Last-Event-ID)</text>
+  <text x="438" y="896" class="s">trace_steps · cost_ledger · cache</text>
+  <text x="438" y="914" class="s">proposals · fts_messages (FTS5)</text>
+  <text x="438" y="932" class="m">better-sqlite3 · migrations + backup</text>
+  <text x="438" y="950" class="m">~/FinSightData/agent/agent.db</text>
+
+  <rect x="870" y="780" width="330" height="180" rx="8" class="boxd"/>
+  <text x="884" y="802" class="t">Agent files · ~/FinSightData/agent</text>
+  <text x="884" y="824" class="s">logs/YYYY-MM-DD.jsonl  (14 days)</text>
+  <text x="884" y="842" class="s">uploads/&lt;id&gt;/  file + extracted.txt</text>
+  <text x="884" y="860" class="s">skills/         your installed skills</text>
+  <text x="884" y="878" class="s">config.json     name · limits · paths</text>
+  <text x="884" y="896" class="s">agent.log       process output</text>
+  <text x="884" y="914" class="s">../strategies/  private plugins</text>
+  <text x="884" y="932" class="m">all redacted, private (0600)</text>
+
+  <rect x="1216" y="780" width="346" height="86" rx="8" class="boxd"/>
+  <text x="1230" y="802" class="t">Your records (markdown)</text>
+  <text x="1230" y="824" class="s">policy · profile · decision log</text>
+  <text x="1230" y="842" class="s">reviews · research notes</text>
+  <text x="1230" y="858" class="m">read by the Records tools · recordsDir</text>
+
+  <rect x="1216" y="876" width="346" height="84" rx="8" class="boxd"/>
+  <text x="1230" y="898" class="t">macOS Keychain</text>
+  <text x="1230" y="918" class="s">DEEPSEEK / ANTHROPIC / TAVILY keys</text>
+  <text x="1230" y="936" class="m">never logged, never in a prompt</text>
+
+  <!-- ================= FLOWS ================= -->
+  <!-- browser → finsight -->
+  <path d="M280 160 L324 146" fill="none" stroke="#6b6b85" stroke-width="1.5" marker-end="url(#a)"/>
+  <path d="M280 300 L324 352" fill="none" stroke="#a78bfa" stroke-width="2" marker-end="url(#v)" marker-start="url(#v)"/>
+  <text x="250" y="390" class="lb" transform="rotate(0)">SSE ⇅</text>
+  <path d="M280 514 L324 252" fill="none" stroke="#6b6b85" stroke-width="1" stroke-dasharray="3 3" marker-end="url(#a)"/>
+  <!-- proxy → kestrel api -->
+  <path d="M666 340 L700 340 L700 160 L710 160" fill="none" stroke="#a78bfa" stroke-width="2" marker-end="url(#v)"/>
+  <text x="612" y="306" class="lb">+secret</text>
+  <!-- supervisor → kestrel process -->
+  <path d="M666 462 L690 462 L690 296 L710 296" fill="none" stroke="#a78bfa" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#v)"/>
+  
+  <!-- api → engine -->
+  <path d="M850 210 L850 222" fill="none" stroke="#a78bfa" stroke-width="2" marker-end="url(#v)"/>
+  <!-- engine ⇄ brains -->
+  <path d="M990 296 L1002 296" fill="none" stroke="#a78bfa" stroke-width="2" marker-end="url(#v)" marker-start="url(#v)"/>
+  <!-- engine → tools -->
+  <path d="M850 372 L850 384" fill="none" stroke="#a78bfa" stroke-width="2" marker-end="url(#v)"/>
+  <!-- mcp → tools -->
+  <path d="M1142 210 L1142 214 L1294 214 L1294 400 L1282 400" fill="none" stroke="#38bdf8" stroke-width="1.5" marker-end="url(#c)"/>
+  <!-- brains → providers / cli -->
+  <path d="M1282 250 L1310 250 L1310 148 L1326 148" fill="none" stroke="#a78bfa" stroke-width="1.5" marker-end="url(#v)"/>
+  <path d="M1282 330 L1314 330 L1314 250 L1326 250" fill="none" stroke="#a78bfa" stroke-width="1.5" marker-end="url(#v)"/>
+  <!-- claude cli → mcp server (uses our tools) -->
+  <path d="M1326 276 L1300 276 L1300 190 L1282 190" fill="none" stroke="#38bdf8" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#c)"/>
+  <!-- mcp clients → mcp server -->
+  <path d="M1326 330 L1306 330 L1306 170 L1282 170" fill="none" stroke="#38bdf8" stroke-width="1.2" marker-end="url(#c)"/>
+  <!-- tools → token gate (facts via FinSight API) -->
+  <path d="M710 420 L684 420 L684 252 L666 252" fill="none" stroke="#2ec27e" stroke-width="1.5" marker-end="url(#g)"/>
+  
+  <!-- tools → sandbox / netguard -->
+  <path d="M800 534 L800 546" fill="none" stroke="#6b6b85" stroke-width="1.5" marker-end="url(#a)"/>
+  <path d="M996 534 L996 546" fill="none" stroke="#6b6b85" stroke-width="1.5" marker-end="url(#a)"/>
+  <!-- netguard → web; tools → edgar -->
+  <path d="M1282 440 L1326 440" fill="none" stroke="#6b6b85" stroke-width="1.5" marker-end="url(#a)"/>
+  <path d="M1282 500 L1326 520" fill="none" stroke="#6b6b85" stroke-width="1.5" marker-end="url(#a)"/>
+  <!-- finsight domain → market data -->
+  <path d="M666 590 L686 590 L686 730 L1304 730 L1304 650 L1326 650" fill="none" stroke="#6b6b85" stroke-width="1.5" marker-end="url(#a)"/>
+  <text x="1010" y="724" class="lb">market data over HTTPS · FinSight is the single owner</text>
+  <!-- storage links -->
+  <path d="M324 690 L304 690 L304 752 L223 752 L223 780" fill="none" stroke="#6b6b85" stroke-width="1.2" stroke-dasharray="3 3" marker-end="url(#a)"/>
+  <path d="M850 714 L850 760 L640 760 L640 780" fill="none" stroke="#6b6b85" stroke-width="1.2" stroke-dasharray="3 3" marker-end="url(#a)"/>
+  <path d="M760 714 L760 750 L1035 750 L1035 780" fill="none" stroke="#6b6b85" stroke-width="1.2" stroke-dasharray="3 3" marker-end="url(#a)"/>
+
+  <!-- ================= LEGEND + TURN FLOW ================= -->
+  <rect x="38" y="976" width="1524" height="122" rx="8" class="boxd"/>
+  <text x="52" y="998" class="t">One question, end to end</text>
+  <text x="52" y="1020" class="s">① panel POSTs /api/agent/threads/:id/messages  →  ② FinSight checks PIN + origin, adds secret  →  ③ Kestrel API checks Host/secret, engine claims the thread</text>
+  <text x="52" y="1038" class="s">④ engine sends system prompt + skills index + context pack + history to the chosen model  →  ⑤ model asks for tools  →  ⑥ tools call FinSight (GET token), sandbox, SEC, web</text>
+  <text x="52" y="1056" class="s">⑦ results go back to the model (loop ≤ 12 steps)  →  ⑧ answer streams to the panel over SSE  →  ⑨ messages, events, trace, cost and log lines are written; trace button shows them</text>
+  <g class="m">
+    <line x1="52" y1="1080" x2="80" y2="1080" stroke="#a78bfa" stroke-width="2"/><text x="86" y="1084">chat / agent path</text>
+    <line x1="214" y1="1080" x2="242" y2="1080" stroke="#2ec27e" stroke-width="2"/><text x="248" y="1084">read-only data (token)</text>
+    <line x1="410" y1="1080" x2="438" y2="1080" stroke="#38bdf8" stroke-width="2"/><text x="444" y="1084">MCP (stdio)</text>
+    <line x1="540" y1="1080" x2="568" y2="1080" stroke="#6b6b85" stroke-width="2"/><text x="574" y="1084">HTTP / internal call</text>
+    <line x1="900" y1="1080" x2="928" y2="1080" stroke="#a78bfa" stroke-width="1.5" stroke-dasharray="5 4"/><text x="934" y="1084">FinSight spawns + supervises the agent</text>
+    <line x1="720" y1="1080" x2="748" y2="1080" stroke="#6b6b85" stroke-width="1.2" stroke-dasharray="3 3"/><text x="754" y="1084">reads / writes storage</text>
+  </g>
+</svg>

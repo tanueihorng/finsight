@@ -24,6 +24,7 @@ Now with <b>✻ Kestrel</b>, a built-in AI research agent that knows your portfo
 <a href="#-features">Features</a> ·
 <a href="#-fx-risk--macro">FX risk &amp; macro</a> ·
 <a href="#-themes--fonts">Themes</a> ·
+<a href="#%EF%B8%8F-architecture">Architecture</a> ·
 <a href="DOCS.md">Developer docs</a>
 </p>
 
@@ -205,6 +206,24 @@ All free, no key:
 
 > [!IMPORTANT]
 > **Not affiliated** with Bloomberg, Yahoo, Interactive Brokers, Forex Factory, or the Federal Reserve. "Bloomberg-style" describes the look only. The code *fetches* public endpoints for your own personal, local use — it does **not redistribute** any provider's data, and you shouldn't either. **FRED**/**World Bank** are open data; **Yahoo** is an unofficial endpoint (a common grey area — expect occasional rate-limiting); **Forex Factory's** feed is free for **personal use only — don't rebroadcast it**. Nothing here is financial advice; data is "as is" with no warranty.
+
+## 🏗️ Architecture
+
+Every component, how they talk to each other, and where data lives. FinSight owns your portfolio data and all market-data fetching. Kestrel runs as a supervised loopback service with read-only access, and everything except model and data providers stays on your machine.
+
+<div align="center"><img src="docs/architecture.svg" alt="Full FinSight + Kestrel architecture: browser, FinSight server, Kestrel agent (API, chat engine, model adapters, 35 tools, MCP server, sandbox), internet services and local storage" width="100%"></div>
+
+<details>
+<summary><b>Component summary</b></summary>
+
+| Layer | Pieces |
+|---|---|
+| **Browser** | Terminal UI (`public/app.js`, `chart.js`), ✻ Kestrel panel (`agent-panel.js`, SSE stream), service worker (static files only), PIN lock |
+| **FinSight server** (`:8001`) | `server.js` router with security headers and Host check · `lib/auth` PIN sessions · `lib/agentlink` GET-only agent token and `/api/agent/*` proxy · `lib/agentproc` agent supervisor · domain logic in `lib/` (portfolio, ledger, dividends, performance, market, macro, charts, journal, cache) |
+| **Kestrel agent** (`127.0.0.1:8100`) | HTTP API (`/v1`, loopback and secret gate) · chat engine (tool loop, limits, retries, SSE events) · model adapters (OpenAI-compatible, Anthropic SDK, Claude Code CLI) · 35 read-only tools · MCP server (stdio) · strategy sandbox · SSRF-guarded fetch · uploads · skills · interaction log |
+| **Storage** | `~/FinSightData`: portfolio and app JSON files (0600) · `agent/agent.db` SQLite (threads, messages, turns, events, traces, cost, cache, proposals, FTS) · logs, uploads, skills, config · macOS Keychain for API keys |
+| **Internet** | LLM providers (DeepSeek, Anthropic) · SEC EDGAR · Tavily/Brave search · Yahoo Finance, FRED, World Bank, Forex Factory (via FinSight only) |
+</details>
 
 ## 📁 Project structure
 
