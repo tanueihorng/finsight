@@ -1,0 +1,3 @@
+.privateValue { filter: blur(5px); user-select: none; }
+.empty { color: var(--muted); }
+.error { color: var(--down); }
