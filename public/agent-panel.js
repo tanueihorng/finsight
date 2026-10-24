@@ -294,7 +294,7 @@
   }
   // Start (or restart) once the PIN lock screen goes away.
   new MutationObserver(() => {
-    if (!document.body.classList.contains('locked') && document.body.classList.contains('agent-open') && !booted) { booted = true; boot(); }
+    if (!document.body.classList.contains('locked') && isOpen() && !booted) { booted = true; boot(); }
   }).observe(document.body, { attributes: true, attributeFilter: ['class'] });
   // Offline: ask FinSight why (it supervises the agent) and retry while it is starting.
   let retryTimer = 0;
