@@ -6,7 +6,7 @@
  */
 (function () {
   'use strict';
-  const LS = { open: 'finsight-agent-open', width: 'finsight-agent-w', thread: 'finsight-agent-thread', brain: 'finsight-agent-brain', ctx: 'finsight-agent-ctx' };
+  const LS = { open: 'finsight-agent-open', width: 'finsight-agent-w', thread: 'finsight-agent-thread', brain: 'finsight-agent-brain', ctx: 'finsight-agent-ctx', mode: 'finsight-agent-mode', dockH: 'finsight-agent-dock-h', collapsed: 'finsight-agent-collapsed' };
   const ls = {
     get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : v; } catch (e) { return d; } },
     set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* private mode */ } },
@@ -88,11 +88,16 @@
     return c;
   }
   const panel = h('aside', { class: 'agent-panel', id: 'agent-panel', role: 'complementary', 'aria-label': 'Agent chat' });
-  const resize = h('div', { class: 'agent-resize', title: 'Drag to resize', 'aria-hidden': 'true' });
+  const resize = h('div', { class: 'agent-resize', role: 'separator', 'aria-orientation': 'vertical', 'aria-label': 'Resize chat panel', tabindex: '0',
+    title: 'Drag to resize · double-click to reset · ← → keys' }, h('span', { class: 'agent-grip' }, '⋮'));
   const titleEl = h('span', { class: 'agent-title' }, h('span', { class: 'mark' }, '↗'), ' ', h('span', { class: 'nm' }, S.name), h('small', {}, 'research agent'));
   const threadsBtn = h('button', { class: 'agent-icon-btn', title: 'Chats', 'aria-label': 'Show chats', 'aria-expanded': 'false', 'aria-controls': 'agent-threads' }, '☰');
   const newBtn = h('button', { class: 'agent-icon-btn', title: 'New chat (/new)', 'aria-label': 'New chat' }, '＋');
+  const widthBtn = h('button', { class: 'agent-icon-btn', title: 'Panel width: small · medium · large · wide', 'aria-label': 'Change panel width' }, '↔');
+  const dockBtn = h('button', { class: 'agent-icon-btn', title: 'Dock into the terminal', 'aria-label': 'Dock into the terminal' }, '⊟');
+  const collapseBtn = h('button', { class: 'agent-icon-btn', title: 'Collapse', 'aria-label': 'Collapse chat', 'aria-expanded': 'true' }, '▾');
   const closeBtn = h('button', { class: 'agent-icon-btn', title: 'Close (Esc)', 'aria-label': 'Close chat' }, '✕');
+  const tools = h('span', { class: 'agent-head-tools' }, threadsBtn, newBtn, widthBtn, dockBtn, collapseBtn, closeBtn);
   const threadsEl = h('div', { class: 'agent-threads', id: 'agent-threads', hidden: true, role: 'listbox', 'aria-label': 'Chats' });
   const log = h('div', { class: 'agent-log', role: 'log', 'aria-live': 'polite', 'aria-relevant': 'additions' });
   const jump = h('button', { class: 'agent-jump', hidden: true }, '↓ latest');
@@ -107,42 +112,142 @@
   const modelSel = h('select', { class: 'agent-model', 'aria-label': 'Model', title: 'Model for this chat' });
   const ctxBtn = h('button', { class: 'agent-ctx', title: 'Send what you are looking at (symbol, timeframe, strategy) with your message' }, '');
   const hintL = h('span', {}, '⏎ send · / skills · ⊕ files');
-  panel.append(resize,
-    h('div', { class: 'agent-head' }, titleEl, threadsBtn, newBtn, closeBtn),
-    threadsEl, log,
+  // The chat itself lives in one container that moves between the side drawer and the terminal panel.
+  const chat = h('div', { class: 'agent-chat' }, threadsEl, log,
     h('div', { class: 'agent-compose' }, menu, box, fileInput,
       h('div', { class: 'agent-hints' }, hintL, h('span', { class: 'r' }, ctxBtn, h('span', {}, '·'), modelSel))));
+  const sideHead = h('div', { class: 'agent-head' });
+  panel.append(resize, sideHead);
+
+  // Docked mode: a regular FinSight panel in the terminal grid. FinSight's layout manager gives it a ⠿ grip
+  // (pid "kestrel"), so it can be dragged between columns and its position is remembered.
+  const dockHead = h('div', { class: 'panel-head agent-dock-head' });
+  const dockBody = h('div', { class: 'agent-dock-body' });
+  const dockResize = h('div', { class: 'agent-dock-resize', role: 'separator', 'aria-orientation': 'horizontal', 'aria-label': 'Resize chat height', tabindex: '0',
+    title: 'Drag to resize · double-click to reset · ↑ ↓ keys' }, h('span', { class: 'agent-grip' }, '⋯'));
+  const dock = h('div', { class: 'panel agent-dock', id: 'agent-dock', hidden: true, 'aria-label': 'Agent chat' }, dockHead, dockBody, dockResize);
+  (function placeDock() { // created now (not on DOMContentLoaded) so FinSight's layout manager finds it at boot
+    const col = document.querySelector('.col-right');
+    if (col) col.insertBefore(dock, col.children[1] || null); else document.body.append(dock);
+  })();
+
+  const WIDTHS = [360, 440, 560, 720];
+  const DEFAULT_W = 440, DEFAULT_H = 560;
+  let mode = ls.get(LS.mode, 'side') === 'dock' ? 'dock' : 'side';
+  const maxW = () => Math.max(320, Math.round(window.innerWidth * 0.6));
+  function setWidth(w, save) {
+    const v = Math.max(320, Math.min(maxW(), Math.round(w)));
+    document.documentElement.style.setProperty('--agent-w', v + 'px');
+    resize.setAttribute('aria-valuenow', String(v));
+    if (save) { ls.set(LS.width, v); window.dispatchEvent(new Event('resize')); }
+    return v;
+  }
+  const curWidth = () => parseInt(getComputedStyle(document.documentElement).getPropertyValue('--agent-w'), 10) || DEFAULT_W;
+  function setHeight(px, save) {
+    const v = Math.max(300, Math.min(Math.round(window.innerHeight * 0.92), Math.round(px)));
+    dock.style.setProperty('--agent-dock-h', v + 'px');
+    if (save) ls.set(LS.dockH, v);
+    return v;
+  }
+  const isOpen = () => (mode === 'side' ? document.body.classList.contains('agent-open') : !dock.hidden);
+
+  function placeChat() {
+    if (mode === 'dock') { dockHead.append(titleEl, tools); dockBody.append(chat); }
+    else { sideHead.append(titleEl, tools); panel.append(chat); }
+    widthBtn.hidden = mode !== 'side';
+    collapseBtn.hidden = mode !== 'dock';
+    dockBtn.textContent = mode === 'dock' ? '⊡' : '⊟';
+    dockBtn.title = mode === 'dock' ? 'Pop out to the side panel' : 'Dock into the terminal';
+    dockBtn.setAttribute('aria-label', dockBtn.title);
+    const t = $('#agent-toggle'); if (t) t.setAttribute('aria-controls', mode === 'dock' ? 'agent-dock' : 'agent-panel');
+  }
+  function setMode(m) {
+    if (m === mode) return;
+    const wasOpen = isOpen();
+    document.body.classList.remove('agent-open'); dock.hidden = true;
+    mode = m; ls.set(LS.mode, m);
+    placeChat();
+    toggle(wasOpen || true);
+    if (m === 'dock') dock.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    scrollBottom(true);
+  }
 
   function mount() {
     document.body.append(panel);
     const bar = document.querySelector('.topbar-right');
     if (bar) bar.prepend(h('button', { id: 'agent-toggle', class: 'topbar-btn agent-toggle', title: 'Ask the agent (⌘/)', 'aria-controls': 'agent-panel', 'aria-expanded': 'false', onclick: () => toggle() }, h('span', { class: 'mark' }, '↗'), ' ', h('span', { class: 'tname' }, 'ASK'), h('span', { class: 'kbd' }, '⌘/')));
-    const w = Number(ls.get(LS.width, 440)); if (w >= 320) document.documentElement.style.setProperty('--agent-w', Math.min(w, window.innerWidth * 0.5) + 'px');
-    if (ls.get(LS.open, '0') === '1') toggle(true);
+    setWidth(Number(ls.get(LS.width, DEFAULT_W)) || DEFAULT_W, false);
+    setHeight(Number(ls.get(LS.dockH, DEFAULT_H)) || DEFAULT_H, false);
+    if (ls.get(LS.collapsed, '0') === '1') setCollapsed(true);
+    placeChat();
+    if (ls.get(LS.open, '0') === '1') toggle(true, true);
   }
 
   // ------------------------------------------------------------- open/close/resize
   let booted = false;
-  function toggle(force) {
-    const open = force != null ? force : !document.body.classList.contains('agent-open');
-    document.body.classList.toggle('agent-open', open);
+  function toggle(force, restoring) {
+    const open = force != null ? force : !isOpen();
+    if (mode === 'side') document.body.classList.toggle('agent-open', open);
+    else { dock.hidden = !open; if (open && !restoring) setCollapsed(false); } // a reload keeps it collapsed
     const t = $('#agent-toggle'); if (t) { t.setAttribute('aria-expanded', String(open)); t.classList.toggle('active', open); }
     ls.set(LS.open, open ? '1' : '0');
     window.dispatchEvent(new Event('resize'));
-    if (open) { if (!booted && !document.body.classList.contains('locked')) { booted = true; boot(); } updateCtx(); setTimeout(() => input.focus(), 30); }
+    if (open) {
+      if (!booted && !document.body.classList.contains('locked')) { booted = true; boot(); }
+      updateCtx(); setTimeout(() => input.focus({ preventScroll: mode === 'dock' }), 30);
+      if (mode === 'dock' && !restoring) dock.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
   }
+  function setCollapsed(on) {
+    dock.classList.toggle('collapsed', on);
+    collapseBtn.textContent = on ? '▸' : '▾';
+    collapseBtn.title = on ? 'Expand' : 'Collapse';
+    collapseBtn.setAttribute('aria-expanded', String(!on));
+    ls.set(LS.collapsed, on ? '1' : '0');
+  }
+  collapseBtn.addEventListener('click', () => setCollapsed(!dock.classList.contains('collapsed')));
+  dockBtn.addEventListener('click', () => setMode(mode === 'dock' ? 'side' : 'dock'));
+  widthBtn.addEventListener('click', () => {
+    const cur = curWidth();
+    const next = WIDTHS.find((w) => w > cur + 10 && w <= maxW()) ?? WIDTHS[0];
+    setWidth(next, true);
+  });
+
+  // Side drawer width: drag the edge grip, double-click to reset, or use ← → when it has focus.
   resize.addEventListener('pointerdown', (e) => {
     e.preventDefault(); resize.setPointerCapture(e.pointerId); document.body.classList.add('agent-resizing');
-    const move = (ev) => { const w = Math.max(320, Math.min(window.innerWidth * 0.5, window.innerWidth - ev.clientX)); document.documentElement.style.setProperty('--agent-w', w + 'px'); };
-    const up = () => { resize.removeEventListener('pointermove', move); document.body.classList.remove('agent-resizing'); ls.set(LS.width, parseInt(getComputedStyle(document.documentElement).getPropertyValue('--agent-w'), 10)); window.dispatchEvent(new Event('resize')); };
+    const move = (ev) => setWidth(window.innerWidth - ev.clientX, false);
+    const up = () => { resize.removeEventListener('pointermove', move); document.body.classList.remove('agent-resizing'); setWidth(curWidth(), true); };
     resize.addEventListener('pointermove', move); resize.addEventListener('pointerup', up, { once: true });
   });
+  resize.addEventListener('dblclick', () => setWidth(DEFAULT_W, true));
+  resize.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowLeft') { e.preventDefault(); setWidth(curWidth() + 20, true); }
+    if (e.key === 'ArrowRight') { e.preventDefault(); setWidth(curWidth() - 20, true); }
+  });
+  // Docked height: drag the bottom grip, double-click to reset, or ↑ ↓.
+  const curHeight = () => parseInt(dock.style.getPropertyValue('--agent-dock-h'), 10) || DEFAULT_H;
+  dockResize.addEventListener('pointerdown', (e) => {
+    e.preventDefault(); dockResize.setPointerCapture(e.pointerId); document.body.classList.add('agent-resizing-v');
+    const top = dockBody.getBoundingClientRect().top;
+    const move = (ev) => setHeight(ev.clientY - top, false);
+    const up = () => { dockResize.removeEventListener('pointermove', move); document.body.classList.remove('agent-resizing-v'); setHeight(curHeight(), true); };
+    dockResize.addEventListener('pointermove', move); dockResize.addEventListener('pointerup', up, { once: true });
+  });
+  dockResize.addEventListener('dblclick', () => setHeight(DEFAULT_H, true));
+  dockResize.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); setHeight(curHeight() + 40, true); }
+    if (e.key === 'ArrowUp') { e.preventDefault(); setHeight(curHeight() - 40, true); }
+  });
+  window.addEventListener('resize', () => { if (curWidth() > maxW()) setWidth(maxW(), false); });
+
   document.addEventListener('keydown', (e) => {
     if ((e.metaKey || e.ctrlKey) && e.key === '/') { e.preventDefault(); toggle(); return; }
-    if (e.key === 'Escape' && document.body.classList.contains('agent-open') && panel.contains(document.activeElement)) {
+    const host = mode === 'side' ? panel : dock;
+    if (e.key === 'Escape' && isOpen() && host.contains(document.activeElement)) {
       if (!menu.hidden) return closeMenu();
       if (S.running) return stop();
-      if (!input.value.trim()) toggle(false); // never discard a typed message by closing
+      if (!input.value.trim()) { if (mode === 'side') toggle(false); else setCollapsed(true); } // never discard a typed message
     }
   });
   closeBtn.addEventListener('click', () => toggle(false));

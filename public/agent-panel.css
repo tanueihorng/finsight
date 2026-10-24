@@ -19,8 +19,28 @@ body.agent-open.agent-resizing { user-select: none; cursor: col-resize; }
 }
 body.agent-open .agent-panel { display: flex; }
 body.locked .agent-panel, body.locked .agent-toggle { display: none !important; }
-.agent-resize { position: absolute; left: -4px; top: 0; bottom: 0; width: 8px; cursor: col-resize; z-index: 2; }
-.agent-resize:hover, .agent-resizing .agent-resize { background: var(--glow); }
+.agent-resize { position: absolute; left: -5px; top: 0; bottom: 0; width: 10px; cursor: col-resize; z-index: 2; outline: none; }
+.agent-resize:hover, .agent-resize:focus-visible, .agent-resizing .agent-resize { background: var(--glow); }
+.agent-grip { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--panel-2); border: 1px solid var(--border-2);
+  border-radius: 6px; padding: 9px 1px; color: var(--muted); font-size: 12px; line-height: 1; pointer-events: none; }
+.agent-resize:hover .agent-grip, .agent-resize:focus-visible .agent-grip, .agent-resizing .agent-grip { color: var(--amber); border-color: var(--amber); }
+
+/* the chat container moves between the side drawer and the docked terminal panel */
+.agent-chat { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.agent-head-tools { display: flex; align-items: center; gap: 4px; }
+.agent-head-tools [hidden] { display: none; }
+
+/* docked: a regular FinSight panel (drag ⠿ to move it, bottom grip for height) */
+.agent-dock { display: flex; flex-direction: column; }
+.agent-dock[hidden] { display: none !important; }
+.agent-dock-head .agent-title { font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; }
+.agent-dock-head .agent-title small { text-transform: none; letter-spacing: 0; }
+.agent-dock-body { height: var(--agent-dock-h, 560px); display: flex; flex-direction: column; background: var(--bg); font-size: 12.5px; position: relative; }
+.agent-dock.collapsed .agent-dock-body, .agent-dock.collapsed .agent-dock-resize { display: none; }
+.agent-dock-resize { position: relative; height: 12px; cursor: row-resize; border-top: 1px solid var(--border); background: var(--head); outline: none; }
+.agent-dock-resize .agent-grip { padding: 0 10px; font-size: 12px; }
+.agent-dock-resize:hover, .agent-dock-resize:focus-visible, .agent-resizing-v .agent-dock-resize { background: var(--glow); }
+body.agent-resizing-v { user-select: none; cursor: row-resize; }
 
 /* header */
 .agent-head { display: flex; align-items: center; gap: 6px; padding: 7px 10px; border-bottom: 1px solid var(--border); background: var(--head); }

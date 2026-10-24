@@ -584,7 +584,7 @@ $('#panels-list').addEventListener('change', (e) => {
 const PANEL_PIDS = [
   ['#positions', 'positions'], ['#wealth-body', 'wealth'], ['#perf-ranges', 'performance'], ['#alloc-mode', 'allocation'],
   ['#heat-metric', 'heatmap'], ['#fxrisk', 'fxrisk'], ['#dividends', 'dividends'], ['#watchlist', 'watchlist'], ['#alerts', 'alerts'], ['#activity', 'activity'],
-  ['#detail-panel', 'detail'], ['#news', 'news'], ['#markets', 'markets'], ['#calendar', 'calendar'], ['#wb-body', 'worldbank'], ['#fred-body', 'fred'], ['#infl-body', 'inflation'],
+  ['#detail-panel', 'detail'], ['#agent-dock', 'kestrel'], ['#news', 'news'], ['#markets', 'markets'], ['#calendar', 'calendar'], ['#wb-body', 'worldbank'], ['#fred-body', 'fred'], ['#infl-body', 'inflation'],
 ];
 let dragInited = false;
 function initDragLayout() {

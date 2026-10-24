@@ -75,7 +75,7 @@ export DEEPSEEK_API_KEY=...    # or add it to the macOS Keychain (see agent/READ
 node server.js                 # FinSight starts, supervises and stops Kestrel for you
 ```
 
-Then press **⌘/** (or the **↗ KESTREL** button). FinSight works exactly as before without it. Full guide: **[agent/README.md](agent/README.md)** · spec: **[agent/docs/SPEC.md](agent/docs/SPEC.md)**.
+Then press **⌘/** (or the **↗ KESTREL** button). Use it as a **side panel** (drag the ⋮ edge or press ↔ to change the width) or **dock it into the terminal** with ⊟, where it becomes a normal panel you can drag between columns, collapse ▾ and resize in height. FinSight works exactly as before without it. Full guide: **[agent/README.md](agent/README.md)** · spec: **[agent/docs/SPEC.md](agent/docs/SPEC.md)**.
 
 
 ## 🚀 Quick start

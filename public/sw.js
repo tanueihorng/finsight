@@ -2,7 +2,7 @@
    shell instantly. Only static files are cached. API responses (your portfolio)
    are never stored in the browser: they stay behind the PIN on the server. */
 'use strict';
-const SHELL = 'finsight-shell-v11';
+const SHELL = 'finsight-shell-v12';
 const FILES = ['/', '/index.html', '/styles.css', '/app.js', '/chart.js', '/chartgrid.js', '/strategy.js', '/strategies.js', '/indicators.js', '/journal.js', '/agent-panel.js', '/agent-panel.css', '/icon.png', '/icon-192.png', '/manifest.webmanifest'];
 
 self.addEventListener('install', (e) => {
