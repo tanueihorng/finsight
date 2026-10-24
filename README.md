@@ -213,6 +213,10 @@ Every component, how they talk to each other, and where data lives. FinSight own
 
 <div align="center"><img src="docs/architecture.svg" alt="Full FinSight + Kestrel architecture: browser, FinSight server, Kestrel agent (API, chat engine, model adapters, 35 tools, MCP server, sandbox), internet services and local storage" width="100%"></div>
 
+**How the Kestrel chatbot works with FinSight**, in six steps:
+
+<div align="center"><img src="docs/kestrel-flow.svg" alt="How Kestrel works inside FinSight: you ask, FinSight checks your PIN and passes it on, Kestrel and the AI model use tools that read your portfolio through FinSight, run your strategies and research, then the answer streams back" width="100%"></div>
+
 <details>
 <summary><b>Component summary</b></summary>
 

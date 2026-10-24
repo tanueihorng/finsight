@@ -1,0 +1,102 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 660" width="1280" height="660" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" role="img" aria-label="How Kestrel works inside FinSight: you ask in the chat panel, FinSight checks your PIN and passes it on, Kestrel asks the AI model, uses tools to read your portfolio through FinSight, run your strategies and research, then streams the answer back">
+  <defs>
+    <marker id="v" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#a78bfa"/></marker>
+    <marker id="g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#2ec27e"/></marker>
+  </defs>
+  <style>
+    .h { font-size: 18px; font-weight: 700; fill: #ece8fb; }
+    .hv { font-size: 18px; font-weight: 700; fill: #a78bfa; }
+    .b { font-size: 14px; fill: #b8bacb; }
+    .q { font-size: 13px; fill: #7e7e96; font-style: italic; }
+    .step { font-size: 13px; font-weight: 700; fill: #08080f; }
+    .lab { font-size: 13px; fill: #c4b5fd; }
+    .labg { font-size: 13px; fill: #2ec27e; }
+  </style>
+
+  <rect width="1280" height="660" fill="#08080f"/>
+  <rect x="8" y="8" width="1264" height="644" rx="14" fill="none" stroke="#20203a"/>
+
+  <text x="40" y="50" font-size="22" font-weight="700" fill="#ece8fb">How <tspan fill="#a78bfa">✻ Kestrel</tspan> works inside FinSight</text>
+  <text x="40" y="76" font-size="14" fill="#7e7e96">You ask → Kestrel gathers real facts with tools → the AI model writes the answer → it streams back to you</text>
+
+  <!-- step 6: answer back (over the top) -->
+  <path d="M810 150 L810 112 L170 112 L170 146" fill="none" stroke="#a78bfa" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#v)"/>
+  <circle cx="490" cy="112" r="11" fill="#a78bfa"/><text x="490" y="117" text-anchor="middle" class="step">6</text>
+  <text x="508" y="104" class="lab">answer streams back, with sources</text>
+
+  <!-- row 1 boxes -->
+  <rect x="40" y="150" width="260" height="120" rx="12" fill="#12121f" stroke="#2d2d4d"/>
+  <text x="60" y="182" class="h">💬 You ask</text>
+  <text x="60" y="208" class="b">in the chat panel</text>
+  <text x="60" y="228" class="b">inside FinSight (⌘/)</text>
+  <text x="60" y="254" class="q">"How exposed am I to tech?"</text>
+
+  <rect x="360" y="150" width="260" height="120" rx="12" fill="#12121f" stroke="#2d2d4d"/>
+  <text x="380" y="182" class="h">🔒 FinSight</text>
+  <text x="380" y="208" class="b">checks your PIN</text>
+  <text x="380" y="228" class="b">passes the message</text>
+  <text x="380" y="248" class="b">to Kestrel</text>
+
+  <rect x="680" y="150" width="260" height="120" rx="12" fill="#161130" stroke="#a78bfa" stroke-width="2"/>
+  <text x="700" y="182" class="hv">✻ Kestrel</text>
+  <text x="700" y="208" class="b">the agent: runs the</text>
+  <text x="700" y="228" class="b">steps, calls tools,</text>
+  <text x="700" y="248" class="b">keeps time/cost limits</text>
+
+  <rect x="1000" y="150" width="240" height="120" rx="12" fill="#12121f" stroke="#2d2d4d"/>
+  <text x="1020" y="182" class="h">🧠 AI model</text>
+  <text x="1020" y="208" class="b">DeepSeek · Claude</text>
+  <text x="1020" y="228" class="b">thinks and decides</text>
+  <text x="1020" y="248" class="b">which tools to use</text>
+
+  <!-- arrows row 1 -->
+  <line x1="302" y1="210" x2="356" y2="210" stroke="#a78bfa" stroke-width="2" marker-end="url(#v)"/>
+  <circle cx="329" cy="210" r="11" fill="#a78bfa"/><text x="329" y="215" text-anchor="middle" class="step">1</text>
+  <line x1="622" y1="210" x2="676" y2="210" stroke="#a78bfa" stroke-width="2" marker-end="url(#v)"/>
+  <circle cx="649" cy="210" r="11" fill="#a78bfa"/><text x="649" y="215" text-anchor="middle" class="step">2</text>
+  <line x1="944" y1="196" x2="996" y2="196" stroke="#a78bfa" stroke-width="2" marker-end="url(#v)"/>
+  <line x1="996" y1="226" x2="944" y2="226" stroke="#a78bfa" stroke-width="2" marker-end="url(#v)"/>
+  <circle cx="970" cy="211" r="11" fill="#a78bfa"/><text x="970" y="216" text-anchor="middle" class="step">3</text>
+  <text x="944" y="296" class="lab">model asks for tools, Kestrel runs them,</text>
+  <text x="944" y="314" class="lab">results go back to the model (repeats)</text>
+
+  <!-- step 4: tools -->
+  <path d="M810 272 L810 352" fill="none" stroke="#a78bfa" stroke-width="2" marker-end="url(#v)"/>
+  <circle cx="810" cy="312" r="11" fill="#a78bfa"/><text x="810" y="317" text-anchor="middle" class="step">4</text>
+  <text x="826" y="346" class="lab">uses tools</text>
+  <path d="M520 356 L1100 356" fill="none" stroke="#a78bfa" stroke-width="2"/>
+  <path d="M520 356 L520 380 M810 356 L810 380 M1100 356 L1100 380" fill="none" stroke="#a78bfa" stroke-width="2"/>
+
+  <rect x="390" y="384" width="260" height="120" rx="12" fill="#0f1a14" stroke="#2ec27e"/>
+  <text x="410" y="416" class="h">📊 Your portfolio</text>
+  <text x="410" y="442" class="b">holdings · cash · P/L</text>
+  <text x="410" y="462" class="b">exposure · earnings dates</text>
+  <text x="410" y="486" class="labg">read-only, via FinSight</text>
+
+  <rect x="680" y="384" width="260" height="120" rx="12" fill="#12121f" stroke="#2d2d4d"/>
+  <text x="700" y="416" class="h">📈 Your strategies</text>
+  <text x="700" y="442" class="b">same engines as the</text>
+  <text x="700" y="462" class="b">chart · scans · sizing</text>
+  <text x="700" y="486" class="q">runs in a safe sandbox</text>
+
+  <rect x="970" y="384" width="260" height="120" rx="12" fill="#12121f" stroke="#2d2d4d"/>
+  <text x="990" y="416" class="h">🔎 Research</text>
+  <text x="990" y="442" class="b">SEC filings</text>
+  <text x="990" y="462" class="b">web search · pages</text>
+  <text x="990" y="486" class="q">every fact cited</text>
+
+  <!-- step 5: portfolio data comes from FinSight -->
+  <path d="M430 382 L430 276" fill="none" stroke="#2ec27e" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#g)"/>
+  <circle cx="430" cy="330" r="11" fill="#2ec27e"/><text x="430" y="335" text-anchor="middle" class="step">5</text>
+  <text x="448" y="318" class="labg">reads your data</text>
+  <text x="448" y="336" class="labg">from FinSight</text>
+
+  <!-- guarantees -->
+  <rect x="40" y="532" width="1200" height="96" rx="12" fill="#0d0d18" stroke="#20203a"/>
+  <text x="64" y="566" font-size="15" font-weight="700" fill="#2ec27e">✓ Never trades or moves money</text>
+  <text x="64" y="594" class="b">it can only read and explain</text>
+  <text x="460" y="566" font-size="15" font-weight="700" fill="#2ec27e">✓ Numbers come from FinSight</text>
+  <text x="460" y="594" class="b">not from the AI's guesswork</text>
+  <text x="860" y="566" font-size="15" font-weight="700" fill="#2ec27e">✓ Runs on your Mac</text>
+  <text x="860" y="594" class="b">FinSight starts and stops it</text>
+</svg>
