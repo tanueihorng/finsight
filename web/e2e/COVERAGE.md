@@ -100,3 +100,13 @@ Not yet covered here, owned elsewhere: performance and visual comparisons (P0-5)
 | News | delayed previous-symbol response never overwrites current headlines | `A2` › intended fix (A2)… | A2 | pass (intended fix: account-independent symbol-keyed query + abort) |
 | News | drag/reload, hide/reload, one host and one request per selection | `A2` › drag/reload… | A2, F10 | pass |
 | News | no protected request while locked, unlock refreshes, unmount removes command subscriptions | `A2` › lock stops news requests… | A2, F3, F6 | pass |
+
+| Macro (A3) | calendar anchors/company selection; WB/FRED controls and errors; manual partial-failure inflation; 15m poll; lock/unmount | `A3` | A3 | pass |
+
+| Watchlist (B1) | search/pick/add/remove/command, error/empty rows, chart adapter and unmount | `B1` | B1, E2 | pass |
+
+| Alerts (B2) | form/command/remove, chart overlay event, seed/dedup toast/beep/desktop mock, 30s poll and unmount | `B2`, `triggers.test` | B2, E2 | pass |
+
+| Income/activity (B3) | forward/received/WHT, ADD/UNDO transactions, error/empty, account race, single 120s poll and unmount | `B3` | B3 | pass (intended stale-account fix) |
+
+| FX risk (C2) | rates/history, multi/empty/error, shock/target/conversion, persistence/focus, one shared 120s poll/unmount | `C2`, `fxrisk.test` | C2 | pass |

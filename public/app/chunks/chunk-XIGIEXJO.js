@@ -1,2 +1,0 @@
-import{d as a,g as n,h as c}from"./chunk-INQUTED2.js";import{b as e}from"./chunk-YJ2R6MOB.js";function f(){let t=a(),i=n(),s=t.data?.positions??[],r=c(s.map(o=>o.symbol)).data??{},u=e(window.FinSight.store,o=>o.account),d=i.data?.accounts.find(o=>o.id===u)?.name||"Account";return{loaded:!!t.data,positions:s,categories:r,accountName:d,base:t.data?.base||window.FinSight.store.getState().base}}export{f as a};
-//# sourceMappingURL=chunk-XIGIEXJO.js.map

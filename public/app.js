@@ -135,7 +135,7 @@ async function runCommand(raw) {
       const [, mkt, pct] = parts;
       if (!mkt || pct == null) return setStatus('Usage: WHT <US|SG|HK|UK|EU|JP|AU|CA|OTHER> <percent>   e.g. WHT US 15', 'err');
       await api('/api/settings/withholding', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ market: mkt, pct }) });
-      setStatus(`Dividend withholding for ${mkt.toUpperCase()} set to ${pct}%`, 'ok'); loadDividends(); afterWrite('withholding'); return;
+      setStatus(`Dividend withholding for ${mkt.toUpperCase()} set to ${pct}%`, 'ok'); afterWrite('withholding'); return;
     }
     if (cmd === 'MKT' || cmd === 'MARKETS') { window.FinSight.bus.invalidate('markets'); setStatus('Refreshing world markets…', 'ok'); return; }
     if (cmd === 'CLEAR') { setStatus(''); return; }
@@ -153,11 +153,9 @@ $('#cmd').addEventListener('keydown', (e) => { if (e.key === 'Enter') { runComma
 // ===========================================================================
 const baseQS = (extra = '') => `?base=${encodeURIComponent(state.base)}&account=${encodeURIComponent(state.account || '')}${extra}`;
 
-// Dividends and FX risk move with holdings, cash and slow FX rates, not every
-// 15s quote tick: refetch them when the holdings/cash/account/base change, or
-// at most every 2 minutes otherwise.
-let sideSig = '', sideAt = 0;
-const SIDE_MAX_AGE = 120000;
+// Holdings changes invalidate income and FX queries; their 120s polling is owned
+// by Query. (Chart trade markers refresh on the 'chart-trades' key since E2.)
+let dividendSig = ''; // B3: separate holdings refresh from Query's 120s timer
 let portfolioRequest = 0;
 async function loadPortfolio() {
   const request = ++portfolioRequest, query = baseQS();
@@ -166,246 +164,38 @@ async function loadPortfolio() {
     if (request !== portfolioRequest || query !== baseQS()) return;
     renderPortfolio(data);
     const sig = state.account + '|' + state.base + '|' + (data.positions || []).map((p) => p.symbol + ':' + p.quantity).join(',') + '|' + JSON.stringify(data.cash || []);
-    if (sig !== sideSig || Date.now() - sideAt > SIDE_MAX_AGE) {
-      sideSig = sig; sideAt = Date.now();
-      loadDividends(); // keep dividend panel in sync with the active account/base
-      loadFxRisk();    // keep FX-risk panel + exposure card in sync too
+    if (sig !== dividendSig) {
+      const hadPrevious = !!dividendSig; dividendSig = sig;
+      if (hadPrevious) { window.FinSight.bus.invalidate('dividends'); window.FinSight.bus.invalidate('fx-risk'); }
     }
   } catch (e) { if (request === portfolioRequest && query === baseQS()) setFooter('Portfolio load failed: ' + e.message); }
 }
 
 // Every completed write refreshes all readers of what it changed (COUPLING.md
 // §A6, web/src/api/invalidation.ts). Islands refetch through Query; legacy
-// readers registered here refresh themselves. Dividends, FX risk, performance
-// and wealth still follow loadPortfolio's signatures until B3/C2/C3.
+// readers registered here refresh themselves.
 function afterWrite(kind) { return window.FinSight.bus.write(kind); }
 window.FinSight.bus.on('portfolio', () => loadPortfolio());
 window.FinSight.bus.on('accounts', () => loadAccounts());
-window.FinSight.bus.on('watchlist', () => loadWatchlist());
-window.FinSight.bus.on('alerts', () => loadAlerts());
 
 function renderPortfolio(data) {
-  const { positions, summary, transactions } = data;
+  const { positions } = data;
   const base = data.base || state.base;
-  lastSummary = summary; // read by the legacy FX risk panel (C2)
   // FX coverage note
   if (data.fxMissing && data.fxMissing.length) setFooter(`Note: no FX rate for ${data.fxMissing.join(', ')} → shown unconverted.`);
 
-  // The positions table is a React island (D1). The detail view and the chart
-  // watch feed still read lastTableData until E1/E2.
+  // Every panel is a React island now. The chart watch feed (chartWatchItems)
+  // still reads the holdings from lastTableData until X1.
   lastTableData = { positions, base };
   pushChartWatch();
-  // activity
-  $('#activity').innerHTML = (transactions || []).map((t) => {
-    const cls = t.type === 'BUY' ? 't-buy' : t.type === 'SELL' ? 't-sell' : 't-del';
-    const when = new Date(t.time).toLocaleString('en-US', { month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' });
-    let detail = t.type === 'DELETE' ? 'removed'
-      : `${fmt(t.quantity, t.quantity % 1 ? 4 : 0)} @ ${fmt(t.price)}` + (t.realized != null ? `  ·  P&L ${signStr(t.realized)}` : '');
-    return `<div class="line"><span class="ts">${when}</span><span class="${cls}">${t.type}</span><span class="sym amber">${esc(t.symbol)}</span><span class="muted">${detail}</span></div>`;
-  }).join('') || '<div class="muted small">No transactions yet.</div>';
-
-
 }
 
-// ---- FX RISK panel ---------------------------------------------------------
-async function loadFxRisk() {
-  try {
-    const data = await api('/api/fx-risk' + baseQS());
-    renderFxRisk(data); // the FX EXPOSURE card reads /api/fx-risk itself (useFxRisk)
-  } catch (e) { /* non-fatal — panel just keeps its last state */ }
-}
+// FX risk is a React island (C2).
 
-// Tool inputs survive the 15s re-render; a render is deferred while you type.
-const fxTools = { conv: '', shock: '0' };
-let fxPending = null;
-function renderFxRisk(data) {
-  const box = $('#fxrisk'); if (!box) return;
-  const ae = document.activeElement;
-  if (ae && box.contains(ae) && ae.tagName === 'INPUT') {
-    fxPending = data;
-    if (!ae.dataset.fxBlur) { ae.dataset.fxBlur = '1'; ae.addEventListener('blur', () => { const d = fxPending; fxPending = null; if (d) renderFxRisk(d); }, { once: true }); }
-    return;
-  }
-  const base = data.base || state.base;
-  const exposures = data.exposures || [];
-  const head = $('#fxr-spot');
-  if (!exposures.length) {
-    if (head) head.textContent = '';
-    box.classList.add('muted');
-    box.innerHTML = (data.totalValue > 0)
-      ? `No foreign-currency holdings — your book is all in ${base}, so there's no FX risk to track.`
-      : `No positions yet — add holdings (in a foreign currency) to track FX risk.`;
-    return;
-  }
-  box.classList.remove('muted');
-  const dom = exposures[0];               // dominant currency (sorted by exposure)
-  const multi = exposures.length > 1;     // >1 foreign currency: label rates per-row, not by dom
-  if (head) head.textContent = `${dom.ccy}/${base} ${fmt(dom.nowRate, 4)}`;
-
-  // header strip — one block per foreign currency
-  const strip = exposures.map((e) => `
-    <div class="fxr-cell"><span class="k">${e.ccy} EXPOSURE</span><span class="v">${moneyBig(base, e.notionalBase)}</span><span class="s">${fmt(e.pct, 0)}% of book · ${money(e.ccy, e.notionalNative, 0)}${e.cashBase ? ' · incl. cash' : ''}</span></div>
-    <div class="fxr-cell"><span class="k">BLENDED ENTRY</span><span class="v">${fmt(e.blendedEntry, 4)}</span><span class="s">avg ${e.ccy}/${base} cost</span></div>
-    <div class="fxr-cell"><span class="k">SPOT</span><span class="v ${signClass(e.driftPct)}">${fmt(e.nowRate, 4)}</span><span class="s ${signClass(e.driftPct)}">${signStr(e.driftPct)}% vs entry</span></div>
-    <div class="fxr-cell"><span class="k">FX P&L</span><span class="v ${signClass(e.fxPnl)}">${moneySigned(base, e.fxPnl)}</span><span class="s ${signClass(e.fxPnl)}">${signStr(e.fxPnlPct)}% · currency only</span></div>`).join('');
-
-  // Realized FX from closed trades (portfolio-wide; from the latest /api/portfolio summary).
-  const rfx = lastSummary ? lastSummary.realizedFxPnl : null;
-  const legacySells = lastSummary ? (lastSummary.realizedLegacy || 0) : 0;
-  const realizedSub = legacySells ? `closed · excl. ${legacySells} pre-FX-tracking` : 'closed trades · currency';
-  const realizedCell = (rfx != null && (rfx || (lastSummary && lastSummary.realizedStockPnl)))
-    ? `<div class="fxr-cell"><span class="k">REALIZED FX</span><span class="v ${signClass(rfx)}">${moneySigned(base, rfx)}</span><span class="s">${realizedSub}</span></div>`
-    : '';
-
-  // 1-week parametric FX VaR from the currency's weekly volatility.
-  const v = data.vol || {};
-  const volCell = v.oneSigmaBase
-    ? `<div class="fxr-cell"><span class="k">1σ MOVE / WK</span><span class="v">±${money(base, v.oneSigmaBase, 0)}</span><span class="s">σ ${fmt(v.sigmaWeeklyPct, 2)}%/wk · 95% ${money(base, v.var95Base, 0)}</span></div>`
-    : '';
-
-  // per-buy FX history
-  const rows = (data.lots || []).map((l) => {
-    const when = l.t ? new Date(l.t).toLocaleDateString('en-US', { year: '2-digit', month: 'short', day: '2-digit' }) : '—';
-    const note = !l.dated ? '<span class="dim"> no date</span>' : (l.recent ? '<span class="dim"> settling</span>' : '');
-    const pair = multi ? `<span class="dim">${l.currency}/${base} </span>` : '';
-    return `<tr>
-      <td>${when}</td><td class="sym">${esc(l.symbol)}</td>
-      <td class="r">${pair}${fmt(l.entryRate, 4)}</td><td class="r">${fmt(l.nowRate, 4)}</td>
-      <td class="r ${signClass(l.fxPnl)}">${moneySigned(base, l.fxPnl)}${note}</td>
-    </tr>`;
-  }).join('') || '<tr><td colspan="5" class="muted small">No purchases recorded yet.</td></tr>';
-
-  const totalExp = data.foreignBase || 0;
-  box.innerHTML = `
-    <div class="fxr-strip">${strip}${realizedCell}${volCell}</div>
-    <div class="fxr-sub">PER-BUY FX HISTORY · gain/loss from currency alone</div>
-    <table class="tbl fxr-tbl">
-      <thead><tr><th>DATE</th><th>SYM</th><th class="r">${multi ? 'FX' : dom.ccy + '/' + base} @BUY</th><th class="r">NOW</th><th class="r">FX P&L</th></tr></thead>
-      <tbody>${rows}</tbody>
-    </table>
-    <div class="fxr-whatif">
-      <div class="fxr-wi-head"><span class="fxr-sub">WHAT-IF · ${multi ? 'foreign-FX' : dom.ccy + '/' + base} shock</span><span id="fxr-shock" class="cyan">0.0%</span></div>
-      <input id="fxr-slider" type="range" min="-15" max="15" value="0" step="0.5">
-      <div class="fxr-wi-out"><span class="muted">impact on book <b id="fxr-impact">—</b></span><span class="muted">new value <b id="fxr-newval">${money(base, totalExp)}</b></span></div>
-    </div>
-    <div class="fxr-tools">
-      <div class="tool"><span class="fxr-sub" style="margin:0">TARGET EXPOSURE</span><br>
-        Keep <input id="fxr-target" type="number" min="0" max="100" step="1" placeholder="e.g. 70"> % in foreign currency
-        <div id="fxr-target-out" class="muted"></div></div>
-      <div class="tool"><span class="fxr-sub" style="margin:0">CONVERT NOW vs LATER · ${dom.ccy}</span><br>
-        Convert <input id="fxr-conv" type="number" min="0" step="100" placeholder="${base} amount"> ${base}
-        <div id="fxr-conv-out" class="muted"></div></div>
-    </div>
-    <div class="fxr-note">Currency risk adds volatility with little long-run expected return — it bites most over short horizons and drawdowns. Informational only; no trades are placed.</div>`;
-
-  const slider = $('#fxr-slider');
-  slider.value = fxTools.shock;
-  const upd = () => {
-    fxTools.shock = slider.value;
-    const pct = parseFloat(slider.value);
-    const impact = totalExp * pct / 100;
-    $('#fxr-shock').textContent = (pct > 0 ? '+' : '') + pct.toFixed(1) + '%';
-    const imp = $('#fxr-impact'); imp.textContent = moneySigned(base, impact); imp.className = signClass(impact);
-    $('#fxr-newval').textContent = money(base, totalExp + impact);
-  };
-  slider.addEventListener('input', upd); upd();
-
-  // Target exposure: gap between today's foreign share and the one you want.
-  const total = data.totalValue || 0;
-  const tIn = $('#fxr-target'), tOut = $('#fxr-target-out');
-  try { tIn.value = localStorage.getItem('finsight-fx-target') || ''; } catch {}
-  const updTarget = () => {
-    const pct = parseFloat(tIn.value);
-    try { localStorage.setItem('finsight-fx-target', tIn.value); } catch {}
-    const cur = total ? (totalExp / total) * 100 : 0;
-    if (!Number.isFinite(pct) || !total) { tOut.innerHTML = `Now <b>${fmt(cur, 1)}%</b> foreign (${money(base, totalExp, 0)} of ${money(base, total, 0)}).`; return; }
-    const gap = (pct / 100) * total - totalExp;
-    tOut.innerHTML = `Now <b>${fmt(cur, 1)}%</b>. ` + (Math.abs(gap) < total * 0.005 ? '<span class="up">On target.</span>'
-      : gap > 0 ? `To reach ${fmt(pct, 0)}%: move <b>${money(base, gap, 0)}</b> into foreign currency.`
-        : `To reach ${fmt(pct, 0)}%: bring <b>${money(base, -gap, 0)}</b> back to ${base}.`);
-  };
-  tIn.addEventListener('input', updTarget); updTarget();
-
-  // Convert now vs later: what the amount buys at spot, and the typical 1-month
-  // range from recent volatility (68% band). Shows the spread, not a forecast.
-  const cIn = $('#fxr-conv'), cOut = $('#fxr-conv-out');
-  cIn.value = fxTools.conv;
-  const sigmaM = (dom.sigmaWeeklyPct || 0) / 100 * Math.sqrt(4.345);
-  const updConv = () => {
-    fxTools.conv = cIn.value;
-    const amt = parseFloat(cIn.value);
-    if (!(amt > 0)) { cOut.innerHTML = `Spot ${fmt(dom.nowRate, 4)} · your blended entry ${fmt(dom.blendedEntry, 4)} (${signStr(dom.driftPct)}%).`; return; }
-    const now = amt / dom.nowRate;
-    let html = `Now: <b>${money(dom.ccy, now, 0)}</b> at ${fmt(dom.nowRate, 4)}.`;
-    if (sigmaM > 0) {
-      const lo = dom.nowRate * Math.exp(-sigmaM), hi = dom.nowRate * Math.exp(sigmaM);
-      html += `<br>In a month, 2 in 3 outcomes: <b>${money(dom.ccy, amt / hi, 0)} – ${money(dom.ccy, amt / lo, 0)}</b> (rate ${fmt(lo, 4)}–${fmt(hi, 4)}). Waiting is a ±${money(dom.ccy, now - amt / hi, 0)} coin flip.`;
-    }
-    cOut.innerHTML = html;
-  };
-  cIn.addEventListener('input', updConv); updConv();
-}
-
-// ---- ECON CALENDAR panel ---------------------------------------------------
-async function loadCalendar() {
-  try {
-    const [cal, ev] = await Promise.all([api('/api/calendar'), api('/api/events' + baseQS()).catch(() => null)]);
-    renderCalendar(cal, ev);
-  } catch (e) { const b = $('#calendar'); if (b) { b.classList.add('muted'); b.textContent = 'Calendar unavailable right now.'; } }
-}
-function renderCalendar(data, ev) {
-  const box = $('#calendar'); if (!box) return;
-  box.classList.remove('muted');
-  const dayShort = (s) => new Date(s + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: '2-digit' });
-  const daysTo = (ms) => Math.max(0, Math.round((ms - Date.now()) / 86400000));
-
-  // FOMC anchor — next rate decision + next dot plot, always known.
-  let anchor = '';
-  const f = data.nextFomc, sep = data.nextSep;
-  if (f) {
-    const dd = daysTo(f.decisionMs);
-    const sepCell = sep
-      ? `<div class="cal-a"><span class="k">NEXT DOT PLOT</span><span class="v">${dayShort(sep.start)}</span><span class="s"><a href="${data.sepUrl}" target="_blank" rel="noopener">FOMC projections ↗</a></span></div>`
-      : '';
-    anchor = `<div class="cal-anchor">
-      <div class="cal-a"><span class="k">NEXT FED DECISION</span><span class="v amber">${dayShort(f.end)}</span><span class="s">${dd}d · rate + statement${f.sep ? ' + dot plot' : ''}</span></div>
-      ${sepCell}
-    </div>`;
-  }
-
-  // This-week high-impact releases (CPI, PCE, NFP, the rate decision…).
-  const dt = (s) => new Date(s).toLocaleString('en-US', { weekday: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' });
-  const rows = (data.events || []).map((e) => {
-    const ms = Date.parse(e.time);
-    const past = !isNaN(ms) && ms < Date.now();
-    const when = isNaN(ms) ? esc(e.time || '—') : dt(e.time); // tolerate a malformed feed time
-    const fp = (e.forecast || e.previous) ? `<span class="cal-fp">f ${esc(e.forecast || '—')} · p ${esc(e.previous || '—')}</span>` : '';
-    return `<div class="cal-row ${past ? 'cal-past' : ''}">
-      <span class="cal-when">${when}</span>
-      <span class="ccy">${esc(e.country)}</span>
-      <span class="cal-title">${esc(e.title)}</span>${fp}
-    </div>`;
-  }).join('') || `<div class="muted small">${data.eventsOk ? 'No high-impact USD/SGD events this week.' : 'Live feed unavailable — Fed schedule shown above.'}</div>`;
-
-  // Earnings + ex-dividend dates for what you hold / watch.
-  let mine = '';
-  if (ev && ev.events) {
-    const d2 = (ms) => new Date(ms).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: '2-digit' });
-    const evRows = ev.events.slice(0, 14).map((e) => `<div class="cal-row" data-sym="${esc(e.symbol)}" style="cursor:pointer">
-      <span class="cal-when">${d2(e.t)}${e.estimated ? ' <span class="dim">~</span>' : ''}</span>
-      <span class="ev-kind ${e.kind === 'EARNINGS' ? 'earn' : 'div'}">${e.kind}</span>
-      <span class="cal-title"><span class="sym amber">${esc(e.symbol)}</span>${e.held ? '' : ' <span class="dim">watch</span>'}</span>
-      ${e.amount ? `<span class="cal-fp">~${fmt(e.amount, 2)}/sh</span>` : ''}</div>`).join('');
-    mine = `<div class="fxr-sub">YOUR HOLDINGS · next 60 days (earnings · ex-dividend)</div>` +
-      (evRows || `<div class="muted small">${ev.ok ? 'No earnings or ex-dividend dates in the next 60 days.' : 'Company dates unavailable right now.'}</div>`);
-  }
-  box.innerHTML = anchor + mine + `<div class="fxr-sub">THIS WEEK · high-impact (USD/SGD)</div>` + rows;
-}
-$('#calendar').addEventListener('click', (e) => { const r = e.target.closest('[data-sym]'); if (r) selectSymbol(r.dataset.sym); });
+// Calendar is a React island (A3).
 
 // ---- customizable summary cards --------------------------------------------
 // Summary cards are a React island (web/src/features/summary, PILOT-2).
-let lastSummary = null; // adapter: the legacy FX risk panel reads realized FX from it until C2
 // ---- PEEK / UNPEEK: blur personal figures, keep public market data ----------
 // Purely visual (CSS on body.unpeek) so screen-sharing is safe; nothing is removed from the page.
 
@@ -586,7 +376,7 @@ document.querySelector('.setup-choices').addEventListener('click', (e) => {
 });
 
 // ---- POSITIONS TABLE: React island (D1, web/src/features/positions) ----------
-// lastTableData feeds the detail view and the chart watch list until E1/E2.
+// lastTableData feeds the chart watch list (chartWatchItems) until X1.
 let lastTableData = { positions: [], base: 'SGD' };
 
 // ===========================================================================
@@ -637,6 +427,8 @@ function selectSymbol(symbol) {
 }
 // ---- chart host hooks: ledger trades, watchlist feed, multi-chart grid ----
 let lastWatch = [];
+// B1 adapter: E2 replaces this legacy chart feed after the lanes integrate.
+window.FinSightLegacy = { ...window.FinSightLegacy, setChartWatch(list) { lastWatch = list || []; pushChartWatch(); } };
 function chartWatchItems() {
   const held = (lastTableData.positions || []).filter((p) => p.quoted !== false);
   const seen = new Set();
@@ -674,26 +466,6 @@ window.FinSightChartHooks = {
   detached() { if (chartGrid && chartGrid.active()) chartGrid.set({ n: 1 }); },
 };
 
-// SVG sparkline / line chart -------------------------------------------------
-function sparkline(points, up) {
-  if (!points || points.length < 2) return '<div class="chart muted small">No chart data.</div>';
-  const W = 520, H = 150, pad = 4;
-  const vals = points.map((p) => p.c);
-  const min = Math.min(...vals), max = Math.max(...vals), span = (max - min) || 1;
-  const stepX = (W - pad * 2) / (points.length - 1);
-  const x = (i) => pad + i * stepX;
-  const y = (v) => pad + (H - pad * 2) * (1 - (v - min) / span);
-  const line = points.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p.c).toFixed(1)}`).join(' ');
-  const area = `${line} L${x(points.length - 1).toFixed(1)},${H - pad} L${x(0).toFixed(1)},${H - pad} Z`;
-  const color = up ? 'var(--up)' : 'var(--down)';
-  return `<svg class="chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
-    <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="${color}" stop-opacity="0.28"/>
-      <stop offset="100%" stop-color="${color}" stop-opacity="0"/></linearGradient></defs>
-    <path d="${area}" fill="url(#g)"/>
-    <path d="${line}" fill="none" stroke="${color}" stroke-width="1.5"/>
-  </svg>`;
-}
 
 // ===========================================================================
 //  WORLD MARKETS
@@ -703,249 +475,27 @@ function sparkline(points, up) {
 // ===========================================================================
 //  WORLD BANK MACRO
 // ===========================================================================
-async function loadWorldBank() {
-  const country = $('#wb-country').value.trim().toUpperCase() || 'US';
-  const indicator = $('#wb-indicator').value;
-  const body = $('#wb-body');
-  body.innerHTML = '<span class="muted">Loading World Bank data…</span>';
-  try {
-    const d = await api(`/api/worldbank?country=${encodeURIComponent(country)}&indicator=${encodeURIComponent(indicator)}`);
-    if (!d.series || !d.series.length) { body.innerHTML = `<span class="muted">No data for ${esc(country)}.</span>`; return; }
-    const latest = d.series[d.series.length - 1];
-    const isPct = /%/.test(d.label) || /ZS|ZG/.test(indicator);
-    const val = isPct ? fmt(latest.value, 2) + '%' : fmtBig(latest.value);
-    body.innerHTML = `
-      <div class="wb-headline"><span class="wb-val">${val}</span><span class="wb-yr">${esc(d.countryName)} · ${latest.year}</span></div>
-      <div class="wb-label">${esc(d.label)} · annual, latest available (use FRED for monthly)</div>
-      ${wbChart(d.series, isPct)}`;
-  } catch (e) { body.innerHTML = `<span class="down">World Bank error: ${esc(e.message)}</span>`; }
-}
-function wbChart(series, isPct) {
-  const pts = series.map((s) => ({ c: s.value }));
-  const last = series[series.length - 1].value, first = series[0].value;
-  return sparkline(pts, last >= first);
-}
-$('#wb-go').addEventListener('click', loadWorldBank);
-$('#wb-country').addEventListener('keydown', (e) => { if (e.key === 'Enter') loadWorldBank(); });
-$('#wb-indicator').addEventListener('change', loadWorldBank);
-
-// ===========================================================================
-//  FRED — US FEDERAL RESERVE MACRO (no key)
-// ===========================================================================
-async function loadFred() {
-  const [series, transform] = $('#fred-series').value.split('|');
-  const label = $('#fred-series').selectedOptions[0].textContent;
-  const body = $('#fred-body');
-  body.innerHTML = '<span class="muted">Loading FRED…</span>';
-  try {
-    const d = await api(`/api/fred?series=${encodeURIComponent(series)}&transform=${encodeURIComponent(transform || 'lin')}`);
-    if (!d.points || !d.points.length) { body.innerHTML = '<span class="muted">No data.</span>'; return; }
-    const last = d.points[d.points.length - 1];
-    const isLevel = /GDP/.test(series) && transform !== 'pc1';
-    const val = isLevel ? fmtBig(last.value) : fmt(last.value, 2) + '%';
-    const pts = d.points.map((p) => ({ c: p.value }));
-    body.innerHTML = `<div class="wb-headline"><span class="wb-val">${val}</span><span class="wb-yr">${esc(last.date)}</span></div>
-      <div class="wb-label">${esc(label)} · FRED</div>${sparkline(pts, last.value >= d.points[0].value)}`;
-  } catch (e) { body.innerHTML = `<span class="down">FRED error: ${esc(e.message)}</span>`; }
-}
-$('#fred-go').addEventListener('click', loadFred);
-$('#fred-series').addEventListener('change', loadFred);
-
-// ===========================================================================
-//  US INFLATION GAUGES — official CPI/PCE + trimmed-mean measures (FRED, no key)
-//  ★ = trimmed/median family: Fed Chair Warsh's preferred "underlying inflation"
-//  gauges (they strip outlier price moves instead of fixed food/energy buckets).
-// ===========================================================================
-const INFL_GAUGES = [
-  { s: 'CPIAUCSL', t: 'pc1', name: 'CPI (headline)', src: 'BLS' },
-  { s: 'CPILFESL', t: 'pc1', name: 'Core CPI', src: 'BLS' },
-  { s: 'PCEPI', t: 'pc1', name: 'PCE (headline)', src: 'BEA · Fed 2% target' },
-  { s: 'PCEPILFE', t: 'pc1', name: 'Core PCE', src: 'BEA' },
-  { s: 'PCETRIM12M159SFRBDAL', t: 'lin', name: '★ Trimmed Mean PCE', src: 'Dallas Fed' },
-  { s: 'MEDCPIM159SFRBCLE', t: 'lin', name: '★ Median CPI', src: 'Cleveland Fed' },
-  { s: 'TRMMEANCPIM159SFRBCLE', t: 'lin', name: '★ Trimmed Mean CPI', src: 'Cleveland Fed' },
-];
-function inflClass(v) {
-  const d = v - 2.0;
-  if (d <= 0.3) return 'up';
-  if (d <= 1.0) return 'warn';
-  return 'down';
-}
-async function loadInflation() {
-  const body = $('#infl-body');
-  body.innerHTML = '<span class="muted">Loading inflation gauges…</span>';
-  try {
-    const results = await Promise.all(
-      INFL_GAUGES.map((g) => api(`/api/fred?series=${g.s}&transform=${g.t}`).catch(() => null))
-    );
-    const ff = await api('/api/fred?series=FEDFUNDS&transform=lin').catch(() => null);
-    const rows = INFL_GAUGES.map((g, i) => {
-      const d = results[i];
-      if (!d || !d.points || !d.points.length) return `<div class="infl-row"><span class="infl-name">${esc(g.name)}</span><span class="muted small">n/a</span></div>`;
-      const last = d.points[d.points.length - 1];
-      const prev = d.points[d.points.length - 2];
-      const mom = prev ? last.value - prev.value : 0;
-      const when = new Date(last.date).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
-      return `<div class="infl-row" title="${esc(g.src)}">
-        <span class="infl-name">${esc(g.name)} <span class="dim small">${esc(g.src)}</span></span>
-        <span class="infl-mom ${mom > 0.005 ? 'down' : mom < -0.005 ? 'up' : 'dim'}">${mom > 0.005 ? '▲' : mom < -0.005 ? '▼' : '·'} ${fmt(Math.abs(mom), 2)}</span>
-        <span class="infl-val ${inflClass(last.value)}">${fmt(last.value, 2)}%</span>
-        <span class="infl-date dim">${when}</span></div>`;
-    }).join('');
-    const ffLast = ff && ff.points && ff.points.length ? ff.points[ff.points.length - 1].value : null;
-    body.innerHTML = `${rows}
-      <div class="infl-note">Fed target: 2% (PCE)${ffLast != null ? ` · Fed funds: ${fmt(ffLast, 2)}%` : ''} · monthly YoY, latest release
-      <br>★ Trimmed/median gauges — Chair Warsh's preferred read of underlying inflation: rank all price changes, drop the extreme tails (Dallas trims bottom 24% / top 31% of the PCE basket), average the rest. ▲▼ = change vs prior month.</div>`;
-  } catch (e) { body.innerHTML = `<span class="down">Inflation gauges error: ${esc(e.message)}</span>`; }
-}
-$('#infl-go').addEventListener('click', loadInflation);
+// World Bank, FRED and inflation are React islands (A3).
 
 // ===========================================================================
 //  DIVIDENDS (income received, from broker imports)
 // ===========================================================================
-async function loadDividends() {
-  const box = $('#dividends');
-  try {
-    const d = await api('/api/dividends' + baseQS());
-    const base = d.base || state.base;
-    const rc = d.received || { ttm: { gross: d.ttm, tax: 0, net: d.ttm }, total: { gross: d.total, tax: 0, net: d.total } };
-    const fw = d.forwardTotal || { gross: 0, tax: 0, net: 0 };
-    $('#div-ttm').textContent = fw.net ? 'FWD ' + money(base, fw.net, 0) + '/yr net' : (d.count ? 'TTM ' + money(base, rc.ttm.net) : '');
-    if (!d.count && !(d.forward || []).length) { box.innerHTML = '<span class="muted">No dividends yet — hold dividend payers, or import an IBKR statement to track income received.</span>'; return; }
-    const cell = (k, v, sub, cls) => `<div class="fxr-cell"><span class="k">${k}</span><span class="v ${cls || ''}">${v}</span><span class="s">${sub}</span></div>`;
-    const strip = [
-      fw.gross ? cell('FORWARD / YR', money(base, fw.net, 0), `net · ${money(base, fw.gross, 0)} gross`, 'up') : '',
-      fw.tax ? cell('WITHHOLDING / YR', money(base, fw.tax, 0), 'tax at source (est.)', 'down') : '',
-      d.count ? cell('RECEIVED · 12M', money(base, rc.ttm.net, 0), `net · ${money(base, rc.ttm.tax, 0)} withheld`) : '',
-      d.count ? cell('ALL-TIME', money(base, rc.total.net, 0), `net · ${d.count} payments`) : '',
-    ].join('');
-    const dd = (ms) => ms ? new Date(ms).toLocaleDateString('en-US', { month: 'short', day: '2-digit' }) : '—';
-    const fwdRows = (d.forward || []).map((f) => `<tr>
-      <td class="sym">${esc(f.symbol)}</td>
-      <td class="r">${fmt(f.perShare, 2)} <span class="dim">${esc(f.currency)}</span></td>
-      <td class="r">${f.yieldOnCost != null ? fmt(f.yieldOnCost, 2) + '%' : '—'}</td>
-      <td class="r">${f.currentYield != null ? fmt(f.currentYield, 2) + '%' : '—'}</td>
-      <td class="r up">${money(base, f.annualNet, 0)}</td>
-      <td class="r">${dd(f.nextEx)}${f.nextExEstimated ? '<span class="dim">~</span>' : ''}</td></tr>`).join('');
-    const recent = (d.recent || []).slice(0, 8).map((r) => `<div class="dr"><span>${esc(r.date)}</span><span class="ds">${esc(r.symbol)}</span>` +
-      `<span>${money(base, r.baseNet ?? r.baseAmount)}${r.baseTax ? ` <span class="dim">(−${money(base, r.baseTax)}${r.whtActual ? '' : ' est.'})</span>` : ''}</span></div>`).join('');
-    const w = d.withholding || {};
-    box.innerHTML = `<div class="div-strip">${strip}</div>` +
-      (fwdRows ? `<div class="fxr-sub">FORWARD INCOME · current holdings</div><table class="tbl div-tbl"><thead><tr><th>SYM</th><th class="r">/SHARE·YR</th><th class="r">YOC</th><th class="r">YIELD</th><th class="r">NET/YR</th><th class="r">NEXT EX</th></tr></thead><tbody>${fwdRows}</tbody></table>` : '') +
-      (recent ? `<div class="fxr-sub">RECEIVED · net of withholding</div><div class="div-recent">${recent}</div>` : '') +
-      `<div class="fxr-note">Withholding assumed: US ${w.US ?? 30}% · SG ${w.SG ?? 0}% · HK ${w.HK ?? 0}% · EU ${w.EU ?? 15}% (IBKR statements use the actual tax). Change with <b>WHT US 15</b>. ~ = estimated from payment history. YOC = yield on your cost.</div>`;
-  } catch (e) { box.innerHTML = `<span class="down">${esc(e.message)}</span>`; }
-}
+// Command/test adapter until F7; B3 owns the account-keyed query.
+function loadDividends() { return window.FinSight.bus.invalidate('dividends'); }
 
 // ===========================================================================
 //  WATCHLIST
 // ===========================================================================
-async function loadWatchlist() {
-  try { renderWatchlist((await api('/api/watchlist')).watchlist); } catch {}
-}
-function renderWatchlist(list) {
-  lastWatch = list || []; pushChartWatch();
-  $('#watchlist').innerHTML = (list && list.length) ? list.map((w) => {
-    if (w.error) return `<div class="wl-row"><span class="wl-sym">${esc(w.symbol)}</span><span class="muted small">n/a</span><span></span><button class="wl-x" data-sym="${esc(w.symbol)}">✕</button></div>`;
-    return `<div class="wl-row" data-sym="${esc(w.symbol)}">
-      <div><span class="wl-sym">${esc(w.symbol)}</span> <span class="wl-name">${esc(w.name || '').slice(0, 16)}</span></div>
-      <span class="wl-px">${fmt(w.price, w.price < 10 ? 4 : 2)}</span>
-      <span class="wl-chg ${signClass(w.changePct)}">${signStr(w.changePct)}%</span>
-      <button class="wl-x" data-sym="${esc(w.symbol)}">✕</button></div>`;
-  }).join('') : '<div class="wl-empty">Empty — add a symbol above, or type <b>WATCH NVDA</b>.</div>';
-}
-$('#watch-toggle').addEventListener('click', () => { $('#watch-form').classList.toggle('hidden'); $('#watch-symbol').focus(); });
-$('#watch-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const s = $('#watch-symbol').value.trim().toUpperCase();
-  if (!s) return;
-  try {
-    const res = await api('/api/watchlist/add', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ symbol: s }) });
-    renderWatchlist(res.watchlist); $('#watch-symbol').value = ''; $('#watch-suggest').classList.add('hidden'); setStatus(`Watching ${s}`, 'ok');
-  } catch (err) { setStatus('Watch failed: ' + err.message, 'err'); }
-});
-$('#watchlist').addEventListener('click', async (e) => {
-  const x = e.target.closest('.wl-x');
-  if (x) {
-    e.stopPropagation();
-    const res = await api('/api/watchlist/remove', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ symbol: x.dataset.sym }) });
-    return renderWatchlist(res.watchlist);
-  }
-  const row = e.target.closest('[data-sym]'); if (row) selectSymbol(row.dataset.sym);
-});
+// Command adapter until F7; the watchlist query owns loading and polling.
+function loadWatchlist() { return window.FinSight.bus.invalidate('watchlist'); }
 
 // ===========================================================================
 //  PRICE ALERTS + NOTIFICATIONS
 // ===========================================================================
-let notifiedAlerts = null; // seeded on first load so pre-existing triggers don't re-fire
-async function loadAlerts() {
-  try { renderAlerts((await api('/api/alerts')).alerts); } catch {}
-}
-function renderAlerts(alerts, fromChart) {
-  alerts = alerts || [];
-  if (notifiedAlerts === null) {
-    notifiedAlerts = new Set(alerts.filter((a) => a.triggeredAt).map((a) => a.id));
-  } else {
-    alerts.forEach((a) => {
-      if (a.met && a.triggeredAt && !notifiedAlerts.has(a.id)) {
-        notifiedAlerts.add(a.id);
-        notify('ALERT', `${a.label || a.symbol} — now ${a.currentValue != null ? fmt(a.currentValue) : fmt(a.currentPrice)}`);
-      }
-    });
-  }
-  // charts draw their symbol's alerts; they also post here after adding one
-  window.__finAlerts = alerts;
-  if (!fromChart) window.dispatchEvent(new CustomEvent('finsight:alerts', { detail: { alerts, from: 'app' } }));
-  $('#alerts').innerHTML = alerts.length ? alerts.map((a) => `
-    <div class="al-row ${a.met ? 'met' : ''}">
-      <div><span class="al-sym" data-sym="${esc(a.symbol)}">${esc(a.symbol)}</span> <span class="al-cond">${esc((a.label || '').replace(a.symbol + ' ', ''))}</span>
-        <span class="muted small">now ${a.currentValue != null ? fmt(a.currentValue) : '—'}${a.level != null && a.kind !== 'price' ? ' · level ' + fmt(a.level) : ''}</span></div>
-      <span class="al-badge">${a.met ? 'TRIGGERED' : 'armed'}</span>
-      <button class="al-x" data-id="${esc(a.id)}">✕</button></div>`).join('')
-    : '<div class="al-empty">No alerts — add one above, type <b>ALERT AAPL > 320</b>, or use the bell on the chart (price, trend line, RSI, moving average).</div>';
-}
-window.addEventListener('finsight:alerts', (e) => { if (e.detail && e.detail.from === 'chart') renderAlerts(e.detail.alerts, true); });
-$('#alert-toggle').addEventListener('click', () => { $('#alert-form').classList.toggle('hidden'); $('#alert-symbol').focus(); requestNotify(); });
-$('#alert-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const symbol = $('#alert-symbol').value.trim().toUpperCase();
-  const op = $('#alert-op').value, price = $('#alert-price').value;
-  if (!symbol || !price) return setStatus('Alert needs a symbol and a price.', 'err');
-  try {
-    const res = await api('/api/alerts/add', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ symbol, op, price }) });
-    renderAlerts(res.alerts); $('#alert-symbol').value = ''; $('#alert-price').value = '';
-    setStatus(`Alert set: ${symbol} ${op} ${price}`, 'ok'); requestNotify();
-  } catch (err) { setStatus('Alert failed: ' + err.message, 'err'); }
-});
-$('#alerts').addEventListener('click', async (e) => {
-  const sy = e.target.closest('.al-sym'); if (sy) return selectSymbol(sy.dataset.sym);
-  const x = e.target.closest('.al-x'); if (!x) return;
-  const res = await api('/api/alerts/remove', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: x.dataset.id }) });
-  renderAlerts(res.alerts);
-});
+// Alerts are a React island. Keep command permission/refresh adapters until F7.
+function loadAlerts() { return window.FinSight.bus.invalidate('alerts'); }
 function requestNotify() {
   if ('Notification' in window && Notification.permission === 'default') { try { Notification.requestPermission(); } catch {} }
-}
-function notify(head, body) {
-  toast(head, body); beep();
-  if ('Notification' in window && Notification.permission === 'granted') { try { new Notification(head, { body }); } catch {} }
-}
-function toast(head, body) {
-  const el = document.createElement('div');
-  el.className = 'toast';
-  el.innerHTML = `<div class="toast-h">🔔 ${esc(head)}</div><div class="toast-b">${esc(body)}</div>`;
-  $('#toasts').appendChild(el);
-  setTimeout(() => { el.style.transition = 'opacity .4s'; el.style.opacity = '0'; setTimeout(() => el.remove(), 400); }, 9000);
-}
-function beep() {
-  try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const o = ctx.createOscillator(), g = ctx.createGain();
-    o.connect(g); g.connect(ctx.destination);
-    o.type = 'sine'; o.frequency.value = 880; g.gain.value = 0.05;
-    o.start(); o.stop(ctx.currentTime + 0.15);
-    o.onended = () => ctx.close();
-  } catch {}
 }
 
 // ===========================================================================
@@ -963,26 +513,6 @@ function loadNews(symbol) {
 $('#import-btn').addEventListener('click', () => { state.importOpen = true; });
 $('#export-btn').addEventListener('click', () => window.FinSight.actions.exportPortfolio());
 
-// reusable symbol search for the watchlist field
-function setupSearch(input, box, onPick) {
-  let timer = null, items = [];
-  input.addEventListener('input', () => {
-    clearTimeout(timer);
-    const q = input.value.trim();
-    if (q.length < 1) { box.classList.add('hidden'); return; }
-    timer = setTimeout(async () => {
-      try {
-        items = await api('/api/search?q=' + encodeURIComponent(q));
-        if (!items.length) { box.classList.add('hidden'); return; }
-        box.innerHTML = items.map((s, i) => `<div data-i="${i}"><span class="s-sym">${esc(s.symbol)}</span> <span class="s-meta">${esc(s.name).slice(0, 26)} · ${esc(s.exchange)}</span></div>`).join('');
-        box.classList.remove('hidden');
-      } catch { box.classList.add('hidden'); }
-    }, 200);
-  });
-  box.addEventListener('click', (e) => { const d = e.target.closest('[data-i]'); if (d) { onPick(items[+d.dataset.i]); box.classList.add('hidden'); } });
-  document.addEventListener('click', (e) => { if (!box.parentElement.contains(e.target)) box.classList.add('hidden'); });
-}
-setupSearch($('#watch-symbol'), $('#watch-suggest'), (s) => { if (s) $('#watch-symbol').value = s.symbol; });
 
 // ===========================================================================
 //  PORTFOLIO ANALYTICS: performance, net worth, allocation and heatmap are
@@ -1044,7 +574,6 @@ $('#account-sel').addEventListener('change', async () => {
   if (v === '__manage') { $('#account-sel').value = state.account; renderAccountsList(); return $('#accounts-modal').classList.remove('hidden'); }
   state.account = v; localStorage.setItem('finsight-account', v);
   await loadPortfolio();
-  loadCalendar(); // holdings' earnings / ex-div dates follow the account
 });
 async function newAccountPrompt() {
   const name = (prompt('New account name (e.g. Crypto, SGX, IBKR):') || '').trim();
@@ -1102,11 +631,6 @@ async function boot() {
   applyProfileName();
   if (!profile.setupDone) openSetup(); // first-launch wizard
   await loadPortfolio();
-  loadWatchlist();
-  loadAlerts();
-  loadWorldBank();
-  loadFred();
-  loadCalendar();
   setFooter(`READY · base ${state.base} · live data refreshing every 15s`);
   startPolling();
 }
@@ -1122,12 +646,7 @@ function startPolling() {
   if (document.hidden) return;
   pollTimers.push(
     setInterval(loadPortfolio, 15000),
-    setInterval(loadWatchlist, 15000),
-    setInterval(loadAlerts, 30000), // the server also evaluates alerts every minute and notifies
     // macro panels change slowly — auto-refresh every 15 min (the LOAD buttons still work)
-    setInterval(loadWorldBank, 15 * 60000),
-    setInterval(loadFred, 15 * 60000),
-    setInterval(loadCalendar, 15 * 60000),
   );
 }
 function stopTimers() { pollTimers.forEach(clearInterval); pollTimers = []; }
@@ -1137,9 +656,9 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden) { hiddenAt = Date.now(); stopTimers(); return; }
   // back in view: refresh what went stale, then resume the timers
   if (Date.now() - hiddenAt > 10000) {
-    loadPortfolio(); window.FinSight.bus.invalidate('markets'); loadWatchlist(); loadAlerts();
+    loadPortfolio(); window.FinSight.bus.invalidate('markets'); window.FinSight.bus.invalidate('watchlist'); window.FinSight.bus.invalidate('alerts');
     window.FinSight.bus.invalidate('quote'); // the detail island re-reads the quote
-    if (Date.now() - hiddenAt > 15 * 60000) { loadWorldBank(); loadFred(); loadCalendar(); }
+    if (Date.now() - hiddenAt > 15 * 60000) { window.FinSight.bus.invalidate('worldbank'); window.FinSight.bus.invalidate('fred'); window.FinSight.bus.invalidate('calendar'); window.FinSight.bus.invalidate('events'); }
   }
   startPolling();
 });

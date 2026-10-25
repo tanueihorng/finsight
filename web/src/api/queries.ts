@@ -48,8 +48,7 @@ export function useAlerts() {
   return useQuery({ queryKey: ['alerts'], enabled, staleTime: 30_000, refetchInterval: 30_000,
     queryFn: ({ signal }) => api<{ alerts: Alert[] }>('/api/alerts', { signal }) });
 }
-// Legacy loadFxRisk() runs when holdings, cash, account or base change, or at
-// most every 2 minutes; mutations invalidate 'fx-risk' for the first case.
+// Shared by summary and FX risk: writes invalidate this key; poll every 2 minutes.
 export function useFxRisk() {
   const { base, account, enabled } = useScope();
   return useQuery({ queryKey: ['fx-risk', base, account], enabled, staleTime: 120_000, refetchInterval: 120_000,
@@ -134,4 +133,47 @@ export function useQuote(symbol: string | null) {
       const q = d?.quotes?.[0];
       return q && !q.error ? q as QuotedQuote : null;
     } });
+}
+
+export function useCalendar() {
+  const { enabled } = useScope();
+  return useQuery({ queryKey: ['calendar'], enabled, staleTime: 900_000, refetchInterval: 900_000,
+    queryFn: ({ signal }) => api<import('../../../shared/types.ts').CalendarResponse>('/api/calendar', { signal }) });
+}
+export function useEvents() {
+  const { base, account, enabled } = useScope();
+  return useQuery({ queryKey: ['events', base, account], enabled, staleTime: 900_000, refetchInterval: 900_000,
+    queryFn: ({ signal }) => api<import('../../../shared/types.ts').EventsResponse>(`/api/events?base=${encodeURIComponent(base)}&account=${encodeURIComponent(account)}`, { signal }) });
+}
+export function useWorldBank(country: string, indicator: string) {
+  const { enabled } = useScope();
+  return useQuery({ queryKey: ['worldbank', country, indicator], enabled, staleTime: 900_000, refetchInterval: 900_000,
+    queryFn: ({ signal }) => api<import('../../../shared/types.ts').WorldBankResponse>(`/api/worldbank?country=${encodeURIComponent(country)}&indicator=${encodeURIComponent(indicator)}`, { signal }) });
+}
+export function useFred(series: string, transform: string) {
+  const { enabled } = useScope();
+  return useQuery({ queryKey: ['fred', series, transform], enabled, staleTime: 900_000, refetchInterval: 900_000,
+    queryFn: ({ signal }) => api<import('../../../shared/types.ts').FredResponse>(`/api/fred?series=${encodeURIComponent(series)}&transform=${encodeURIComponent(transform)}`, { signal }) });
+}
+export function useInflation(requested: boolean) {
+  const { enabled } = useScope();
+  return useQuery({ queryKey: ['inflation'], enabled: enabled && requested, staleTime: Infinity,
+    queryFn: async ({ signal }) => {
+      const { INFL_GAUGES } = await import('../features/macro/macro.ts');
+      const gauges = await Promise.all(INFL_GAUGES.map((g) => api<import('../../../shared/types.ts').FredResponse>(`/api/fred?series=${g.s}&transform=${g.t}`, { signal }).catch(() => null)));
+      const funds = await api<import('../../../shared/types.ts').FredResponse>('/api/fred?series=FEDFUNDS&transform=lin', { signal }).catch(() => null);
+      return { gauges, funds };
+    } });
+}
+
+export function useSearch(text: string) {
+  const { enabled } = useScope();
+  return useQuery<import('../../../shared/types.ts').SearchItem[]>({ queryKey: ['search', text], enabled: enabled && text.length > 0, staleTime: 0, placeholderData: (previous) => previous,
+    queryFn: ({ signal }) => api<import('../../../shared/types.ts').SearchItem[]>('/api/search?q=' + encodeURIComponent(text), { signal }) });
+}
+
+export function useDividends() {
+  const { base, account, enabled } = useScope();
+  return useQuery({ queryKey: ['dividends', base, account], enabled, staleTime: 120_000, refetchInterval: 120_000,
+    queryFn: ({ signal }) => api<import('../../../shared/types.ts').DividendsReport>(`/api/dividends?base=${encodeURIComponent(base)}&account=${encodeURIComponent(account)}`, { signal }) });
 }

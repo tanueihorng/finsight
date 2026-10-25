@@ -17,4 +17,13 @@ export const islands: IslandRegistry = {
   allocation: () => import('./features/analytics/AllocationIsland.tsx'),
   heatmap: () => import('./features/analytics/HeatmapIsland.tsx'),
   detail: () => import('./features/detail/DetailIsland.tsx'),
+  calendar: () => import('./features/macro/CalendarIsland.tsx'),
+  worldbank: () => import('./features/macro/WorldBankIsland.tsx'),
+  fred: () => import('./features/macro/FredIsland.tsx'),
+  inflation: () => import('./features/macro/InflationIsland.tsx'),
+  watchlist: () => import('./features/watchlist/WatchlistIsland.tsx'),
+  alerts: () => import('./features/alerts/AlertsIsland.tsx'),
+  dividends: () => import('./features/dividends/DividendsIsland.tsx'),
+  activity: () => import('./features/activity/ActivityIsland.tsx'),
+  fxrisk: () => import('./features/fxrisk/FxRiskIsland.tsx'),
 };
