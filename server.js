@@ -69,6 +69,9 @@ const MIME = {
   '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.svg': 'image/svg+xml',
   '.ico': 'image/x-icon', '.png': 'image/png', '.webmanifest': 'application/manifest+json',
 };
+// Content-hashed build chunks (esbuild's 8-character hash) never change under
+// the same URL, so the browser may keep them without asking again (H1).
+const HASHED_CHUNK = /^\/app\/chunks\/[^/]+-[A-Z0-9]{8}\.(js|css)$/;
 function serveStatic(req, res, pathname) {
   let rel = pathname === '/' ? '/index.html' : pathname;
   const filePath = path.normalize(path.join(PUBLIC_DIR, rel));
@@ -82,7 +85,8 @@ function serveStatic(req, res, pathname) {
     // no-cache = revalidate each load, so UI updates (and sw.js) are never stuck;
     // the ETag lets an unchanged file answer 304 with no body.
     const etag = 'W/"' + st.size.toString(36) + '-' + Math.floor(st.mtimeMs).toString(36) + '"';
-    const head = { 'Content-Type': MIME[path.extname(filePath)] || 'application/octet-stream', 'Cache-Control': 'no-cache', ETag: etag };
+    const cache = HASHED_CHUNK.test(rel) ? 'public, max-age=31536000, immutable' : 'no-cache';
+    const head = { 'Content-Type': MIME[path.extname(filePath)] || 'application/octet-stream', 'Cache-Control': cache, ETag: etag };
     if (req.headers['if-none-match'] === etag) { res.writeHead(304, head); return res.end(); }
     fs.readFile(filePath, (err, buf) => {
       if (err) { res.writeHead(404); return res.end('Not found'); }

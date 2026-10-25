@@ -1,4 +1,4 @@
-import { api } from '../api/client.ts';
+import { earlyAuthStatus, loadAccountsList } from '../api/early.ts';
 import { setFooter } from '../legacy/app.ts';
 import type { Accounts } from '../../../shared/types.ts';
 
@@ -11,7 +11,7 @@ const body = () => document.body.classList;
 
 export async function loadAccounts() {
   try {
-    const d = await api<Accounts>('/api/accounts');
+    const d = await loadAccountsList();
     const accounts = d.accounts || [];
     const exists = (id: string | null) => id === 'ALL' || accounts.some((a) => a.id === id);
     let account = store().getState().account;
@@ -51,9 +51,10 @@ function showOffline() {
 export async function checkAuth() {
   let st: { authed?: boolean; pinSet?: boolean };
   try {
-    const r = await fetch('/api/auth/status');
-    if (!r.ok) throw new Error();
-    st = await r.json();
+    st = await (earlyAuthStatus() ?? fetch('/api/auth/status').then((r) => {
+      if (!r.ok) throw new Error();
+      return r.json();
+    }));
   } catch { return showOffline(); }
   if (st.authed) showApp();
   else { store().setState({ lock: { ...store().getState().lock, msg: '' } }); showLock(st.pinSet ? 'enter' : 'create'); }

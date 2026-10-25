@@ -1,7 +1,0 @@
-{
-  "version": 3,
-  "sources": ["../../../web/src/ui/primitives.module.css"],
-  "sourcesContent": ["import \"./primitives.module.css?scoped\";\nexport default {\"privateValue\":\"fs-primitives-01e13_privateValue\",\"empty\":\"fs-primitives-01e13_empty\",\"error\":\"fs-primitives-01e13_error\"};"],
-  "mappings": "AACA,IAAOA,EAAQ,CAAC,aAAe,mCAAmC,MAAQ,4BAA4B,MAAQ,2BAA2B",
-  "names": ["primitives_default"]
-}

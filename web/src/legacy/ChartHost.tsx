@@ -1,9 +1,10 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { selectSymbol } from './app.ts';
 import type { ChartLoadContext, PriceChartInstance } from './chart.d.ts';
 import type { HistoryPoint, QuotedQuote } from '../../../shared/types.ts';
 import { CHART_TF_RANGE } from '../features/detail/detail.ts';
 import { chartHooks } from '../shell/chartHooks.ts';
+import { loadChartScripts } from './chartScripts.ts';
 
 // Wraps the legacy canvas chart (public/chart.js) without rewriting it (E2).
 // React owns only the wrapper div. The chart's own root (#detail-chart-host)
@@ -18,10 +19,18 @@ const hooks = () => chartHooks;
 export function ChartHost({ data, tradesKey }: { data: ChartData | null; tradesKey: string }) {
   const wrap = useRef<HTMLDivElement>(null);
   const chart = useRef<PriceChartInstance | null>(null);
+  // chart.js loads after the app starts (H1); the chart is created once it is in.
+  const [scripts, setScripts] = useState(() => !!window.PriceChart);
+  useEffect(() => {
+    if (scripts) return;
+    let live = true;
+    loadChartScripts().then(() => { if (live) setScripts(true); }, () => { /* no chart, as when chart.js failed to load */ });
+    return () => { live = false; };
+  }, [scripts]);
 
   useEffect(() => {
     const PriceChart = window.PriceChart;
-    if (!PriceChart || !wrap.current) return;
+    if (!scripts || !PriceChart || !wrap.current) return;
     const host = document.createElement('div');
     host.id = 'detail-chart-host';
     wrap.current.appendChild(host);
@@ -37,7 +46,7 @@ export function ChartHost({ data, tradesKey }: { data: ChartData | null; tradesK
       chart.current = null;
       if (window.detailChart === c) window.detailChart = null;
     };
-  }, []);
+  }, [scripts]);
   // New bars (symbol, range or an intraday refresh): load them. An identical
   // refetch keeps the same data object, so the chart is not reloaded.
   useEffect(() => {
@@ -47,13 +56,13 @@ export function ChartHost({ data, tradesKey }: { data: ChartData | null; tradesK
     // counted the indicator panes. Here the chart mounts before data: re-size.
     chart.current.resize();
     hooks()?.loaded();
-  }, [data]);
+  }, [data, scripts]);
   // Trade markers: on each symbol/range load and whenever a write changes trades.
   useEffect(() => {
     const c = chart.current, symbol = data?.symbol;
     if (!c || !symbol) return;
     void hooks()?.trades(c, symbol);
     return window.FinSight.bus.on('chart-trades', () => hooks()?.trades(c, symbol));
-  }, [tradesKey]); // deliberately not [data]: a quote/bar refresh is not a new load
+  }, [tradesKey, scripts]); // deliberately not [data]: a quote/bar refresh is not a new load
   return <div ref={wrap} className="detail-chart-wrap" />;
 }

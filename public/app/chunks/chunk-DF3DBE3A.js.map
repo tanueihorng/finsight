@@ -1,7 +1,0 @@
-{
-  "version": 3,
-  "sources": ["../../../web/src/features/command/StatusIsland.tsx"],
-  "sourcesContent": ["import { useStore } from 'zustand';\n\n// The command status line and the footer message (F7). Both read the store,\n// which legacy setStatus/setFooter and the islands write, so a message sent\n// before these islands mount still shows.\nexport default function StatusIsland() {\n  const status = useStore(window.FinSight.store, (s) => s.status);\n  return <div id=\"cmd-status\" className={'cmd-status ' + status.kind}>{status.msg}</div>;\n}\nexport function FooterIsland() {\n  const footer = useStore(window.FinSight.store, (s) => s.footer);\n  return <span id=\"footer-msg\">{footer}</span>;\n}\n"],
-  "mappings": "wHAOS,IAAAA,EAAA,SAFM,SAARC,GAAgC,CACrC,IAAMC,EAASC,EAAS,OAAO,SAAS,MAAQC,GAAMA,EAAE,MAAM,EAC9D,SAAO,OAAC,OAAI,GAAG,aAAa,UAAW,cAAgBF,EAAO,KAAO,SAAAA,EAAO,IAAI,CAClF,CACO,SAASG,GAAe,CAC7B,IAAMC,EAASH,EAAS,OAAO,SAAS,MAAQC,GAAMA,EAAE,MAAM,EAC9D,SAAO,OAAC,QAAK,GAAG,aAAc,SAAAE,EAAO,CACvC",
-  "names": ["import_jsx_runtime", "StatusIsland", "status", "useStore", "s", "FooterIsland", "footer"]
-}

@@ -1,7 +1,0 @@
-{
-  "version": 3,
-  "sources": ["../../../web/src/features/clock/ClockIsland.tsx"],
-  "sourcesContent": ["import { useEffect, useState } from 'react';\n// Same locale/options and one-second cadence as the legacy tick().\nconst clockText = () => {\n  const d = new Date();\n  return d.toLocaleTimeString('en-US', { hour12: false }) + ' ' +\n    d.toLocaleDateString('en-US', { month: 'short', day: '2-digit' }).toUpperCase();\n};\nexport default function ClockIsland() {\n  const [text, setText] = useState(clockText);\n  useEffect(() => {\n    const timer = setInterval(() => setText(clockText()), 1000);\n    return () => clearInterval(timer);\n  }, []);\n  return <>{text}</>;\n}\n"],
-  "mappings": "wHAAA,IAAAA,EAAoC,SAa3BC,EAAA,SAXHC,EAAY,IAAM,CACtB,IAAMC,EAAI,IAAI,KACd,OAAOA,EAAE,mBAAmB,QAAS,CAAE,OAAQ,EAAM,CAAC,EAAI,IACxDA,EAAE,mBAAmB,QAAS,CAAE,MAAO,QAAS,IAAK,SAAU,CAAC,EAAE,YAAY,CAClF,EACe,SAARC,GAA+B,CACpC,GAAM,CAACC,EAAMC,CAAO,KAAI,YAASJ,CAAS,EAC1C,sBAAU,IAAM,CACd,IAAMK,EAAQ,YAAY,IAAMD,EAAQJ,EAAU,CAAC,EAAG,GAAI,EAC1D,MAAO,IAAM,cAAcK,CAAK,CAClC,EAAG,CAAC,CAAC,KACE,mBAAG,SAAAF,EAAK,CACjB",
-  "names": ["import_react", "import_jsx_runtime", "clockText", "d", "ClockIsland", "text", "setText", "timer"]
-}
