@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { useDividends } from '../../api/queries.ts';
 import { PanelHeadSlot } from '../../ui/PanelHeadSlot.tsx';
@@ -6,6 +7,7 @@ function Cell({ label, value, sub, color = '' }: { label: string; value: ReactNo
   return <div className="fxr-cell"><span className="k">{label}</span><span className={`v ${color}`}>{value}</span><span className="s">{sub}</span></div>;
 }
 export default function DividendsIsland() {
+  useEffect(() => { const el = document.getElementById('dividends'); if (el) { el.tabIndex = 0; el.setAttribute('aria-label', 'Dividend income'); } }, []);
   // intended fix (B3): an old account's income response cannot replace a new
   // account's view. The query key scopes cache and cancellation to account/base.
   const q = useDividends(), d = q.data;

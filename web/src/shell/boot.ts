@@ -1,4 +1,5 @@
 import { earlyAuthStatus, loadAccountsList } from '../api/early.ts';
+import { installKeyboardLayout } from './layout.ts';
 import { setFooter } from '../legacy/app.ts';
 import type { Accounts } from '../../../shared/types.ts';
 
@@ -63,6 +64,7 @@ export async function checkAuth() {
 let started = false;
 export function startShell() {
   if (started) return; started = true;
+  installKeyboardLayout();
   window.addEventListener('finsight:locked', () => { if (!body().contains('locked')) showLock('enter'); });
   window.addEventListener('finsight:unlocked', () => { if (body().contains('locked')) showApp(); });
   window.FinSight.bus.on('accounts', () => loadAccounts());

@@ -1,6 +1,7 @@
 import { useEffect, useReducer, useRef, useState } from 'react';
 import { useStore } from 'zustand';
 import { api } from '../../api/client.ts';
+import { useModalFocus } from '../../ui/modalFocus.ts';
 import type { Accounts, Portfolio } from '../../../../shared/types.ts';
 import { planCashSave, type CashDraft } from './cash.ts';
 
@@ -34,6 +35,7 @@ export default function CashEditorIsland() {
   const saving = useRef<Promise<void> | null>(null);
   const focusNew = useRef(false);
   const editorRef = useRef<HTMLDivElement>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -75,6 +77,7 @@ export default function CashEditorIsland() {
   }
   const queue = (delay = 700) => { clearTimeout(timer.current); timer.current = setTimeout(() => void save(), delay); };
   const close = async () => { await save(); store().setState({ cashEditorOpen: false }); };
+  useModalFocus(open, () => void close(), boxRef, { initialFocus: () => editorRef.current?.querySelector<HTMLElement>('.cash-amt') ?? null });
   const edit = (ai: number, ri: number, field: 'ccy' | 'amount', value: string) => {
     const r = drafts.current[ai]!.rows[ri]!;
     if (field === 'ccy') r.ccy = value.toUpperCase(); else r.amount = value;
@@ -83,10 +86,10 @@ export default function CashEditorIsland() {
 
   return (
     <div id="cash-modal" className={open ? 'modal' : 'modal hidden'}>
-      <div className="modal-box">
+      <div className="modal-box" ref={boxRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Cash · edit balances">
         <div className="modal-head">
           <span className="panel-title">CASH &nbsp;·&nbsp; EDIT BALANCES</span>
-          <button id="cash-close" className="x-btn" title="Close" onClick={() => void close()}>✕</button>
+          <button id="cash-close" aria-label="Close dialog" className="x-btn" title="Close" onClick={() => void close()}>✕</button>
         </div>
         <div className="modal-body">
           <p className="muted small">Click an amount and type the new balance. It <b>saves automatically</b>, and net worth, the breakdown chart and FX exposure update straight away. Set an amount to 0 or press ✕ to remove it.</p>
@@ -96,11 +99,11 @@ export default function CashEditorIsland() {
                 <div className="cash-acct-name">{a.name}</div>
                 {a.rows.map((r, ri) => (
                   <div className="cash-row" key={ri}>
-                    <input className="cash-ccy" data-a={ai} data-r={ri} value={r.ccy} maxLength={3} placeholder="CCY"
+                    <input aria-label={`${a.name} currency ${ri + 1}`} className="cash-ccy" data-a={ai} data-r={ri} value={r.ccy} maxLength={3} placeholder="CCY"
                       onChange={(e) => edit(ai, ri, 'ccy', e.target.value)} onBlur={() => queue(0)} />
-                    <input className="cash-amt" data-a={ai} data-r={ri} value={r.amount} inputMode="decimal" placeholder="0.00"
+                    <input aria-label={`${a.name} ${r.ccy} balance`} className="cash-amt" data-a={ai} data-r={ri} value={r.amount} inputMode="decimal" placeholder="0.00"
                       onChange={(e) => edit(ai, ri, 'amount', e.target.value)} onBlur={() => queue(0)} />
-                    <button className="x-btn" data-del-a={ai} data-del-r={ri} title="Remove"
+                    <button className="x-btn" data-del-a={ai} data-del-r={ri} title="Remove" aria-label={`Remove ${r.ccy} balance from ${a.name}`}
                       onClick={() => { a.rows.splice(ri, 1); rerender(); queue(0); }}>✕</button>
                   </div>
                 ))}

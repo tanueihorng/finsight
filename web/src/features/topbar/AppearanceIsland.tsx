@@ -17,12 +17,12 @@ export default function AppearanceIsland() {
     <>
       <div className="setup-label muted small">APPEARANCE — theme</div>
       <div id="theme-list" className="swatch-row">
-        {THEMES.map((t) => <button key={t.id} className={'swatch' + (t.id === theme ? ' on' : '')} data-theme={t.id} onClick={() => apply('theme', t.id)}>
+        {THEMES.map((t) => <button key={t.id} className={'swatch' + (t.id === theme ? ' on' : '')} data-theme={t.id} aria-pressed={t.id === theme} onClick={() => apply('theme', t.id)}>
           <span className="dot" style={{ background: t.accent }}></span>{t.label}</button>)}
       </div>
       <div className="setup-label muted small" style={{ marginTop: 12 }}>APPEARANCE — font</div>
       <div id="font-list" className="swatch-row">
-        {FONTS.map((f) => <button key={f.id} className={'font-btn' + (f.id === font ? ' on' : '')} data-font={f.id} onClick={() => apply('font', f.id)}>{f.label}</button>)}
+        {FONTS.map((f) => <button key={f.id} className={'font-btn' + (f.id === font ? ' on' : '')} data-font={f.id} aria-pressed={f.id === font} onClick={() => apply('font', f.id)}>{f.label}</button>)}
       </div>
     </>
   );

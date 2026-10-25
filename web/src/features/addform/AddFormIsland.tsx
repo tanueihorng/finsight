@@ -16,7 +16,11 @@ export default function AddFormIsland() {
   const [items, setItems] = useState<SearchResult[]>([]), [shown, setShown] = useState(false), [idx, setIdx] = useState(-1);
   const symbolRef = useRef<HTMLInputElement>(null), qtyRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { if (open) symbolRef.current?.focus(); }, [open]);
+  useEffect(() => {
+    const button = document.getElementById('add-toggle');
+    button?.setAttribute('aria-expanded', String(open)); button?.setAttribute('aria-controls', 'add-form');
+    if (open) symbolRef.current?.focus();
+  }, [open]);
   useEffect(() => {
     const outside = (e: MouseEvent) => { if (!(e.target as Element | null)?.closest?.('.add-field')) setShown(false); };
     document.addEventListener('click', outside);
@@ -47,7 +51,7 @@ export default function AddFormIsland() {
     if (!shown) return;
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); setIdx((i) => moveIndex(i, e.key === 'ArrowDown' ? 1 : -1, items.length)); }
     else if (e.key === 'Enter' && idx >= 0) { e.preventDefault(); pick(items[idx]); }
-    else if (e.key === 'Escape') setShown(false);
+    else if (e.key === 'Escape') { e.stopPropagation(); setShown(false); }
   };
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -64,20 +68,22 @@ export default function AddFormIsland() {
   };
 
   return (
-    <form id="add-form" className={open ? 'add-form' : 'add-form hidden'} autoComplete="off" onSubmit={(e) => void onSubmit(e)}>
+    <form id="add-form" className={open ? 'add-form' : 'add-form hidden'} autoComplete="off" aria-label="Add holding" onKeyDown={(e) => {
+      if (e.key === 'Escape') { window.FinSight.store.setState({ addFormOpen: false }); document.getElementById('add-toggle')?.focus(); }
+    }} onSubmit={(e) => void onSubmit(e)}>
       <div className="add-field">
-        <input id="add-symbol" ref={symbolRef} placeholder="SYMBOL (e.g. AAPL)" value={symbol} onChange={(e) => { setSymbol(e.target.value); setQuery(e.target.value); }} onKeyDown={onKey} />
-        <div id="add-suggest" className={shown ? 'suggest' : 'suggest hidden'}>
+        <input id="add-symbol" aria-label="Symbol to buy" role="combobox" aria-autocomplete="list" aria-expanded={shown} aria-controls="add-suggest" aria-activedescendant={shown && idx >= 0 ? `add-option-${idx}` : undefined} ref={symbolRef} placeholder="SYMBOL (e.g. AAPL)" value={symbol} onChange={(e) => { setSymbol(e.target.value); setQuery(e.target.value); }} onKeyDown={onKey} />
+        <div id="add-suggest" role="listbox" aria-label="Symbol suggestions" className={shown ? 'suggest' : 'suggest hidden'}>
           {items.map((s, i) => (
-            <div key={s.symbol + i} data-i={i} className={i === idx ? 'active' : undefined} onClick={() => pick(s)}>
+            <div key={s.symbol + i} id={`add-option-${i}`} role="option" aria-selected={i === idx} data-i={i} className={i === idx ? 'active' : undefined} onClick={() => pick(s)}>
               <span className="s-sym">{s.symbol}</span> <span className="s-meta">{s.name.slice(0, 30)} · {s.exchange} · {s.type}</span>
             </div>
           ))}
         </div>
       </div>
-      <input id="add-qty" ref={qtyRef} type="number" step="any" min="0" placeholder="QTY" value={qty} onChange={(e) => setQty(e.target.value)} />
-      <input id="add-price" type="number" step="any" min="0" placeholder="AVG PRICE" value={price} onChange={(e) => setPrice(e.target.value)} />
-      <input id="add-date" type="date" title="Optional purchase date — records the real FX rate for an accurate Stock vs FX split" value={date} onChange={(e) => setDate(e.target.value)} />
+      <input id="add-qty" aria-label="Quantity to buy" ref={qtyRef} type="number" step="any" min="0" placeholder="QTY" value={qty} onChange={(e) => setQty(e.target.value)} />
+      <input id="add-price" aria-label="Average price" type="number" step="any" min="0" placeholder="AVG PRICE" value={price} onChange={(e) => setPrice(e.target.value)} />
+      <input id="add-date" aria-label="Purchase date (optional)" type="date" title="Optional purchase date — records the real FX rate for an accurate Stock vs FX split" value={date} onChange={(e) => setDate(e.target.value)} />
       <button type="submit" className="mini-btn solid">BUY</button>
     </form>
   );

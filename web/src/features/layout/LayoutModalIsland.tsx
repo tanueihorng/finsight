@@ -1,7 +1,9 @@
+import { useRef } from 'react';
 import { useStore } from 'zustand';
 import AppearanceSection from '../topbar/AppearanceIsland.tsx';
 import CardsEditor from '../summary/CardsEditorIsland.tsx';
 import { resetCardPrefs } from '../summary/cardPrefs.ts';
+import { useModalFocus } from '../../ui/modalFocus.ts';
 import { hiddenPanels, PANELS, resetLayout, setPanelHidden } from '../../shell/layout.ts';
 
 // ⚙ CUSTOMISE LAYOUT (F10): appearance (F8), summary cards (C1) and panel
@@ -10,13 +12,15 @@ const store = () => window.FinSight.store;
 export default function LayoutModalIsland() {
   const open = useStore(store(), (s) => s.layoutOpen);
   const hidden = useStore(hiddenPanels);
+  const boxRef = useRef<HTMLDivElement>(null);
   const close = () => store().setState({ layoutOpen: false });
+  useModalFocus(open, close, boxRef);
   return (
     <div id="cards-modal" className={open ? 'modal' : 'modal hidden'} onClick={(e) => { if (e.target === e.currentTarget) close(); }}>
-      <div className="modal-box">
+      <div className="modal-box" ref={boxRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Customise layout">
         <div className="modal-head">
           <span className="panel-title">CUSTOMISE LAYOUT</span>
-          <button id="cards-close" className="x-btn" onClick={close}>✕</button>
+          <button id="cards-close" aria-label="Close dialog" className="x-btn" onClick={close}>✕</button>
         </div>
         <div className="modal-body">
           <AppearanceSection />

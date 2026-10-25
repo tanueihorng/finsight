@@ -1,3 +1,4 @@
+import { keyboardClick } from '../../ui/keyboard.ts';
 import { useEffect, useMemo, useRef, type MouseEvent } from 'react';
 import { useStore } from 'zustand';
 import { api } from '../../api/client.ts';
@@ -66,7 +67,7 @@ function PositionRow({ p, base, group, selected, flash, flashKey }: { p: Row; ba
   const act = (fn: () => void) => (e: MouseEvent) => { e.stopPropagation(); fn(); };
   return (
     // A flashing row remounts (new key), so the CSS animation runs again on every new price.
-    <tr key={flash ? flashKey : 0} className={['clickable', selected && 'selected', flash].filter(Boolean).join(' ')} data-sym={p.symbol}
+    <tr key={flash ? flashKey : 0} className={['clickable', selected && 'selected', flash].filter(Boolean).join(' ')} data-sym={p.symbol} tabIndex={0} onKeyDown={keyboardClick}
       onClick={() => selectSymbol(p.symbol)}>
       <td><span className="sym">{p.symbol}</span><div className="name">{String(p.name || '').slice(0, 20)} · <span className="ccy">{p.currency}</span>{accts}</div></td>
       <td className="r">{fmt(p.quantity, p.quantity % 1 ? 4 : 0)}</td>
@@ -79,8 +80,8 @@ function PositionRow({ p, base, group, selected, flash, flashKey }: { p: Row; ba
       <td className={`r ${signClass(p.fxPnl)}`}>{p.currency === base ? <span className="dim">—</span> : moneySigned(base, p.fxPnl)}</td>
       <td className="r">{fmt(p.weight, 1)}</td>
       <td><div className="row-actions">
-        <button className="x-btn sell" data-act="sell" data-sym={p.symbol} data-qty={p.quantity} onClick={act(() => void sellHolding(p.symbol, p.quantity))}>S</button>
-        <button className="x-btn del" data-act="del" data-sym={p.symbol} onClick={act(() => void removeHolding(p.symbol))}>✕</button>
+        <button aria-label={`Sell ${p.symbol}`} className="x-btn sell" data-act="sell" data-sym={p.symbol} data-qty={p.quantity} onClick={act(() => void sellHolding(p.symbol, p.quantity))}>S</button>
+        <button aria-label={`Remove ${p.symbol}`} className="x-btn del" data-act="del" data-sym={p.symbol} onClick={act(() => void removeHolding(p.symbol))}>✕</button>
       </div></td>
     </tr>
   );
@@ -118,14 +119,14 @@ export default function PositionsIsland() {
       <div className="pos-toolbar">
         <div className="ranges" id="pos-filter" title="Filter by asset class">
           {model.chips.map((c) => (
-            <button key={c.id} data-cls={c.id} className={view.filter === c.id ? 'active' : ''} title={money(base, c.value)}
+            <button key={c.id} data-cls={c.id} aria-pressed={view.filter === c.id} className={view.filter === c.id ? 'active' : ''} title={money(base, c.value)}
               onClick={() => setPosView({ ...view, filter: c.id })}>
               {c.label}{c.pct != null && <> <span className="dim">{c.pct}</span></>}
             </button>
           ))}
         </div>
         <div className="pos-tools">
-          <input id="pos-search" placeholder="SEARCH" autoComplete="off" value={view.q} onChange={(e) => setPosView({ ...view, q: e.target.value })} />
+          <input id="pos-search" aria-label="Search positions" placeholder="SEARCH" autoComplete="off" value={view.q} onChange={(e) => setPosView({ ...view, q: e.target.value })} />
           <label className="pos-group">GROUP{' '}
             <select id="pos-group" value={view.group} onChange={(e) => setPosView({ ...view, group: e.target.value as Group })}>
               {GROUPS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
@@ -144,10 +145,10 @@ export default function PositionsIsland() {
           <thead>
             <tr id="pos-head">
               {COLUMNS.map(([k, label, right]) => (
-                <th key={k} data-sort={k} className={[right && 'r', view.sortKey === k && 'sorted'].filter(Boolean).join(' ') || undefined}
+                <th key={k} scope="col" tabIndex={0} onKeyDown={keyboardClick} aria-sort={view.sortKey === k ? (view.sortDir > 0 ? 'ascending' : 'descending') : 'none'} data-sort={k} className={[right && 'r', view.sortKey === k && 'sorted'].filter(Boolean).join(' ') || undefined}
                   data-dir={view.sortKey === k ? (view.sortDir > 0 ? '▲' : '▼') : ''} onClick={() => setPosView(toggleSort(view, k))}>{label}</th>
               ))}
-              <th></th>
+              <th scope="col"><span className="sr-only">Actions</span></th>
             </tr>
           </thead>
           <tbody id="positions-body">
@@ -155,7 +156,7 @@ export default function PositionsIsland() {
             {b.kind === 'nomatch' && <tr><td colSpan={11} className="empty">No holdings match this filter.</td></tr>}
             {b.kind === 'rows' && b.rows.map(row)}
             {b.kind === 'groups' && b.groups.map((g) => [
-              <tr key={'grp:' + g.key} className="grp-row" data-grp={g.key} onClick={() => setPosView(toggleCollapsed(view, g.key))}>
+              <tr key={'grp:' + g.key} className="grp-row" data-grp={g.key} tabIndex={0} aria-expanded={g.open} onKeyDown={keyboardClick} onClick={() => setPosView(toggleCollapsed(view, g.key))}>
                 <td colSpan={5}><span className="grp-caret">{g.open ? '▾' : '▸'}</span> {g.key.toUpperCase()} <span className="dim">· {g.rows.length}</span></td>
                 <SumCells base={base} s={g.sums} /><td></td>
               </tr>,

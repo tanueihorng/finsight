@@ -75,3 +75,39 @@ export function resetLayout() {
   try { localStorage.removeItem(LAYOUT_KEY); } catch { /* storage blocked */ }
   location.reload();
 }
+
+// Keyboard equivalent of the existing drag handle. Decorate the shell-owned
+// hosts here so the shared App.tsx stays outside the H3 lane's file ownership.
+let keyboardInstalled = false;
+export function installKeyboardLayout() {
+  if (keyboardInstalled) return; keyboardInstalled = true;
+  const enhance = () => {
+    document.querySelectorAll<HTMLElement>('.drag-grip').forEach((grip) => {
+      if (grip.hasAttribute('tabindex')) return;
+      const panel = grip.closest<HTMLElement>('[data-pid]');
+      grip.tabIndex = 0; grip.setAttribute('role', 'button');
+      grip.setAttribute('aria-label', `Move ${panel?.dataset.pid || 'panel'}: arrow keys reorder or change column`);
+      grip.setAttribute('aria-keyshortcuts', 'ArrowUp ArrowDown ArrowLeft ArrowRight');
+    });
+    const brand = document.querySelector('.brand');
+    brand?.setAttribute('role', 'heading'); brand?.setAttribute('aria-level', '1');
+  };
+  enhance();
+  new MutationObserver(enhance).observe(document.getElementById('root')!, { childList: true, subtree: true });
+  document.addEventListener('keydown', (e) => {
+    const grip = e.target instanceof HTMLElement && e.target.closest<HTMLElement>('.drag-grip');
+    if (!grip || document.body.classList.contains('locked') || !['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) return;
+    const pid = grip.closest<HTMLElement>('[data-pid]')?.dataset.pid;
+    if (!pid) return;
+    e.preventDefault(); e.stopPropagation();
+    const cols = columns.getState(), side: Side = cols.left.includes(pid) ? 'left' : 'right';
+    const index = cols[side].indexOf(pid);
+    let to = side, before: string | null = null;
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') to = e.key === 'ArrowLeft' ? 'left' : 'right';
+    else if (e.key === 'ArrowUp') before = cols[side][Math.max(0, index - 1)]!;
+    else before = cols[side][index + 2] ?? null;
+    if (before === pid || to === side && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) return;
+    columns.setState(movePanel(cols, pid, to, before), true); saveLayout();
+    requestAnimationFrame(() => { grip.focus({ preventScroll: true }); grip.scrollIntoView({ block: 'nearest', inline: 'nearest' }); });
+  });
+}

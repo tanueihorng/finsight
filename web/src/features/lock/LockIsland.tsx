@@ -9,6 +9,7 @@ import { lockTitle, pinProblem } from './lock.ts';
 // goes through FinSight.auth, whose event resumes the legacy boot/polling.
 const store = () => window.FinSight.store;
 export default function LockIsland() {
+  useEffect(() => { const host = document.getElementById('lock-screen'); host?.setAttribute('role', 'region'); host?.setAttribute('aria-label', 'FinSight lock screen'); }, []);
   const lock = useStore(store(), (s) => s.lock);
   const [pin, setPin] = useState(''), [pin2, setPin2] = useState('');
   const pinRef = useRef<HTMLInputElement>(null), pin2Ref = useRef<HTMLInputElement>(null);
@@ -32,14 +33,14 @@ export default function LockIsland() {
   const offline = lock.mode === 'offline', create = lock.mode === 'create';
   return (
     <>
-      <div id="lock-title" className="lock-title">{lockTitle(lock.mode)}</div>
-      <input id="lock-pin" ref={pinRef} className={'lock-input' + (offline ? ' hidden' : '')} type="password" inputMode="numeric" autoComplete="off" maxLength={12} placeholder="● ● ● ●"
+      <div id="lock-title" role="heading" aria-level={1} className="lock-title">{lockTitle(lock.mode)}</div>
+      <input id="lock-pin" aria-label={create ? 'Create PIN' : 'PIN'} ref={pinRef} className={'lock-input' + (offline ? ' hidden' : '')} type="password" inputMode="numeric" autoComplete="off" maxLength={12} placeholder="● ● ● ●"
         value={pin} onChange={(e) => setPin(e.target.value)}
         onKeyDown={(e) => { if (e.key === 'Enter') { if (create) pin2Ref.current?.focus(); else void submit(); } }} />
-      <input id="lock-pin2" ref={pin2Ref} className={'lock-input' + (create ? '' : ' hidden')} type="password" inputMode="numeric" autoComplete="off" maxLength={12} placeholder="Confirm PIN"
+      <input id="lock-pin2" aria-label="Confirm PIN" ref={pin2Ref} className={'lock-input' + (create ? '' : ' hidden')} type="password" inputMode="numeric" autoComplete="off" maxLength={12} placeholder="Confirm PIN"
         value={pin2} onChange={(e) => setPin2(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void submit(); }} />
       <button id="lock-go" className={'lock-btn' + (offline ? ' hidden' : '')} onClick={() => void submit()}>{create ? 'SET PIN' : 'UNLOCK'}</button>
-      <div id="lock-msg" className="lock-msg">{lock.msg}</div>
+      <div id="lock-msg" role="status" className="lock-msg">{lock.msg}</div>
     </>
   );
 }

@@ -10,7 +10,7 @@ export default function PeekIsland() {
     try { localStorage.setItem('finsight-unpeek', !next ? '1' : '0'); } catch { /* storage blocked */ }
   };
   return (
-    <button id="peek-btn" className={'topbar-btn' + (!peek ? ' active' : '')} onClick={toggle}
+    <button id="peek-btn" aria-pressed={!peek} className={'topbar-btn' + (!peek ? ' active' : '')} onClick={toggle}
       title="Hide or show your personal figures (holdings, values, P&L, cash). Prices and market data stay visible.">
       {!peek ? '◌ PEEK' : '◉ UNPEEK'}
     </button>

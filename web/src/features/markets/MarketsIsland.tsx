@@ -1,3 +1,4 @@
+import { keyboardClick } from '../../ui/keyboard.ts';
 import { useEffect } from 'react';
 import { useMarkets } from '../../api/queries.ts';
 import { selectSymbol } from '../../legacy/app.ts';
@@ -32,7 +33,7 @@ export default function MarketsIsland() {
           {items.map((q) => ('error' in q
             ? <div className={styles.row} key={q.symbol}><span className={styles.label}>{q.label || q.symbol}</span><span className="muted small">n/a</span></div>
             : (
-              <div className={styles.row} data-sym={q.symbol} key={q.symbol} onClick={() => selectSymbol(q.symbol)}>
+              <div className={styles.row} data-sym={q.symbol} key={q.symbol} role="button" tabIndex={0} onKeyDown={keyboardClick} onClick={() => selectSymbol(q.symbol)}>
                 <span className={styles.label}>{q.label || q.symbol}</span>
                 <span className={styles.px}>{fmt(q.price, priceDecimals(q.price))}</span>
                 <span className={`${styles.chg} ${signClass(q.changePct)}`}>{signStr(q.changePct)}%</span>

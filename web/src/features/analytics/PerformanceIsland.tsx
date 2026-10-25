@@ -87,12 +87,12 @@ export default function PerformanceIsland() {
   const perf = usePerformance(range, bench, holdingsSig(positions));
   const head = (
     <PanelHeadSlot island="performance">
-      <select id="perf-bench" className="mini-sel" title="Benchmark — the same cash flows put into this index on the same days" value={bench}
+      <select id="perf-bench" aria-label="Benchmark" className="mini-sel" title="Benchmark — the same cash flows put into this index on the same days" value={bench}
         onChange={(e) => { setBench(e.target.value); try { localStorage.setItem(BENCH_KEY, e.target.value); } catch { /* storage blocked */ } }}>
         {BENCHES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
       </select>
       <div className="ranges" id="perf-ranges">
-        {RANGES.map(([v, l]) => <button key={v} data-range={v} className={range === v ? 'active' : ''} onClick={() => setRange(v)}>{l}</button>)}
+        {RANGES.map(([v, l]) => <button key={v} data-range={v} aria-pressed={range === v} className={range === v ? 'active' : ''} onClick={() => setRange(v)}>{l}</button>)}
       </div>
     </PanelHeadSlot>
   );
