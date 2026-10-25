@@ -1,11 +1,13 @@
 // Phase 3 review follow-ups for the Kestrel chat (KESTRELFIX-001). Each test
-// passes against legacy agent-panel.js at c1f1516 as well as the React chat:
-// Esc to stop, the offline retry and a lock/unlock while the chat is open.
+// is legacy agent-panel.js (c1f1516) behaviour and passes against it: notices
+// on a fresh chat, Esc to stop, the offline retry and a lock/unlock while the
+// chat is open.
 import { test, expect, type Page } from '@playwright/test';
 import { PIN, seeded } from './helpers';
 
 const input = (page: Page) => page.locator('.agent-input:visible');
 const lastTurn = (page: Page) => page.locator('.agent-turn:visible').last();
+const log = (page: Page) => page.locator('.agent-log:visible');
 async function open(page: Page) {
   await seeded(page);
   await page.evaluate(() => { localStorage.setItem('finsight-agent-mode', 'side'); localStorage.removeItem('finsight-agent-thread'); });
@@ -16,6 +18,34 @@ async function open(page: Page) {
   await expect(page.locator('.agent-send:visible')).toBeEnabled();
 }
 async function send(page: Page, text: string) { await input(page).fill(text); await input(page).press('Enter'); }
+
+test('a fresh chat shows attachment and upload notices under the welcome', async ({ page }) => {
+  await open(page);
+  await expect(page.locator('.agent-welcome:visible')).toBeVisible();
+  await page.locator('input[type="file"][multiple]').setInputFiles({ name: 'huge.pdf', mimeType: 'application/pdf', buffer: Buffer.alloc(15 * 1024 * 1024 + 1) });
+  await expect(log(page).locator('.agent-notice.error')).toHaveText('huge.pdf: larger than 15 MB');
+  await expect(page.locator('.agent-welcome:visible')).toBeVisible();
+  await expect(page.locator('.agent-attach-row:visible .agent-file')).toHaveCount(0);
+
+  // Hold the upload so the chip stays "uploading", then try to send.
+  let release!: () => void;
+  const held = new Promise<void>((r) => { release = r; });
+  await page.route('**/api/agent/uploads', async (route) => { await held; await route.continue(); });
+  await page.locator('input[type="file"][multiple]').setInputFiles({ name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('hello file') });
+  await expect(page.locator('.agent-attach-row:visible')).toContainText('notes.txt uploading…');
+  await send(page, 'read this');
+  await expect(log(page).locator('.agent-notice.warn')).toHaveText('Wait for uploads to finish.');
+  await expect(page.locator('.agent-welcome:visible')).toBeVisible();
+  await expect(input(page)).toHaveValue('read this');
+  release();
+  await expect(page.locator('.agent-attach-row:visible')).not.toContainText('uploading');
+  await page.unroute('**/api/agent/uploads');
+  // Sending starts the chat: the welcome and its notices give way to the conversation.
+  await input(page).press('Enter');
+  await expect(lastTurn(page).locator('.agent-text')).toHaveText('Echo: read this (1 attachment)');
+  await expect(page.locator('.agent-welcome')).toHaveCount(0);
+  await expect(log(page).locator('.agent-notice')).toHaveCount(0);
+});
 
 test('Esc in the composer stops a running reply and keeps the panel open', async ({ page }) => {
   await open(page);

@@ -166,9 +166,11 @@ export function Chat({ inputRef, onRetry }: { inputRef: RefObject<HTMLTextAreaEl
   const pc = pageContext();
 
   let body: ReactNode;
+  const items = s.items.map((item) => <ItemView key={item.key} item={item} />);
   if (s.view === 'offline' && s.offline) body = <Offline name={s.name} why={s.offline.why} onRetry={onRetry} />;
-  else if (s.view === 'welcome') body = <Welcome name={s.name} onTry={send} />;
-  else body = s.items.map((item) => <ItemView key={item.key} item={item} />);
+  // Notices on a fresh chat (a rejected file, "wait for uploads") show under the welcome, like legacy.
+  else if (s.view === 'welcome') body = <><Welcome name={s.name} onTry={send} />{items}</>;
+  else body = items;
 
   return (
     <div className="agent-chat">
