@@ -1,0 +1,2 @@
+import{a as i,b as n}from"./chunk-NU54BIHF.js";import{b as r}from"./chunk-M2YQC233.js";import"./chunk-SWWDN4NU.js";import{a as e}from"./chunk-FGYO3MPH.js";import{b as o}from"./chunk-FY3BTKY4.js";var t=o(e(),1);function s(){let p=r(n);return(0,t.jsxs)("button",{id:"profile-btn",className:"topbar-btn",title:"Your profile & setup",onClick:()=>window.FinSight.store.setState({setupOpen:!0}),children:["\u25D0 ",(0,t.jsx)("span",{id:"profile-name",children:i(p)})]})}export{s as default};
+//# sourceMappingURL=ProfileIsland-O3FHUY2Q.js.map

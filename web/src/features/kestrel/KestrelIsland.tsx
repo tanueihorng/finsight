@@ -3,13 +3,14 @@ import { createPortal } from 'react-dom';
 import { useStore } from 'zustand';
 import { boot, chat, newChat, stop, toggleThreads } from './chat.ts';
 import { Chat } from './Chat.tsx';
+import { kestrelDock } from './dock.ts';
 import { clampHeight, clampWidth, DEFAULT_H, DEFAULT_W, LS, ls, nextWidth } from './labels.ts';
 
 // Kestrel shell (G3): the side drawer (resizable width) or a docked terminal
-// panel (resizable height, collapsible), the ↗ ASK toggle, ⌘/ and Esc. The
-// dock host (#agent-dock) stays in index.html so the layout system tags it
-// "kestrel" at boot; this island fills its head and body through portals and
-// moves the one chat between the drawer and the dock.
+// panel (resizable height, collapsible), the ↗ ASK toggle, ⌘/ and Esc. App
+// renders the dock panel (#agent-dock, pid "kestrel") from kestrelDock; this
+// island fills its head, body and resize slot through portals and moves the
+// one chat between the drawer and the dock.
 type Mode = 'side' | 'dock';
 const dockEl = () => document.getElementById('agent-dock');
 const resizeEvent = () => window.dispatchEvent(new Event('resize'));
@@ -23,7 +24,7 @@ export default function KestrelIsland() {
   const [width, setWidthState] = useState(DEFAULT_W);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const booted = useRef(false);
-  const dock = dockEl(), dockHead = dock?.querySelector('.agent-dock-head') ?? null, dockBody = dock?.querySelector('.agent-dock-body') ?? null;
+  const dock = dockEl(), dockHead = dock?.querySelector('.agent-dock-head') ?? null, dockBody = dock?.querySelector('.agent-dock-body') ?? null, dockSlot = dock?.querySelector('.agent-dock-resize-slot') ?? null;
   const slot = document.getElementById('agent-toggle-slot');
 
   const setWidth = useCallback((w: number, save: boolean) => {
@@ -74,7 +75,7 @@ export default function KestrelIsland() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   // Where the chat shows: body.agent-open for the drawer, the dock's hidden/collapsed state for the dock.
   useEffect(() => { document.body.classList.toggle('agent-open', mode === 'side' && open); }, [mode, open]);
-  useEffect(() => { const d = dockEl(); if (d) { d.hidden = !(mode === 'dock' && open); d.classList.toggle('collapsed', collapsed); } }, [mode, open, collapsed]);
+  useEffect(() => { kestrelDock.setState({ visible: mode === 'dock' && open, collapsed }); }, [mode, open, collapsed]);
   // ⌘/ toggles; Esc stops a reply, or closes the drawer / collapses the dock, but never discards a typed message.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -140,11 +141,11 @@ export default function KestrelIsland() {
       </aside>
       {mode === 'dock' && dockHead && createPortal(<>{title}{tools}</>, dockHead)}
       {mode === 'dock' && dockBody && createPortal(body, dockBody)}
-      {dock && createPortal(
+      {dockSlot && createPortal(
         <div className="agent-dock-resize" role="separator" aria-orientation="horizontal" aria-label="Resize chat height" tabIndex={0}
           title="Drag to resize · double-click to reset · ↑ ↓ keys" onPointerDown={drag('y')} onDoubleClick={() => setHeight(DEFAULT_H, true)} onKeyDown={heightKeys}>
           <span className="agent-grip">⋯</span>
-        </div>, dock)}
+        </div>, dockSlot)}
     </>
   );
 }

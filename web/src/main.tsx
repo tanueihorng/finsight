@@ -8,18 +8,20 @@ import { islands, type IslandRegistry } from './islands.ts';
 import { IslandBoundary } from './ui/IslandBoundary.tsx';
 import { Loading } from './ui/Loading.tsx';
 import { actions } from './features/cash/actions.ts';
-import { initLayout } from './features/layout/layout.ts';
+import App from './App.tsx';
+import { startShell } from './shell/boot.ts';
+import './shell/compat.ts';
 
 export const queryClient = new QueryClient({ defaultOptions: { queries: queryDefaults } });
 window.FinSight.actions = actions;
-window.FinSight.layout = { init: initLayout };
 window.FinSight.bus.connect((key) => queryClient.invalidateQueries({ queryKey: [key] }));
 window.addEventListener('finsight:locked', () => { void queryClient.cancelQueries(); });
 window.addEventListener('finsight:unlocked', () => { void queryClient.invalidateQueries(); });
 
-// DOM ownership belongs to the legacy layout. React roots own only island body
-// nodes, and survive moves. Reconcile after the mutation batch/microtask so a
-// remove+insert during drag is not mistaken for deletion.
+// The island runtime (F6). Since X1 the page is one React app (App.tsx); this
+// stays for [data-island] nodes added outside it (embeds and the F6 specs).
+// Roots survive host moves; reconcile after the mutation batch/microtask so a
+// remove+insert during a move is not mistaken for deletion.
 export function mountIslands(registry: IslandRegistry, container: Document | HTMLElement = document) {
   const roots = new Map<HTMLElement, { id: string; root: Root }>();
   const components = new Map<string, LazyExoticComponent<ComponentType>>();
@@ -66,5 +68,12 @@ export function mountIslands(registry: IslandRegistry, container: Document | HTM
     roots.forEach(({ root }) => root.unmount()); roots.clear();
   };
 }
+// X1: one React app for the whole page; the startup/lock shell runs beside it.
+createRoot(document.getElementById('root')!).render(
+  <IslandBoundary><QueryClientProvider client={queryClient}><App /></QueryClientProvider></IslandBoundary>,
+);
 mountIslands(islands);
+startShell();
 window.FinSight.markIslandsReady();
+// Installable app + instant shell (static files only — see sw.js).
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});

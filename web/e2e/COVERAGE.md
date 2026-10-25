@@ -70,6 +70,8 @@ Card = the migration card(s) that must keep the row green (`docs/frontend-migrat
 | Kestrel (G) | ⌘/, Esc close vs keep a draft, width presets/dblclick/arrow keys persist | `G.agent` › ⌘/ and Esc… | G3 | pass |
 | Kestrel (G) | dock: pid kestrel with grip, collapse persists across reload, height keys, pop out | `G.agent` › dock mode… | G3, F10 | pass |
 | Kestrel (G) | a turn failing before the send reply does not stick on ■ | `G.agent` › a turn that fails… | G1 | pass (intended fix; fails on legacy) |
+| Audit fixes (Phase 2 audit) | 6M↔1Y changes the chart context and header; account switch refreshes and clears chart markers (main + grid); late old-account markers rejected (A→B→A); watchlist add/remove refreshes the company calendar; cash-only account counted in All Accounts wealth | `phase2-regressions`, `phase2-accounts-regression` | E1, E2, B1, A3, F8 | pass |
+| One app (X1) | the page renders from App.tsx; every baseline and lane spec passes with app.js deleted; SW precaches the classic chart scripts (`/chart.js`) instead of the deleted `/app.js` | all; `baseline/upgrade.sw` | X1 | pass |
 | Trades | ADD via command bar, UNDO restores | `baseline/add-sell` | F7, D3 | pass |
 | Trades | SELL with a price (realized P/L), SELL at market | `baseline/trades` | F7, D1 | pass |
 | Trades | row S button prompts for quantity and price | `baseline/trades` | D1 | pass |

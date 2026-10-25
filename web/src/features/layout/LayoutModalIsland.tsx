@@ -2,7 +2,7 @@ import { useStore } from 'zustand';
 import AppearanceSection from '../topbar/AppearanceIsland.tsx';
 import CardsEditor from '../summary/CardsEditorIsland.tsx';
 import { resetCardPrefs } from '../summary/cardPrefs.ts';
-import { hiddenPanels, PANELS, resetLayout, setPanelHidden } from './layout.ts';
+import { hiddenPanels, PANELS, resetLayout, setPanelHidden } from '../../shell/layout.ts';
 
 // ⚙ CUSTOMISE LAYOUT (F10): appearance (F8), summary cards (C1) and panel
 // show/hide, rendered here as plain components rather than nested islands.

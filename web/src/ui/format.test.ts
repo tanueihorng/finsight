@@ -5,8 +5,8 @@ import vm from 'node:vm';
 import * as format from './format.ts';
 
 test('all formatters match legacy source for 20 sample values and known/unknown currencies', () => {
-  const source = fs.readFileSync(new URL('../../../public/app.js', import.meta.url), 'utf8');
-  const helpers = source.slice(source.indexOf('const fmt ='), source.indexOf('// Reads always'));
+  // public/app.js is gone (X1); its helpers are frozen in this fixture.
+  const helpers = fs.readFileSync(new URL('./legacy-format.fixture.js', import.meta.url), 'utf8');
   const legacy = vm.runInNewContext(`${helpers}\n({fmt,fmtBig,signStr,csym,money,moneyBig,moneySigned})`) as typeof format;
   const samples = [null, undefined, NaN, 0, -0, 0.001, -0.001, 1, -1, 999.995, 1000, -1000, 1e6, -1e6, 1e9, -1e9, 1e12, -1e12, Infinity, -Infinity];
   assert.equal(samples.length, 20);

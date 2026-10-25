@@ -1,17 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createUiStore, initialState, createStateBridge, setLastPrice, createAuth } from './store.ts';
+import { createUiStore, initialState, setLastPrices, createAuth } from './store.ts';
 
-test('legacy bridge reads current snapshots and writes notify subscribers, including last prices', () => {
-  const store = createUiStore(initialState({ getItem: () => null }));
-  const bridge = createStateBridge(store); let updates = 0;
+test('store writes notify subscribers; last prices merge in one update', () => {
+  const store = createUiStore(initialState({ getItem: () => null })); let updates = 0;
   const off = store.subscribe(() => { updates++; });
-  bridge.base = 'USD'; assert.equal(store.getState().base, 'USD');
-  store.setState({ base: 'EUR' }); assert.equal(bridge.base, 'EUR');
-  const before = bridge.lastPrices; setLastPrice(store, 'NVDA', 123);
-  assert.equal(bridge.lastPrices.NVDA, 123); assert.notEqual(before, bridge.lastPrices);
+  store.setState({ base: 'EUR' }); assert.equal(store.getState().base, 'EUR');
+  const before = store.getState().lastPrices; setLastPrices(store, { NVDA: 123, AAPL: 1 }); setLastPrices(store, { NVDA: 124 });
+  assert.deepEqual(store.getState().lastPrices, { NVDA: 124, AAPL: 1 }); assert.notEqual(before, store.getState().lastPrices);
   assert.equal(updates, 3); off();
-  assert.ok(Object.keys(bridge).includes('base'));
 });
 test('preferences preserve legacy migration, precedence and private-figure visibility', () => {
   const data: Record<string, string> = { 'fincept-base': 'usd', 'fincept-account': 'old', 'finsight-unpeek': '1' };

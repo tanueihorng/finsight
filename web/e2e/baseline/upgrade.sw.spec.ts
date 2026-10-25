@@ -20,7 +20,8 @@ test('precache, update on reload, offline shell', async ({ page, context }) => {
     return (await c.keys()).map((r) => new URL(r.url).pathname);
   });
   const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'public/app/manifest.json'), 'utf8')).files as string[];
-  for (const f of ['/', '/app.js', '/styles.css', ...manifest]) expect(cached).toContain(f);
+  // /app.js was deleted in X1; /chart.js is a retained classic script.
+  for (const f of ['/', '/chart.js', '/styles.css', ...manifest]) expect(cached).toContain(f);
 
   // "Deploy" a change to the copy: the next load gets it (network first).
   fs.appendFileSync(path.join(ROOT, 'public/styles.css'), '\n/* e2e-upgrade-marker */\n');

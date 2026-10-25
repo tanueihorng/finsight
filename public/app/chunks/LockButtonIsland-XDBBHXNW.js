@@ -1,2 +1,0 @@
-import{a as n}from"./chunk-2R3CXXBB.js";import{a as o}from"./chunk-FGYO3MPH.js";import{b as t}from"./chunk-FY3BTKY4.js";var a=t(o(),1);function i(){let c=async()=>{try{await n("/api/auth/logout",{method:"POST"})}catch{}window.FinSight.auth.lock()};return(0,a.jsx)("button",{id:"lock-btn",className:"topbar-btn",title:"Lock now",onClick:()=>{c()},children:"\u{1F512}"})}export{i as default};
-//# sourceMappingURL=LockButtonIsland-XDBBHXNW.js.map

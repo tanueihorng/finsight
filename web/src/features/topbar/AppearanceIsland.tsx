@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { chartHooks } from '../../shell/chartHooks.ts';
 import { FONTS, THEMES } from './topbar.ts';
 
 // APPEARANCE in ⚙ Layout (F8): theme and font, system fonts only. The head
@@ -10,7 +11,7 @@ export default function AppearanceIsland() {
   const apply = (key: 'theme' | 'font', id: string) => {
     try { localStorage.setItem('finsight-' + key, id); } catch { /* storage blocked */ }
     document.documentElement.dataset[key] = id;
-    if (key === 'theme') { setTheme(id); window.FinSightChartHooks?.repaint(); } else setFont(id);
+    if (key === 'theme') { setTheme(id); chartHooks.repaint(); } else setFont(id);
   };
   return (
     <>

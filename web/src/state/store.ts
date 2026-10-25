@@ -27,21 +27,6 @@ export function initialState(storage: Pick<Storage, 'getItem'>): UiState {
 export const createUiStore = (initial: UiState) => createStore<UiState>()(() => initial);
 export type UiStore = ReturnType<typeof createUiStore>;
 
-export function createStateBridge(store: UiStore): UiState {
-  return new Proxy({} as UiState, {
-    get: (_, key) => Reflect.get(store.getState(), key),
-    set: (_, key, value: unknown) => {
-      if (!Object.hasOwn(store.getState(), key)) throw new TypeError(`Unknown UI state key: ${String(key)}`);
-      store.setState({ [key]: value }); return true;
-    },
-    ownKeys: () => Reflect.ownKeys(store.getState()),
-    getOwnPropertyDescriptor: (_, key) => Object.hasOwn(store.getState(), key)
-      ? { configurable: true, enumerable: true, writable: true, value: Reflect.get(store.getState(), key) } : undefined,
-  });
-}
-export function setLastPrice(store: UiStore, symbol: string, value: number) {
-  store.setState((state) => ({ lastPrices: { ...state.lastPrices, [symbol]: value } }));
-}
 // One store update for a whole portfolio refresh (the positions table records every price).
 export function setLastPrices(store: UiStore, prices: Record<string, number>) {
   store.setState((state) => ({ lastPrices: { ...state.lastPrices, ...prices } }));

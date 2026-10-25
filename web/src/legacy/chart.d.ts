@@ -26,6 +26,6 @@ declare global {
   interface Window {
     PriceChart?: PriceChartConstructor;
     detailChart?: PriceChartInstance | null; // read by agent-panel.js and specs
-    FinSightChartHooks?: ChartHooks;
+    FinSightChartHooks?: ChartHooks; // test/console compatibility (shell/compat.ts)
   }
 }
