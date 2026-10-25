@@ -422,25 +422,7 @@ MSFT,5,380,2023-11-02
 
   <!-- ledger: all trades + realized gains -->
   <!-- cash editor: every account's uninvested cash, per currency -->
-  <div id="cash-modal" class="modal hidden">
-    <div class="modal-box">
-      <div class="modal-head">
-        <span class="panel-title">CASH &nbsp;·&nbsp; EDIT BALANCES</span>
-        <button id="cash-close" class="x-btn" title="Close">✕</button>
-      </div>
-      <div class="modal-body">
-        <p class="muted small">Click an amount and type the new balance. It <b>saves automatically</b>, and net worth, the breakdown chart and FX exposure update straight away. Set an amount to 0 or press ✕ to remove it.</p>
-        <div id="cash-editor"></div>
-      </div>
-      <div class="modal-foot">
-        <span id="cash-status" class="cmd-status"></span>
-        <div class="head-btns">
-          <button id="cash-cancel" class="mini-btn hidden">CANCEL</button>
-          <button id="cash-save" class="mini-btn solid">DONE</button>
-        </div>
-      </div>
-    </div>
-  </div>
+  <div id="cash-modal-host" data-island="cash-editor"></div>
 
   <div id="ledger-modal" class="modal hidden">
     <div class="modal-box wide">

@@ -26,6 +26,9 @@ Card = the migration card(s) that must keep the row green (`docs/frontend-migrat
 | Add form (D2) | + ADD toggles and focuses; suggestions with arrow/Enter pick, Escape, click outside, mouse pick, no-result hide | `D2` | D2 | pass |
 | Add form (D2) | BUY validation, status with date, fields cleared, form stays open, portfolio refreshes; All Accounts blocked; server error reported | `D2` | D2 | pass |
 | Add form (D2) | setup wizard "Add manually" opens the form focused | `D2` › the setup wizard… | D2, F8 | pass |
+| Undo (D3) | ↶ UNDO hover title, click reverts positions + summary; UNDO error reported | `D3` › ↶ UNDO… | D3 | pass |
+| Cash editor (D3) | opens from CASH and the NET WORTH card; base-currency new row focused; ccy/number validation; Enter saves; ✕ removes; close saves pending edit | `D3` › cash editor… | D3, C1 | pass |
+| Cash editor (D3) | All Accounts lists each account; failed save reported and retried on DONE; reopening reloads saved values; CASH command error | `D3` | D3 | pass |
 | Trades | ADD via command bar, UNDO restores | `baseline/add-sell` | F7, D3 | pass |
 | Trades | SELL with a price (realized P/L), SELL at market | `baseline/trades` | F7, D1 | pass |
 | Trades | row S button prompts for quantity and price | `baseline/trades` | D1 | pass |

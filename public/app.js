@@ -598,112 +598,19 @@ let lastTableData = { positions: [], base: 'SGD' };
 // ===========================================================================
 //  UNDO + CASH
 // ===========================================================================
-async function doUndo() {
-  try {
-    const r = await api('/api/undo', { method: 'POST' });
-    setStatus(`UNDID: ${r.undone}${r.available ? ` · ${r.available} more step(s) available` : ''}`, 'ok');
-    perfSig = '';
-    await afterWrite('undo'); // accounts first, then portfolio, ledger, watchlist, alerts…
-  } catch (e) { setStatus('UNDO: ' + e.message, 'err'); }
-}
+// Undo, CASH and the cash editor are TypeScript (D3, web/src/features/cash).
+// These names stay for the command bar and the ledger's ↶ until F7/D4.
+function doUndo() { return window.FinSight.actions.undo(); }
+function setCashBalance(ccy, amt) { return window.FinSight.actions.setCashBalance(ccy, amt); }
+function openCashEditor() { state.cashEditorOpen = true; }
+// C3 removes this: D3's writes reset the analytics signatures as legacy did.
+function analyticsStale({ perf = false, wealth = false } = {}) { if (perf) perfSig = ''; if (wealth) wealthSig = ''; }
 $('#undo-btn').addEventListener('click', doUndo);
 $('#undo-btn').addEventListener('mouseenter', async () => {
-  try { const u = await api('/api/undo'); $('#undo-btn').title = u.last ? `Undo: ${u.last.label}` : 'Nothing to undo'; } catch {}
+  const title = await window.FinSight.actions.undoTitle(); if (title) $('#undo-btn').title = title;
 });
-async function setCashBalance(ccy, amt) {
-  try {
-    const res = await api('/api/cash' + baseQS(), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ccy, amount: amt }) });
-    setStatus(Number(amt) === 0 ? `Cleared ${ccy.toUpperCase()} cash` : `Cash ${ccy.toUpperCase()} set to ${fmt(Number(amt))}`, 'ok');
-    wealthSig = ''; await afterWrite('cash'); // loadPortfolio's holdings/cash signature refreshes FX risk
-  } catch (e) { setStatus('CASH failed: ' + e.message, 'err'); }
-}
-// ---- CASH EDITOR: all accounts × currencies in one place ---------------------
-let cashDraft = [];   // [{ id, name, rows: [{ ccy, amount, orig }] }]
-function setCashStatus(m, k) { const el = $('#cash-status'); el.textContent = m || ''; el.className = 'cmd-status ' + (k || ''); }
-async function openCashEditor() {
-  $('#cash-modal').classList.remove('hidden'); setCashStatus('Loading…');
-  $('#cash-editor').innerHTML = '';
-  try {
-    const ids = state.account === 'ALL' ? accountsCache.map((a) => a.id) : [state.account];
-    cashDraft = await Promise.all(ids.map(async (id) => {
-      const d = await api(`/api/portfolio?base=${encodeURIComponent(state.base)}&account=${encodeURIComponent(id)}`);
-      return { id, name: (accountsCache.find((a) => a.id === id) || {}).name || id,
-        orig: Object.fromEntries((d.cash || []).map((c) => [c.ccy, c.amount])),
-        rows: (d.cash || []).map((c) => ({ ccy: c.ccy, amount: String(c.amount) })) };
-    }));
-    renderCashEditor(); setCashStatus('');
-  } catch (e) { setCashStatus('Could not load cash: ' + e.message, 'err'); }
-}
-function renderCashEditor() {
-  $('#cash-editor').innerHTML = cashDraft.map((a, ai) => `
-    <div class="cash-acct">
-      <div class="cash-acct-name">${esc(a.name)}</div>
-      ${a.rows.map((r, ri) => `<div class="cash-row">
-        <input class="cash-ccy" data-a="${ai}" data-r="${ri}" value="${esc(r.ccy)}" maxlength="3" placeholder="CCY" />
-        <input class="cash-amt" data-a="${ai}" data-r="${ri}" value="${esc(r.amount)}" inputmode="decimal" placeholder="0.00" />
-        <button class="x-btn" data-del-a="${ai}" data-del-r="${ri}" title="Remove">✕</button></div>`).join('')}
-      <button class="mini-btn cash-add" data-add="${ai}">+ CURRENCY</button>
-    </div>`).join('');
-}
-// Auto-save: each edit is saved ~0.7s after you stop typing (Enter / leaving the box saves at once).
-let cashTimer = null, cashSaving = null;
-function queueCashSave(delay = 700) { clearTimeout(cashTimer); cashTimer = setTimeout(() => saveCash(), delay); }
-$('#cash-editor').addEventListener('input', (e) => {
-  const t = e.target; if (!t.dataset || t.dataset.a == null) return;
-  const r = cashDraft[t.dataset.a].rows[t.dataset.r];
-  if (t.classList.contains('cash-ccy')) r.ccy = t.value.toUpperCase(); else r.amount = t.value;
-  setCashStatus('Editing…'); queueCashSave();
-});
-$('#cash-editor').addEventListener('focusout', (e) => { if (e.target.matches && e.target.matches('.cash-row input')) queueCashSave(0); });
-$('#cash-editor').addEventListener('click', (e) => {
-  const add = e.target.closest('[data-add]'), del = e.target.closest('[data-del-a]');
-  if (add) { cashDraft[add.dataset.add].rows.push({ ccy: state.base, amount: '' }); renderCashEditor(); const ins = $$('#cash-editor .cash-amt'); ins.length && ins[ins.length - 1].focus(); }
-  if (del) { cashDraft[del.dataset.delA].rows.splice(+del.dataset.delR, 1); renderCashEditor(); queueCashSave(0); }
-});
-async function saveCash() {
-  clearTimeout(cashTimer);
-  if (cashSaving) { await cashSaving; }          // never run two saves at once
-  cashSaving = (async () => {
-    const calls = [];
-    for (const a of cashDraft) {
-      const next = {};
-      for (const r of a.rows) {
-        const ccy = String(r.ccy || '').trim().toUpperCase(), amt = String(r.amount || '').replace(/[, ]/g, '');
-        if (!ccy && !amt) continue;
-        if (!/^[A-Z]{3}$/.test(ccy)) return setCashStatus(`${a.name}: currency must be a 3-letter code (e.g. SGD)`, 'err');
-        if (amt === '' || amt === '-' || amt === '.') continue;   // still typing
-        const v = Number(amt);
-        if (!Number.isFinite(v)) return setCashStatus(`${a.name}: "${r.amount}" is not a number`, 'err');
-        next[ccy] = (next[ccy] || 0) + v;
-      }
-      for (const ccy of new Set([...Object.keys(a.orig), ...Object.keys(next)])) {
-        const v = next[ccy] || 0;
-        const stillListed = a.rows.some((r) => String(r.ccy || '').trim().toUpperCase() === ccy);
-        if (!(ccy in next) && stillListed) continue;          // row being edited (blank) — leave the saved value alone
-        if (Math.abs(v - (a.orig[ccy] || 0)) > 1e-9) calls.push({ a, ccy, amount: v });
-      }
-    }
-    if (!calls.length) { setCashStatus('All changes saved ✓', 'ok'); return; }
-    setCashStatus('Saving…');
-    try {
-      for (const c of calls) {
-        await api(`/api/cash?base=${encodeURIComponent(state.base)}&account=${encodeURIComponent(c.a.id)}`,
-          { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ccy: c.ccy, amount: c.amount }) });
-        if (c.amount === 0) delete c.a.orig[c.ccy]; else c.a.orig[c.ccy] = c.amount;
-      }
-      setCashStatus(`Saved ✓ · net worth updated`, 'ok');
-      wealthSig = ''; await afterWrite('cash'); loadWealth();
-    } catch (e) { setCashStatus('Save failed: ' + e.message, 'err'); }
-  })();
-  try { await cashSaving; } finally { cashSaving = null; }
-}
-async function closeCashEditor() { await saveCash(); $('#cash-modal').classList.add('hidden'); }
 $('#cash-btn').addEventListener('click', openCashEditor);
 $('#wealth-cash-btn').addEventListener('click', openCashEditor);
-$('#cash-save').addEventListener('click', closeCashEditor);
-$('#cash-cancel').addEventListener('click', closeCashEditor);
-$('#cash-close').addEventListener('click', closeCashEditor);
-$('#cash-editor').addEventListener('keydown', (e) => { if (e.key === 'Enter') saveCash(); });
 // The NET WORTH / CASH cards open the editor too.
 $('#summary').addEventListener('click', (e) => {
   if (e.target.closest('[data-cash-card]')) openCashEditor();

@@ -9,4 +9,5 @@ export const islands: IslandRegistry = {
   positions: () => import('./features/positions/PositionsIsland.tsx'),
   news: () => import('./features/news/NewsIsland.tsx'),
   'add-form': () => import('./features/addform/AddFormIsland.tsx'),
+  'cash-editor': () => import('./features/cash/CashEditorIsland.tsx'),
 };
