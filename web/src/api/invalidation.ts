@@ -1,16 +1,24 @@
-const holdings = ['portfolio', 'dividends', 'fx-risk', 'performance', 'wealth', 'ledger', 'realized', 'accounts', 'chart-trades', 'events'] as const;
+const holdings = ['portfolio', 'dividends', 'fx-risk', 'performance', 'wealth', 'ledger', 'realized', 'accounts', 'chart-trades', 'events', 'categories'] as const;
 const scoped = [...holdings, 'alerts', 'detail'] as const;
-// Endpoint writes -> readers. I1 will inventory every legacy caller before pilots.
+// Endpoint writes -> readers (docs/frontend-migration/COUPLING.md §A6). Keys are
+// refreshed in order: 'accounts' comes first where a write can remove the
+// active account, so later readers use the corrected account.
 export const mutationInvalidations = {
-  buy: holdings, sell: holdings, delete: holdings, import: holdings, undo: holdings,
-  'ledger-edit': holdings, 'ledger-delete': holdings, reset: holdings,
+  buy: holdings, sell: holdings, delete: holdings, import: holdings, reset: holdings,
+  'ledger-edit': holdings, 'ledger-delete': holdings,
+  // Undo can revert trades, cash, accounts, the watchlist and alerts.
+  undo: ['accounts', ...holdings.filter((key) => key !== 'accounts'), 'watchlist', 'chart-watch', 'alerts', 'chart-alerts'],
   cash: ['portfolio', 'fx-risk', 'wealth'],
+  withholding: ['dividends', 'realized'],
   'watchlist-add': ['watchlist', 'chart-watch'], 'watchlist-remove': ['watchlist', 'chart-watch'],
   'alerts-add': ['alerts', 'chart-alerts'], 'alerts-update': ['alerts', 'chart-alerts'], 'alerts-remove': ['alerts', 'chart-alerts'],
-  'account-add': ['accounts', ...scoped.filter((key) => key !== 'accounts')],
-  'account-rename': scoped, 'account-remove': scoped, 'account-switch': scoped,
+  // Adding or renaming changes names and counts only; switching is a store change (keys include the account).
+  'account-add': ['accounts'], 'account-rename': ['accounts'],
+  'account-remove': ['accounts', ...scoped.filter((key) => key !== 'accounts')],
+  'account-switch': scoped,
   base: scoped,
 } as const;
+export type MutationKind = keyof typeof mutationInvalidations;
 
 type Refresher = () => unknown;
 export function createBus() {
@@ -25,6 +33,10 @@ export function createBus() {
     on(key: string, fn: Refresher) {
       const set = listeners.get(key) ?? new Set<Refresher>(); set.add(fn); listeners.set(key, set);
       return () => { set.delete(fn); if (!set.size) listeners.delete(key); };
+    },
+    // A completed write: refresh every reader of what it changed, key by key.
+    async write(kind: MutationKind) {
+      for (const key of mutationInvalidations[kind]) await this.invalidate(key);
     },
     invalidate(key: string) {
       const callbacks: Refresher[] = [...(listeners.get(key) ?? [])];

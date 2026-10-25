@@ -12,6 +12,11 @@ Card = the migration card(s) that must keep the row green (`docs/frontend-migrat
 | Lock | wrong PIN error; right PIN unlocks | `baseline/lock` | F9 | pass |
 | Lock | expired session locks, stops polling (no API calls for 16 s), keeps the typed PIN, unlock resumes | `baseline/session` | F3, F4, F9 | pass |
 | Summary | net worth, day P/L, FX exposure values; UNPEEK blurs | `baseline/summary` | C1 | pass |
+| Summary (PILOT-2) | React cards keep legacy values, sign colours and the cash-editor click | `PILOT-2` | C1 | pass |
+| Fan-out (PILOT-2) | ADD, SELL, CASH, import, UNDO each update React summary + FX EXPOSURE, legacy positions, dividends and FX risk without reload | `PILOT-2` | C1, D1–D4, B3, C2 | pass |
+| Fan-out (PILOT-2) | the open ledger refreshes after its own undo, with summary and positions | `PILOT-2` | D3, D4 | pass |
+| Fan-out (PILOT-2) | account/base switch re-keys the summary; a held old-account response never shows (React and legacy) | `PILOT-2` | F3, F4, F8 | pass |
+| Card editor (PILOT-2) | toggle, reorder, reset update the React summary and persist across reload | `PILOT-2` | C1 | pass (intended fix: a reordered NET WORTH no longer jumps back first after the first reload) |
 | Positions | row count, sort by MKT VAL, search, group by currency | `baseline/positions` | D1 | pass |
 | Trades | ADD via command bar, UNDO restores | `baseline/add-sell` | F7, D3 | pass |
 | Trades | SELL with a price (realized P/L), SELL at market | `baseline/trades` | F7, D1 | pass |

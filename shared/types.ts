@@ -104,3 +104,14 @@ export interface LedgerRow {
   account: string; accountId: string; editable?: boolean; valueBase?: number;
   realized?: number; realizedStock?: number; realizedFx?: number; legacy?: boolean;
 }
+/** lib/portfolio.js fxRisk (exposures), server.js GET /api/fx-risk. */
+export interface FxExposure {
+  ccy: string; base: string; cashBase: number; notionalNative: number; notionalBase: number; pct: number;
+  blendedEntry: number; nowRate: number; breakeven: number; driftPct: number; fxPnl: number; fxPnlPct: number;
+  sigmaWeeklyPct: number; oneSigmaBase: number; var95Base: number;
+}
+/** lib/portfolio.js fxRisk, server.js GET /api/fx-risk. `lots` is consumed only by the legacy FX panel (C2 types it). */
+export interface FxRisk {
+  base: string; totalValue: number; foreignBase: number; totalFxPnl: number; exposures: FxExposure[];
+  vol: { sigmaWeeklyPct: number; oneSigmaBase: number; var95Base: number }; lots: unknown[];
+}
