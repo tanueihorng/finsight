@@ -80,6 +80,7 @@ test('a streaming reply updates with each delta while earlier answers stay rende
   await send(page, 'markdown please');
   const earlier = page.locator('.agent-turn:visible').first().locator('.agent-text');
   await expect(earlier.locator('td.num')).toHaveText('+1.5%');
+  await expect(page.locator('.agent-send:visible')).toHaveText('⏎'); // Enter does not send while a reply runs
   await send(page, 'slow one please');
   const text = lastTurn(page).locator('.agent-text');
   await expect(text).toContainText('w3');
