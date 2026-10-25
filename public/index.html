@@ -91,16 +91,7 @@ try { var d = document.documentElement;
           </div>
         </div>
 
-        <form id="add-form" class="add-form hidden" autocomplete="off">
-          <div class="add-field">
-            <input id="add-symbol" placeholder="SYMBOL (e.g. AAPL)" />
-            <div id="add-suggest" class="suggest hidden"></div>
-          </div>
-          <input id="add-qty" type="number" step="any" min="0" placeholder="QTY" />
-          <input id="add-price" type="number" step="any" min="0" placeholder="AVG PRICE" />
-          <input id="add-date" type="date" title="Optional purchase date — records the real FX rate for an accurate Stock vs FX split" />
-          <button type="submit" class="mini-btn solid">BUY</button>
-        </form>
+        <div id="add-view" data-island="add-form"></div>
 
         <div id="positions-view" data-island="positions"></div>
       </div>

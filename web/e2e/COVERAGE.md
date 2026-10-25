@@ -23,6 +23,9 @@ Card = the migration card(s) that must keep the row green (`docs/frontend-migrat
 | Positions (D1) | All Accounts: "· 2 accts" label; group by account splits a symbol per account | `D1` › All Accounts… | D1 | pass |
 | Positions (D1) | a new price flashes the row and records `lastPrices`; an unchanged refetch clears it | `D1` › a new price flashes… | D1 | pass |
 | Positions (D1) | dragged to the right column it survives reload; a write made while locked shows after unlock | `D1` › dragged to the right column… | D1, F9, F10 | pass |
+| Add form (D2) | + ADD toggles and focuses; suggestions with arrow/Enter pick, Escape, click outside, mouse pick, no-result hide | `D2` | D2 | pass |
+| Add form (D2) | BUY validation, status with date, fields cleared, form stays open, portfolio refreshes; All Accounts blocked; server error reported | `D2` | D2 | pass |
+| Add form (D2) | setup wizard "Add manually" opens the form focused | `D2` › the setup wizard… | D2, F8 | pass |
 | Trades | ADD via command bar, UNDO restores | `baseline/add-sell` | F7, D3 | pass |
 | Trades | SELL with a price (realized P/L), SELL at market | `baseline/trades` | F7, D1 | pass |
 | Trades | row S button prompts for quantity and price | `baseline/trades` | D1 | pass |

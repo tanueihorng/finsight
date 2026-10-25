@@ -4,6 +4,7 @@ export interface UiState {
   selected: string | null;
   detailRange: { range: string; interval: string; tf?: boolean };
   base: string; account: string; accountReady: boolean; peek: boolean;
+  addFormOpen: boolean; // + ADD (legacy button) ↔ add form island (D2); held here so a click before mount counts
   lastPrices: Record<string, number>;
 }
 export function initialState(storage: Pick<Storage, 'getItem'>): UiState {
@@ -11,7 +12,7 @@ export function initialState(storage: Pick<Storage, 'getItem'>): UiState {
   // Bootstrap precedes the legacy preference migration. Read its old keys too,
   // preserving the same precedence without requiring app.js to run first.
   return {
-    selected: null, detailRange: { range: '1mo', interval: '1d' }, lastPrices: {},
+    selected: null, detailRange: { range: '1mo', interval: '1d' }, lastPrices: {}, addFormOpen: false,
     base: ((read('finsight-base') ?? read('fincept-base')) || 'SGD').toUpperCase(),
     account: read('finsight-account') ?? read('fincept-account') ?? '',
     accountReady: false, peek: read('finsight-unpeek') !== '1',

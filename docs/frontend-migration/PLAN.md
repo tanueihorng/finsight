@@ -475,7 +475,8 @@ Two esbuild builds (`bootstrap.js` IIFE; `main.js` ESM with splitting), `manifes
 | C1 | C | done as PILOT-2 (merged) | mig/PILOT-2-summary | Claude | |
 | C2–C3 | C | todo | | | |
 | D1 | D | done (merged 2026-10-25) | mig/D1-positions | Claude | Positions table island (toolbar, filter chips, search, sort, group, collapse, row S/✕, flash) + `useCategories`, `useAccounts`; `posView` keeps the `finsight-posview` key. Legacy keeps `lastTableData` fed from `renderPortfolio` for detail/chart (E1/E2) and its own `assetClass`/`splitByAccount` copies for allocation (C3). Intended fix: a failed row ✕ delete now shows an error |
-| D2–D4 | D | todo | | | after D1 |
+| D2 | D | done (not merged; stacked on main 246f219) | mig/D2-addform | Claude | Add form + symbol search island; `store.addFormOpen` carries the legacy + ADD button and the setup wizard's "Add manually" choice (a click before the island mounts still counts); debounced search aborts the older request |
+| D3–D4 | D | todo | | | stacked after D2 |
 | E1–E2 | E | todo | | | |
 | F7–F10 | 3 | todo | | | after A–E merged |
 | G1–G3 | 3 | todo | | | after F10 |

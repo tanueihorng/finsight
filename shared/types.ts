@@ -124,3 +124,6 @@ export interface NewsItem {
 }
 /** server.js GET /api/news. */
 export interface NewsResponse { news: NewsItem[] }
+
+/** lib/market.js fetchSearch, server.js GET /api/search. */
+export interface SearchResult { symbol: string; name: string; exchange: string; type: string }

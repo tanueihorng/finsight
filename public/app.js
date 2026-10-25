@@ -587,7 +587,7 @@ document.querySelector('.setup-choices').addEventListener('click', (e) => {
   $('#setup-modal').classList.add('hidden');
   const a = c.dataset.action;
   if (a === 'import') $('#import-modal').classList.remove('hidden');
-  else if (a === 'manual') { $('#add-form').classList.remove('hidden'); $('#add-symbol').focus(); }
+  else if (a === 'manual') state.addFormOpen = true; // the D2 island opens and focuses the form
   setStatus(profile.name ? `Welcome, ${profile.name}.` : 'Terminal ready.', 'ok');
 });
 
@@ -814,59 +814,8 @@ $('#ledger-tabs').addEventListener('click', (e) => { const b = e.target.closest(
 // ===========================================================================
 //  ADD FORM + SYMBOL SEARCH
 // ===========================================================================
-$('#add-toggle').addEventListener('click', () => { $('#add-form').classList.toggle('hidden'); $('#add-symbol').focus(); });
-$('#add-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const symbol = $('#add-symbol').value.trim().toUpperCase();
-  const quantity = $('#add-qty').value, price = $('#add-price').value, date = $('#add-date').value || null;
-  if (!symbol || !quantity || !price) return setStatus('Fill symbol, quantity and average price.', 'err');
-  if (blockIfAll()) return;
-  try {
-    await api('/api/portfolio/buy' + baseQS(), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ symbol, quantity, price, date }) });
-    setStatus(`BOUGHT ${quantity} ${symbol} @ ${price}${date ? ' on ' + date : ''}`, 'ok');
-    $('#add-symbol').value = $('#add-qty').value = $('#add-price').value = $('#add-date').value = '';
-    $('#add-suggest').classList.add('hidden');
-    await afterWrite('buy');
-  } catch (err) { setStatus('ADD failed: ' + err.message, 'err'); }
-});
-
-let searchTimer = null, suggestItems = [], suggestIdx = -1;
-$('#add-symbol').addEventListener('input', (e) => {
-  clearTimeout(searchTimer);
-  const q = e.target.value.trim();
-  if (q.length < 1) { $('#add-suggest').classList.add('hidden'); return; }
-  searchTimer = setTimeout(async () => {
-    try {
-      suggestItems = await api('/api/search?q=' + encodeURIComponent(q));
-      suggestIdx = -1;
-      const box = $('#add-suggest');
-      if (!suggestItems.length) { box.classList.add('hidden'); return; }
-      box.innerHTML = suggestItems.map((s, i) =>
-        `<div data-i="${i}"><span class="s-sym">${esc(s.symbol)}</span> <span class="s-meta">${esc(s.name).slice(0, 30)} · ${esc(s.exchange)} · ${esc(s.type)}</span></div>`).join('');
-      box.classList.remove('hidden');
-    } catch { $('#add-suggest').classList.add('hidden'); }
-  }, 200);
-});
-$('#add-suggest').addEventListener('click', (e) => {
-  const d = e.target.closest('[data-i]'); if (!d) return;
-  pickSuggest(suggestItems[+d.dataset.i]);
-});
-$('#add-symbol').addEventListener('keydown', (e) => {
-  const box = $('#add-suggest');
-  if (box.classList.contains('hidden')) return;
-  if (e.key === 'ArrowDown') { e.preventDefault(); suggestIdx = Math.min(suggestIdx + 1, suggestItems.length - 1); hl(); }
-  else if (e.key === 'ArrowUp') { e.preventDefault(); suggestIdx = Math.max(suggestIdx - 1, 0); hl(); }
-  else if (e.key === 'Enter' && suggestIdx >= 0) { e.preventDefault(); pickSuggest(suggestItems[suggestIdx]); }
-  else if (e.key === 'Escape') box.classList.add('hidden');
-  function hl() { $$('#add-suggest div').forEach((el, i) => el.classList.toggle('active', i === suggestIdx)); }
-});
-function pickSuggest(s) {
-  if (!s) return;
-  $('#add-symbol').value = s.symbol;
-  $('#add-suggest').classList.add('hidden');
-  $('#add-qty').focus();
-}
-document.addEventListener('click', (e) => { if (!e.target.closest('.add-field')) $('#add-suggest').classList.add('hidden'); });
+// The add form and symbol search are a React island (D2, web/src/features/addform).
+$('#add-toggle').addEventListener('click', () => { state.addFormOpen = !state.addFormOpen; });
 
 // ===========================================================================
 //  SECURITY DETAIL + CHART
