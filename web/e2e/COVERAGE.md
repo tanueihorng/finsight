@@ -77,3 +77,5 @@ Not yet covered here, owned elsewhere: performance and visual comparisons (P0-5)
 | News | delayed previous-symbol response never overwrites current headlines | `A2` › intended fix (A2)… | A2 | pass (intended fix: account-independent symbol-keyed query + abort) |
 | News | drag/reload, hide/reload, one host and one request per selection | `A2` › drag/reload… | A2, F10 | pass |
 | News | no protected request while locked, unlock refreshes, unmount removes command subscriptions | `A2` › lock stops news requests… | A2, F3, F6 | pass |
+
+| Macro (A3) | calendar anchors/company selection; WB/FRED controls and errors; manual partial-failure inflation; 15m poll; lock/unmount | `A3` | A3 | pass |

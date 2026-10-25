@@ -124,3 +124,17 @@ export interface NewsItem {
 }
 /** server.js GET /api/news. */
 export interface NewsResponse { news: NewsItem[] }
+
+/** lib/macro.js fetchWorldBank. */
+export interface WorldBankResponse { country: string; countryName: string; indicator: string; label: string; series: { year: string; value: number }[] }
+/** lib/macro.js fetchFred. */
+export interface FredResponse { series: string; transform: string; points: { date: string; value: number }[] }
+/** lib/macro.js fetchCalendar. */
+export interface FomcMeeting { start: string; end: string; sep: boolean; decisionMs: number }
+export interface CalendarResponse {
+  now: number; fomc: FomcMeeting[]; nextFomc: FomcMeeting | null; nextSep: FomcMeeting | null;
+  events: { title: string; country: string; time: string; impact: string; forecast: string; previous: string }[];
+  eventsOk: boolean; sepUrl: string;
+}
+/** lib/dividends.js upcomingEvents. */
+export interface EventsResponse { events: EventItem[]; ok: boolean }

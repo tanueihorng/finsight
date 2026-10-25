@@ -352,62 +352,7 @@ function renderFxRisk(data) {
   cIn.addEventListener('input', updConv); updConv();
 }
 
-// ---- ECON CALENDAR panel ---------------------------------------------------
-async function loadCalendar() {
-  try {
-    const [cal, ev] = await Promise.all([api('/api/calendar'), api('/api/events' + baseQS()).catch(() => null)]);
-    renderCalendar(cal, ev);
-  } catch (e) { const b = $('#calendar'); if (b) { b.classList.add('muted'); b.textContent = 'Calendar unavailable right now.'; } }
-}
-function renderCalendar(data, ev) {
-  const box = $('#calendar'); if (!box) return;
-  box.classList.remove('muted');
-  const dayShort = (s) => new Date(s + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: '2-digit' });
-  const daysTo = (ms) => Math.max(0, Math.round((ms - Date.now()) / 86400000));
-
-  // FOMC anchor — next rate decision + next dot plot, always known.
-  let anchor = '';
-  const f = data.nextFomc, sep = data.nextSep;
-  if (f) {
-    const dd = daysTo(f.decisionMs);
-    const sepCell = sep
-      ? `<div class="cal-a"><span class="k">NEXT DOT PLOT</span><span class="v">${dayShort(sep.start)}</span><span class="s"><a href="${data.sepUrl}" target="_blank" rel="noopener">FOMC projections ↗</a></span></div>`
-      : '';
-    anchor = `<div class="cal-anchor">
-      <div class="cal-a"><span class="k">NEXT FED DECISION</span><span class="v amber">${dayShort(f.end)}</span><span class="s">${dd}d · rate + statement${f.sep ? ' + dot plot' : ''}</span></div>
-      ${sepCell}
-    </div>`;
-  }
-
-  // This-week high-impact releases (CPI, PCE, NFP, the rate decision…).
-  const dt = (s) => new Date(s).toLocaleString('en-US', { weekday: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' });
-  const rows = (data.events || []).map((e) => {
-    const ms = Date.parse(e.time);
-    const past = !isNaN(ms) && ms < Date.now();
-    const when = isNaN(ms) ? esc(e.time || '—') : dt(e.time); // tolerate a malformed feed time
-    const fp = (e.forecast || e.previous) ? `<span class="cal-fp">f ${esc(e.forecast || '—')} · p ${esc(e.previous || '—')}</span>` : '';
-    return `<div class="cal-row ${past ? 'cal-past' : ''}">
-      <span class="cal-when">${when}</span>
-      <span class="ccy">${esc(e.country)}</span>
-      <span class="cal-title">${esc(e.title)}</span>${fp}
-    </div>`;
-  }).join('') || `<div class="muted small">${data.eventsOk ? 'No high-impact USD/SGD events this week.' : 'Live feed unavailable — Fed schedule shown above.'}</div>`;
-
-  // Earnings + ex-dividend dates for what you hold / watch.
-  let mine = '';
-  if (ev && ev.events) {
-    const d2 = (ms) => new Date(ms).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: '2-digit' });
-    const evRows = ev.events.slice(0, 14).map((e) => `<div class="cal-row" data-sym="${esc(e.symbol)}" style="cursor:pointer">
-      <span class="cal-when">${d2(e.t)}${e.estimated ? ' <span class="dim">~</span>' : ''}</span>
-      <span class="ev-kind ${e.kind === 'EARNINGS' ? 'earn' : 'div'}">${e.kind}</span>
-      <span class="cal-title"><span class="sym amber">${esc(e.symbol)}</span>${e.held ? '' : ' <span class="dim">watch</span>'}</span>
-      ${e.amount ? `<span class="cal-fp">~${fmt(e.amount, 2)}/sh</span>` : ''}</div>`).join('');
-    mine = `<div class="fxr-sub">YOUR HOLDINGS · next 60 days (earnings · ex-dividend)</div>` +
-      (evRows || `<div class="muted small">${ev.ok ? 'No earnings or ex-dividend dates in the next 60 days.' : 'Company dates unavailable right now.'}</div>`);
-  }
-  box.innerHTML = anchor + mine + `<div class="fxr-sub">THIS WEEK · high-impact (USD/SGD)</div>` + rows;
-}
-$('#calendar').addEventListener('click', (e) => { const r = e.target.closest('[data-sym]'); if (r) selectSymbol(r.dataset.sym); });
+// Calendar is a React island (A3).
 
 // ---- customizable summary cards --------------------------------------------
 // Summary cards are a React island (web/src/features/summary, PILOT-2).
@@ -1062,102 +1007,8 @@ function sparkline(points, up) {
 // ===========================================================================
 //  WORLD BANK MACRO
 // ===========================================================================
-async function loadWorldBank() {
-  const country = $('#wb-country').value.trim().toUpperCase() || 'US';
-  const indicator = $('#wb-indicator').value;
-  const body = $('#wb-body');
-  body.innerHTML = '<span class="muted">Loading World Bank data…</span>';
-  try {
-    const d = await api(`/api/worldbank?country=${encodeURIComponent(country)}&indicator=${encodeURIComponent(indicator)}`);
-    if (!d.series || !d.series.length) { body.innerHTML = `<span class="muted">No data for ${esc(country)}.</span>`; return; }
-    const latest = d.series[d.series.length - 1];
-    const isPct = /%/.test(d.label) || /ZS|ZG/.test(indicator);
-    const val = isPct ? fmt(latest.value, 2) + '%' : fmtBig(latest.value);
-    body.innerHTML = `
-      <div class="wb-headline"><span class="wb-val">${val}</span><span class="wb-yr">${esc(d.countryName)} · ${latest.year}</span></div>
-      <div class="wb-label">${esc(d.label)} · annual, latest available (use FRED for monthly)</div>
-      ${wbChart(d.series, isPct)}`;
-  } catch (e) { body.innerHTML = `<span class="down">World Bank error: ${esc(e.message)}</span>`; }
-}
-function wbChart(series, isPct) {
-  const pts = series.map((s) => ({ c: s.value }));
-  const last = series[series.length - 1].value, first = series[0].value;
-  return sparkline(pts, last >= first);
-}
-$('#wb-go').addEventListener('click', loadWorldBank);
-$('#wb-country').addEventListener('keydown', (e) => { if (e.key === 'Enter') loadWorldBank(); });
-$('#wb-indicator').addEventListener('change', loadWorldBank);
-
-// ===========================================================================
-//  FRED — US FEDERAL RESERVE MACRO (no key)
-// ===========================================================================
-async function loadFred() {
-  const [series, transform] = $('#fred-series').value.split('|');
-  const label = $('#fred-series').selectedOptions[0].textContent;
-  const body = $('#fred-body');
-  body.innerHTML = '<span class="muted">Loading FRED…</span>';
-  try {
-    const d = await api(`/api/fred?series=${encodeURIComponent(series)}&transform=${encodeURIComponent(transform || 'lin')}`);
-    if (!d.points || !d.points.length) { body.innerHTML = '<span class="muted">No data.</span>'; return; }
-    const last = d.points[d.points.length - 1];
-    const isLevel = /GDP/.test(series) && transform !== 'pc1';
-    const val = isLevel ? fmtBig(last.value) : fmt(last.value, 2) + '%';
-    const pts = d.points.map((p) => ({ c: p.value }));
-    body.innerHTML = `<div class="wb-headline"><span class="wb-val">${val}</span><span class="wb-yr">${esc(last.date)}</span></div>
-      <div class="wb-label">${esc(label)} · FRED</div>${sparkline(pts, last.value >= d.points[0].value)}`;
-  } catch (e) { body.innerHTML = `<span class="down">FRED error: ${esc(e.message)}</span>`; }
-}
-$('#fred-go').addEventListener('click', loadFred);
-$('#fred-series').addEventListener('change', loadFred);
-
-// ===========================================================================
-//  US INFLATION GAUGES — official CPI/PCE + trimmed-mean measures (FRED, no key)
-//  ★ = trimmed/median family: Fed Chair Warsh's preferred "underlying inflation"
-//  gauges (they strip outlier price moves instead of fixed food/energy buckets).
-// ===========================================================================
-const INFL_GAUGES = [
-  { s: 'CPIAUCSL', t: 'pc1', name: 'CPI (headline)', src: 'BLS' },
-  { s: 'CPILFESL', t: 'pc1', name: 'Core CPI', src: 'BLS' },
-  { s: 'PCEPI', t: 'pc1', name: 'PCE (headline)', src: 'BEA · Fed 2% target' },
-  { s: 'PCEPILFE', t: 'pc1', name: 'Core PCE', src: 'BEA' },
-  { s: 'PCETRIM12M159SFRBDAL', t: 'lin', name: '★ Trimmed Mean PCE', src: 'Dallas Fed' },
-  { s: 'MEDCPIM159SFRBCLE', t: 'lin', name: '★ Median CPI', src: 'Cleveland Fed' },
-  { s: 'TRMMEANCPIM159SFRBCLE', t: 'lin', name: '★ Trimmed Mean CPI', src: 'Cleveland Fed' },
-];
-function inflClass(v) {
-  const d = v - 2.0;
-  if (d <= 0.3) return 'up';
-  if (d <= 1.0) return 'warn';
-  return 'down';
-}
-async function loadInflation() {
-  const body = $('#infl-body');
-  body.innerHTML = '<span class="muted">Loading inflation gauges…</span>';
-  try {
-    const results = await Promise.all(
-      INFL_GAUGES.map((g) => api(`/api/fred?series=${g.s}&transform=${g.t}`).catch(() => null))
-    );
-    const ff = await api('/api/fred?series=FEDFUNDS&transform=lin').catch(() => null);
-    const rows = INFL_GAUGES.map((g, i) => {
-      const d = results[i];
-      if (!d || !d.points || !d.points.length) return `<div class="infl-row"><span class="infl-name">${esc(g.name)}</span><span class="muted small">n/a</span></div>`;
-      const last = d.points[d.points.length - 1];
-      const prev = d.points[d.points.length - 2];
-      const mom = prev ? last.value - prev.value : 0;
-      const when = new Date(last.date).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
-      return `<div class="infl-row" title="${esc(g.src)}">
-        <span class="infl-name">${esc(g.name)} <span class="dim small">${esc(g.src)}</span></span>
-        <span class="infl-mom ${mom > 0.005 ? 'down' : mom < -0.005 ? 'up' : 'dim'}">${mom > 0.005 ? '▲' : mom < -0.005 ? '▼' : '·'} ${fmt(Math.abs(mom), 2)}</span>
-        <span class="infl-val ${inflClass(last.value)}">${fmt(last.value, 2)}%</span>
-        <span class="infl-date dim">${when}</span></div>`;
-    }).join('');
-    const ffLast = ff && ff.points && ff.points.length ? ff.points[ff.points.length - 1].value : null;
-    body.innerHTML = `${rows}
-      <div class="infl-note">Fed target: 2% (PCE)${ffLast != null ? ` · Fed funds: ${fmt(ffLast, 2)}%` : ''} · monthly YoY, latest release
-      <br>★ Trimmed/median gauges — Chair Warsh's preferred read of underlying inflation: rank all price changes, drop the extreme tails (Dallas trims bottom 24% / top 31% of the PCE basket), average the rest. ▲▼ = change vs prior month.</div>`;
-  } catch (e) { body.innerHTML = `<span class="down">Inflation gauges error: ${esc(e.message)}</span>`; }
-}
-$('#infl-go').addEventListener('click', loadInflation);
+// World Bank, FRED and inflation are React islands (A3).
+// sparkline() stays until E2, its final legacy consumer, migrates.
 
 // ===========================================================================
 //  DIVIDENDS (income received, from broker imports)
@@ -1734,7 +1585,6 @@ $('#account-sel').addEventListener('change', async () => {
   if (v === '__manage') { $('#account-sel').value = state.account; renderAccountsList(); return $('#accounts-modal').classList.remove('hidden'); }
   state.account = v; localStorage.setItem('finsight-account', v); perfSig = '';
   await loadPortfolio();
-  loadCalendar(); // holdings' earnings / ex-div dates follow the account
 });
 async function newAccountPrompt() {
   const name = (prompt('New account name (e.g. Crypto, SGX, IBKR):') || '').trim();
@@ -1794,9 +1644,6 @@ async function boot() {
   await loadPortfolio();
   loadWatchlist();
   loadAlerts();
-  loadWorldBank();
-  loadFred();
-  loadCalendar();
   setFooter(`READY · base ${state.base} · live data refreshing every 15s`);
   startPolling();
 }
@@ -1816,9 +1663,6 @@ function startPolling() {
     setInterval(loadAlerts, 30000), // the server also evaluates alerts every minute and notifies
     setInterval(() => { if (state.selected) loadDetail({ periodic: true }); }, 30000),
     // macro panels change slowly — auto-refresh every 15 min (the LOAD buttons still work)
-    setInterval(loadWorldBank, 15 * 60000),
-    setInterval(loadFred, 15 * 60000),
-    setInterval(loadCalendar, 15 * 60000),
   );
 }
 function stopTimers() { pollTimers.forEach(clearInterval); pollTimers = []; }
@@ -1830,7 +1674,7 @@ document.addEventListener('visibilitychange', () => {
   if (Date.now() - hiddenAt > 10000) {
     loadPortfolio(); window.FinSight.bus.invalidate('markets'); loadWatchlist(); loadAlerts();
     if (state.selected) loadDetail({ periodic: true });
-    if (Date.now() - hiddenAt > 15 * 60000) { loadWorldBank(); loadFred(); loadCalendar(); }
+    if (Date.now() - hiddenAt > 15 * 60000) { window.FinSight.bus.invalidate('worldbank'); window.FinSight.bus.invalidate('fred'); window.FinSight.bus.invalidate('calendar'); window.FinSight.bus.invalidate('events'); }
   }
   startPolling();
 });

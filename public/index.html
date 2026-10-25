@@ -243,60 +243,29 @@ try { var d = document.documentElement;
 
       <div class="panel">
         <div class="panel-head"><span class="panel-title">ECON CALENDAR · FED · CPI · PCE</span><span class="dim small">no key</span></div>
-        <div id="calendar" class="calendar muted">Loading upcoming Fed &amp; inflation events…</div>
+        <div id="calendar" class="calendar" data-island="calendar"></div>
       </div>
 
       <div class="panel">
         <div class="panel-head">
           <span class="panel-title">WORLD BANK · MACRO</span>
         </div>
-        <div class="wb-controls">
-          <input id="wb-country" value="US" maxlength="3" title="ISO country code (US, GB, DE, JP, CN, IN, SG, WLD...)" />
-          <select id="wb-indicator">
-            <option value="NY.GDP.MKTP.CD">GDP (current US$)</option>
-            <option value="NY.GDP.MKTP.KD.ZG">GDP growth (annual %)</option>
-            <option value="NY.GDP.PCAP.CD">GDP per capita (US$)</option>
-            <option value="FP.CPI.TOTL.ZG">Inflation, CPI (annual %)</option>
-            <option value="SL.UEM.TOTL.ZS">Unemployment (% labor force)</option>
-            <option value="SP.POP.TOTL">Population, total</option>
-            <option value="GC.DOD.TOTL.GD.ZS">Govt debt (% of GDP)</option>
-            <option value="NE.EXP.GNFS.ZS">Exports (% of GDP)</option>
-          </select>
-          <button id="wb-go" class="mini-btn">LOAD</button>
-        </div>
-        <div id="wb-body" class="wb-body muted">Pick a country + indicator and press LOAD.</div>
+        <div class="wb-controls" data-island-slot="worldbank:head"></div>
+        <div id="wb-body" class="wb-body muted" data-island="worldbank"></div>
       </div>
 
       <div class="panel">
         <div class="panel-head"><span class="panel-title">US FED · MACRO (FRED)</span><span class="dim small">no key</span></div>
-        <div class="wb-controls">
-          <select id="fred-series">
-            <option value="DGS10|lin">10-Year Treasury Yield</option>
-            <option value="DGS2|lin">2-Year Treasury Yield</option>
-            <option value="T10Y2Y|lin">Yield Curve Spread (10Y–2Y)</option>
-            <option value="FEDFUNDS|lin">Fed Funds Rate</option>
-            <option value="CPIAUCSL|pc1">Inflation · CPI (YoY %)</option>
-            <option value="CPILFESL|pc1">Inflation · Core CPI (YoY %)</option>
-            <option value="PCEPILFE|pc1">Inflation · Core PCE (YoY %)</option>
-            <option value="PCEPI|pc1">Inflation · PCE (YoY %)</option>
-            <option value="PCETRIM12M159SFRBDAL|lin">Inflation · Trimmed Mean PCE (Dallas Fed)</option>
-            <option value="MEDCPIM159SFRBCLE|lin">Inflation · Median CPI (Cleveland Fed)</option>
-            <option value="TRMMEANCPIM159SFRBCLE|lin">Inflation · Trimmed Mean CPI (Cleveland Fed)</option>
-            <option value="UNRATE|lin">Unemployment Rate</option>
-            <option value="MORTGAGE30US|lin">30-Yr Mortgage Rate</option>
-            <option value="GDPC1|lin">Real GDP (level)</option>
-          </select>
-          <button id="fred-go" class="mini-btn">LOAD</button>
-        </div>
-        <div id="fred-body" class="wb-body muted">Pick a series and press LOAD.</div>
+        <div class="wb-controls" data-island-slot="fred:head"></div>
+        <div id="fred-body" class="wb-body muted" data-island="fred"></div>
       </div>
 
       <div class="panel">
         <div class="panel-head">
           <span class="panel-title">US INFLATION · FED GAUGES</span>
-          <button id="infl-go" class="mini-btn">LOAD</button>
+          <span data-island-slot="inflation:head"></span>
         </div>
-        <div id="infl-body" class="wb-body muted">Press LOAD — official CPI/PCE plus the trimmed-mean gauges Fed Chair Warsh watches.</div>
+        <div id="infl-body" class="wb-body muted" data-island="inflation"></div>
       </div>
     </section>
   </main>

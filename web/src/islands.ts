@@ -8,4 +8,8 @@ export const islands: IslandRegistry = {
   'summary-cards': () => import('./features/summary/CardsEditorIsland.tsx'),
   positions: () => import('./features/positions/PositionsIsland.tsx'),
   news: () => import('./features/news/NewsIsland.tsx'),
+  calendar: () => import('./features/macro/CalendarIsland.tsx'),
+  worldbank: () => import('./features/macro/WorldBankIsland.tsx'),
+  fred: () => import('./features/macro/FredIsland.tsx'),
+  inflation: () => import('./features/macro/InflationIsland.tsx'),
 };

@@ -75,3 +75,34 @@ export function useNews(symbol: string) {
   return useQuery({ queryKey: ['news', symbol], enabled, staleTime: 0,
     queryFn: ({ signal }) => api<NewsResponse>(`/api/news${symbol ? '?symbol=' + encodeURIComponent(symbol) : ''}`, { signal }) });
 }
+
+export function useCalendar() {
+  const { enabled } = useScope();
+  return useQuery({ queryKey: ['calendar'], enabled, staleTime: 900_000, refetchInterval: 900_000,
+    queryFn: ({ signal }) => api<import('../../../shared/types.ts').CalendarResponse>('/api/calendar', { signal }) });
+}
+export function useEvents() {
+  const { base, account, enabled } = useScope();
+  return useQuery({ queryKey: ['events', base, account], enabled, staleTime: 900_000, refetchInterval: 900_000,
+    queryFn: ({ signal }) => api<import('../../../shared/types.ts').EventsResponse>(`/api/events?base=${encodeURIComponent(base)}&account=${encodeURIComponent(account)}`, { signal }) });
+}
+export function useWorldBank(country: string, indicator: string) {
+  const { enabled } = useScope();
+  return useQuery({ queryKey: ['worldbank', country, indicator], enabled, staleTime: 900_000, refetchInterval: 900_000,
+    queryFn: ({ signal }) => api<import('../../../shared/types.ts').WorldBankResponse>(`/api/worldbank?country=${encodeURIComponent(country)}&indicator=${encodeURIComponent(indicator)}`, { signal }) });
+}
+export function useFred(series: string, transform: string) {
+  const { enabled } = useScope();
+  return useQuery({ queryKey: ['fred', series, transform], enabled, staleTime: 900_000, refetchInterval: 900_000,
+    queryFn: ({ signal }) => api<import('../../../shared/types.ts').FredResponse>(`/api/fred?series=${encodeURIComponent(series)}&transform=${encodeURIComponent(transform)}`, { signal }) });
+}
+export function useInflation(requested: boolean) {
+  const { enabled } = useScope();
+  return useQuery({ queryKey: ['inflation'], enabled: enabled && requested, staleTime: Infinity,
+    queryFn: async ({ signal }) => {
+      const { INFL_GAUGES } = await import('../features/macro/macro.ts');
+      const gauges = await Promise.all(INFL_GAUGES.map((g) => api<import('../../../shared/types.ts').FredResponse>(`/api/fred?series=${g.s}&transform=${g.t}`, { signal }).catch(() => null)));
+      const funds = await api<import('../../../shared/types.ts').FredResponse>('/api/fred?series=FEDFUNDS&transform=lin', { signal }).catch(() => null);
+      return { gauges, funds };
+    } });
+}

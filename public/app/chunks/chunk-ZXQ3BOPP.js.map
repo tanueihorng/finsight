@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../../../web/src/features/macro/macro.ts"],
+  "sourcesContent": ["export const INFL_GAUGES = [\n  { s: 'CPIAUCSL', t: 'pc1', name: 'CPI (headline)', src: 'BLS' },\n  { s: 'CPILFESL', t: 'pc1', name: 'Core CPI', src: 'BLS' },\n  { s: 'PCEPI', t: 'pc1', name: 'PCE (headline)', src: 'BEA \u00B7 Fed 2% target' },\n  { s: 'PCEPILFE', t: 'pc1', name: 'Core PCE', src: 'BEA' },\n  { s: 'PCETRIM12M159SFRBDAL', t: 'lin', name: '\u2605 Trimmed Mean PCE', src: 'Dallas Fed' },\n  { s: 'MEDCPIM159SFRBCLE', t: 'lin', name: '\u2605 Median CPI', src: 'Cleveland Fed' },\n  { s: 'TRMMEANCPIM159SFRBCLE', t: 'lin', name: '\u2605 Trimmed Mean CPI', src: 'Cleveland Fed' },\n];\nexport function inflClass(v: number) {\n  const d = v - 2.0;\n  if (d <= 0.3) return 'up';\n  if (d <= 1.0) return 'warn';\n  return 'down';\n}\n"],
+  "mappings": "AAAO,IAAMA,EAAc,CACzB,CAAE,EAAG,WAAY,EAAG,MAAO,KAAM,iBAAkB,IAAK,KAAM,EAC9D,CAAE,EAAG,WAAY,EAAG,MAAO,KAAM,WAAY,IAAK,KAAM,EACxD,CAAE,EAAG,QAAS,EAAG,MAAO,KAAM,iBAAkB,IAAK,wBAAsB,EAC3E,CAAE,EAAG,WAAY,EAAG,MAAO,KAAM,WAAY,IAAK,KAAM,EACxD,CAAE,EAAG,uBAAwB,EAAG,MAAO,KAAM,0BAAsB,IAAK,YAAa,EACrF,CAAE,EAAG,oBAAqB,EAAG,MAAO,KAAM,oBAAgB,IAAK,eAAgB,EAC/E,CAAE,EAAG,wBAAyB,EAAG,MAAO,KAAM,0BAAsB,IAAK,eAAgB,CAC3F,EACO,SAASC,EAAUC,EAAW,CACnC,IAAMC,EAAID,EAAI,EACd,OAAIC,GAAK,GAAY,KACjBA,GAAK,EAAY,OACd,MACT",
+  "names": ["INFL_GAUGES", "inflClass", "v", "d"]
+}
