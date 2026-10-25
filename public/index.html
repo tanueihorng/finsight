@@ -34,22 +34,34 @@ try { var d = document.documentElement;
    first, chosen as web/src/state/store.ts and shell/boot.ts choose them; the
    app takes each once (web/src/api/early.ts) and fetches anything that does
    not match. Bodies are read at once: an unread one would hold a connection.
-   A locked page sends no protected request. */
+   A page that was signed in last time (finsight-signed-in, kept by boot.ts and
+   cleared on every lock) asks for its accounts and saved account's portfolio
+   at once, beside the session check: on a warm load the app's own script
+   would otherwise hold these requests back. If that session has since
+   expired they get a 401 and are ignored. Any other locked page sends no
+   protected request. */
 try { (function () {
   var get = function (k) { try { return localStorage.getItem(k); } catch (e) { return null; } };
   var opts = { credentials: 'same-origin', headers: { Accept: 'application/json' } };
   var body = function (r) { return r.ok ? r.json() : null; };
   var early = window.finsightEarly = {};
   early.auth = fetch('/api/auth/status', { credentials: 'same-origin' }).then(function (r) { if (!r.ok) throw new Error(); return r.json(); });
-  early.accounts = early.auth.then(function (s) { return s.authed ? fetch('/api/accounts', opts).then(body) : null; });
-  var portfolio = early.accounts.then(function (d) {
-    if (!d) return;
-    var list = d.accounts || [], exists = function (id) { return id === 'ALL' || list.some(function (a) { return a.id === id; }); };
-    var account = get('finsight-account') || get('fincept-account') || '', base = (get('finsight-base') || get('fincept-base') || 'SGD').toUpperCase();
-    if (!exists(account)) account = exists(get('finsight-account')) ? get('finsight-account') : d.activeId;
+  var hinted = get('finsight-signed-in') === '1', saved = get('finsight-account') || get('fincept-account') || '';
+  var base = (get('finsight-base') || get('fincept-base') || 'SGD').toUpperCase();
+  var portfolioFor = function (account) {
     var url = '/api/portfolio?base=' + encodeURIComponent(base) + '&account=' + encodeURIComponent(account);
     early.portfolio = { url: url, data: fetch(url, opts).then(body) };
     early.portfolio.data.catch(function () {});
+  };
+  var accounts = function () { return fetch('/api/accounts', opts).then(body); };
+  early.accounts = hinted ? accounts() : early.auth.then(function (s) { return s.authed ? accounts() : null; });
+  if (hinted && saved) portfolioFor(saved); // used only if the app settles on this same account
+  var portfolio = hinted && saved ? Promise.resolve() : early.accounts.then(function (d) {
+    if (!d) return;
+    var list = d.accounts || [], exists = function (id) { return id === 'ALL' || list.some(function (a) { return a.id === id; }); };
+    var account = saved;
+    if (!exists(account)) account = exists(get('finsight-account')) ? get('finsight-account') : d.activeId;
+    portfolioFor(account);
   });
   early.auth.catch(function () {}); early.accounts.catch(function () {}); portfolio.catch(function () {});
 })(); } catch (e) {}</script>

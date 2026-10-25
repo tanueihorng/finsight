@@ -67,8 +67,37 @@ test('a saved account that no longer exists falls back to the active one at star
   await page.reload();
   await expect(page.locator('#positions-body tr[data-sym]')).toHaveCount(9);
   await page.waitForTimeout(1000);
-  expect(urls).toEqual(startup('?base=SGD&account=main'));
+  // Signed in last time, so index.html asked for the saved account at once;
+  // the app settled on the active one, did not use that response, and fetched.
+  expect(urls).toEqual([{ search: '?base=SGD&account=gone', startup: true }, ...startup('?base=SGD&account=main').map((u) => ({ ...u, startup: false }))]);
   expect(await page.evaluate(() => localStorage.getItem('finsight-account'))).toBe('main');
+  await expect(page.locator('#positions-body tr[data-sym="VOO"]')).toBeVisible();
+});
+
+test('the signed-in hint is kept while unlocked and cleared by a lock', async ({ page }) => {
+  await seeded(page);
+  expect(await page.evaluate(() => localStorage.getItem('finsight-signed-in'))).toBe('1');
+  await page.click('#lock-btn');
+  await expect(page.locator('body')).toHaveClass(/\blocked\b/);
+  expect(await page.evaluate(() => localStorage.getItem('finsight-signed-in'))).toBeNull();
+});
+
+test('a hint left from an expired session: one try each for accounts and portfolio, then nothing while locked', async ({ page, context }) => {
+  await seeded(page);
+  await page.waitForLoadState('networkidle');
+  await context.clearCookies(); // the session is gone, but this browser still says "signed in last time"
+  const api: string[] = [];
+  page.on('request', (r) => { const p = new URL(r.url()).pathname; if (p.startsWith('/api/') && !p.startsWith('/api/auth/')) api.push(p); });
+  await page.reload();
+  await expect(page.locator('body')).toHaveClass(/\blocked\b/);
+  await expect(page.locator('#lock-pin')).toBeVisible();
+  await page.waitForTimeout(2000);
+  expect(api.sort()).toEqual(['/api/accounts', '/api/portfolio']);
+  expect(await page.evaluate(() => localStorage.getItem('finsight-signed-in'))).toBeNull();
+  await page.reload(); // the hint is gone: a locked page asks only for the session status
+  await expect(page.locator('#lock-pin')).toBeVisible();
+  await page.waitForTimeout(1000);
+  expect(api.length).toBe(2);
 });
 
 test('the saved base is the one fetched at startup', async ({ page }) => {

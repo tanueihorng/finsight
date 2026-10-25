@@ -22,8 +22,9 @@ type HostProps = { id?: string; className?: string; title?: string; style?: obje
 // chunk has loaded, failed, or taken 300 ms, React's reveal throttle (islands.ts).
 // Until then it stays empty instead of showing a fallback, so one slow chunk
 // neither delays nor is delayed by the others. The positions table and the
-// controls around it mount first; the other panels once the browser is idle.
-const FIRST = new Set(['positions', 'summary', 'lock', 'command', 'status', 'account', 'base', 'clock']);
+// lock screen mount first; every other panel once the browser is idle (each
+// root rendered before the first row delayed it).
+const FIRST = new Set(['positions', 'lock']);
 const idle = (go: () => void) => {
   if (!('requestIdleCallback' in window)) { const t = setTimeout(go, 0); return () => clearTimeout(t); }
   const id = requestIdleCallback(go, { timeout: 200 });
