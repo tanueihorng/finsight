@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { api } from './client.ts';
-import type { Accounts, Alert, Category, FxRisk, Ledger, Markets, NewsResponse, Performance, Portfolio, Realized, WatchItem } from '../../../shared/types.ts';
+import type { Accounts, Alert, Category, FxRisk, History, Ledger, Markets, NewsResponse, Performance, Portfolio, Quote, QuotedQuote, Realized, WatchItem } from '../../../shared/types.ts';
 import type {} from '../bootstrap.ts';
 
 // F4 supplies this source in bootstrap, before legacy startup. Until then hooks
@@ -111,5 +111,27 @@ export function useWealth(accounts: { id: string; name: string }[] | undefined) 
       const symbols = [...new Set(list.flatMap((a) => a.portfolio.positions.map((p) => p.symbol)))].sort();
       const categories = symbols.length ? await api<Record<string, Category>>('/api/categories?symbols=' + encodeURIComponent(symbols.join(',')), { signal }).catch(() => ({})) : {};
       return { base, accounts: list as WealthInput[], categories };
+    } });
+}
+
+// Security detail (E1). Legacy re-read the quote every 30 s while a symbol was
+// selected; daily+ history was reused for 5 minutes, intraday re-fetched each
+// time. The previous symbol's data stays visible until the new one arrives.
+export function useHistory(symbol: string | null, range: string, interval: string) {
+  const { enabled } = useScope();
+  const every = /m$|h$/.test(interval) ? 30_000 : 300_000;
+  return useQuery({ queryKey: ['history', symbol, range, interval], enabled: enabled && !!symbol, staleTime: every, refetchInterval: every,
+    placeholderData: keepPreviousData,
+    queryFn: ({ signal }) => api<History>(`/api/history?symbol=${encodeURIComponent(symbol!)}&range=${range}&interval=${interval}`, { signal }) });
+}
+// A failed quote is not an error: the header falls back to the history meta.
+export function useQuote(symbol: string | null) {
+  const { enabled } = useScope();
+  return useQuery({ queryKey: ['quote', symbol], enabled: enabled && !!symbol, staleTime: 30_000, refetchInterval: 30_000,
+    placeholderData: keepPreviousData,
+    queryFn: async ({ signal }) => {
+      const d = await api<{ quotes: Quote[] }>('/api/quote?symbols=' + encodeURIComponent(symbol!), { signal }).catch(() => null);
+      const q = d?.quotes?.[0];
+      return q && !q.error ? q as QuotedQuote : null;
     } });
 }

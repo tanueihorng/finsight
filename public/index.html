@@ -180,18 +180,9 @@ try { var d = document.documentElement;
       <div class="panel" id="detail-panel">
         <div class="panel-head">
           <span class="panel-title" id="detail-title">SECURITY DETAIL</span>
-          <div class="ranges" id="ranges">
-            <button data-range="1d" data-interval="5m">1D</button>
-            <button data-range="5d" data-interval="15m">5D</button>
-            <button data-range="1mo" data-interval="1d" class="active">1M</button>
-            <button data-range="6mo" data-interval="1d">6M</button>
-            <button data-range="1y" data-interval="1d">1Y</button>
-            <button data-range="5y" data-interval="1wk">5Y</button>
-          </div>
+          <span data-island-slot="detail:head"></span>
         </div>
-        <div id="detail-body" class="detail-body">
-          <div class="muted">Click a position or run <b>Q SYMBOL</b> to inspect a security.</div>
-        </div>
+        <div id="detail-body" class="detail-body" data-island="detail"></div>
       </div>
 
       <div class="panel">

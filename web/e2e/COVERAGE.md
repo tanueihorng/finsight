@@ -39,6 +39,13 @@ Card = the migration card(s) that must keep the row green (`docs/frontend-migrat
 | Net worth (C3) | class legend, cash note and CASH share, BY ACCOUNT rows in All Accounts, EDIT CASH opens the editor | `C3` › net worth breakdown… | C3, D3 | pass |
 | Performance (C3) | headline end value, stats/legend, range + benchmark requests, benchmark saved / range not, hover tooltip + crosshair | `C3` › performance… | C3 | pass |
 | Analytics (C3) | ADD and UNDO refetch performance; empty account empty states; drag + reload, hide/show via ⚙ Layout | `C3` | C3, F10 | pass |
+| Detail (E) | header, name, price, range %, exchange, six stats, chart canvas; Q selects; same-symbol Q refreshes the quote | `E` › header and stats… | E1, E2 | pass |
+| Detail (E) | ranges fetch warm-up history; chart timeframe clears the active range and the range % | `E` › ranges… | E1, E2 | pass |
+| Detail (E) | manual holding valuation without a chart; a quoted symbol restores the chart | `E` › a manual holding… | E1, E2 | pass |
+| Detail (E) | a slow previous-symbol response never replaces the new one; history errors shown | `E` › a slow response… | E1 | pass |
+| Detail (E) | removing the selected holding auto-selects the first; a sale reloads trade markers | `E` › removing the selected holding… | E1, E2, D1 | pass |
+| Chart (E) | expand and the 2-chart grid move the chart out and back into #detail-body; theme change repaints | `E` › expand and the 2-chart grid… | E2 | pass |
+| Detail (E) | 30 s refresh re-reads the quote, not daily history | `E` › the 30 s refresh… | E1 | pass |
 | Trades | ADD via command bar, UNDO restores | `baseline/add-sell` | F7, D3 | pass |
 | Trades | SELL with a price (realized P/L), SELL at market | `baseline/trades` | F7, D1 | pass |
 | Trades | row S button prompts for quantity and price | `baseline/trades` | D1 | pass |

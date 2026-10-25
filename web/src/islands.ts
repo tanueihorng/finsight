@@ -16,4 +16,5 @@ export const islands: IslandRegistry = {
   wealth: () => import('./features/analytics/WealthIsland.tsx'),
   allocation: () => import('./features/analytics/AllocationIsland.tsx'),
   heatmap: () => import('./features/analytics/HeatmapIsland.tsx'),
+  detail: () => import('./features/detail/DetailIsland.tsx'),
 };

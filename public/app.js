@@ -205,8 +205,6 @@ function renderPortfolio(data) {
   }).join('') || '<div class="muted small">No transactions yet.</div>';
 
 
-  // re-select detail if needed
-  if (!state.selected && positions.length) selectSymbol((positions.find((p) => p.quoted !== false) || positions[0]).symbol);
 }
 
 // ---- FX RISK panel ---------------------------------------------------------
@@ -440,7 +438,7 @@ let curFont  = localStorage.getItem('finsight-font')  || 'mono';
 function applyTheme() { document.documentElement.dataset.theme = curTheme; document.documentElement.dataset.font = curFont; }
 function setTheme(id) {
   curTheme = id; localStorage.setItem('finsight-theme', id); applyTheme();
-  renderAppearance(); if (state.selected) loadDetail(); // repaint canvas chart with new colours
+  renderAppearance(); allCharts().forEach((c) => c.render()); // repaint canvas charts with the new colours
 }
 function setFont(id) { curFont = id; localStorage.setItem('finsight-font', id); applyTheme(); renderAppearance(); }
 function renderAppearance() {
@@ -627,108 +625,15 @@ $('#add-toggle').addEventListener('click', () => { state.addFormOpen = !state.ad
 // ===========================================================================
 //  SECURITY DETAIL + CHART
 // ===========================================================================
-async function selectSymbol(symbol) {
+// The detail header, stats, ranges and chart host are a React island (E1+E2,
+// web/src/features/detail, web/src/legacy/ChartHost.tsx). selectSymbol stays
+// global for its callers; the island follows store.selected.
+function selectSymbol(symbol) {
   state.selected = symbol; // the positions island highlights the row from the store
   // A2 bridge: same-symbol selection exits NEWS's market override and refreshes.
   // Keep this notification through E1 until F7 owns the command callers.
   window.FinSight.bus.invalidate('news-selected');
-  await loadDetail();
-}
-
-let detailChart = null; // singleton PriceChart instance (chart.js); survives refreshes
-
-// The 30s background refresh re-reads the quote; bar history for daily and
-// longer timeframes changes slowly, so it is re-downloaded at most every 5 min.
-let detailHist = { key: '', at: 0, h: null };
-async function loadDetail(opts) {
-  const periodic = !!(opts && opts.periodic);
-  const symbol = state.selected;
-  if (!symbol) return;
-  $('#detail-title').textContent = symbol + ' · DETAIL';
-  const body = $('#detail-body');
-  // Build a persistent skeleton ONCE so the interactive chart (its canvases,
-  // ResizeObserver, zoom window and drawings) survives range switches and the
-  // 30s background refresh — only the header + stats blocks get re-rendered.
-  // (an expanded chart is temporarily re-parented to <body>; keep using it)
-  if (!body.querySelector('#detail-chart-host') && !(detailChart && (detailChart.maxed || detailChart.fit))) {
-    body.innerHTML =
-      '<div id="detail-hdr"></div>' +
-      '<div id="detail-chart-host"></div>' +
-      '<div id="detail-stats" class="stats"></div>';
-    detailChart = null;
-  }
-  const hdr = $('#detail-hdr');
-  // Manual holdings (no Yahoo ticker, e.g. a unit trust) have no chart or quote to fetch.
-  const manual = lastTableData.positions.find((p) => p.symbol === symbol && p.quoted === false);
-  if (manual) {
-    if (chartGrid && chartGrid.active()) chartGrid.set({ n: 1 });
-    detailChart = null; // body is replaced below, so the chart skeleton is rebuilt on the next real symbol
-    body.innerHTML = `<div class="sym amber">${esc(symbol)}</div><div class="muted small">${esc(manual.name || '')}</div>
-      <div class="muted small" style="margin-top:8px">Manual holding · no market data feed. Valued at the price you entered:
-      <b>${esc(manual.currency)} ${fmt(manual.last)}</b> × ${fmt(manual.quantity, 4)} = <b>${money(lastTableData.base, manual.marketValue)}</b>.
-      To update it, edit its price in the ledger.</div>`;
-    return;
-  }
-  if (!detailChart) hdr.innerHTML = '<div class="muted">Loading ' + esc(symbol) + '…</div>';
-  try {
-    const { range, interval, tf } = state.detailRange;
-    // Fetch more history than is shown so moving averages (up to MA200) and other
-    // indicators are fully formed from the first visible bar; the chart opens on `range`.
-    // Chart timeframe buttons (tf) load a long history and open on the latest bars.
-    const fetchRange = tf ? range : (DETAIL_WARMUP[range] || range);
-    const hKey = symbol + '|' + fetchRange + '|' + interval;
-    const reuse = periodic && detailHist.key === hKey && detailHist.h && !/m$|h$/.test(interval) && Date.now() - detailHist.at < 300000;
-    const [h, qd] = await Promise.all([
-      reuse ? detailHist.h : api(`/api/history?symbol=${encodeURIComponent(symbol)}&range=${fetchRange}&interval=${interval}`),
-      api('/api/quote?symbols=' + encodeURIComponent(symbol)).catch(() => null),
-    ]);
-    if (state.selected !== symbol) return; // user switched symbols while we awaited
-    if (!reuse) detailHist = { key: hKey, at: Date.now(), h };
-    const q = (qd && qd.quotes && qd.quotes[0] && !qd.quotes[0].error) ? qd.quotes[0] : {};
-    const m = { ...(h.meta || {}), ...q };
-    const pts = h.points || [];
-    const visibleFrom = tf ? null : visibleStart(pts, range);
-    const vi = Math.max(0, pts.findIndex((p) => p.t >= visibleFrom));
-    const base0 = pts[vi > 0 ? vi - 1 : 0], lastPt = pts[pts.length - 1];
-    const rChg = base0 && lastPt ? lastPt.c - base0.c : null, rPct = rChg != null && base0.c ? rChg / base0.c * 100 : null;
-    const rLabel = { '1d': '1D', '5d': '5D', '1mo': '1M', '6mo': '6M', '1y': '1Y', '5y': '5Y' }[range] || range.toUpperCase();
-    hdr.innerHTML = `
-      <div class="detail-top">
-        <div><span class="detail-sym">${esc(m.symbol || symbol)}</span> <span class="detail-name">${esc(m.name || '')}</span></div>
-      </div>
-      <div class="detail-top" style="margin-top:4px">
-        <span class="detail-price">${fmt(m.price)}</span>
-        <span class="detail-chg ${signClass(m.change)}">${signStr(m.change)} (${signStr(m.changePct)}%) <span class="muted small">today</span></span>
-        ${!tf && range !== '1d' && rPct != null ? `<span class="small ${signClass(rChg)}">${signStr(rPct)}% <span class="muted">${rLabel}</span></span>` : ''}
-        <span class="muted small">${m.currency || ''} · ${esc(m.exchange || '')}</span>
-      </div>`;
-    $('#detail-stats').innerHTML = `
-        ${statRow('Prev Close', fmt(m.prevClose))}
-        ${statRow('Day Range', `${fmt(m.dayLow)} – ${fmt(m.dayHigh)}`)}
-        ${statRow('52W High', fmt(m.weekHigh52))}
-        ${statRow('52W Low', fmt(m.weekLow52))}
-        ${statRow('Volume', fmtBig(m.volume))}
-        ${statRow('Type', esc(m.type || '—'))}`;
-    if (!detailChart && window.PriceChart) {
-      detailChart = new PriceChart($('#detail-chart-host'));
-      detailChart.onRequest = ({ interval: iv }) => {
-        state.detailRange = { range: CHART_TF_RANGE[iv] || '1y', interval: iv, tf: true };
-        $$('#ranges button').forEach((x) => x.classList.remove('active'));
-        loadDetail();
-      };
-      detailChart.onSymbol = (sym) => { if (detailChart && detailChart.maxed) detailChart.symInput.value = sym; selectSymbol(sym); };
-      setupChartHost(detailChart);
-      if (chartGrid) chartGrid.attach(detailChart);
-    }
-    if (detailChart) {
-      if (!reuse) detailChart.load(symbol, pts, m, { range, interval, visibleFrom, fetchRange });
-      if (!periodic || sideAt > (detailChart._tradesAt || 0)) { detailChart._tradesAt = Date.now(); loadChartTrades(detailChart, symbol); }
-      if (chartGrid) chartGrid.syncSymbols();
-    }
-    else $('#detail-chart-host').innerHTML = sparkline(pts, pts.length > 1 ? pts[pts.length - 1].c >= pts[0].c : true); // fallback if chart.js absent
-  } catch (e) {
-    hdr.innerHTML = `<div class="down">Could not load ${esc(symbol)}: ${esc(e.message)}</div>`;
-  }
+  window.FinSight.bus.invalidate('detail'); // the same symbol again refreshes the detail
 }
 // ---- chart host hooks: ledger trades, watchlist feed, multi-chart grid ----
 let lastWatch = [];
@@ -758,36 +663,16 @@ const chartGrid = window.ChartGrid ? new ChartGrid({
   setupChart: (c) => setupChartHost(c),
 }) : null;
 
-// Detail chart: history fetched per visible range, with enough extra bars for MA200/MA50.
-// Chart timeframe -> history to fetch (Yahoo caps: 1m ≈ 7 days, 5m/15m ≈ 60 days, 1h ≈ 730 days).
-// Yahoo's range=max returns quarterly bars for every interval, so W / M ask for explicit years.
-const CHART_TF_RANGE = { '1m': '5d', '5m': '1mo', '15m': '1mo', '60m': '1y', '1d': '5y', '1wk': '10y', '1mo': '30y' };
-const DETAIL_WARMUP = { '1d': '5d', '5d': '1mo', '1mo': '1y', '6mo': '2y', '1y': '2y', '5y': '10y' };
-// First timestamp of the requested range inside a longer fetched series.
-// Intraday: count trading sessions back via overnight gaps (> 2h); daily/weekly: calendar span.
-function visibleStart(pts, range) {
-  if (!pts.length) return 0;
-  const last = pts[pts.length - 1].t;
-  const sessions = { '1d': 1, '5d': 5 }[range];
-  if (sessions) {
-    let seen = 0;
-    for (let i = pts.length - 1; i > 0; i--) {
-      if (pts[i].t - pts[i - 1].t > 2 * 3600000 && ++seen === sessions) return pts[i].t;
-    }
-    return pts[0].t;
-  }
-  const days = { '1mo': 31, '6mo': 183, '1y': 366, '5y': 5 * 366 }[range];
-  return days ? last - days * 86400000 : pts[0].t;
-}
-function statRow(k, v) { return `<div class="stat-row"><span class="k">${k}</span><span class="v">${v}</span></div>`; }
-
-$('#ranges').addEventListener('click', (e) => {
-  const b = e.target.closest('button'); if (!b) return;
-  $$('#ranges button').forEach((x) => x.classList.remove('active'));
-  b.classList.add('active');
-  state.detailRange = { range: b.dataset.range, interval: b.dataset.interval };
-  loadDetail();
-});
+// ChartHost (the detail island) calls these: the watch feed (B1), trade
+// markers and the multi-chart grid stay here, on window.detailChart. It is
+// null until the island mounts; allCharts() reads it by its bare name.
+window.detailChart = null;
+window.FinSightChartHooks = {
+  attached(chart) { setupChartHost(chart); if (chartGrid) chartGrid.attach(chart); },
+  loaded() { if (chartGrid) chartGrid.syncSymbols(); },
+  trades(chart, symbol) { return loadChartTrades(chart, symbol); },
+  detached() { if (chartGrid && chartGrid.active()) chartGrid.set({ n: 1 }); },
+};
 
 // SVG sparkline / line chart -------------------------------------------------
 function sparkline(points, up) {
@@ -1239,7 +1124,6 @@ function startPolling() {
     setInterval(loadPortfolio, 15000),
     setInterval(loadWatchlist, 15000),
     setInterval(loadAlerts, 30000), // the server also evaluates alerts every minute and notifies
-    setInterval(() => { if (state.selected) loadDetail({ periodic: true }); }, 30000),
     // macro panels change slowly — auto-refresh every 15 min (the LOAD buttons still work)
     setInterval(loadWorldBank, 15 * 60000),
     setInterval(loadFred, 15 * 60000),
@@ -1254,7 +1138,7 @@ document.addEventListener('visibilitychange', () => {
   // back in view: refresh what went stale, then resume the timers
   if (Date.now() - hiddenAt > 10000) {
     loadPortfolio(); window.FinSight.bus.invalidate('markets'); loadWatchlist(); loadAlerts();
-    if (state.selected) loadDetail({ periodic: true });
+    window.FinSight.bus.invalidate('quote'); // the detail island re-reads the quote
     if (Date.now() - hiddenAt > 15 * 60000) { loadWorldBank(); loadFred(); loadCalendar(); }
   }
   startPolling();
