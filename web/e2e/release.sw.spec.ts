@@ -20,11 +20,28 @@ async function controlled(page: Page) {
   await page.evaluate(() => navigator.serviceWorker.ready);
   await expect.poll(() => page.evaluate(() => !!navigator.serviceWorker.controller)).toBe(true);
 }
+// Panels mount when the browser is idle (H1), so a chunk can still be on its
+// way, and be cached by the SW, after the page looks ready. Damage the deploy
+// only once the page has loaded everything.
+async function settled(page: Page) {
+  await expect(page.locator('#markets [data-sym]').first()).toBeVisible();
+  await page.waitForLoadState('networkidle');
+}
+// Hashed chunks are served immutable (H1, server.js), so a browser that already
+// fetched one keeps using its copy even after the server lost it, which is
+// correct, since the URL always names the same bytes. These tests are about a
+// client that does not have the chunk: clear the browser's HTTP cache too.
+async function forgetHttpCache(page: Page) {
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Network.clearBrowserCache');
+  await cdp.detach();
+}
 async function cachePaths(page: Page) {
   return page.evaluate(async (name) => (await (await caches.open(name)).keys()).map((r) => new URL(r.url).pathname), shell);
 }
 async function removeMarket(page: Page) {
   fs.rmSync(path.join(publicDir, market));
+  await forgetHttpCache(page);
   await page.evaluate(async (url) => {
     for (const key of await caches.keys()) await (await caches.open(key)).delete(url);
   }, market);
@@ -45,17 +62,29 @@ test('old cached deploy upgrades; stale main hits a removed chunk, reloads once 
   fs.writeFileSync(path.join(publicDir, 'app/main.js'), oldMain);
   fs.writeFileSync(path.join(publicDir, 'app/manifest.json'), JSON.stringify({ files: manifest.map((f) => f === market ? oldMarket : f) }));
   fs.writeFileSync(path.join(publicDir, 'sw.js'), sw.replaceAll(shell, 'finsight-shell-h4-old'));
-  await unlock(page); await controlled(page);
-  await expect(page.locator('#markets [data-sym]').first()).toBeVisible();
-  restore(); fs.rmSync(path.join(publicDir, oldMarket));
+  await unlock(page); await controlled(page); await settled(page);
+  restore(); fs.rmSync(path.join(publicDir, oldMarket)); await forgetHttpCache(page);
+  // The new deploy's worker can serve the old main.js exactly once when armed,
+  // as a mixed-version client might see it. This is deterministic, unlike
+  // rewriting the file from a response handler, which could lose a race with
+  // the guard's reload.
+  fs.writeFileSync(path.join(publicDir, 'app/main-stale.js'), oldMain);
+  fs.writeFileSync(path.join(publicDir, 'sw.js'), sw.replace('e.respondWith(caches.open(SHELL)',
+    `if (url.pathname === '/app/main.js' && h4StaleOnce) {
+      h4StaleOnce = false; e.respondWith(fetch('/app/main-stale.js', { cache: 'no-store' })); return;
+    }
+    e.respondWith(caches.open(SHELL)`) +
+    "\nlet h4StaleOnce = false; self.addEventListener('message', (e) => { h4StaleOnce = true; e.ports[0].postMessage('armed'); });\n");
   await page.evaluate(async () => { await (await navigator.serviceWorker.getRegistration())!.update(); });
   await expect.poll(() => page.evaluate(async () => (await caches.keys()).includes('finsight-shell-h4-old'))).toBe(false);
-  // One final stale entry response after deployment, as a mixed-version client
-  // can see. The removed hashed URL is absent from both the new cache and disk.
-  fs.writeFileSync(path.join(publicDir, 'app/main.js'), oldMain);
-  page.on('response', (response) => {
-    if (response.url().endsWith('/app/main.js')) fs.writeFileSync(path.join(publicDir, 'app/main.js'), main);
-  });
+  await expect.poll(() => page.evaluate(async () => (await navigator.serviceWorker.getRegistration())?.active?.state)).toBe('activated');
+  // One stale entry response after deployment. The removed hashed URL is
+  // absent from both the new cache and disk.
+  await expect.poll(() => page.evaluate(() => navigator.serviceWorker.controller?.scriptURL ?? '')).toContain('/sw.js');
+  await page.evaluate(() => new Promise<void>((resolve) => {
+    const channel = new MessageChannel(); channel.port1.onmessage = () => resolve();
+    navigator.serviceWorker.controller!.postMessage('stale-once', [channel.port2]);
+  }));
   const count = navigations(page);
   await page.reload();
   await expect.poll(count).toBe(2);
@@ -89,7 +118,7 @@ test('same-build transient failure: the panel retry recovers without a reload, l
 });
 
 test('permanently missing chunk reloads once; later boots retain the boundary and fuse', async ({ page }) => {
-  await unlock(page); await controlled(page); await removeMarket(page);
+  await unlock(page); await controlled(page); await settled(page); await removeMarket(page);
   const count = navigations(page);
   await page.reload();
   await expect(page.getByText(boundary, { exact: true })).toBeVisible();
