@@ -29,6 +29,11 @@ Card = the migration card(s) that must keep the row green (`docs/frontend-migrat
 | Undo (D3) | ↶ UNDO hover title, click reverts positions + summary; UNDO error reported | `D3` › ↶ UNDO… | D3 | pass |
 | Cash editor (D3) | opens from CASH and the NET WORTH card; base-currency new row focused; ccy/number validation; Enter saves; ✕ removes; close saves pending edit | `D3` › cash editor… | D3, C1 | pass |
 | Cash editor (D3) | All Accounts lists each account; failed save reported and retried on DONE; reopening reloads saved values; CASH command error | `D3` | D3 | pass |
+| Ledger (D4) | LEDGER button, type filter, SELL row not editable, no-match row, cancel edit, dismissed delete keeps, backdrop closes | `D4` › ledger: open… | D4 | pass |
+| Ledger (D4) | edit date + qty updates positions; realized tab, closed trades, realized-gains.csv; ledger ↶ refreshes the open ledger | `D4` › ledger: edit a date… | D4, D3 | pass |
+| Ledger (D4) | All Accounts shows each trade's account | `D4` | D4 | pass |
+| Import (D4) | needs text, file fills the box, server error, All Accounts refused, backdrop closes, CLEAR ALL empties and clears the selection; wizard import choice opens it | `D4` | D4, F8 | pass |
+| Export (D4) | empty portfolio footer message | `D4` › export of an empty portfolio… | D4 | pass |
 | Trades | ADD via command bar, UNDO restores | `baseline/add-sell` | F7, D3 | pass |
 | Trades | SELL with a price (realized P/L), SELL at market | `baseline/trades` | F7, D1 | pass |
 | Trades | row S button prompts for quantity and price | `baseline/trades` | D1 | pass |

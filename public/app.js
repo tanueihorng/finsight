@@ -181,8 +181,6 @@ async function loadPortfolio() {
 function afterWrite(kind) { return window.FinSight.bus.write(kind); }
 window.FinSight.bus.on('portfolio', () => loadPortfolio());
 window.FinSight.bus.on('accounts', () => loadAccounts());
-window.FinSight.bus.on('ledger', () => { if (!$('#ledger-modal').classList.contains('hidden') && ledgerTab === 'trades') return loadLedger(); });
-window.FinSight.bus.on('realized', () => { if (!$('#ledger-modal').classList.contains('hidden') && ledgerTab === 'realized') return loadRealized(); });
 window.FinSight.bus.on('watchlist', () => loadWatchlist());
 window.FinSight.bus.on('alerts', () => loadAlerts());
 
@@ -586,7 +584,7 @@ document.querySelector('.setup-choices').addEventListener('click', (e) => {
   commitSetup();
   $('#setup-modal').classList.add('hidden');
   const a = c.dataset.action;
-  if (a === 'import') $('#import-modal').classList.remove('hidden');
+  if (a === 'import') state.importOpen = true; // the D4 island opens the import modal
   else if (a === 'manual') state.addFormOpen = true; // the D2 island opens and focuses the form
   setStatus(profile.name ? `Welcome, ${profile.name}.` : 'Terminal ready.', 'ok');
 });
@@ -619,104 +617,10 @@ $('#summary').addEventListener('click', (e) => {
 // ===========================================================================
 //  LEDGER — every trade; fix buys; realized gains by year
 // ===========================================================================
-let ledgerRows = [], ledgerEdit = null, ledgerTab = 'trades', lastRealized = null;
-function setLedgerStatus(m, k) { const el = $('#ledger-status'); el.textContent = m || ''; el.className = 'cmd-status ' + (k || ''); }
-function openLedger() { $('#ledger-modal').classList.remove('hidden'); setLedgerTab(ledgerTab); }
-function closeLedger() { $('#ledger-modal').classList.add('hidden'); ledgerEdit = null; }
-function setLedgerTab(tab) {
-  ledgerTab = tab;
-  $$('#ledger-tabs button').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
-  $('#ledger-trades').classList.toggle('hidden', tab !== 'trades');
-  $('#ledger-realized').classList.toggle('hidden', tab !== 'realized');
-  setLedgerStatus('');
-  if (tab === 'trades') loadLedger(); else loadRealized();
-}
-async function loadLedger() {
-  try { const d = await api('/api/ledger' + baseQS()); ledgerRows = d.rows || []; renderLedger(); }
-  catch (e) { setLedgerStatus(e.message, 'err'); }
-}
-function renderLedger() {
-  const base = state.base, f = ($('#ledger-filter').value || '').trim().toUpperCase();
-  const rows = ledgerRows.filter((r) => !f || (r.symbol || '').toUpperCase().includes(f) || r.type.includes(f));
-  const showAcct = state.account === 'ALL';
-  const d = (ms) => new Date(ms).toLocaleDateString('en-US', { year: '2-digit', month: 'short', day: '2-digit' });
-  $('#ledger-body').innerHTML = rows.map((r) => {
-    const cls = r.type === 'BUY' ? 't-buy' : r.type === 'SELL' ? 't-sell' : 't-del';
-    if (ledgerEdit === r.id) {
-      const iso = new Date(r.time).toISOString().slice(0, 10);
-      return `<tr data-id="${esc(r.id)}"><td><input type="date" class="le-date" value="${iso}"></td><td class="${cls}">${r.type}</td><td class="sym">${esc(r.symbol)}</td>
-        <td class="r"><input type="number" step="any" class="le-qty" value="${r.quantity}"></td><td class="r"><input type="number" step="any" class="le-px" value="${r.price}"></td>
-        <td></td><td></td><td><div class="lg-act"><button class="mini-btn solid" data-act="save">SAVE</button><button class="mini-btn" data-act="cancel">✕</button></div></td></tr>`;
-    }
-    const realized = r.realized != null ? `<span class="${signClass(r.realized)}">${moneySigned(base, r.realized)}</span>` +
-      (r.realizedFx != null && Math.abs(r.realizedFx) > 0.005 ? `<div class="dim small">FX ${moneySigned(base, r.realizedFx)}</div>` : '') : '';
-    const acts = r.editable ? `<div class="lg-act"><button class="x-btn" data-act="edit" title="Fix date / price / quantity">✎</button><button class="x-btn del" data-act="delete" title="Delete this buy">✕</button></div>` : '';
-    return `<tr data-id="${esc(r.id)}"><td>${d(r.time)}${showAcct ? `<div class="dim small">${esc(r.account)}</div>` : ''}</td><td class="${cls}">${r.type}</td><td class="sym">${esc(r.symbol)}</td>
-      <td class="r">${r.quantity != null ? fmt(r.quantity, r.quantity % 1 ? 4 : 0) : ''}</td><td class="r">${r.price != null ? fmt(r.price) + ` <span class="dim">${esc(r.currency || '')}</span>` : ''}</td>
-      <td class="r">${r.valueBase != null ? money(base, r.valueBase, 0) : ''}</td><td class="r">${realized}</td><td>${acts}</td></tr>`;
-  }).join('') || '<tr><td colspan="8" class="empty">No transactions.</td></tr>';
-}
-$('#ledger-filter').addEventListener('input', renderLedger);
-$('#ledger-body').addEventListener('click', async (e) => {
-  const b = e.target.closest('[data-act]'); if (!b) return;
-  const id = b.closest('tr').dataset.id, row = ledgerRows.find((r) => r.id === id);
-  const act = b.dataset.act;
-  if (act === 'edit') { ledgerEdit = id; renderLedger(); return; }
-  if (act === 'cancel') { ledgerEdit = null; renderLedger(); return; }
-  try {
-    if (act === 'save') {
-      const tr = b.closest('tr');
-      const body = { id, date: tr.querySelector('.le-date').value, quantity: tr.querySelector('.le-qty').value, price: tr.querySelector('.le-px').value };
-      setLedgerStatus('Saving… (fetching that day\'s FX)');
-      await api('/api/ledger/edit' + baseQS(), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-      setLedgerStatus(`Updated ${row.symbol} buy. UNDO reverts it.`, 'ok');
-    } else if (act === 'delete') {
-      if (!confirm(`Delete this buy of ${row.quantity} ${row.symbol}? Its lot is removed from the position. (UNDO can restore it.)`)) return;
-      await api('/api/ledger/delete' + baseQS(), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
-      setLedgerStatus(`Deleted ${row.symbol} buy. UNDO restores it.`, 'ok');
-    }
-    ledgerEdit = null; perfSig = '';
-    await afterWrite(act === 'save' ? 'ledger-edit' : 'ledger-delete');
-  } catch (err) { setLedgerStatus(err.message, 'err'); }
-});
-async function loadRealized() {
-  const box = $('#ledger-realized');
-  box.innerHTML = '<span class="muted">Loading…</span>';
-  try {
-    const d = await api('/api/realized' + baseQS());
-    lastRealized = d;
-    const base = d.base || state.base;
-    const yrs = d.years.map((y) => `<tr><td><b>${y.year}</b></td><td class="r">${y.trades}</td><td class="r">${money(base, y.proceeds, 0)}</td><td class="r">${money(base, y.cost, 0)}</td>
-      <td class="r ${signClass(y.stock)}">${moneySigned(base, y.stock, 0)}</td><td class="r ${signClass(y.fx)}">${moneySigned(base, y.fx, 0)}</td>
-      <td class="r ${signClass(y.total)}"><b>${moneySigned(base, y.total, 0)}</b></td><td class="r">${y.divNet ? money(base, y.divNet, 0) : '—'}${y.divTax ? `<div class="dim small">−${money(base, y.divTax, 0)} tax</div>` : ''}</td></tr>`).join('')
-      || '<tr><td colspan="8" class="empty">No closed trades or dividends yet.</td></tr>';
-    const dd = (ms) => new Date(ms).toLocaleDateString('en-US', { year: '2-digit', month: 'short', day: '2-digit' });
-    const rows = d.rows.map((r) => `<tr><td>${dd(r.time)}</td><td class="sym">${esc(r.symbol)}</td><td class="r">${fmt(r.quantity, r.quantity % 1 ? 4 : 0)}</td>
-      <td class="r">${money(base, r.proceeds, 0)}</td><td class="r">${money(base, r.cost, 0)}</td>
-      <td class="r ${signClass(r.stock)}">${r.stock != null ? moneySigned(base, r.stock, 0) : '—'}</td><td class="r ${signClass(r.fx)}">${r.fx != null ? moneySigned(base, r.fx, 0) : '—'}</td>
-      <td class="r ${signClass(r.total)}">${moneySigned(base, r.total, 0)}</td><td class="r">${r.heldDays != null ? (r.heldDays >= 365 ? fmt(r.heldDays / 365.25, 1) + 'y' : r.heldDays + 'd') : '—'}</td></tr>`).join('');
-    box.innerHTML = `<div class="rz-head"><span class="muted small">Cost uses the FX rate you actually paid; proceeds use the rate on the sale date. Singapore doesn't tax capital gains — this is for your records.</span>
-        <button id="rz-export" class="mini-btn">EXPORT CSV</button></div>
-      <table class="tbl rz-years"><thead><tr><th>YEAR</th><th class="r">SALES</th><th class="r">PROCEEDS</th><th class="r">COST</th><th class="r">STOCK</th><th class="r">FX</th><th class="r">REALIZED</th><th class="r">DIVIDENDS NET</th></tr></thead><tbody>${yrs}</tbody></table>` +
-      (rows ? `<div class="fxr-sub">CLOSED TRADES</div><div class="table-wrap"><table class="tbl rz-years"><thead><tr><th>SOLD</th><th>SYM</th><th class="r">QTY</th><th class="r">PROCEEDS</th><th class="r">COST</th><th class="r">STOCK</th><th class="r">FX</th><th class="r">TOTAL</th><th class="r">HELD</th></tr></thead><tbody>${rows}</tbody></table></div>` : '');
-  } catch (e) { box.innerHTML = `<span class="down">${esc(e.message)}</span>`; }
-}
-$('#ledger-realized').addEventListener('click', (e) => {
-  if (!e.target.closest('#rz-export') || !lastRealized) return;
-  const b = lastRealized.base.toLowerCase();
-  const head = ['date', 'symbol', 'quantity', 'price', 'currency', `proceeds_${b}`, `cost_${b}`, `stock_pnl_${b}`, `fx_pnl_${b}`, `realized_${b}`, 'held_days'];
-  const lines = lastRealized.rows.map((r) => [new Date(r.time).toISOString().slice(0, 10), r.symbol, r.quantity, r.price, r.currency,
-    r.proceeds.toFixed(2), r.cost.toFixed(2), r.stock != null ? r.stock.toFixed(2) : '', r.fx != null ? r.fx.toFixed(2) : '', r.total.toFixed(2), r.heldDays ?? '']);
-  const csv = [head, ...lines].map((r) => r.map(csvCell).join(',')).join('\n');
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
-  a.download = 'realized-gains.csv'; a.click(); URL.revokeObjectURL(a.href);
-});
+// The ledger modal is a React island (D4, web/src/features/ledger). openLedger
+// stays for the LEDGER/TRADES commands until F7.
+function openLedger() { state.ledgerOpen = true; }
 $('#ledger-btn').addEventListener('click', openLedger);
-$('#ledger-close').addEventListener('click', closeLedger);
-$('#ledger-undo').addEventListener('click', doUndo);
-$('#ledger-modal').addEventListener('click', (e) => { if (e.target.id === 'ledger-modal') closeLedger(); });
-$('#ledger-tabs').addEventListener('click', (e) => { const b = e.target.closest('[data-tab]'); if (b) setLedgerTab(b.dataset.tab); });
 
 // ===========================================================================
 //  ADD FORM + SYMBOL SEARCH
@@ -1174,44 +1078,9 @@ function loadNews(symbol) {
 // ===========================================================================
 //  CSV IMPORT / EXPORT
 // ===========================================================================
-function setImportStatus(m, k) { const el = $('#import-status'); el.textContent = m; el.className = 'cmd-status ' + (k || ''); }
-$('#import-btn').addEventListener('click', () => { $('#import-modal').classList.remove('hidden'); $('#import-text').focus(); });
-$('#import-close').addEventListener('click', () => $('#import-modal').classList.add('hidden'));
-$('#import-modal').addEventListener('click', (e) => { if (e.target.id === 'import-modal') $('#import-modal').classList.add('hidden'); });
-$('#import-file').addEventListener('change', async (e) => { const f = e.target.files[0]; if (f) $('#import-text').value = await f.text(); });
-$('#import-do').addEventListener('click', async () => {
-  const csv = $('#import-text').value.trim();
-  if (!csv) return setImportStatus('Paste CSV or choose a file first.', 'err');
-  if (state.account === 'ALL') return setImportStatus('Switch to a specific account first (ACCT, top-right).', 'err');
-  setImportStatus('Importing… (fetching a quote per symbol)', '');
-  try {
-    const res = await api('/api/portfolio/import' + baseQS(), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ csv, replace: $('#import-replace').checked }) });
-    const r = res.imported;
-    setImportStatus(`Imported ${r.added}/${r.total}${r.failed.length ? ' · failed: ' + r.failed.join(', ') : ''}`, r.added ? 'ok' : 'err');
-    await afterWrite('import');
-    if (r.added) setTimeout(() => $('#import-modal').classList.add('hidden'), 1400);
-  } catch (e) { setImportStatus('Import failed: ' + e.message, 'err'); }
-});
-$('#import-clear').addEventListener('click', async () => {
-  if (!confirm('Clear ALL positions and transaction history?\n(Watchlist and alerts are kept.)')) return;
-  try {
-    const res = await api('/api/portfolio/reset' + baseQS(), { method: 'POST' });
-    state.selected = null; await afterWrite('reset'); setImportStatus('Portfolio cleared.', 'ok');
-  } catch (e) { setImportStatus(e.message, 'err'); }
-});
-$('#export-btn').addEventListener('click', async () => {
-  try {
-    const data = await api('/api/portfolio' + baseQS());
-    if (!data.positions.length) return setFooter('Nothing to export — portfolio is empty.');
-    const head = ['symbol', 'quantity', 'avg_price', 'currency', 'last', 'market_value_' + (data.base || state.base).toLowerCase(), 'unrealized_pnl'];
-    const rows = data.positions.map((p) => [p.symbol, p.quantity, p.avgCost, p.currency, p.last, p.marketValue.toFixed(2), p.unrealized.toFixed(2)]);
-    const csv = [head, ...rows].map((r) => r.map(csvCell).join(',')).join('\n');
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
-    a.download = 'portfolio.csv'; a.click(); URL.revokeObjectURL(a.href);
-    setFooter('Exported portfolio.csv');
-  } catch (e) { setFooter('Export failed: ' + e.message); }
-});
+// The import modal is a React island and EXPORT a TypeScript action (D4).
+$('#import-btn').addEventListener('click', () => { state.importOpen = true; });
+$('#export-btn').addEventListener('click', () => window.FinSight.actions.exportPortfolio());
 
 // reusable symbol search for the watchlist field
 function setupSearch(input, box, onPick) {

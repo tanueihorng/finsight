@@ -1,5 +1,8 @@
 import { api } from '../../api/client.ts';
-import { analyticsStale, setStatus } from '../../legacy/app.ts';
+import { analyticsStale, setFooter, setStatus } from '../../legacy/app.ts';
+import { downloadCsv, toCsv } from '../../ui/csv.ts';
+import type { Portfolio } from '../../../../shared/types.ts';
+import { portfolioCsvRows } from '../ledger/ledger.ts';
 import { cashStatusText, undoStatusText } from './cash.ts';
 
 // Undo and single-currency cash writes (D3). No panel of their own: the legacy
@@ -34,5 +37,14 @@ export async function setCashBalance(ccy: string, amt: string): Promise<void> {
     await window.FinSight.bus.write('cash');
   } catch (e) { setStatus('CASH failed: ' + message(e), 'err'); }
 }
-export const actions = { undo, undoTitle, setCashBalance };
+// EXPORT (D4): the active account's holdings as portfolio.csv.
+export async function exportPortfolio(): Promise<void> {
+  try {
+    const data = await api<Portfolio>('/api/portfolio' + qs());
+    if (!data.positions.length) return setFooter('Nothing to export — portfolio is empty.');
+    downloadCsv('portfolio.csv', toCsv(portfolioCsvRows(data, window.FinSight.store.getState().base)));
+    setFooter('Exported portfolio.csv');
+  } catch (e) { setFooter('Export failed: ' + message(e)); }
+}
+export const actions = { undo, undoTitle, setCashBalance, exportPortfolio };
 export type FinSightActions = typeof actions;

@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from './client.ts';
-import type { Accounts, Alert, Category, FxRisk, Markets, NewsResponse, Portfolio, WatchItem } from '../../../shared/types.ts';
+import type { Accounts, Alert, Category, FxRisk, Ledger, Markets, NewsResponse, Portfolio, Realized, WatchItem } from '../../../shared/types.ts';
 import type {} from '../bootstrap.ts';
 
 // F4 supplies this source in bootstrap, before legacy startup. Until then hooks
@@ -74,4 +74,17 @@ export function useNews(symbol: string) {
   const { enabled } = useScope();
   return useQuery({ queryKey: ['news', symbol], enabled, staleTime: 0,
     queryFn: ({ signal }) => api<NewsResponse>(`/api/news${symbol ? '?symbol=' + encodeURIComponent(symbol) : ''}`, { signal }) });
+}
+
+// The ledger modal's tabs: fetched while their tab is open (legacy reloaded on
+// every open and tab switch), refreshed by the 'ledger'/'realized' keys.
+export function useLedger(open: boolean) {
+  const { base, account, enabled } = useScope();
+  return useQuery({ queryKey: ['ledger', base, account], enabled: enabled && open, staleTime: 0,
+    queryFn: ({ signal }) => api<Ledger>(`/api/ledger?base=${encodeURIComponent(base)}&account=${encodeURIComponent(account)}`, { signal }) });
+}
+export function useRealized(open: boolean) {
+  const { base, account, enabled } = useScope();
+  return useQuery({ queryKey: ['realized', base, account], enabled: enabled && open, staleTime: 0,
+    queryFn: ({ signal }) => api<Realized>(`/api/realized?base=${encodeURIComponent(base)}&account=${encodeURIComponent(account)}`, { signal }) });
 }

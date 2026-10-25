@@ -7,6 +7,7 @@ interface LegacyAppGlobals {
   blockIfAll?: () => boolean; // refuses trades in the All Accounts view (F8)
   analyticsStale?: (which: { perf?: boolean; wealth?: boolean }) => void; // C3 removes
   loadWealth?: () => Promise<void>; // C3 turns this into a query
+  setFooter?: (msg: string) => void; // footer message line, shell (F7)
 }
 const legacy = () => window as unknown as LegacyAppGlobals;
 
@@ -29,4 +30,7 @@ export function analyticsStale(which: { perf?: boolean; wealth?: boolean }): voi
 }
 export function loadWealth(): void {
   void legacy().loadWealth?.();
+}
+export function setFooter(msg: string): void {
+  legacy().setFooter?.(msg);
 }

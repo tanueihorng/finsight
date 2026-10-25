@@ -298,35 +298,7 @@ try { var d = document.documentElement;
   </footer>
 
   <!-- CSV import modal -->
-  <div id="import-modal" class="modal hidden">
-    <div class="modal-box">
-      <div class="modal-head">
-        <span class="panel-title">IMPORT HOLDINGS · CSV</span>
-        <button id="import-close" class="x-btn">✕</button>
-      </div>
-      <div class="modal-body">
-        <p class="muted small">Paste CSV or choose a file. Expected columns (header row optional):
-          <b>symbol, quantity, avg_price</b>, and optionally <b>date</b> (YYYY-MM-DD) to record the real
-          purchase-time FX rate. Column names are matched loosely (ticker/qty/shares/cost/bought all work).
-          <br>You can also drop in a broker export — <b>Interactive Brokers</b> Activity Statement,
-          <b>moomoo</b>, or <b>Tiger</b> positions CSV — it finds your holdings automatically (and adds the
-          right suffix for SG/HK tickers).</p>
-        <textarea id="import-text" spellcheck="false" placeholder="symbol,quantity,avg_price,date
-AAPL,10,195.50,2024-01-15
-MSFT,5,380,2023-11-02
-0700.HK,100,400,2024-06-20"></textarea>
-        <div class="import-row">
-          <input type="file" id="import-file" accept=".csv,.txt" />
-          <label class="chk"><input type="checkbox" id="import-replace" /> Replace existing positions</label>
-        </div>
-        <div id="import-status" class="cmd-status"></div>
-      </div>
-      <div class="modal-foot">
-        <button id="import-clear" class="mini-btn">CLEAR ALL POSITIONS</button>
-        <button id="import-do" class="mini-btn solid">IMPORT</button>
-      </div>
-    </div>
-  </div>
+  <div id="import-modal-host" data-island="import"></div>
 
   <!-- first-launch / profile setup -->
   <div id="setup-modal" class="modal hidden">
@@ -424,33 +396,7 @@ MSFT,5,380,2023-11-02
   <!-- cash editor: every account's uninvested cash, per currency -->
   <div id="cash-modal-host" data-island="cash-editor"></div>
 
-  <div id="ledger-modal" class="modal hidden">
-    <div class="modal-box wide">
-      <div class="modal-head">
-        <div class="ranges" id="ledger-tabs">
-          <button data-tab="trades" class="active">TRADES</button>
-          <button data-tab="realized">REALIZED GAINS</button>
-        </div>
-        <div class="head-btns">
-          <button id="ledger-undo" class="mini-btn" title="Undo the last change">↶ UNDO</button>
-          <button id="ledger-close" class="x-btn">✕</button>
-        </div>
-      </div>
-      <div class="modal-body">
-        <div id="ledger-trades">
-          <div class="ledger-tools">
-            <input id="ledger-filter" placeholder="Filter by symbol or type…" autocomplete="off" />
-            <span class="muted small">✎ fix a buy's date / price / quantity (a date re-fetches that day's FX). Sales can be reversed with UNDO.</span>
-          </div>
-          <div class="table-wrap"><table class="tbl ledger-tbl"><thead><tr>
-            <th>DATE</th><th>TYPE</th><th>SYMBOL</th><th class="r">QTY</th><th class="r">PRICE</th><th class="r">VALUE</th><th class="r">REALIZED</th><th></th>
-          </tr></thead><tbody id="ledger-body"></tbody></table></div>
-        </div>
-        <div id="ledger-realized" class="hidden"></div>
-        <div id="ledger-status" class="cmd-status"></div>
-      </div>
-    </div>
-  </div>
+  <div id="ledger-modal-host" data-island="ledger"></div>
 
   <!-- alert/notification toasts -->
   <div id="toasts" class="toasts"></div>

@@ -127,3 +127,14 @@ export interface NewsResponse { news: NewsItem[] }
 
 /** lib/market.js fetchSearch, server.js GET /api/search. */
 export interface SearchResult { symbol: string; name: string; exchange: string; type: string }
+
+export interface Ledger { base: string; account: string; rows: LedgerRow[] }
+/** lib/ledger.js realizedReport(). */
+export interface RealizedRow {
+  id: string; time: number; year: number; symbol: string; quantity: number; price: number; currency: string;
+  proceeds: number; cost: number; stock: number | null; fx: number | null; total: number; legacy: boolean; heldDays: number | null;
+}
+export interface RealizedYear { year: number; proceeds: number; cost: number; stock: number; fx: number; total: number; trades: number; divGross: number; divTax: number; divNet: number }
+export interface Realized { base: string; account: string; rows: RealizedRow[]; years: RealizedYear[] }
+/** lib/portfolio.js importCsv result, returned as Portfolio.imported. */
+export interface ImportResult { added: number; total: number; failed: string[] }
