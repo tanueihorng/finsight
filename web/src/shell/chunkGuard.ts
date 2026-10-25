@@ -29,11 +29,11 @@ export function createChunkGuard(build: string, env: Environment) {
   const key = MARKER_PREFIX + build;
   let pending = 0, failed = false, reloading = false;
   const recovered = new Set<string>();
-  return <T>(loader: Loader<T>): Loader<T> => async () => {
+  return <T>(loader: Loader<T>): Loader<T> => () => {
     const identity = String(loader);
     pending++;
-    try {
-      const result = await loader();
+    const succeed = (result: T) => {
+      pending--;
       recovered.add(identity);
       env.afterBoot(() => {
         if (pending || failed || reloading) return;
@@ -45,7 +45,9 @@ export function createChunkGuard(build: string, env: Environment) {
         } catch { /* storage denied: automatic reload is disabled too */ }
       });
       return result;
-    } catch (error) {
+    };
+    const fail = (error: unknown): never => {
+      pending--;
       failed = true;
       try {
         const storage = env.storage();
@@ -55,7 +57,13 @@ export function createChunkGuard(build: string, env: Environment) {
         }
       } catch { /* fail closed: no storage / navigation -> existing boundary */ }
       throw error; // React's existing IslandBoundary remains the fallback.
-    } finally { pending--; }
+    };
+    // An island whose chunk has already loaded resolves synchronously (H1,
+    // islands.ts). Keep it synchronous so React.lazy renders it at once: a
+    // suspended island brings back React's 300 ms reveal throttle.
+    let sync: { value: T } | undefined;
+    const settled = loader().then((value) => (sync = { value: succeed(value) }).value, fail);
+    return sync ? ({ then: (ok: (value: T) => unknown) => ok(sync!.value) } as unknown as Promise<T>) : settled;
   };
 }
 let guard: ReturnType<typeof createChunkGuard> | undefined;

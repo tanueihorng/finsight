@@ -89,3 +89,20 @@ test('the chart scripts no longer block the page; the detail chart and its grid 
   await expect.poll(() => page.evaluate(() => !!window.detailChart && typeof (window as unknown as { ChartGrid?: unknown }).ChartGrid === 'function')).toBe(true);
   await expect(page.locator('#detail-chart-host canvas').first()).toBeVisible();
 });
+
+test('no panel shows its Suspense fallback at startup, so React never holds the page back 300 ms', async ({ page }) => {
+  await seeded(page);
+  await page.addInitScript(() => {
+    const seen: string[] = [];
+    (window as unknown as { fallbacks: string[] }).fallbacks = seen;
+    new MutationObserver(() => {
+      document.querySelectorAll<HTMLElement>('[data-island] > [role="status"]').forEach((el) => {
+        if (el.textContent === 'Loading…') seen.push(el.parentElement!.dataset.island!);
+      });
+    }).observe(document, { childList: true, subtree: true });
+  });
+  await page.reload();
+  await expect(page.locator('#positions-body tr[data-sym]')).toHaveCount(9);
+  await expect.poll(() => page.evaluate(() => !!window.detailChart)).toBe(true); // the idle-mounted panels are in too
+  expect(await page.evaluate(() => (window as unknown as { fallbacks: string[] }).fallbacks)).toEqual([]);
+});

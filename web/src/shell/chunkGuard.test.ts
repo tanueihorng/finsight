@@ -69,3 +69,12 @@ test('ordinary loader exceptions go directly to the boundary without a reload', 
   }
   assert.equal(h.reloads(), 0); assert.equal(h.values.size, 0);
 });
+test('an import that already resolved stays synchronous through the guard (H1: no Suspense fallback)', () => {
+  const h = harness();
+  const ready = { then: (ok: (v: number) => unknown) => ok(7) } as unknown as Promise<number>;
+  let seen: number | undefined;
+  void createChunkGuard('build', h.env)(() => ready)().then((v) => { seen = v; });
+  assert.equal(seen, 7);
+  h.boot();
+  assert.equal(h.reloads(), 0);
+});

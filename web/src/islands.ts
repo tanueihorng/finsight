@@ -38,14 +38,18 @@ export type IslandRegistry = Record<string, () => Promise<IslandModule>>;
 // wait for their chunk before mounting; once it has loaded, its loader
 // returns a thenable that calls back at once, so React.lazy resolves during
 // the first render and no fallback is shown. A failed load is not remembered:
-// the next call imports again, as before.
+// the next call imports again, as before. Each wrapper reads as its original
+// loader, whose import() names the content-hashed chunk: shell/chunkGuard.ts
+// identifies the build and each island by that text (H4).
 function preloadable(loaders: IslandRegistry): IslandRegistry {
   const out: IslandRegistry = {};
   for (const [id, load] of Object.entries(loaders)) {
     let mod: IslandModule | undefined;
-    out[id] = () => mod
+    const wrapped = () => mod
       ? ({ then: (ok: (m: IslandModule) => unknown) => ok(mod!) } as unknown as Promise<IslandModule>)
       : load().then((m) => (mod = m));
+    wrapped.toString = () => String(load);
+    out[id] = wrapped;
   }
   return out;
 }

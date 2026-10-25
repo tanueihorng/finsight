@@ -29,7 +29,7 @@ const idle = (go: () => void) => {
   const id = requestIdleCallback(go, { timeout: 200 });
   return () => cancelIdleCallback(id);
 };
-const Host = ({ island, as = 'div', ...rest }: { island: string; as?: 'div' | 'span' | 'label' } & HostProps) => {
+function useIslandReady(island: string) {
   const [ready, setReady] = useState(false);
   useEffect(() => {
     if (!Object.hasOwn(islands, island)) { setReady(true); return; }
@@ -39,6 +39,10 @@ const Host = ({ island, as = 'div', ...rest }: { island: string; as?: 'div' | 's
     const cancelIdle = FIRST.has(island) ? (load(), undefined) : idle(load);
     return () => { live = false; clearTimeout(timer); cancelIdle?.(); };
   }, [island]);
+  return ready;
+}
+const Host = ({ island, as = 'div', ...rest }: { island: string; as?: 'div' | 'span' | 'label' } & HostProps) => {
+  const ready = useIslandReady(island);
   const Tag = as;
   return <Tag data-island={ready ? island : undefined} {...rest} />;
 };
@@ -240,13 +244,13 @@ function Column({ side, children }: { side: Side; children?: ReactNode }) {
 // The NET WORTH / CASH cards open the cash editor. They are rendered by the
 // summary island's own root, so this listens on the host natively.
 function Summary() {
-  const ref = useRef<HTMLDivElement>(null);
+  const ref = useRef<HTMLDivElement>(null), ready = useIslandReady('summary');
   useEffect(() => {
     const el = ref.current; if (!el) return;
     const onClick = (e: MouseEvent) => { if ((e.target as Element).closest('[data-cash-card]')) open('cashEditorOpen'); };
     el.addEventListener('click', onClick); return () => el.removeEventListener('click', onClick);
   }, []);
-  return <div ref={ref} className="summary" id="summary" data-island="summary" />;
+  return <div ref={ref} className="summary" id="summary" data-island={ready ? 'summary' : undefined} />;
 }
 
 function PanelRender({ render }: { render: () => ReactNode }) { return <>{render()}</>; }
