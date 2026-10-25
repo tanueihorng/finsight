@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../../../web/src/features/topbar/ProfileIsland.tsx"],
+  "sourcesContent": ["import { useStore } from 'zustand';\nimport { firstName, profile } from './profile.ts';\n\n// \u25D0 Profile button (F8): shows the first name and reopens the setup modal.\nexport default function ProfileIsland() {\n  const p = useStore(profile);\n  return (\n    <button id=\"profile-btn\" className=\"topbar-btn\" title=\"Your profile & setup\" onClick={() => window.FinSight.store.setState({ setupOpen: true })}>\n      \u25D0 <span id=\"profile-name\">{firstName(p)}</span>\n    </button>\n  );\n}\n"],
+  "mappings": "+NAOI,IAAAA,EAAA,SAHW,SAARC,GAAiC,CACtC,IAAM,EAAIC,EAASC,CAAO,EAC1B,SACE,QAAC,UAAO,GAAG,cAAc,UAAU,aAAa,MAAM,uBAAuB,QAAS,IAAM,OAAO,SAAS,MAAM,SAAS,CAAE,UAAW,EAAK,CAAC,EAAG,uBAC7I,OAAC,QAAK,GAAG,eAAgB,SAAAC,EAAU,CAAC,EAAE,GAC1C,CAEJ",
+  "names": ["import_jsx_runtime", "ProfileIsland", "useStore", "profile", "firstName"]
+}

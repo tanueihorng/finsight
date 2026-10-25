@@ -20,6 +20,8 @@ export type FinSightGlobal = {
   markIslandsReady(): void;
   // Set by main.js (D3): TypeScript actions the legacy buttons and command bar call.
   actions?: FinSightActions;
+  // Set by main.js (F10): legacy boot initialises the panel layout through it.
+  layout?: { init(): void };
 };
 
 declare global {

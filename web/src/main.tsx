@@ -8,9 +8,11 @@ import { islands, type IslandRegistry } from './islands.ts';
 import { IslandBoundary } from './ui/IslandBoundary.tsx';
 import { Loading } from './ui/Loading.tsx';
 import { actions } from './features/cash/actions.ts';
+import { initLayout } from './features/layout/layout.ts';
 
 export const queryClient = new QueryClient({ defaultOptions: { queries: queryDefaults } });
 window.FinSight.actions = actions;
+window.FinSight.layout = { init: initLayout };
 window.FinSight.bus.connect((key) => queryClient.invalidateQueries({ queryKey: [key] }));
 window.addEventListener('finsight:locked', () => { void queryClient.cancelQueries(); });
 window.addEventListener('finsight:unlocked', () => { void queryClient.invalidateQueries(); });

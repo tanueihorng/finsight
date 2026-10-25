@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../../../node_modules/zustand/esm/react.mjs"],
+  "sourcesContent": ["import React from 'react';\nimport { createStore } from 'zustand/vanilla';\n\nconst identity = (arg) => arg;\nfunction useStore(api, selector = identity) {\n  const slice = React.useSyncExternalStore(\n    api.subscribe,\n    React.useCallback(() => selector(api.getState()), [api, selector]),\n    React.useCallback(() => selector(api.getInitialState()), [api, selector])\n  );\n  React.useDebugValue(slice);\n  return slice;\n}\nconst createImpl = (createState) => {\n  const api = createStore(createState);\n  const useBoundStore = (selector) => useStore(api, selector);\n  Object.assign(useBoundStore, api);\n  return useBoundStore;\n};\nconst create = ((createState) => createState ? createImpl(createState) : createImpl);\n\nexport { create, useStore };\n"],
+  "mappings": "gFAAA,IAAAA,EAAkB,SAGlB,IAAMC,EAAYC,GAAQA,EAC1B,SAASC,EAASC,EAAKC,EAAWJ,EAAU,CAC1C,IAAMK,EAAQ,EAAAC,QAAM,qBAClBH,EAAI,UACJ,EAAAG,QAAM,YAAY,IAAMF,EAASD,EAAI,SAAS,CAAC,EAAG,CAACA,EAAKC,CAAQ,CAAC,EACjE,EAAAE,QAAM,YAAY,IAAMF,EAASD,EAAI,gBAAgB,CAAC,EAAG,CAACA,EAAKC,CAAQ,CAAC,CAC1E,EACA,SAAAE,QAAM,cAAcD,CAAK,EAClBA,CACT",
+  "names": ["import_react", "identity", "arg", "useStore", "api", "selector", "slice", "React"]
+}

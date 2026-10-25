@@ -113,105 +113,8 @@ function renderPortfolio(data) {
 // ---- appearance: switchable theme + font (system fonts only, no downloads) ----
 // Theme and font are the appearance island (F8); the head script applies them pre-paint.
 
-$('#cards-btn').addEventListener('click', () => { renderPanelsEditor(); $('#cards-modal').classList.remove('hidden'); });
-$('#cards-close').addEventListener('click', () => $('#cards-modal').classList.add('hidden'));
-$('#cards-done').addEventListener('click', () => $('#cards-modal').classList.add('hidden'));
-$('#cards-modal').addEventListener('click', (e) => { if (e.target.id === 'cards-modal') $('#cards-modal').classList.add('hidden'); });
-// Card prefs, the card list and RESET TO DEFAULT belong to the summary islands (PILOT-2).
-
-// ---- show / hide whole panels ----------------------------------------------
-const PANELS = [
-  ['perf-body', 'Performance'], ['alloc-body', 'Allocation'], ['heatmap-body', 'Sector Heatmap'],
-  ['fxrisk', 'FX Risk'], ['dividends', 'Dividends'], ['watchlist', 'Watchlist'], ['alerts', 'Price Alerts'], ['activity', 'Recent Activity'],
-  ['news', 'News'], ['markets', 'World Markets'], ['calendar', 'Econ Calendar'], ['wb-body', 'World Bank'], ['fred-body', 'US Fed (FRED)'], ['infl-body', 'US Inflation Gauges'],
-];
-let hiddenPanels = (() => { try { return new Set(JSON.parse(localStorage.getItem('finsight-panels')) || []); } catch { return new Set(); } })();
-const panelEl = (id) => { const e = document.getElementById(id); return e ? e.closest('.panel') : null; };
-function applyPanels() { PANELS.forEach(([id]) => { const el = panelEl(id); if (el) el.style.display = hiddenPanels.has(id) ? 'none' : ''; }); }
-function renderPanelsEditor() {
-  $('#panels-list').innerHTML = PANELS.map(([id, label]) => {
-    const on = !hiddenPanels.has(id);
-    return `<div class="card-edit-row ${on ? '' : 'off'}"><label><input type="checkbox" data-panel="${id}" ${on ? 'checked' : ''}> ${label}</label></div>`;
-  }).join('');
-}
-$('#panels-list').addEventListener('change', (e) => {
-  const cb = e.target.closest('input[data-panel]'); if (!cb) return;
-  if (cb.checked) hiddenPanels.delete(cb.dataset.panel); else hiddenPanels.add(cb.dataset.panel);
-  localStorage.setItem('finsight-panels', JSON.stringify([...hiddenPanels]));
-  applyPanels(); renderPanelsEditor();
-});
-
-// ---- drag-to-rearrange panels ----------------------------------------------
-// Each panel is tagged with a stable pid (via a known child element) so its
-// position can be saved/restored; a ⠿ grip in the header is the drag handle.
-const PANEL_PIDS = [
-  ['#positions-view', 'positions'], ['#wealth-body', 'wealth'], ['#perf-body', 'performance'], ['#alloc-body', 'allocation'],
-  ['#heatmap-body', 'heatmap'], ['#fxrisk', 'fxrisk'], ['#dividends', 'dividends'], ['#watchlist', 'watchlist'], ['#alerts', 'alerts'], ['#activity', 'activity'],
-  ['#detail-panel', 'detail'], ['#agent-dock', 'kestrel'], ['#news', 'news'], ['#markets', 'markets'], ['#calendar', 'calendar'], ['#wb-body', 'worldbank'], ['#fred-body', 'fred'], ['#infl-body', 'inflation'],
-];
-let dragInited = false;
-function initDragLayout() {
-  if (dragInited) return; dragInited = true;
-  PANEL_PIDS.forEach(([sel, pid]) => {
-    const el = document.querySelector(sel); if (!el) return;
-    const panel = el.classList.contains('panel') ? el : el.closest('.panel');
-    const head = panel && panel.querySelector('.panel-head');
-    if (!panel || !head) return;
-    panel.dataset.pid = pid; panel.classList.add('draggable-block');
-    if (head.querySelector('.drag-grip')) return;
-    const grip = document.createElement('span');
-    grip.className = 'drag-grip'; grip.textContent = '⠿'; grip.title = 'Drag to rearrange';
-    grip.setAttribute('draggable', 'true');
-    grip.addEventListener('dragstart', (e) => {
-      panel.classList.add('dragging');
-      e.dataTransfer.effectAllowed = 'move';
-      try { e.dataTransfer.setData('text/plain', pid); e.dataTransfer.setDragImage(panel, 12, 12); } catch {}
-    });
-    grip.addEventListener('dragend', () => {
-      panel.classList.remove('dragging');
-      document.querySelectorAll('.drop-on').forEach((c) => c.classList.remove('drop-on'));
-      saveLayout();
-    });
-    head.insertBefore(grip, head.firstChild);
-  });
-  ['.col-left', '.col-right'].forEach((csel) => {
-    const col = document.querySelector(csel); if (!col) return;
-    col.addEventListener('dragover', (e) => {
-      const dragging = document.querySelector('.panel.dragging'); if (!dragging) return;
-      e.preventDefault(); col.classList.add('drop-on');
-      const after = dragAfter(col, e.clientY);
-      if (after == null) col.appendChild(dragging); else col.insertBefore(dragging, after);
-    });
-    col.addEventListener('dragleave', (e) => { if (!col.contains(e.relatedTarget)) col.classList.remove('drop-on'); });
-    col.addEventListener('drop', (e) => e.preventDefault());
-  });
-}
-function dragAfter(col, y) {
-  const els = [...col.querySelectorAll(':scope > .panel.draggable-block:not(.dragging)')].filter((el) => el.offsetParent !== null);
-  let best = null, bestOff = -Infinity;
-  for (const el of els) {
-    const box = el.getBoundingClientRect();
-    const off = y - box.top - box.height / 2;
-    if (off < 0 && off > bestOff) { bestOff = off; best = el; }
-  }
-  return best;
-}
-function saveLayout() {
-  const read = (csel) => [...document.querySelectorAll(`${csel} > .panel.draggable-block`)].map((p) => p.dataset.pid);
-  localStorage.setItem('finsight-layout', JSON.stringify({ left: read('.col-left'), right: read('.col-right') }));
-}
-function applyLayout() {
-  let saved; try { saved = JSON.parse(localStorage.getItem('finsight-layout')); } catch {}
-  if (!saved) return;
-  [['left', '.col-left'], ['right', '.col-right']].forEach(([side, csel]) => {
-    const col = document.querySelector(csel); if (!col) return;
-    (saved[side] || []).forEach((pid) => {
-      const panel = document.querySelector(`.panel.draggable-block[data-pid="${pid}"]`);
-      if (panel) col.appendChild(panel); // append in saved order (also moves across columns)
-    });
-  });
-}
-$('#layout-reset').addEventListener('click', () => { localStorage.removeItem('finsight-layout'); location.reload(); });
+// ⚙ Layout, panel show/hide and drag-to-rearrange are the layout system (F10,
+// web/src/features/layout); boot initialises it through FinSight.layout.
 
 // ---- profile + first-launch setup wizard -----------------------------------
 // Profile and the setup wizard are React islands (F8, web/src/features/topbar).
@@ -389,9 +292,10 @@ async function loadAccounts() {
 }
 
 async function boot() {
-  initDragLayout();
-  applyLayout();
-  applyPanels();
+  // The layout module comes from main.js (a module script, after this file);
+  // the Kestrel dock exists by now, so its panel gets a grip too.
+  await window.FinSight.islandsReady;
+  window.FinSight.layout.init();
   await loadAccounts();
   // the setup island opens the first-launch wizard once accountReady is set (F8)
   await loadPortfolio();

@@ -1,0 +1,2 @@
+import{a as r}from"./chunk-EBY63KBO.js";var t="finsight-profile";function o(e){try{return JSON.parse(e||"null")||{}}catch{return{}}}var l=e=>e.name?e.name.split(" ")[0]:"Profile",i=r()(()=>{try{return o(localStorage.getItem(t))}catch{return{}}});function a(e){i.setState(e,!0);try{localStorage.setItem(t,JSON.stringify(e))}catch{}}export{l as a,i as b,a as c};
+//# sourceMappingURL=chunk-NGAVIRIQ.js.map

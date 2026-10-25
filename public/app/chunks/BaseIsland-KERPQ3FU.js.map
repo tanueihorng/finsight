@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../../../web/src/features/topbar/BaseIsland.tsx"],
+  "sourcesContent": ["import { useStore } from 'zustand';\nimport { CURRENCIES } from './topbar.ts';\nimport { switchBase } from './actions.ts';\n\n// BASE currency selector (F8).\nexport default function BaseIsland() {\n  const base = useStore(window.FinSight.store, (s) => s.base);\n  return (\n    <>\n      BASE{' '}\n      <select id=\"base-ccy\" value={base} onChange={(e) => void switchBase(e.target.value.toUpperCase())}>\n        {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}\n      </select>\n    </>\n  );\n}\n"],
+  "mappings": "mTAQI,IAAAA,EAAA,SAHW,SAARC,GAA8B,CACnC,IAAMC,EAAOC,EAAS,OAAO,SAAS,MAAQC,GAAMA,EAAE,IAAI,EAC1D,SACE,oBAAE,iBACK,OACL,OAAC,UAAO,GAAG,WAAW,MAAOF,EAAM,SAAW,GAAG,CAAQG,EAAW,EAAE,OAAO,MAAM,YAAY,CAAC,GAC7F,SAAAC,EAAW,IAAKC,MAAM,OAAC,UAAe,MAAOA,EAAI,SAAAA,GAAdA,CAAgB,CAAS,EAC/D,GACF,CAEJ",
+  "names": ["import_jsx_runtime", "BaseIsland", "base", "useStore", "s", "switchBase", "CURRENCIES", "c"]
+}

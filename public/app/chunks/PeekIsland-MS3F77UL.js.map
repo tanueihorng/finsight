@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../../../web/src/features/topbar/PeekIsland.tsx"],
+  "sourcesContent": ["import { useStore } from 'zustand';\n\n// PEEK / UNPEEK (F8). Purely visual: bootstrap applies body.unpeek from the\n// store at load (before any island) and on every change.\nexport default function PeekIsland() {\n  const peek = useStore(window.FinSight.store, (s) => s.peek);\n  const toggle = () => {\n    const next = !peek;\n    window.FinSight.store.setState({ peek: next });\n    try { localStorage.setItem('finsight-unpeek', !next ? '1' : '0'); } catch { /* storage blocked */ }\n  };\n  return (\n    <button id=\"peek-btn\" className={'topbar-btn' + (!peek ? ' active' : '')} onClick={toggle}\n      title=\"Hide or show your personal figures (holdings, values, P&L, cash). Prices and market data stay visible.\">\n      {!peek ? '\u25CC PEEK' : '\u25C9 UNPEEK'}\n    </button>\n  );\n}\n"],
+  "mappings": "gLAYI,IAAAA,EAAA,SARW,SAARC,GAA8B,CACnC,IAAMC,EAAOC,EAAS,OAAO,SAAS,MAAQC,GAAMA,EAAE,IAAI,EACpDC,EAAS,IAAM,CACnB,IAAMC,EAAO,CAACJ,EACd,OAAO,SAAS,MAAM,SAAS,CAAE,KAAMI,CAAK,CAAC,EAC7C,GAAI,CAAE,aAAa,QAAQ,kBAAoBA,EAAa,IAAN,GAAS,CAAG,MAAQ,CAAwB,CACpG,EACA,SACE,OAAC,UAAO,GAAG,WAAW,UAAW,cAAiBJ,EAAmB,GAAZ,WAAiB,QAASG,EACjF,MAAM,yGACL,SAACH,EAAkB,gBAAX,cACX,CAEJ",
+  "names": ["import_jsx_runtime", "PeekIsland", "peek", "useStore", "s", "toggle", "next"]
+}

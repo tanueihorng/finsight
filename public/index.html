@@ -35,7 +35,7 @@ try { var d = document.documentElement;
       <label class="base-sel" title="Account / portfolio — each holds its own positions" data-island="account"></label>
       <span data-island="profile" style="display:contents"></span>
       <span data-island="peek" style="display:contents"></span>
-      <button id="cards-btn" class="topbar-btn" title="Customise cards & panels">⚙ Layout</button>
+      <span data-island="layout-button" style="display:contents"></span>
       <label class="base-sel" title="Base currency — your whole portfolio is converted into this. You deposit SGD." data-island="base"></label>
       <span id="market-state" class="pill">MKT</span>
       <span id="clock" class="clock" data-island="clock">--:--:--</span>
@@ -203,28 +203,7 @@ try { var d = document.documentElement;
   <div data-island="setup"></div>
 
   <!-- customise summary cards -->
-  <div id="cards-modal" class="modal hidden">
-    <div class="modal-box">
-      <div class="modal-head">
-        <span class="panel-title">CUSTOMISE LAYOUT</span>
-        <button id="cards-close" class="x-btn">✕</button>
-      </div>
-      <div class="modal-body">
-        <div data-island="appearance"></div>
-        <div style="border-top:1px solid var(--border); margin:16px 0 12px"></div>
-        <p class="muted small">Summary cards — tick the ones you want and use ▲▼ to reorder. Changes apply instantly.</p>
-        <div id="cards-list" class="cards-list" data-island="summary-cards"></div>
-        <div class="setup-label muted small" style="margin-top:14px">PANELS — show / hide whole widgets</div>
-        <div id="panels-list" class="cards-list"></div>
-        <div class="muted small" style="margin-top:8px">Tip: drag the <b>⠿</b> grip in any panel's header to rearrange widgets (even between columns).
-          <button id="layout-reset" class="mini-btn">Reset order</button></div>
-      </div>
-      <div class="modal-foot">
-        <button id="cards-reset" class="mini-btn">RESET TO DEFAULT</button>
-        <button id="cards-done" class="mini-btn solid">DONE</button>
-      </div>
-    </div>
-  </div>
+  <div data-island="layout"></div>
 
   <!-- manage accounts -->
   <div data-island="accounts"></div>
