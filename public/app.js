@@ -135,7 +135,7 @@ async function runCommand(raw) {
       const [, mkt, pct] = parts;
       if (!mkt || pct == null) return setStatus('Usage: WHT <US|SG|HK|UK|EU|JP|AU|CA|OTHER> <percent>   e.g. WHT US 15', 'err');
       await api('/api/settings/withholding', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ market: mkt, pct }) });
-      setStatus(`Dividend withholding for ${mkt.toUpperCase()} set to ${pct}%`, 'ok'); loadDividends(); afterWrite('withholding'); return;
+      setStatus(`Dividend withholding for ${mkt.toUpperCase()} set to ${pct}%`, 'ok'); afterWrite('withholding'); return;
     }
     if (cmd === 'MKT' || cmd === 'MARKETS') { window.FinSight.bus.invalidate('markets'); setStatus('Refreshing world markets…', 'ok'); return; }
     if (cmd === 'CLEAR') { setStatus(''); return; }
@@ -153,11 +153,9 @@ $('#cmd').addEventListener('keydown', (e) => { if (e.key === 'Enter') { runComma
 // ===========================================================================
 const baseQS = (extra = '') => `?base=${encodeURIComponent(state.base)}&account=${encodeURIComponent(state.account || '')}${extra}`;
 
-// Dividends and FX risk move with holdings, cash and slow FX rates, not every
-// 15s quote tick: refetch them when the holdings/cash/account/base change, or
-// at most every 2 minutes otherwise.
-let sideSig = '', sideAt = 0;
-const SIDE_MAX_AGE = 120000;
+// Holdings changes invalidate income and FX queries; their 120s polling is owned
+// by Query. (Chart trade markers refresh on the 'chart-trades' key since E2.)
+let dividendSig = ''; // B3: separate holdings refresh from Query's 120s timer
 let portfolioRequest = 0;
 async function loadPortfolio() {
   const request = ++portfolioRequest, query = baseQS();
@@ -166,252 +164,38 @@ async function loadPortfolio() {
     if (request !== portfolioRequest || query !== baseQS()) return;
     renderPortfolio(data);
     const sig = state.account + '|' + state.base + '|' + (data.positions || []).map((p) => p.symbol + ':' + p.quantity).join(',') + '|' + JSON.stringify(data.cash || []);
-    if (sig !== sideSig || Date.now() - sideAt > SIDE_MAX_AGE) {
-      sideSig = sig; sideAt = Date.now();
-      loadDividends(); // keep dividend panel in sync with the active account/base
-      loadFxRisk();    // keep FX-risk panel + exposure card in sync too
+    if (sig !== dividendSig) {
+      const hadPrevious = !!dividendSig; dividendSig = sig;
+      if (hadPrevious) { window.FinSight.bus.invalidate('dividends'); window.FinSight.bus.invalidate('fx-risk'); }
     }
   } catch (e) { if (request === portfolioRequest && query === baseQS()) setFooter('Portfolio load failed: ' + e.message); }
 }
 
 // Every completed write refreshes all readers of what it changed (COUPLING.md
 // §A6, web/src/api/invalidation.ts). Islands refetch through Query; legacy
-// readers registered here refresh themselves. Dividends, FX risk, performance
-// and wealth still follow loadPortfolio's signatures until B3/C2/C3.
+// readers registered here refresh themselves.
 function afterWrite(kind) { return window.FinSight.bus.write(kind); }
 window.FinSight.bus.on('portfolio', () => loadPortfolio());
 window.FinSight.bus.on('accounts', () => loadAccounts());
-window.FinSight.bus.on('ledger', () => { if (!$('#ledger-modal').classList.contains('hidden') && ledgerTab === 'trades') return loadLedger(); });
-window.FinSight.bus.on('realized', () => { if (!$('#ledger-modal').classList.contains('hidden') && ledgerTab === 'realized') return loadRealized(); });
-window.FinSight.bus.on('watchlist', () => loadWatchlist());
-window.FinSight.bus.on('alerts', () => loadAlerts());
 
 function renderPortfolio(data) {
-  const { positions, summary, transactions } = data;
+  const { positions } = data;
   const base = data.base || state.base;
-  lastSummary = summary; // read by the legacy FX risk panel (C2)
   // FX coverage note
   if (data.fxMissing && data.fxMissing.length) setFooter(`Note: no FX rate for ${data.fxMissing.join(', ')} → shown unconverted.`);
 
-  // The positions table is a React island (D1). The detail view and the chart
-  // watch feed still read lastTableData until E1/E2.
+  // Every panel is a React island now. The chart watch feed (chartWatchItems)
+  // still reads the holdings from lastTableData until X1.
   lastTableData = { positions, base };
   pushChartWatch();
-  // activity
-  $('#activity').innerHTML = (transactions || []).map((t) => {
-    const cls = t.type === 'BUY' ? 't-buy' : t.type === 'SELL' ? 't-sell' : 't-del';
-    const when = new Date(t.time).toLocaleString('en-US', { month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' });
-    let detail = t.type === 'DELETE' ? 'removed'
-      : `${fmt(t.quantity, t.quantity % 1 ? 4 : 0)} @ ${fmt(t.price)}` + (t.realized != null ? `  ·  P&L ${signStr(t.realized)}` : '');
-    return `<div class="line"><span class="ts">${when}</span><span class="${cls}">${t.type}</span><span class="sym amber">${esc(t.symbol)}</span><span class="muted">${detail}</span></div>`;
-  }).join('') || '<div class="muted small">No transactions yet.</div>';
-
-  // charts + heatmap
-  renderAnalytics(positions);
-
-  // re-select detail if needed
-  if (!state.selected && positions.length) selectSymbol((positions.find((p) => p.quoted !== false) || positions[0]).symbol);
 }
 
-// ---- FX RISK panel ---------------------------------------------------------
-async function loadFxRisk() {
-  try {
-    const data = await api('/api/fx-risk' + baseQS());
-    renderFxRisk(data); // the FX EXPOSURE card reads /api/fx-risk itself (useFxRisk)
-  } catch (e) { /* non-fatal — panel just keeps its last state */ }
-}
+// FX risk is a React island (C2).
 
-// Tool inputs survive the 15s re-render; a render is deferred while you type.
-const fxTools = { conv: '', shock: '0' };
-let fxPending = null;
-function renderFxRisk(data) {
-  const box = $('#fxrisk'); if (!box) return;
-  const ae = document.activeElement;
-  if (ae && box.contains(ae) && ae.tagName === 'INPUT') {
-    fxPending = data;
-    if (!ae.dataset.fxBlur) { ae.dataset.fxBlur = '1'; ae.addEventListener('blur', () => { const d = fxPending; fxPending = null; if (d) renderFxRisk(d); }, { once: true }); }
-    return;
-  }
-  const base = data.base || state.base;
-  const exposures = data.exposures || [];
-  const head = $('#fxr-spot');
-  if (!exposures.length) {
-    if (head) head.textContent = '';
-    box.classList.add('muted');
-    box.innerHTML = (data.totalValue > 0)
-      ? `No foreign-currency holdings — your book is all in ${base}, so there's no FX risk to track.`
-      : `No positions yet — add holdings (in a foreign currency) to track FX risk.`;
-    return;
-  }
-  box.classList.remove('muted');
-  const dom = exposures[0];               // dominant currency (sorted by exposure)
-  const multi = exposures.length > 1;     // >1 foreign currency: label rates per-row, not by dom
-  if (head) head.textContent = `${dom.ccy}/${base} ${fmt(dom.nowRate, 4)}`;
-
-  // header strip — one block per foreign currency
-  const strip = exposures.map((e) => `
-    <div class="fxr-cell"><span class="k">${e.ccy} EXPOSURE</span><span class="v">${moneyBig(base, e.notionalBase)}</span><span class="s">${fmt(e.pct, 0)}% of book · ${money(e.ccy, e.notionalNative, 0)}${e.cashBase ? ' · incl. cash' : ''}</span></div>
-    <div class="fxr-cell"><span class="k">BLENDED ENTRY</span><span class="v">${fmt(e.blendedEntry, 4)}</span><span class="s">avg ${e.ccy}/${base} cost</span></div>
-    <div class="fxr-cell"><span class="k">SPOT</span><span class="v ${signClass(e.driftPct)}">${fmt(e.nowRate, 4)}</span><span class="s ${signClass(e.driftPct)}">${signStr(e.driftPct)}% vs entry</span></div>
-    <div class="fxr-cell"><span class="k">FX P&L</span><span class="v ${signClass(e.fxPnl)}">${moneySigned(base, e.fxPnl)}</span><span class="s ${signClass(e.fxPnl)}">${signStr(e.fxPnlPct)}% · currency only</span></div>`).join('');
-
-  // Realized FX from closed trades (portfolio-wide; from the latest /api/portfolio summary).
-  const rfx = lastSummary ? lastSummary.realizedFxPnl : null;
-  const legacySells = lastSummary ? (lastSummary.realizedLegacy || 0) : 0;
-  const realizedSub = legacySells ? `closed · excl. ${legacySells} pre-FX-tracking` : 'closed trades · currency';
-  const realizedCell = (rfx != null && (rfx || (lastSummary && lastSummary.realizedStockPnl)))
-    ? `<div class="fxr-cell"><span class="k">REALIZED FX</span><span class="v ${signClass(rfx)}">${moneySigned(base, rfx)}</span><span class="s">${realizedSub}</span></div>`
-    : '';
-
-  // 1-week parametric FX VaR from the currency's weekly volatility.
-  const v = data.vol || {};
-  const volCell = v.oneSigmaBase
-    ? `<div class="fxr-cell"><span class="k">1σ MOVE / WK</span><span class="v">±${money(base, v.oneSigmaBase, 0)}</span><span class="s">σ ${fmt(v.sigmaWeeklyPct, 2)}%/wk · 95% ${money(base, v.var95Base, 0)}</span></div>`
-    : '';
-
-  // per-buy FX history
-  const rows = (data.lots || []).map((l) => {
-    const when = l.t ? new Date(l.t).toLocaleDateString('en-US', { year: '2-digit', month: 'short', day: '2-digit' }) : '—';
-    const note = !l.dated ? '<span class="dim"> no date</span>' : (l.recent ? '<span class="dim"> settling</span>' : '');
-    const pair = multi ? `<span class="dim">${l.currency}/${base} </span>` : '';
-    return `<tr>
-      <td>${when}</td><td class="sym">${esc(l.symbol)}</td>
-      <td class="r">${pair}${fmt(l.entryRate, 4)}</td><td class="r">${fmt(l.nowRate, 4)}</td>
-      <td class="r ${signClass(l.fxPnl)}">${moneySigned(base, l.fxPnl)}${note}</td>
-    </tr>`;
-  }).join('') || '<tr><td colspan="5" class="muted small">No purchases recorded yet.</td></tr>';
-
-  const totalExp = data.foreignBase || 0;
-  box.innerHTML = `
-    <div class="fxr-strip">${strip}${realizedCell}${volCell}</div>
-    <div class="fxr-sub">PER-BUY FX HISTORY · gain/loss from currency alone</div>
-    <table class="tbl fxr-tbl">
-      <thead><tr><th>DATE</th><th>SYM</th><th class="r">${multi ? 'FX' : dom.ccy + '/' + base} @BUY</th><th class="r">NOW</th><th class="r">FX P&L</th></tr></thead>
-      <tbody>${rows}</tbody>
-    </table>
-    <div class="fxr-whatif">
-      <div class="fxr-wi-head"><span class="fxr-sub">WHAT-IF · ${multi ? 'foreign-FX' : dom.ccy + '/' + base} shock</span><span id="fxr-shock" class="cyan">0.0%</span></div>
-      <input id="fxr-slider" type="range" min="-15" max="15" value="0" step="0.5">
-      <div class="fxr-wi-out"><span class="muted">impact on book <b id="fxr-impact">—</b></span><span class="muted">new value <b id="fxr-newval">${money(base, totalExp)}</b></span></div>
-    </div>
-    <div class="fxr-tools">
-      <div class="tool"><span class="fxr-sub" style="margin:0">TARGET EXPOSURE</span><br>
-        Keep <input id="fxr-target" type="number" min="0" max="100" step="1" placeholder="e.g. 70"> % in foreign currency
-        <div id="fxr-target-out" class="muted"></div></div>
-      <div class="tool"><span class="fxr-sub" style="margin:0">CONVERT NOW vs LATER · ${dom.ccy}</span><br>
-        Convert <input id="fxr-conv" type="number" min="0" step="100" placeholder="${base} amount"> ${base}
-        <div id="fxr-conv-out" class="muted"></div></div>
-    </div>
-    <div class="fxr-note">Currency risk adds volatility with little long-run expected return — it bites most over short horizons and drawdowns. Informational only; no trades are placed.</div>`;
-
-  const slider = $('#fxr-slider');
-  slider.value = fxTools.shock;
-  const upd = () => {
-    fxTools.shock = slider.value;
-    const pct = parseFloat(slider.value);
-    const impact = totalExp * pct / 100;
-    $('#fxr-shock').textContent = (pct > 0 ? '+' : '') + pct.toFixed(1) + '%';
-    const imp = $('#fxr-impact'); imp.textContent = moneySigned(base, impact); imp.className = signClass(impact);
-    $('#fxr-newval').textContent = money(base, totalExp + impact);
-  };
-  slider.addEventListener('input', upd); upd();
-
-  // Target exposure: gap between today's foreign share and the one you want.
-  const total = data.totalValue || 0;
-  const tIn = $('#fxr-target'), tOut = $('#fxr-target-out');
-  try { tIn.value = localStorage.getItem('finsight-fx-target') || ''; } catch {}
-  const updTarget = () => {
-    const pct = parseFloat(tIn.value);
-    try { localStorage.setItem('finsight-fx-target', tIn.value); } catch {}
-    const cur = total ? (totalExp / total) * 100 : 0;
-    if (!Number.isFinite(pct) || !total) { tOut.innerHTML = `Now <b>${fmt(cur, 1)}%</b> foreign (${money(base, totalExp, 0)} of ${money(base, total, 0)}).`; return; }
-    const gap = (pct / 100) * total - totalExp;
-    tOut.innerHTML = `Now <b>${fmt(cur, 1)}%</b>. ` + (Math.abs(gap) < total * 0.005 ? '<span class="up">On target.</span>'
-      : gap > 0 ? `To reach ${fmt(pct, 0)}%: move <b>${money(base, gap, 0)}</b> into foreign currency.`
-        : `To reach ${fmt(pct, 0)}%: bring <b>${money(base, -gap, 0)}</b> back to ${base}.`);
-  };
-  tIn.addEventListener('input', updTarget); updTarget();
-
-  // Convert now vs later: what the amount buys at spot, and the typical 1-month
-  // range from recent volatility (68% band). Shows the spread, not a forecast.
-  const cIn = $('#fxr-conv'), cOut = $('#fxr-conv-out');
-  cIn.value = fxTools.conv;
-  const sigmaM = (dom.sigmaWeeklyPct || 0) / 100 * Math.sqrt(4.345);
-  const updConv = () => {
-    fxTools.conv = cIn.value;
-    const amt = parseFloat(cIn.value);
-    if (!(amt > 0)) { cOut.innerHTML = `Spot ${fmt(dom.nowRate, 4)} · your blended entry ${fmt(dom.blendedEntry, 4)} (${signStr(dom.driftPct)}%).`; return; }
-    const now = amt / dom.nowRate;
-    let html = `Now: <b>${money(dom.ccy, now, 0)}</b> at ${fmt(dom.nowRate, 4)}.`;
-    if (sigmaM > 0) {
-      const lo = dom.nowRate * Math.exp(-sigmaM), hi = dom.nowRate * Math.exp(sigmaM);
-      html += `<br>In a month, 2 in 3 outcomes: <b>${money(dom.ccy, amt / hi, 0)} – ${money(dom.ccy, amt / lo, 0)}</b> (rate ${fmt(lo, 4)}–${fmt(hi, 4)}). Waiting is a ±${money(dom.ccy, now - amt / hi, 0)} coin flip.`;
-    }
-    cOut.innerHTML = html;
-  };
-  cIn.addEventListener('input', updConv); updConv();
-}
-
-// ---- ECON CALENDAR panel ---------------------------------------------------
-async function loadCalendar() {
-  try {
-    const [cal, ev] = await Promise.all([api('/api/calendar'), api('/api/events' + baseQS()).catch(() => null)]);
-    renderCalendar(cal, ev);
-  } catch (e) { const b = $('#calendar'); if (b) { b.classList.add('muted'); b.textContent = 'Calendar unavailable right now.'; } }
-}
-function renderCalendar(data, ev) {
-  const box = $('#calendar'); if (!box) return;
-  box.classList.remove('muted');
-  const dayShort = (s) => new Date(s + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: '2-digit' });
-  const daysTo = (ms) => Math.max(0, Math.round((ms - Date.now()) / 86400000));
-
-  // FOMC anchor — next rate decision + next dot plot, always known.
-  let anchor = '';
-  const f = data.nextFomc, sep = data.nextSep;
-  if (f) {
-    const dd = daysTo(f.decisionMs);
-    const sepCell = sep
-      ? `<div class="cal-a"><span class="k">NEXT DOT PLOT</span><span class="v">${dayShort(sep.start)}</span><span class="s"><a href="${data.sepUrl}" target="_blank" rel="noopener">FOMC projections ↗</a></span></div>`
-      : '';
-    anchor = `<div class="cal-anchor">
-      <div class="cal-a"><span class="k">NEXT FED DECISION</span><span class="v amber">${dayShort(f.end)}</span><span class="s">${dd}d · rate + statement${f.sep ? ' + dot plot' : ''}</span></div>
-      ${sepCell}
-    </div>`;
-  }
-
-  // This-week high-impact releases (CPI, PCE, NFP, the rate decision…).
-  const dt = (s) => new Date(s).toLocaleString('en-US', { weekday: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' });
-  const rows = (data.events || []).map((e) => {
-    const ms = Date.parse(e.time);
-    const past = !isNaN(ms) && ms < Date.now();
-    const when = isNaN(ms) ? esc(e.time || '—') : dt(e.time); // tolerate a malformed feed time
-    const fp = (e.forecast || e.previous) ? `<span class="cal-fp">f ${esc(e.forecast || '—')} · p ${esc(e.previous || '—')}</span>` : '';
-    return `<div class="cal-row ${past ? 'cal-past' : ''}">
-      <span class="cal-when">${when}</span>
-      <span class="ccy">${esc(e.country)}</span>
-      <span class="cal-title">${esc(e.title)}</span>${fp}
-    </div>`;
-  }).join('') || `<div class="muted small">${data.eventsOk ? 'No high-impact USD/SGD events this week.' : 'Live feed unavailable — Fed schedule shown above.'}</div>`;
-
-  // Earnings + ex-dividend dates for what you hold / watch.
-  let mine = '';
-  if (ev && ev.events) {
-    const d2 = (ms) => new Date(ms).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: '2-digit' });
-    const evRows = ev.events.slice(0, 14).map((e) => `<div class="cal-row" data-sym="${esc(e.symbol)}" style="cursor:pointer">
-      <span class="cal-when">${d2(e.t)}${e.estimated ? ' <span class="dim">~</span>' : ''}</span>
-      <span class="ev-kind ${e.kind === 'EARNINGS' ? 'earn' : 'div'}">${e.kind}</span>
-      <span class="cal-title"><span class="sym amber">${esc(e.symbol)}</span>${e.held ? '' : ' <span class="dim">watch</span>'}</span>
-      ${e.amount ? `<span class="cal-fp">~${fmt(e.amount, 2)}/sh</span>` : ''}</div>`).join('');
-    mine = `<div class="fxr-sub">YOUR HOLDINGS · next 60 days (earnings · ex-dividend)</div>` +
-      (evRows || `<div class="muted small">${ev.ok ? 'No earnings or ex-dividend dates in the next 60 days.' : 'Company dates unavailable right now.'}</div>`);
-  }
-  box.innerHTML = anchor + mine + `<div class="fxr-sub">THIS WEEK · high-impact (USD/SGD)</div>` + rows;
-}
-$('#calendar').addEventListener('click', (e) => { const r = e.target.closest('[data-sym]'); if (r) selectSymbol(r.dataset.sym); });
+// Calendar is a React island (A3).
 
 // ---- customizable summary cards --------------------------------------------
 // Summary cards are a React island (web/src/features/summary, PILOT-2).
-let lastSummary = null; // adapter: the legacy FX risk panel reads realized FX from it until C2
 // ---- PEEK / UNPEEK: blur personal figures, keep public market data ----------
 // Purely visual (CSS on body.unpeek) so screen-sharing is safe; nothing is removed from the page.
 
@@ -444,7 +228,7 @@ let curFont  = localStorage.getItem('finsight-font')  || 'mono';
 function applyTheme() { document.documentElement.dataset.theme = curTheme; document.documentElement.dataset.font = curFont; }
 function setTheme(id) {
   curTheme = id; localStorage.setItem('finsight-theme', id); applyTheme();
-  renderAppearance(); if (state.selected) loadDetail(); // repaint canvas chart with new colours
+  renderAppearance(); allCharts().forEach((c) => c.render()); // repaint canvas charts with the new colours
 }
 function setFont(id) { curFont = id; localStorage.setItem('finsight-font', id); applyTheme(); renderAppearance(); }
 function renderAppearance() {
@@ -489,8 +273,8 @@ $('#panels-list').addEventListener('change', (e) => {
 // Each panel is tagged with a stable pid (via a known child element) so its
 // position can be saved/restored; a ⠿ grip in the header is the drag handle.
 const PANEL_PIDS = [
-  ['#positions-view', 'positions'], ['#wealth-body', 'wealth'], ['#perf-ranges', 'performance'], ['#alloc-mode', 'allocation'],
-  ['#heat-metric', 'heatmap'], ['#fxrisk', 'fxrisk'], ['#dividends', 'dividends'], ['#watchlist', 'watchlist'], ['#alerts', 'alerts'], ['#activity', 'activity'],
+  ['#positions-view', 'positions'], ['#wealth-body', 'wealth'], ['#perf-body', 'performance'], ['#alloc-body', 'allocation'],
+  ['#heatmap-body', 'heatmap'], ['#fxrisk', 'fxrisk'], ['#dividends', 'dividends'], ['#watchlist', 'watchlist'], ['#alerts', 'alerts'], ['#activity', 'activity'],
   ['#detail-panel', 'detail'], ['#agent-dock', 'kestrel'], ['#news', 'news'], ['#markets', 'markets'], ['#calendar', 'calendar'], ['#wb-body', 'worldbank'], ['#fred-body', 'fred'], ['#infl-body', 'inflation'],
 ];
 let dragInited = false;
@@ -586,124 +370,29 @@ document.querySelector('.setup-choices').addEventListener('click', (e) => {
   commitSetup();
   $('#setup-modal').classList.add('hidden');
   const a = c.dataset.action;
-  if (a === 'import') $('#import-modal').classList.remove('hidden');
-  else if (a === 'manual') { $('#add-form').classList.remove('hidden'); $('#add-symbol').focus(); }
+  if (a === 'import') state.importOpen = true; // the D4 island opens the import modal
+  else if (a === 'manual') state.addFormOpen = true; // the D2 island opens and focuses the form
   setStatus(profile.name ? `Welcome, ${profile.name}.` : 'Terminal ready.', 'ok');
 });
 
 // ---- POSITIONS TABLE: React island (D1, web/src/features/positions) ----------
-// lastTableData feeds the detail view and the chart watch list until E1/E2.
+// lastTableData feeds the chart watch list (chartWatchItems) until X1.
 let lastTableData = { positions: [], base: 'SGD' };
 
 // ===========================================================================
 //  UNDO + CASH
 // ===========================================================================
-async function doUndo() {
-  try {
-    const r = await api('/api/undo', { method: 'POST' });
-    setStatus(`UNDID: ${r.undone}${r.available ? ` · ${r.available} more step(s) available` : ''}`, 'ok');
-    perfSig = '';
-    await afterWrite('undo'); // accounts first, then portfolio, ledger, watchlist, alerts…
-  } catch (e) { setStatus('UNDO: ' + e.message, 'err'); }
-}
+// Undo, CASH and the cash editor are TypeScript (D3, web/src/features/cash).
+// These names stay for the command bar and the ledger's ↶ until F7/D4.
+function doUndo() { return window.FinSight.actions.undo(); }
+function setCashBalance(ccy, amt) { return window.FinSight.actions.setCashBalance(ccy, amt); }
+function openCashEditor() { state.cashEditorOpen = true; }
 $('#undo-btn').addEventListener('click', doUndo);
 $('#undo-btn').addEventListener('mouseenter', async () => {
-  try { const u = await api('/api/undo'); $('#undo-btn').title = u.last ? `Undo: ${u.last.label}` : 'Nothing to undo'; } catch {}
+  const title = await window.FinSight.actions.undoTitle(); if (title) $('#undo-btn').title = title;
 });
-async function setCashBalance(ccy, amt) {
-  try {
-    const res = await api('/api/cash' + baseQS(), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ccy, amount: amt }) });
-    setStatus(Number(amt) === 0 ? `Cleared ${ccy.toUpperCase()} cash` : `Cash ${ccy.toUpperCase()} set to ${fmt(Number(amt))}`, 'ok');
-    wealthSig = ''; await afterWrite('cash'); // loadPortfolio's holdings/cash signature refreshes FX risk
-  } catch (e) { setStatus('CASH failed: ' + e.message, 'err'); }
-}
-// ---- CASH EDITOR: all accounts × currencies in one place ---------------------
-let cashDraft = [];   // [{ id, name, rows: [{ ccy, amount, orig }] }]
-function setCashStatus(m, k) { const el = $('#cash-status'); el.textContent = m || ''; el.className = 'cmd-status ' + (k || ''); }
-async function openCashEditor() {
-  $('#cash-modal').classList.remove('hidden'); setCashStatus('Loading…');
-  $('#cash-editor').innerHTML = '';
-  try {
-    const ids = state.account === 'ALL' ? accountsCache.map((a) => a.id) : [state.account];
-    cashDraft = await Promise.all(ids.map(async (id) => {
-      const d = await api(`/api/portfolio?base=${encodeURIComponent(state.base)}&account=${encodeURIComponent(id)}`);
-      return { id, name: (accountsCache.find((a) => a.id === id) || {}).name || id,
-        orig: Object.fromEntries((d.cash || []).map((c) => [c.ccy, c.amount])),
-        rows: (d.cash || []).map((c) => ({ ccy: c.ccy, amount: String(c.amount) })) };
-    }));
-    renderCashEditor(); setCashStatus('');
-  } catch (e) { setCashStatus('Could not load cash: ' + e.message, 'err'); }
-}
-function renderCashEditor() {
-  $('#cash-editor').innerHTML = cashDraft.map((a, ai) => `
-    <div class="cash-acct">
-      <div class="cash-acct-name">${esc(a.name)}</div>
-      ${a.rows.map((r, ri) => `<div class="cash-row">
-        <input class="cash-ccy" data-a="${ai}" data-r="${ri}" value="${esc(r.ccy)}" maxlength="3" placeholder="CCY" />
-        <input class="cash-amt" data-a="${ai}" data-r="${ri}" value="${esc(r.amount)}" inputmode="decimal" placeholder="0.00" />
-        <button class="x-btn" data-del-a="${ai}" data-del-r="${ri}" title="Remove">✕</button></div>`).join('')}
-      <button class="mini-btn cash-add" data-add="${ai}">+ CURRENCY</button>
-    </div>`).join('');
-}
-// Auto-save: each edit is saved ~0.7s after you stop typing (Enter / leaving the box saves at once).
-let cashTimer = null, cashSaving = null;
-function queueCashSave(delay = 700) { clearTimeout(cashTimer); cashTimer = setTimeout(() => saveCash(), delay); }
-$('#cash-editor').addEventListener('input', (e) => {
-  const t = e.target; if (!t.dataset || t.dataset.a == null) return;
-  const r = cashDraft[t.dataset.a].rows[t.dataset.r];
-  if (t.classList.contains('cash-ccy')) r.ccy = t.value.toUpperCase(); else r.amount = t.value;
-  setCashStatus('Editing…'); queueCashSave();
-});
-$('#cash-editor').addEventListener('focusout', (e) => { if (e.target.matches && e.target.matches('.cash-row input')) queueCashSave(0); });
-$('#cash-editor').addEventListener('click', (e) => {
-  const add = e.target.closest('[data-add]'), del = e.target.closest('[data-del-a]');
-  if (add) { cashDraft[add.dataset.add].rows.push({ ccy: state.base, amount: '' }); renderCashEditor(); const ins = $$('#cash-editor .cash-amt'); ins.length && ins[ins.length - 1].focus(); }
-  if (del) { cashDraft[del.dataset.delA].rows.splice(+del.dataset.delR, 1); renderCashEditor(); queueCashSave(0); }
-});
-async function saveCash() {
-  clearTimeout(cashTimer);
-  if (cashSaving) { await cashSaving; }          // never run two saves at once
-  cashSaving = (async () => {
-    const calls = [];
-    for (const a of cashDraft) {
-      const next = {};
-      for (const r of a.rows) {
-        const ccy = String(r.ccy || '').trim().toUpperCase(), amt = String(r.amount || '').replace(/[, ]/g, '');
-        if (!ccy && !amt) continue;
-        if (!/^[A-Z]{3}$/.test(ccy)) return setCashStatus(`${a.name}: currency must be a 3-letter code (e.g. SGD)`, 'err');
-        if (amt === '' || amt === '-' || amt === '.') continue;   // still typing
-        const v = Number(amt);
-        if (!Number.isFinite(v)) return setCashStatus(`${a.name}: "${r.amount}" is not a number`, 'err');
-        next[ccy] = (next[ccy] || 0) + v;
-      }
-      for (const ccy of new Set([...Object.keys(a.orig), ...Object.keys(next)])) {
-        const v = next[ccy] || 0;
-        const stillListed = a.rows.some((r) => String(r.ccy || '').trim().toUpperCase() === ccy);
-        if (!(ccy in next) && stillListed) continue;          // row being edited (blank) — leave the saved value alone
-        if (Math.abs(v - (a.orig[ccy] || 0)) > 1e-9) calls.push({ a, ccy, amount: v });
-      }
-    }
-    if (!calls.length) { setCashStatus('All changes saved ✓', 'ok'); return; }
-    setCashStatus('Saving…');
-    try {
-      for (const c of calls) {
-        await api(`/api/cash?base=${encodeURIComponent(state.base)}&account=${encodeURIComponent(c.a.id)}`,
-          { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ccy: c.ccy, amount: c.amount }) });
-        if (c.amount === 0) delete c.a.orig[c.ccy]; else c.a.orig[c.ccy] = c.amount;
-      }
-      setCashStatus(`Saved ✓ · net worth updated`, 'ok');
-      wealthSig = ''; await afterWrite('cash'); loadWealth();
-    } catch (e) { setCashStatus('Save failed: ' + e.message, 'err'); }
-  })();
-  try { await cashSaving; } finally { cashSaving = null; }
-}
-async function closeCashEditor() { await saveCash(); $('#cash-modal').classList.add('hidden'); }
 $('#cash-btn').addEventListener('click', openCashEditor);
 $('#wealth-cash-btn').addEventListener('click', openCashEditor);
-$('#cash-save').addEventListener('click', closeCashEditor);
-$('#cash-cancel').addEventListener('click', closeCashEditor);
-$('#cash-close').addEventListener('click', closeCashEditor);
-$('#cash-editor').addEventListener('keydown', (e) => { if (e.key === 'Enter') saveCash(); });
 // The NET WORTH / CASH cards open the editor too.
 $('#summary').addEventListener('click', (e) => {
   if (e.target.closest('[data-cash-card]')) openCashEditor();
@@ -712,270 +401,34 @@ $('#summary').addEventListener('click', (e) => {
 // ===========================================================================
 //  LEDGER — every trade; fix buys; realized gains by year
 // ===========================================================================
-let ledgerRows = [], ledgerEdit = null, ledgerTab = 'trades', lastRealized = null;
-function setLedgerStatus(m, k) { const el = $('#ledger-status'); el.textContent = m || ''; el.className = 'cmd-status ' + (k || ''); }
-function openLedger() { $('#ledger-modal').classList.remove('hidden'); setLedgerTab(ledgerTab); }
-function closeLedger() { $('#ledger-modal').classList.add('hidden'); ledgerEdit = null; }
-function setLedgerTab(tab) {
-  ledgerTab = tab;
-  $$('#ledger-tabs button').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
-  $('#ledger-trades').classList.toggle('hidden', tab !== 'trades');
-  $('#ledger-realized').classList.toggle('hidden', tab !== 'realized');
-  setLedgerStatus('');
-  if (tab === 'trades') loadLedger(); else loadRealized();
-}
-async function loadLedger() {
-  try { const d = await api('/api/ledger' + baseQS()); ledgerRows = d.rows || []; renderLedger(); }
-  catch (e) { setLedgerStatus(e.message, 'err'); }
-}
-function renderLedger() {
-  const base = state.base, f = ($('#ledger-filter').value || '').trim().toUpperCase();
-  const rows = ledgerRows.filter((r) => !f || (r.symbol || '').toUpperCase().includes(f) || r.type.includes(f));
-  const showAcct = state.account === 'ALL';
-  const d = (ms) => new Date(ms).toLocaleDateString('en-US', { year: '2-digit', month: 'short', day: '2-digit' });
-  $('#ledger-body').innerHTML = rows.map((r) => {
-    const cls = r.type === 'BUY' ? 't-buy' : r.type === 'SELL' ? 't-sell' : 't-del';
-    if (ledgerEdit === r.id) {
-      const iso = new Date(r.time).toISOString().slice(0, 10);
-      return `<tr data-id="${esc(r.id)}"><td><input type="date" class="le-date" value="${iso}"></td><td class="${cls}">${r.type}</td><td class="sym">${esc(r.symbol)}</td>
-        <td class="r"><input type="number" step="any" class="le-qty" value="${r.quantity}"></td><td class="r"><input type="number" step="any" class="le-px" value="${r.price}"></td>
-        <td></td><td></td><td><div class="lg-act"><button class="mini-btn solid" data-act="save">SAVE</button><button class="mini-btn" data-act="cancel">✕</button></div></td></tr>`;
-    }
-    const realized = r.realized != null ? `<span class="${signClass(r.realized)}">${moneySigned(base, r.realized)}</span>` +
-      (r.realizedFx != null && Math.abs(r.realizedFx) > 0.005 ? `<div class="dim small">FX ${moneySigned(base, r.realizedFx)}</div>` : '') : '';
-    const acts = r.editable ? `<div class="lg-act"><button class="x-btn" data-act="edit" title="Fix date / price / quantity">✎</button><button class="x-btn del" data-act="delete" title="Delete this buy">✕</button></div>` : '';
-    return `<tr data-id="${esc(r.id)}"><td>${d(r.time)}${showAcct ? `<div class="dim small">${esc(r.account)}</div>` : ''}</td><td class="${cls}">${r.type}</td><td class="sym">${esc(r.symbol)}</td>
-      <td class="r">${r.quantity != null ? fmt(r.quantity, r.quantity % 1 ? 4 : 0) : ''}</td><td class="r">${r.price != null ? fmt(r.price) + ` <span class="dim">${esc(r.currency || '')}</span>` : ''}</td>
-      <td class="r">${r.valueBase != null ? money(base, r.valueBase, 0) : ''}</td><td class="r">${realized}</td><td>${acts}</td></tr>`;
-  }).join('') || '<tr><td colspan="8" class="empty">No transactions.</td></tr>';
-}
-$('#ledger-filter').addEventListener('input', renderLedger);
-$('#ledger-body').addEventListener('click', async (e) => {
-  const b = e.target.closest('[data-act]'); if (!b) return;
-  const id = b.closest('tr').dataset.id, row = ledgerRows.find((r) => r.id === id);
-  const act = b.dataset.act;
-  if (act === 'edit') { ledgerEdit = id; renderLedger(); return; }
-  if (act === 'cancel') { ledgerEdit = null; renderLedger(); return; }
-  try {
-    if (act === 'save') {
-      const tr = b.closest('tr');
-      const body = { id, date: tr.querySelector('.le-date').value, quantity: tr.querySelector('.le-qty').value, price: tr.querySelector('.le-px').value };
-      setLedgerStatus('Saving… (fetching that day\'s FX)');
-      await api('/api/ledger/edit' + baseQS(), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-      setLedgerStatus(`Updated ${row.symbol} buy. UNDO reverts it.`, 'ok');
-    } else if (act === 'delete') {
-      if (!confirm(`Delete this buy of ${row.quantity} ${row.symbol}? Its lot is removed from the position. (UNDO can restore it.)`)) return;
-      await api('/api/ledger/delete' + baseQS(), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
-      setLedgerStatus(`Deleted ${row.symbol} buy. UNDO restores it.`, 'ok');
-    }
-    ledgerEdit = null; perfSig = '';
-    await afterWrite(act === 'save' ? 'ledger-edit' : 'ledger-delete');
-  } catch (err) { setLedgerStatus(err.message, 'err'); }
-});
-async function loadRealized() {
-  const box = $('#ledger-realized');
-  box.innerHTML = '<span class="muted">Loading…</span>';
-  try {
-    const d = await api('/api/realized' + baseQS());
-    lastRealized = d;
-    const base = d.base || state.base;
-    const yrs = d.years.map((y) => `<tr><td><b>${y.year}</b></td><td class="r">${y.trades}</td><td class="r">${money(base, y.proceeds, 0)}</td><td class="r">${money(base, y.cost, 0)}</td>
-      <td class="r ${signClass(y.stock)}">${moneySigned(base, y.stock, 0)}</td><td class="r ${signClass(y.fx)}">${moneySigned(base, y.fx, 0)}</td>
-      <td class="r ${signClass(y.total)}"><b>${moneySigned(base, y.total, 0)}</b></td><td class="r">${y.divNet ? money(base, y.divNet, 0) : '—'}${y.divTax ? `<div class="dim small">−${money(base, y.divTax, 0)} tax</div>` : ''}</td></tr>`).join('')
-      || '<tr><td colspan="8" class="empty">No closed trades or dividends yet.</td></tr>';
-    const dd = (ms) => new Date(ms).toLocaleDateString('en-US', { year: '2-digit', month: 'short', day: '2-digit' });
-    const rows = d.rows.map((r) => `<tr><td>${dd(r.time)}</td><td class="sym">${esc(r.symbol)}</td><td class="r">${fmt(r.quantity, r.quantity % 1 ? 4 : 0)}</td>
-      <td class="r">${money(base, r.proceeds, 0)}</td><td class="r">${money(base, r.cost, 0)}</td>
-      <td class="r ${signClass(r.stock)}">${r.stock != null ? moneySigned(base, r.stock, 0) : '—'}</td><td class="r ${signClass(r.fx)}">${r.fx != null ? moneySigned(base, r.fx, 0) : '—'}</td>
-      <td class="r ${signClass(r.total)}">${moneySigned(base, r.total, 0)}</td><td class="r">${r.heldDays != null ? (r.heldDays >= 365 ? fmt(r.heldDays / 365.25, 1) + 'y' : r.heldDays + 'd') : '—'}</td></tr>`).join('');
-    box.innerHTML = `<div class="rz-head"><span class="muted small">Cost uses the FX rate you actually paid; proceeds use the rate on the sale date. Singapore doesn't tax capital gains — this is for your records.</span>
-        <button id="rz-export" class="mini-btn">EXPORT CSV</button></div>
-      <table class="tbl rz-years"><thead><tr><th>YEAR</th><th class="r">SALES</th><th class="r">PROCEEDS</th><th class="r">COST</th><th class="r">STOCK</th><th class="r">FX</th><th class="r">REALIZED</th><th class="r">DIVIDENDS NET</th></tr></thead><tbody>${yrs}</tbody></table>` +
-      (rows ? `<div class="fxr-sub">CLOSED TRADES</div><div class="table-wrap"><table class="tbl rz-years"><thead><tr><th>SOLD</th><th>SYM</th><th class="r">QTY</th><th class="r">PROCEEDS</th><th class="r">COST</th><th class="r">STOCK</th><th class="r">FX</th><th class="r">TOTAL</th><th class="r">HELD</th></tr></thead><tbody>${rows}</tbody></table></div>` : '');
-  } catch (e) { box.innerHTML = `<span class="down">${esc(e.message)}</span>`; }
-}
-$('#ledger-realized').addEventListener('click', (e) => {
-  if (!e.target.closest('#rz-export') || !lastRealized) return;
-  const b = lastRealized.base.toLowerCase();
-  const head = ['date', 'symbol', 'quantity', 'price', 'currency', `proceeds_${b}`, `cost_${b}`, `stock_pnl_${b}`, `fx_pnl_${b}`, `realized_${b}`, 'held_days'];
-  const lines = lastRealized.rows.map((r) => [new Date(r.time).toISOString().slice(0, 10), r.symbol, r.quantity, r.price, r.currency,
-    r.proceeds.toFixed(2), r.cost.toFixed(2), r.stock != null ? r.stock.toFixed(2) : '', r.fx != null ? r.fx.toFixed(2) : '', r.total.toFixed(2), r.heldDays ?? '']);
-  const csv = [head, ...lines].map((r) => r.map(csvCell).join(',')).join('\n');
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
-  a.download = 'realized-gains.csv'; a.click(); URL.revokeObjectURL(a.href);
-});
+// The ledger modal is a React island (D4, web/src/features/ledger). openLedger
+// stays for the LEDGER/TRADES commands until F7.
+function openLedger() { state.ledgerOpen = true; }
 $('#ledger-btn').addEventListener('click', openLedger);
-$('#ledger-close').addEventListener('click', closeLedger);
-$('#ledger-undo').addEventListener('click', doUndo);
-$('#ledger-modal').addEventListener('click', (e) => { if (e.target.id === 'ledger-modal') closeLedger(); });
-$('#ledger-tabs').addEventListener('click', (e) => { const b = e.target.closest('[data-tab]'); if (b) setLedgerTab(b.dataset.tab); });
 
 // ===========================================================================
 //  ADD FORM + SYMBOL SEARCH
 // ===========================================================================
-$('#add-toggle').addEventListener('click', () => { $('#add-form').classList.toggle('hidden'); $('#add-symbol').focus(); });
-$('#add-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const symbol = $('#add-symbol').value.trim().toUpperCase();
-  const quantity = $('#add-qty').value, price = $('#add-price').value, date = $('#add-date').value || null;
-  if (!symbol || !quantity || !price) return setStatus('Fill symbol, quantity and average price.', 'err');
-  if (blockIfAll()) return;
-  try {
-    await api('/api/portfolio/buy' + baseQS(), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ symbol, quantity, price, date }) });
-    setStatus(`BOUGHT ${quantity} ${symbol} @ ${price}${date ? ' on ' + date : ''}`, 'ok');
-    $('#add-symbol').value = $('#add-qty').value = $('#add-price').value = $('#add-date').value = '';
-    $('#add-suggest').classList.add('hidden');
-    await afterWrite('buy');
-  } catch (err) { setStatus('ADD failed: ' + err.message, 'err'); }
-});
-
-let searchTimer = null, suggestItems = [], suggestIdx = -1;
-$('#add-symbol').addEventListener('input', (e) => {
-  clearTimeout(searchTimer);
-  const q = e.target.value.trim();
-  if (q.length < 1) { $('#add-suggest').classList.add('hidden'); return; }
-  searchTimer = setTimeout(async () => {
-    try {
-      suggestItems = await api('/api/search?q=' + encodeURIComponent(q));
-      suggestIdx = -1;
-      const box = $('#add-suggest');
-      if (!suggestItems.length) { box.classList.add('hidden'); return; }
-      box.innerHTML = suggestItems.map((s, i) =>
-        `<div data-i="${i}"><span class="s-sym">${esc(s.symbol)}</span> <span class="s-meta">${esc(s.name).slice(0, 30)} · ${esc(s.exchange)} · ${esc(s.type)}</span></div>`).join('');
-      box.classList.remove('hidden');
-    } catch { $('#add-suggest').classList.add('hidden'); }
-  }, 200);
-});
-$('#add-suggest').addEventListener('click', (e) => {
-  const d = e.target.closest('[data-i]'); if (!d) return;
-  pickSuggest(suggestItems[+d.dataset.i]);
-});
-$('#add-symbol').addEventListener('keydown', (e) => {
-  const box = $('#add-suggest');
-  if (box.classList.contains('hidden')) return;
-  if (e.key === 'ArrowDown') { e.preventDefault(); suggestIdx = Math.min(suggestIdx + 1, suggestItems.length - 1); hl(); }
-  else if (e.key === 'ArrowUp') { e.preventDefault(); suggestIdx = Math.max(suggestIdx - 1, 0); hl(); }
-  else if (e.key === 'Enter' && suggestIdx >= 0) { e.preventDefault(); pickSuggest(suggestItems[suggestIdx]); }
-  else if (e.key === 'Escape') box.classList.add('hidden');
-  function hl() { $$('#add-suggest div').forEach((el, i) => el.classList.toggle('active', i === suggestIdx)); }
-});
-function pickSuggest(s) {
-  if (!s) return;
-  $('#add-symbol').value = s.symbol;
-  $('#add-suggest').classList.add('hidden');
-  $('#add-qty').focus();
-}
-document.addEventListener('click', (e) => { if (!e.target.closest('.add-field')) $('#add-suggest').classList.add('hidden'); });
+// The add form and symbol search are a React island (D2, web/src/features/addform).
+$('#add-toggle').addEventListener('click', () => { state.addFormOpen = !state.addFormOpen; });
 
 // ===========================================================================
 //  SECURITY DETAIL + CHART
 // ===========================================================================
-async function selectSymbol(symbol) {
+// The detail header, stats, ranges and chart host are a React island (E1+E2,
+// web/src/features/detail, web/src/legacy/ChartHost.tsx). selectSymbol stays
+// global for its callers; the island follows store.selected.
+function selectSymbol(symbol) {
   state.selected = symbol; // the positions island highlights the row from the store
   // A2 bridge: same-symbol selection exits NEWS's market override and refreshes.
   // Keep this notification through E1 until F7 owns the command callers.
   window.FinSight.bus.invalidate('news-selected');
-  await loadDetail();
-}
-
-let detailChart = null; // singleton PriceChart instance (chart.js); survives refreshes
-
-// The 30s background refresh re-reads the quote; bar history for daily and
-// longer timeframes changes slowly, so it is re-downloaded at most every 5 min.
-let detailHist = { key: '', at: 0, h: null };
-async function loadDetail(opts) {
-  const periodic = !!(opts && opts.periodic);
-  const symbol = state.selected;
-  if (!symbol) return;
-  $('#detail-title').textContent = symbol + ' · DETAIL';
-  const body = $('#detail-body');
-  // Build a persistent skeleton ONCE so the interactive chart (its canvases,
-  // ResizeObserver, zoom window and drawings) survives range switches and the
-  // 30s background refresh — only the header + stats blocks get re-rendered.
-  // (an expanded chart is temporarily re-parented to <body>; keep using it)
-  if (!body.querySelector('#detail-chart-host') && !(detailChart && (detailChart.maxed || detailChart.fit))) {
-    body.innerHTML =
-      '<div id="detail-hdr"></div>' +
-      '<div id="detail-chart-host"></div>' +
-      '<div id="detail-stats" class="stats"></div>';
-    detailChart = null;
-  }
-  const hdr = $('#detail-hdr');
-  // Manual holdings (no Yahoo ticker, e.g. a unit trust) have no chart or quote to fetch.
-  const manual = lastTableData.positions.find((p) => p.symbol === symbol && p.quoted === false);
-  if (manual) {
-    if (chartGrid && chartGrid.active()) chartGrid.set({ n: 1 });
-    detailChart = null; // body is replaced below, so the chart skeleton is rebuilt on the next real symbol
-    body.innerHTML = `<div class="sym amber">${esc(symbol)}</div><div class="muted small">${esc(manual.name || '')}</div>
-      <div class="muted small" style="margin-top:8px">Manual holding · no market data feed. Valued at the price you entered:
-      <b>${esc(manual.currency)} ${fmt(manual.last)}</b> × ${fmt(manual.quantity, 4)} = <b>${money(lastTableData.base, manual.marketValue)}</b>.
-      To update it, edit its price in the ledger.</div>`;
-    return;
-  }
-  if (!detailChart) hdr.innerHTML = '<div class="muted">Loading ' + esc(symbol) + '…</div>';
-  try {
-    const { range, interval, tf } = state.detailRange;
-    // Fetch more history than is shown so moving averages (up to MA200) and other
-    // indicators are fully formed from the first visible bar; the chart opens on `range`.
-    // Chart timeframe buttons (tf) load a long history and open on the latest bars.
-    const fetchRange = tf ? range : (DETAIL_WARMUP[range] || range);
-    const hKey = symbol + '|' + fetchRange + '|' + interval;
-    const reuse = periodic && detailHist.key === hKey && detailHist.h && !/m$|h$/.test(interval) && Date.now() - detailHist.at < 300000;
-    const [h, qd] = await Promise.all([
-      reuse ? detailHist.h : api(`/api/history?symbol=${encodeURIComponent(symbol)}&range=${fetchRange}&interval=${interval}`),
-      api('/api/quote?symbols=' + encodeURIComponent(symbol)).catch(() => null),
-    ]);
-    if (state.selected !== symbol) return; // user switched symbols while we awaited
-    if (!reuse) detailHist = { key: hKey, at: Date.now(), h };
-    const q = (qd && qd.quotes && qd.quotes[0] && !qd.quotes[0].error) ? qd.quotes[0] : {};
-    const m = { ...(h.meta || {}), ...q };
-    const pts = h.points || [];
-    const visibleFrom = tf ? null : visibleStart(pts, range);
-    const vi = Math.max(0, pts.findIndex((p) => p.t >= visibleFrom));
-    const base0 = pts[vi > 0 ? vi - 1 : 0], lastPt = pts[pts.length - 1];
-    const rChg = base0 && lastPt ? lastPt.c - base0.c : null, rPct = rChg != null && base0.c ? rChg / base0.c * 100 : null;
-    const rLabel = { '1d': '1D', '5d': '5D', '1mo': '1M', '6mo': '6M', '1y': '1Y', '5y': '5Y' }[range] || range.toUpperCase();
-    hdr.innerHTML = `
-      <div class="detail-top">
-        <div><span class="detail-sym">${esc(m.symbol || symbol)}</span> <span class="detail-name">${esc(m.name || '')}</span></div>
-      </div>
-      <div class="detail-top" style="margin-top:4px">
-        <span class="detail-price">${fmt(m.price)}</span>
-        <span class="detail-chg ${signClass(m.change)}">${signStr(m.change)} (${signStr(m.changePct)}%) <span class="muted small">today</span></span>
-        ${!tf && range !== '1d' && rPct != null ? `<span class="small ${signClass(rChg)}">${signStr(rPct)}% <span class="muted">${rLabel}</span></span>` : ''}
-        <span class="muted small">${m.currency || ''} · ${esc(m.exchange || '')}</span>
-      </div>`;
-    $('#detail-stats').innerHTML = `
-        ${statRow('Prev Close', fmt(m.prevClose))}
-        ${statRow('Day Range', `${fmt(m.dayLow)} – ${fmt(m.dayHigh)}`)}
-        ${statRow('52W High', fmt(m.weekHigh52))}
-        ${statRow('52W Low', fmt(m.weekLow52))}
-        ${statRow('Volume', fmtBig(m.volume))}
-        ${statRow('Type', esc(m.type || '—'))}`;
-    if (!detailChart && window.PriceChart) {
-      detailChart = new PriceChart($('#detail-chart-host'));
-      detailChart.onRequest = ({ interval: iv }) => {
-        state.detailRange = { range: CHART_TF_RANGE[iv] || '1y', interval: iv, tf: true };
-        $$('#ranges button').forEach((x) => x.classList.remove('active'));
-        loadDetail();
-      };
-      detailChart.onSymbol = (sym) => { if (detailChart && detailChart.maxed) detailChart.symInput.value = sym; selectSymbol(sym); };
-      setupChartHost(detailChart);
-      if (chartGrid) chartGrid.attach(detailChart);
-    }
-    if (detailChart) {
-      if (!reuse) detailChart.load(symbol, pts, m, { range, interval, visibleFrom, fetchRange });
-      if (!periodic || sideAt > (detailChart._tradesAt || 0)) { detailChart._tradesAt = Date.now(); loadChartTrades(detailChart, symbol); }
-      if (chartGrid) chartGrid.syncSymbols();
-    }
-    else $('#detail-chart-host').innerHTML = sparkline(pts, pts.length > 1 ? pts[pts.length - 1].c >= pts[0].c : true); // fallback if chart.js absent
-  } catch (e) {
-    hdr.innerHTML = `<div class="down">Could not load ${esc(symbol)}: ${esc(e.message)}</div>`;
-  }
+  window.FinSight.bus.invalidate('detail'); // the same symbol again refreshes the detail
 }
 // ---- chart host hooks: ledger trades, watchlist feed, multi-chart grid ----
 let lastWatch = [];
+// B1 adapter: E2 replaces this legacy chart feed after the lanes integrate.
+window.FinSightLegacy = { ...window.FinSightLegacy, setChartWatch(list) { lastWatch = list || []; pushChartWatch(); } };
 function chartWatchItems() {
   const held = (lastTableData.positions || []).filter((p) => p.quoted !== false);
   const seen = new Set();
@@ -1002,57 +455,17 @@ const chartGrid = window.ChartGrid ? new ChartGrid({
   setupChart: (c) => setupChartHost(c),
 }) : null;
 
-// Detail chart: history fetched per visible range, with enough extra bars for MA200/MA50.
-// Chart timeframe -> history to fetch (Yahoo caps: 1m ≈ 7 days, 5m/15m ≈ 60 days, 1h ≈ 730 days).
-// Yahoo's range=max returns quarterly bars for every interval, so W / M ask for explicit years.
-const CHART_TF_RANGE = { '1m': '5d', '5m': '1mo', '15m': '1mo', '60m': '1y', '1d': '5y', '1wk': '10y', '1mo': '30y' };
-const DETAIL_WARMUP = { '1d': '5d', '5d': '1mo', '1mo': '1y', '6mo': '2y', '1y': '2y', '5y': '10y' };
-// First timestamp of the requested range inside a longer fetched series.
-// Intraday: count trading sessions back via overnight gaps (> 2h); daily/weekly: calendar span.
-function visibleStart(pts, range) {
-  if (!pts.length) return 0;
-  const last = pts[pts.length - 1].t;
-  const sessions = { '1d': 1, '5d': 5 }[range];
-  if (sessions) {
-    let seen = 0;
-    for (let i = pts.length - 1; i > 0; i--) {
-      if (pts[i].t - pts[i - 1].t > 2 * 3600000 && ++seen === sessions) return pts[i].t;
-    }
-    return pts[0].t;
-  }
-  const days = { '1mo': 31, '6mo': 183, '1y': 366, '5y': 5 * 366 }[range];
-  return days ? last - days * 86400000 : pts[0].t;
-}
-function statRow(k, v) { return `<div class="stat-row"><span class="k">${k}</span><span class="v">${v}</span></div>`; }
+// ChartHost (the detail island) calls these: the watch feed (B1), trade
+// markers and the multi-chart grid stay here, on window.detailChart. It is
+// null until the island mounts; allCharts() reads it by its bare name.
+window.detailChart = null;
+window.FinSightChartHooks = {
+  attached(chart) { setupChartHost(chart); if (chartGrid) chartGrid.attach(chart); },
+  loaded() { if (chartGrid) chartGrid.syncSymbols(); },
+  trades(chart, symbol) { return loadChartTrades(chart, symbol); },
+  detached() { if (chartGrid && chartGrid.active()) chartGrid.set({ n: 1 }); },
+};
 
-$('#ranges').addEventListener('click', (e) => {
-  const b = e.target.closest('button'); if (!b) return;
-  $$('#ranges button').forEach((x) => x.classList.remove('active'));
-  b.classList.add('active');
-  state.detailRange = { range: b.dataset.range, interval: b.dataset.interval };
-  loadDetail();
-});
-
-// SVG sparkline / line chart -------------------------------------------------
-function sparkline(points, up) {
-  if (!points || points.length < 2) return '<div class="chart muted small">No chart data.</div>';
-  const W = 520, H = 150, pad = 4;
-  const vals = points.map((p) => p.c);
-  const min = Math.min(...vals), max = Math.max(...vals), span = (max - min) || 1;
-  const stepX = (W - pad * 2) / (points.length - 1);
-  const x = (i) => pad + i * stepX;
-  const y = (v) => pad + (H - pad * 2) * (1 - (v - min) / span);
-  const line = points.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p.c).toFixed(1)}`).join(' ');
-  const area = `${line} L${x(points.length - 1).toFixed(1)},${H - pad} L${x(0).toFixed(1)},${H - pad} Z`;
-  const color = up ? 'var(--up)' : 'var(--down)';
-  return `<svg class="chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
-    <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="${color}" stop-opacity="0.28"/>
-      <stop offset="100%" stop-color="${color}" stop-opacity="0"/></linearGradient></defs>
-    <path d="${area}" fill="url(#g)"/>
-    <path d="${line}" fill="none" stroke="${color}" stroke-width="1.5"/>
-  </svg>`;
-}
 
 // ===========================================================================
 //  WORLD MARKETS
@@ -1062,249 +475,27 @@ function sparkline(points, up) {
 // ===========================================================================
 //  WORLD BANK MACRO
 // ===========================================================================
-async function loadWorldBank() {
-  const country = $('#wb-country').value.trim().toUpperCase() || 'US';
-  const indicator = $('#wb-indicator').value;
-  const body = $('#wb-body');
-  body.innerHTML = '<span class="muted">Loading World Bank data…</span>';
-  try {
-    const d = await api(`/api/worldbank?country=${encodeURIComponent(country)}&indicator=${encodeURIComponent(indicator)}`);
-    if (!d.series || !d.series.length) { body.innerHTML = `<span class="muted">No data for ${esc(country)}.</span>`; return; }
-    const latest = d.series[d.series.length - 1];
-    const isPct = /%/.test(d.label) || /ZS|ZG/.test(indicator);
-    const val = isPct ? fmt(latest.value, 2) + '%' : fmtBig(latest.value);
-    body.innerHTML = `
-      <div class="wb-headline"><span class="wb-val">${val}</span><span class="wb-yr">${esc(d.countryName)} · ${latest.year}</span></div>
-      <div class="wb-label">${esc(d.label)} · annual, latest available (use FRED for monthly)</div>
-      ${wbChart(d.series, isPct)}`;
-  } catch (e) { body.innerHTML = `<span class="down">World Bank error: ${esc(e.message)}</span>`; }
-}
-function wbChart(series, isPct) {
-  const pts = series.map((s) => ({ c: s.value }));
-  const last = series[series.length - 1].value, first = series[0].value;
-  return sparkline(pts, last >= first);
-}
-$('#wb-go').addEventListener('click', loadWorldBank);
-$('#wb-country').addEventListener('keydown', (e) => { if (e.key === 'Enter') loadWorldBank(); });
-$('#wb-indicator').addEventListener('change', loadWorldBank);
-
-// ===========================================================================
-//  FRED — US FEDERAL RESERVE MACRO (no key)
-// ===========================================================================
-async function loadFred() {
-  const [series, transform] = $('#fred-series').value.split('|');
-  const label = $('#fred-series').selectedOptions[0].textContent;
-  const body = $('#fred-body');
-  body.innerHTML = '<span class="muted">Loading FRED…</span>';
-  try {
-    const d = await api(`/api/fred?series=${encodeURIComponent(series)}&transform=${encodeURIComponent(transform || 'lin')}`);
-    if (!d.points || !d.points.length) { body.innerHTML = '<span class="muted">No data.</span>'; return; }
-    const last = d.points[d.points.length - 1];
-    const isLevel = /GDP/.test(series) && transform !== 'pc1';
-    const val = isLevel ? fmtBig(last.value) : fmt(last.value, 2) + '%';
-    const pts = d.points.map((p) => ({ c: p.value }));
-    body.innerHTML = `<div class="wb-headline"><span class="wb-val">${val}</span><span class="wb-yr">${esc(last.date)}</span></div>
-      <div class="wb-label">${esc(label)} · FRED</div>${sparkline(pts, last.value >= d.points[0].value)}`;
-  } catch (e) { body.innerHTML = `<span class="down">FRED error: ${esc(e.message)}</span>`; }
-}
-$('#fred-go').addEventListener('click', loadFred);
-$('#fred-series').addEventListener('change', loadFred);
-
-// ===========================================================================
-//  US INFLATION GAUGES — official CPI/PCE + trimmed-mean measures (FRED, no key)
-//  ★ = trimmed/median family: Fed Chair Warsh's preferred "underlying inflation"
-//  gauges (they strip outlier price moves instead of fixed food/energy buckets).
-// ===========================================================================
-const INFL_GAUGES = [
-  { s: 'CPIAUCSL', t: 'pc1', name: 'CPI (headline)', src: 'BLS' },
-  { s: 'CPILFESL', t: 'pc1', name: 'Core CPI', src: 'BLS' },
-  { s: 'PCEPI', t: 'pc1', name: 'PCE (headline)', src: 'BEA · Fed 2% target' },
-  { s: 'PCEPILFE', t: 'pc1', name: 'Core PCE', src: 'BEA' },
-  { s: 'PCETRIM12M159SFRBDAL', t: 'lin', name: '★ Trimmed Mean PCE', src: 'Dallas Fed' },
-  { s: 'MEDCPIM159SFRBCLE', t: 'lin', name: '★ Median CPI', src: 'Cleveland Fed' },
-  { s: 'TRMMEANCPIM159SFRBCLE', t: 'lin', name: '★ Trimmed Mean CPI', src: 'Cleveland Fed' },
-];
-function inflClass(v) {
-  const d = v - 2.0;
-  if (d <= 0.3) return 'up';
-  if (d <= 1.0) return 'warn';
-  return 'down';
-}
-async function loadInflation() {
-  const body = $('#infl-body');
-  body.innerHTML = '<span class="muted">Loading inflation gauges…</span>';
-  try {
-    const results = await Promise.all(
-      INFL_GAUGES.map((g) => api(`/api/fred?series=${g.s}&transform=${g.t}`).catch(() => null))
-    );
-    const ff = await api('/api/fred?series=FEDFUNDS&transform=lin').catch(() => null);
-    const rows = INFL_GAUGES.map((g, i) => {
-      const d = results[i];
-      if (!d || !d.points || !d.points.length) return `<div class="infl-row"><span class="infl-name">${esc(g.name)}</span><span class="muted small">n/a</span></div>`;
-      const last = d.points[d.points.length - 1];
-      const prev = d.points[d.points.length - 2];
-      const mom = prev ? last.value - prev.value : 0;
-      const when = new Date(last.date).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
-      return `<div class="infl-row" title="${esc(g.src)}">
-        <span class="infl-name">${esc(g.name)} <span class="dim small">${esc(g.src)}</span></span>
-        <span class="infl-mom ${mom > 0.005 ? 'down' : mom < -0.005 ? 'up' : 'dim'}">${mom > 0.005 ? '▲' : mom < -0.005 ? '▼' : '·'} ${fmt(Math.abs(mom), 2)}</span>
-        <span class="infl-val ${inflClass(last.value)}">${fmt(last.value, 2)}%</span>
-        <span class="infl-date dim">${when}</span></div>`;
-    }).join('');
-    const ffLast = ff && ff.points && ff.points.length ? ff.points[ff.points.length - 1].value : null;
-    body.innerHTML = `${rows}
-      <div class="infl-note">Fed target: 2% (PCE)${ffLast != null ? ` · Fed funds: ${fmt(ffLast, 2)}%` : ''} · monthly YoY, latest release
-      <br>★ Trimmed/median gauges — Chair Warsh's preferred read of underlying inflation: rank all price changes, drop the extreme tails (Dallas trims bottom 24% / top 31% of the PCE basket), average the rest. ▲▼ = change vs prior month.</div>`;
-  } catch (e) { body.innerHTML = `<span class="down">Inflation gauges error: ${esc(e.message)}</span>`; }
-}
-$('#infl-go').addEventListener('click', loadInflation);
+// World Bank, FRED and inflation are React islands (A3).
 
 // ===========================================================================
 //  DIVIDENDS (income received, from broker imports)
 // ===========================================================================
-async function loadDividends() {
-  const box = $('#dividends');
-  try {
-    const d = await api('/api/dividends' + baseQS());
-    const base = d.base || state.base;
-    const rc = d.received || { ttm: { gross: d.ttm, tax: 0, net: d.ttm }, total: { gross: d.total, tax: 0, net: d.total } };
-    const fw = d.forwardTotal || { gross: 0, tax: 0, net: 0 };
-    $('#div-ttm').textContent = fw.net ? 'FWD ' + money(base, fw.net, 0) + '/yr net' : (d.count ? 'TTM ' + money(base, rc.ttm.net) : '');
-    if (!d.count && !(d.forward || []).length) { box.innerHTML = '<span class="muted">No dividends yet — hold dividend payers, or import an IBKR statement to track income received.</span>'; return; }
-    const cell = (k, v, sub, cls) => `<div class="fxr-cell"><span class="k">${k}</span><span class="v ${cls || ''}">${v}</span><span class="s">${sub}</span></div>`;
-    const strip = [
-      fw.gross ? cell('FORWARD / YR', money(base, fw.net, 0), `net · ${money(base, fw.gross, 0)} gross`, 'up') : '',
-      fw.tax ? cell('WITHHOLDING / YR', money(base, fw.tax, 0), 'tax at source (est.)', 'down') : '',
-      d.count ? cell('RECEIVED · 12M', money(base, rc.ttm.net, 0), `net · ${money(base, rc.ttm.tax, 0)} withheld`) : '',
-      d.count ? cell('ALL-TIME', money(base, rc.total.net, 0), `net · ${d.count} payments`) : '',
-    ].join('');
-    const dd = (ms) => ms ? new Date(ms).toLocaleDateString('en-US', { month: 'short', day: '2-digit' }) : '—';
-    const fwdRows = (d.forward || []).map((f) => `<tr>
-      <td class="sym">${esc(f.symbol)}</td>
-      <td class="r">${fmt(f.perShare, 2)} <span class="dim">${esc(f.currency)}</span></td>
-      <td class="r">${f.yieldOnCost != null ? fmt(f.yieldOnCost, 2) + '%' : '—'}</td>
-      <td class="r">${f.currentYield != null ? fmt(f.currentYield, 2) + '%' : '—'}</td>
-      <td class="r up">${money(base, f.annualNet, 0)}</td>
-      <td class="r">${dd(f.nextEx)}${f.nextExEstimated ? '<span class="dim">~</span>' : ''}</td></tr>`).join('');
-    const recent = (d.recent || []).slice(0, 8).map((r) => `<div class="dr"><span>${esc(r.date)}</span><span class="ds">${esc(r.symbol)}</span>` +
-      `<span>${money(base, r.baseNet ?? r.baseAmount)}${r.baseTax ? ` <span class="dim">(−${money(base, r.baseTax)}${r.whtActual ? '' : ' est.'})</span>` : ''}</span></div>`).join('');
-    const w = d.withholding || {};
-    box.innerHTML = `<div class="div-strip">${strip}</div>` +
-      (fwdRows ? `<div class="fxr-sub">FORWARD INCOME · current holdings</div><table class="tbl div-tbl"><thead><tr><th>SYM</th><th class="r">/SHARE·YR</th><th class="r">YOC</th><th class="r">YIELD</th><th class="r">NET/YR</th><th class="r">NEXT EX</th></tr></thead><tbody>${fwdRows}</tbody></table>` : '') +
-      (recent ? `<div class="fxr-sub">RECEIVED · net of withholding</div><div class="div-recent">${recent}</div>` : '') +
-      `<div class="fxr-note">Withholding assumed: US ${w.US ?? 30}% · SG ${w.SG ?? 0}% · HK ${w.HK ?? 0}% · EU ${w.EU ?? 15}% (IBKR statements use the actual tax). Change with <b>WHT US 15</b>. ~ = estimated from payment history. YOC = yield on your cost.</div>`;
-  } catch (e) { box.innerHTML = `<span class="down">${esc(e.message)}</span>`; }
-}
+// Command/test adapter until F7; B3 owns the account-keyed query.
+function loadDividends() { return window.FinSight.bus.invalidate('dividends'); }
 
 // ===========================================================================
 //  WATCHLIST
 // ===========================================================================
-async function loadWatchlist() {
-  try { renderWatchlist((await api('/api/watchlist')).watchlist); } catch {}
-}
-function renderWatchlist(list) {
-  lastWatch = list || []; pushChartWatch();
-  $('#watchlist').innerHTML = (list && list.length) ? list.map((w) => {
-    if (w.error) return `<div class="wl-row"><span class="wl-sym">${esc(w.symbol)}</span><span class="muted small">n/a</span><span></span><button class="wl-x" data-sym="${esc(w.symbol)}">✕</button></div>`;
-    return `<div class="wl-row" data-sym="${esc(w.symbol)}">
-      <div><span class="wl-sym">${esc(w.symbol)}</span> <span class="wl-name">${esc(w.name || '').slice(0, 16)}</span></div>
-      <span class="wl-px">${fmt(w.price, w.price < 10 ? 4 : 2)}</span>
-      <span class="wl-chg ${signClass(w.changePct)}">${signStr(w.changePct)}%</span>
-      <button class="wl-x" data-sym="${esc(w.symbol)}">✕</button></div>`;
-  }).join('') : '<div class="wl-empty">Empty — add a symbol above, or type <b>WATCH NVDA</b>.</div>';
-}
-$('#watch-toggle').addEventListener('click', () => { $('#watch-form').classList.toggle('hidden'); $('#watch-symbol').focus(); });
-$('#watch-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const s = $('#watch-symbol').value.trim().toUpperCase();
-  if (!s) return;
-  try {
-    const res = await api('/api/watchlist/add', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ symbol: s }) });
-    renderWatchlist(res.watchlist); $('#watch-symbol').value = ''; $('#watch-suggest').classList.add('hidden'); setStatus(`Watching ${s}`, 'ok');
-  } catch (err) { setStatus('Watch failed: ' + err.message, 'err'); }
-});
-$('#watchlist').addEventListener('click', async (e) => {
-  const x = e.target.closest('.wl-x');
-  if (x) {
-    e.stopPropagation();
-    const res = await api('/api/watchlist/remove', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ symbol: x.dataset.sym }) });
-    return renderWatchlist(res.watchlist);
-  }
-  const row = e.target.closest('[data-sym]'); if (row) selectSymbol(row.dataset.sym);
-});
+// Command adapter until F7; the watchlist query owns loading and polling.
+function loadWatchlist() { return window.FinSight.bus.invalidate('watchlist'); }
 
 // ===========================================================================
 //  PRICE ALERTS + NOTIFICATIONS
 // ===========================================================================
-let notifiedAlerts = null; // seeded on first load so pre-existing triggers don't re-fire
-async function loadAlerts() {
-  try { renderAlerts((await api('/api/alerts')).alerts); } catch {}
-}
-function renderAlerts(alerts, fromChart) {
-  alerts = alerts || [];
-  if (notifiedAlerts === null) {
-    notifiedAlerts = new Set(alerts.filter((a) => a.triggeredAt).map((a) => a.id));
-  } else {
-    alerts.forEach((a) => {
-      if (a.met && a.triggeredAt && !notifiedAlerts.has(a.id)) {
-        notifiedAlerts.add(a.id);
-        notify('ALERT', `${a.label || a.symbol} — now ${a.currentValue != null ? fmt(a.currentValue) : fmt(a.currentPrice)}`);
-      }
-    });
-  }
-  // charts draw their symbol's alerts; they also post here after adding one
-  window.__finAlerts = alerts;
-  if (!fromChart) window.dispatchEvent(new CustomEvent('finsight:alerts', { detail: { alerts, from: 'app' } }));
-  $('#alerts').innerHTML = alerts.length ? alerts.map((a) => `
-    <div class="al-row ${a.met ? 'met' : ''}">
-      <div><span class="al-sym" data-sym="${esc(a.symbol)}">${esc(a.symbol)}</span> <span class="al-cond">${esc((a.label || '').replace(a.symbol + ' ', ''))}</span>
-        <span class="muted small">now ${a.currentValue != null ? fmt(a.currentValue) : '—'}${a.level != null && a.kind !== 'price' ? ' · level ' + fmt(a.level) : ''}</span></div>
-      <span class="al-badge">${a.met ? 'TRIGGERED' : 'armed'}</span>
-      <button class="al-x" data-id="${esc(a.id)}">✕</button></div>`).join('')
-    : '<div class="al-empty">No alerts — add one above, type <b>ALERT AAPL > 320</b>, or use the bell on the chart (price, trend line, RSI, moving average).</div>';
-}
-window.addEventListener('finsight:alerts', (e) => { if (e.detail && e.detail.from === 'chart') renderAlerts(e.detail.alerts, true); });
-$('#alert-toggle').addEventListener('click', () => { $('#alert-form').classList.toggle('hidden'); $('#alert-symbol').focus(); requestNotify(); });
-$('#alert-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const symbol = $('#alert-symbol').value.trim().toUpperCase();
-  const op = $('#alert-op').value, price = $('#alert-price').value;
-  if (!symbol || !price) return setStatus('Alert needs a symbol and a price.', 'err');
-  try {
-    const res = await api('/api/alerts/add', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ symbol, op, price }) });
-    renderAlerts(res.alerts); $('#alert-symbol').value = ''; $('#alert-price').value = '';
-    setStatus(`Alert set: ${symbol} ${op} ${price}`, 'ok'); requestNotify();
-  } catch (err) { setStatus('Alert failed: ' + err.message, 'err'); }
-});
-$('#alerts').addEventListener('click', async (e) => {
-  const sy = e.target.closest('.al-sym'); if (sy) return selectSymbol(sy.dataset.sym);
-  const x = e.target.closest('.al-x'); if (!x) return;
-  const res = await api('/api/alerts/remove', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: x.dataset.id }) });
-  renderAlerts(res.alerts);
-});
+// Alerts are a React island. Keep command permission/refresh adapters until F7.
+function loadAlerts() { return window.FinSight.bus.invalidate('alerts'); }
 function requestNotify() {
   if ('Notification' in window && Notification.permission === 'default') { try { Notification.requestPermission(); } catch {} }
-}
-function notify(head, body) {
-  toast(head, body); beep();
-  if ('Notification' in window && Notification.permission === 'granted') { try { new Notification(head, { body }); } catch {} }
-}
-function toast(head, body) {
-  const el = document.createElement('div');
-  el.className = 'toast';
-  el.innerHTML = `<div class="toast-h">🔔 ${esc(head)}</div><div class="toast-b">${esc(body)}</div>`;
-  $('#toasts').appendChild(el);
-  setTimeout(() => { el.style.transition = 'opacity .4s'; el.style.opacity = '0'; setTimeout(() => el.remove(), 400); }, 9000);
-}
-function beep() {
-  try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const o = ctx.createOscillator(), g = ctx.createGain();
-    o.connect(g); g.connect(ctx.destination);
-    o.type = 'sine'; o.frequency.value = 880; g.gain.value = 0.05;
-    o.start(); o.stop(ctx.currentTime + 0.15);
-    o.onended = () => ctx.close();
-  } catch {}
 }
 
 // ===========================================================================
@@ -1318,366 +509,15 @@ function loadNews(symbol) {
 // ===========================================================================
 //  CSV IMPORT / EXPORT
 // ===========================================================================
-function setImportStatus(m, k) { const el = $('#import-status'); el.textContent = m; el.className = 'cmd-status ' + (k || ''); }
-$('#import-btn').addEventListener('click', () => { $('#import-modal').classList.remove('hidden'); $('#import-text').focus(); });
-$('#import-close').addEventListener('click', () => $('#import-modal').classList.add('hidden'));
-$('#import-modal').addEventListener('click', (e) => { if (e.target.id === 'import-modal') $('#import-modal').classList.add('hidden'); });
-$('#import-file').addEventListener('change', async (e) => { const f = e.target.files[0]; if (f) $('#import-text').value = await f.text(); });
-$('#import-do').addEventListener('click', async () => {
-  const csv = $('#import-text').value.trim();
-  if (!csv) return setImportStatus('Paste CSV or choose a file first.', 'err');
-  if (state.account === 'ALL') return setImportStatus('Switch to a specific account first (ACCT, top-right).', 'err');
-  setImportStatus('Importing… (fetching a quote per symbol)', '');
-  try {
-    const res = await api('/api/portfolio/import' + baseQS(), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ csv, replace: $('#import-replace').checked }) });
-    const r = res.imported;
-    setImportStatus(`Imported ${r.added}/${r.total}${r.failed.length ? ' · failed: ' + r.failed.join(', ') : ''}`, r.added ? 'ok' : 'err');
-    await afterWrite('import');
-    if (r.added) setTimeout(() => $('#import-modal').classList.add('hidden'), 1400);
-  } catch (e) { setImportStatus('Import failed: ' + e.message, 'err'); }
-});
-$('#import-clear').addEventListener('click', async () => {
-  if (!confirm('Clear ALL positions and transaction history?\n(Watchlist and alerts are kept.)')) return;
-  try {
-    const res = await api('/api/portfolio/reset' + baseQS(), { method: 'POST' });
-    state.selected = null; await afterWrite('reset'); setImportStatus('Portfolio cleared.', 'ok');
-  } catch (e) { setImportStatus(e.message, 'err'); }
-});
-$('#export-btn').addEventListener('click', async () => {
-  try {
-    const data = await api('/api/portfolio' + baseQS());
-    if (!data.positions.length) return setFooter('Nothing to export — portfolio is empty.');
-    const head = ['symbol', 'quantity', 'avg_price', 'currency', 'last', 'market_value_' + (data.base || state.base).toLowerCase(), 'unrealized_pnl'];
-    const rows = data.positions.map((p) => [p.symbol, p.quantity, p.avgCost, p.currency, p.last, p.marketValue.toFixed(2), p.unrealized.toFixed(2)]);
-    const csv = [head, ...rows].map((r) => r.map(csvCell).join(',')).join('\n');
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
-    a.download = 'portfolio.csv'; a.click(); URL.revokeObjectURL(a.href);
-    setFooter('Exported portfolio.csv');
-  } catch (e) { setFooter('Export failed: ' + e.message); }
-});
+// The import modal is a React island and EXPORT a TypeScript action (D4).
+$('#import-btn').addEventListener('click', () => { state.importOpen = true; });
+$('#export-btn').addEventListener('click', () => window.FinSight.actions.exportPortfolio());
 
-// reusable symbol search for the watchlist field
-function setupSearch(input, box, onPick) {
-  let timer = null, items = [];
-  input.addEventListener('input', () => {
-    clearTimeout(timer);
-    const q = input.value.trim();
-    if (q.length < 1) { box.classList.add('hidden'); return; }
-    timer = setTimeout(async () => {
-      try {
-        items = await api('/api/search?q=' + encodeURIComponent(q));
-        if (!items.length) { box.classList.add('hidden'); return; }
-        box.innerHTML = items.map((s, i) => `<div data-i="${i}"><span class="s-sym">${esc(s.symbol)}</span> <span class="s-meta">${esc(s.name).slice(0, 26)} · ${esc(s.exchange)}</span></div>`).join('');
-        box.classList.remove('hidden');
-      } catch { box.classList.add('hidden'); }
-    }, 200);
-  });
-  box.addEventListener('click', (e) => { const d = e.target.closest('[data-i]'); if (d) { onPick(items[+d.dataset.i]); box.classList.add('hidden'); } });
-  document.addEventListener('click', (e) => { if (!box.parentElement.contains(e.target)) box.classList.add('hidden'); });
-}
-setupSearch($('#watch-symbol'), $('#watch-suggest'), (s) => { if (s) $('#watch-symbol').value = s.symbol; });
 
 // ===========================================================================
-//  PORTFOLIO ANALYTICS — performance, allocation donut, sector heatmap
+//  PORTFOLIO ANALYTICS: performance, net worth, allocation and heatmap are
+//  React islands (C3, web/src/features/analytics).
 // ===========================================================================
-let lastPositions = [];
-let heatMetric = 'day', allocMode = 'holding', perfRange = '1y', perfSig = '';
-let perfBench = (() => { try { return localStorage.getItem('finsight-bench') || '^GSPC'; } catch { return '^GSPC'; } })();
-const catCache = {};
-// Legacy copies for the allocation chart until C3 imports
-// web/src/features/positions/table.ts (D1 ported the originals there).
-const ASSET_CLASSES = ['Stocks', 'ETFs', 'Crypto', 'Funds & Other'];
-function assetClass(sym) {
-  const t = catCache[sym]?.type;
-  if (t === 'CRYPTOCURRENCY') return 'Crypto';
-  if (t === 'ETF') return 'ETFs';
-  if (t === 'EQUITY') return 'Stocks';
-  return 'Funds & Other';
-}
-function splitByAccount(p) {
-  const hs = p.holdings;
-  if (!hs || !hs.length) return [{ ...p, account: accountName() }];
-  if (hs.length === 1) return [{ ...p, account: hs[0].account }];
-  const costNative = p.avgCost * p.quantity || 1;
-  return hs.map((h) => {
-    const qf = h.quantity / (p.quantity || 1), cf = (h.avgCost * h.quantity) / costNative;
-    const marketValue = p.marketValue * qf, cost = p.cost * cf, unrealized = marketValue - cost;
-    return { ...p, account: h.account, quantity: h.quantity, avgCost: h.avgCost, marketValue, cost, unrealized,
-      unrealizedPct: cost ? unrealized / cost * 100 : 0, fxPnl: p.fxPnl * cf, weight: p.weight * qf, dayChange: p.dayChange * qf };
-  });
-}
-function accountName() {
-  return (accountsCache.find((a) => a.id === state.account) || {}).name || 'Account';
-}
-
-async function ensureCategories(symbols) {
-  const missing = symbols.filter((s) => !catCache[s]);
-  if (!missing.length) return;
-  try { Object.assign(catCache, await api('/api/categories?symbols=' + encodeURIComponent(missing.join(',')))); } catch {}
-}
-
-// Squarified treemap: data [{value,...}] in rect -> [{...,x,y,w,h}] (validated: fills, no overlap).
-function treemap(data, x, y, w, h) {
-  const nodes = data.filter((d) => d.value > 0).map((d) => ({ d, value: d.value }));
-  const out = [];
-  const total = nodes.reduce((s, n) => s + n.value, 0);
-  if (!total || w <= 0 || h <= 0) return out;
-  const scale = (w * h) / total;
-  nodes.forEach((n) => (n.area = n.value * scale));
-  let rect = { x, y, w, h }, row = [], i = 0;
-  const shortest = () => Math.min(rect.w, rect.h);
-  const worst = (r, side) => {
-    const s = r.reduce((a, q) => a + q.area, 0); let mx = 0, mn = Infinity;
-    for (const q of r) { mx = Math.max(mx, q.area); mn = Math.min(mn, q.area); }
-    return Math.max((side * side * mx) / (s * s), (s * s) / (side * side * mn));
-  };
-  const layout = (r) => {
-    const s = r.reduce((a, q) => a + q.area, 0);
-    if (rect.w >= rect.h) {
-      const rw = s / rect.h; let cy = rect.y;
-      for (const q of r) { const rh = q.area / rw; out.push({ ...q.d, x: rect.x, y: cy, w: rw, h: rh }); cy += rh; }
-      rect.x += rw; rect.w -= rw;
-    } else {
-      const rh = s / rect.w; let cx = rect.x;
-      for (const q of r) { const rw = q.area / rh; out.push({ ...q.d, x: cx, y: rect.y, w: rw, h: rh }); cx += rw; }
-      rect.y += rh; rect.h -= rh;
-    }
-  };
-  while (i < nodes.length) {
-    const n = nodes[i], side = shortest();
-    if (row.length === 0 || worst(row, side) >= worst([...row, n], side)) { row.push(n); i++; }
-    else { layout(row); row = []; }
-  }
-  if (row.length) layout(row);
-  return out;
-}
-
-function heatColor(pct) {
-  const t = Math.max(-1, Math.min(1, (pct || 0) / 3)); // clamp at ±3%
-  const neutral = [26, 31, 38], tgt = t >= 0 ? [38, 175, 110] : [205, 55, 55], a = Math.abs(t);
-  const c = neutral.map((n, i) => Math.round(n + (tgt[i] - n) * a));
-  return `rgb(${c[0]},${c[1]},${c[2]})`;
-}
-
-function renderHeatmap(positions) {
-  const box = $('#heatmap-body');
-  if (!positions || !positions.length) { box.innerHTML = '<span class="muted">Add positions to see the heatmap.</span>'; return; }
-  const W = 800, H = 380, pad = 2, labelH = 14;
-  const groups = {};
-  positions.forEach((p) => {
-    const cat = (catCache[p.symbol]?.category) || 'Other';
-    (groups[cat] || (groups[cat] = { category: cat, value: 0, items: [] }));
-    groups[cat].value += p.marketValue; groups[cat].items.push(p);
-  });
-  const sectors = Object.values(groups).filter((g) => g.value > 0);
-  let svg = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="height:380px">`;
-  for (const sr of treemap(sectors.map((s) => ({ ...s })), 0, 0, W, H)) {
-    svg += `<rect x="${sr.x}" y="${sr.y}" width="${sr.w}" height="${sr.h}" fill="#0a0c10" stroke="#000" stroke-width="2"/>`;
-    const showLbl = sr.w > 56 && sr.h > 26;
-    if (showLbl) svg += `<text x="${sr.x + 4}" y="${sr.y + 10}" fill="#8aa0b5" font-size="9" letter-spacing="0.5">${esc(sr.category.toUpperCase().slice(0, Math.floor(sr.w / 6)))}</text>`;
-    const iy = sr.y + (showLbl ? labelH : pad), ih = sr.h - (showLbl ? labelH : pad) - pad;
-    const ix = sr.x + pad, iw = sr.w - 2 * pad;
-    if (iw <= 2 || ih <= 2) continue;
-    for (const t of treemap(sr.items.map((p) => ({ p, value: p.marketValue })), ix, iy, iw, ih)) {
-      const pct = heatMetric === 'day' ? t.p.changePct : t.p.unrealizedPct;
-      svg += `<g class="hm-tile" data-sym="${esc(t.p.symbol)}" style="cursor:pointer">`;
-      svg += `<rect x="${t.x}" y="${t.y}" width="${t.w}" height="${t.h}" fill="${heatColor(pct)}" stroke="#050608" stroke-width="1"/>`;
-      if (t.w > 32 && t.h > 24) {
-        svg += `<text x="${t.x + t.w / 2}" y="${t.y + t.h / 2 - 1}" fill="#fff" font-size="${Math.min(13, t.w / 4.2)}" font-weight="700" text-anchor="middle">${esc(t.p.symbol)}</text>`;
-        svg += `<text x="${t.x + t.w / 2}" y="${t.y + t.h / 2 + 11}" fill="#e6edf3" font-size="9" text-anchor="middle">${signStr(pct)}%</text>`;
-      }
-      svg += `</g>`;
-    }
-  }
-  box.innerHTML = svg + `</svg>`;
-}
-$('#heatmap-body').addEventListener('click', (e) => { const g = e.target.closest('[data-sym]'); if (g) selectSymbol(g.dataset.sym); });
-$('#heat-metric').addEventListener('click', (e) => {
-  const b = e.target.closest('button'); if (!b) return;
-  $$('#heat-metric button').forEach((x) => x.classList.remove('active')); b.classList.add('active');
-  heatMetric = b.dataset.metric; $('#heatmap-body').dataset.metric = heatMetric; renderHeatmap(lastPositions);
-});
-
-// ---- NET WORTH BREAKDOWN: asset classes + cash, overall and per account -----
-const CLASS_COLORS = { Stocks: '#a78bfa', ETFs: '#38bdf8', Crypto: '#facc15', 'Funds & Other': '#f472b6', Cash: '#2ec27e' };
-let wealthSig = '', wealthAt = 0;
-async function loadWealth() {
-  const box = $('#wealth-body'); if (!box) return;
-  const ids = state.account === 'ALL' ? accountsCache.map((a) => a.id) : [state.account];
-  const sig = state.base + '|' + ids.join(',');
-  if (sig === wealthSig && Date.now() - wealthAt < 60000) return; // per-account fetches are cheap but not free
-  wealthSig = sig; wealthAt = Date.now();
-  try {
-    const accts = await Promise.all(ids.map(async (id) => {
-      const d = await api(`/api/portfolio?base=${encodeURIComponent(state.base)}&account=${encodeURIComponent(id)}`);
-      await ensureCategories(d.positions.map((p) => p.symbol));
-      const parts = {};
-      d.positions.forEach((p) => { const c = assetClass(p.symbol); parts[c] = (parts[c] || 0) + p.marketValue; });
-      const cash = (d.cash || []).reduce((s, c) => s + (c.base || 0), 0);
-      if (cash) parts.Cash = cash;
-      return { id, name: (accountsCache.find((a) => a.id === id) || {}).name || id, parts, cash, cashList: d.cash || [],
-        net: Object.values(parts).reduce((s, v) => s + v, 0) };
-    }));
-    renderWealth(accts, state.base);
-  } catch (e) { wealthSig = ''; box.innerHTML = `<span class="muted">Breakdown unavailable: ${esc(e.message)}</span>`; }
-}
-function renderWealth(accts, base) {
-  const box = $('#wealth-body');
-  const order = [...ASSET_CLASSES, 'Cash'];
-  const tot = {}; accts.forEach((a) => Object.entries(a.parts).forEach(([k, v]) => { tot[k] = (tot[k] || 0) + v; }));
-  const net = Object.values(tot).reduce((s, v) => s + v, 0);
-  if (!net) { box.innerHTML = '<span class="muted">Add positions or cash to see your breakdown.</span>'; return; }
-  const seg = (parts, scale) => order.filter((k) => parts[k] > 0).map((k) =>
-    `<span class="w-seg" style="width:${(parts[k] / scale * 100).toFixed(3)}%;background:${CLASS_COLORS[k]}" title="${esc(k)} · ${money(base, parts[k])} (${(parts[k] / net * 100).toFixed(1)}% of net worth)"></span>`).join('');
-  const legend = order.filter((k) => tot[k] > 0).map((k) =>
-    `<div class="w-lg"><span class="sw" style="background:${CLASS_COLORS[k]}"></span><span class="w-lab">${esc(k.toUpperCase())}</span><span class="w-amt">${money(base, tot[k])}</span><span class="pct">${(tot[k] / net * 100).toFixed(1)}%</span></div>`).join('');
-  const cashCcy = {}; accts.forEach((a) => a.cashList.forEach((c) => { cashCcy[c.ccy] = (cashCcy[c.ccy] || 0) + c.amount; }));
-  const cashNote = Object.keys(cashCcy).length ? `<div class="w-note">CASH · ${Object.entries(cashCcy).map(([c, v]) => `${esc(c)} ${fmt(v)}`).join(' · ')}</div>` : '';
-  const maxNet = Math.max(...accts.map((a) => a.net)) || 1;
-  const rows = accts.length > 1 ? accts.filter((a) => a.net > 0).sort((a, b) => b.net - a.net).map((a) =>
-    `<div class="w-row"><span class="w-name" title="${esc(a.name)}">${esc(a.name)}</span>
-      <span class="w-track"><span class="w-bar" style="width:${(a.net / maxNet * 100).toFixed(2)}%">${seg(a.parts, a.net)}</span></span>
-      <span class="w-amt">${money(base, a.net)}</span><span class="pct">${(a.net / net * 100).toFixed(1)}%</span></div>`).join('') : '';
-  box.innerHTML = `<div class="w-head"><span class="muted small">NET WORTH</span><span class="w-total">${money(base, net)}</span></div>
-    <div class="w-stack">${seg(tot, net)}</div><div class="w-legend">${legend}</div>${cashNote}
-    ${rows ? `<div class="fxr-sub">BY ACCOUNT</div><div class="w-rows">${rows}</div>` : ''}`;
-}
-
-const PALETTE = ['#a78bfa', '#38bdf8', '#2ec27e', '#fb7185', '#f472b6', '#facc15', '#34d399', '#60a5fa', '#2dd4bf', '#c084fc', '#94a3b8'];
-function renderAllocation(positions) {
-  const box = $('#alloc-body');
-  if (!positions || !positions.length) { box.innerHTML = '<span class="muted">Add positions to see allocation.</span>'; return; }
-  let items;
-  if (allocMode === 'sector' || allocMode === 'class' || allocMode === 'account') {
-    const g = {};
-    const rows = allocMode === 'account' ? positions.flatMap(splitByAccount) : positions;
-    rows.forEach((p) => {
-      const c = allocMode === 'sector' ? (catCache[p.symbol]?.category || 'Other') : allocMode === 'class' ? assetClass(p.symbol) : p.account;
-      g[c] = (g[c] || 0) + p.marketValue;
-    });
-    items = Object.entries(g).map(([label, value]) => ({ label, value }));
-  } else items = positions.map((p) => ({ label: p.symbol, value: p.marketValue }));
-  items.sort((a, b) => b.value - a.value);
-  const total = items.reduce((s, i) => s + i.value, 0) || 1;
-  const cx = 70, cy = 70, r = 60, rin = 36; let ang = -Math.PI / 2, paths = '';
-  items.forEach((it, i) => {
-    const frac = it.value / total, a2 = ang + Math.max(frac, 0.0001) * 2 * Math.PI, col = PALETTE[i % PALETTE.length];
-    it.color = col;
-    // A single 100% slice would be a degenerate arc (start==end) that draws nothing —
-    // render it as a full ring (two stacked circles) instead.
-    if (frac >= 0.9999) {
-      paths += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${col}" data-sym="${allocMode === 'holding' ? esc(it.label) : ''}"/><circle cx="${cx}" cy="${cy}" r="${rin}" fill="var(--panel)"/>`;
-      ang = a2; return;
-    }
-    const x1 = cx + r * Math.cos(ang), y1 = cy + r * Math.sin(ang), x2 = cx + r * Math.cos(a2), y2 = cy + r * Math.sin(a2);
-    const xi1 = cx + rin * Math.cos(a2), yi1 = cy + rin * Math.sin(a2), xi2 = cx + rin * Math.cos(ang), yi2 = cy + rin * Math.sin(ang);
-    const large = frac > 0.5 ? 1 : 0;
-    paths += `<path d="M${x1} ${y1} A${r} ${r} 0 ${large} 1 ${x2} ${y2} L${xi1} ${yi1} A${rin} ${rin} 0 ${large} 0 ${xi2} ${yi2} Z" fill="${col}" data-sym="${allocMode === 'holding' ? esc(it.label) : ''}"/>`;
-    ang = a2;
-  });
-  const legend = items.slice(0, 11).map((it) => `<div class="lg" data-sym="${allocMode === 'holding' ? esc(it.label) : ''}"><span class="sw" style="background:${it.color}"></span>${esc(it.label).slice(0, 18)}<span class="pct">${(it.value / total * 100).toFixed(1)}%</span></div>`).join('');
-  box.innerHTML = `<div class="donut-wrap"><svg width="140" height="140" viewBox="0 0 140 140">${paths}</svg><div class="donut-legend">${legend}</div></div>`;
-}
-$('#alloc-body').addEventListener('click', (e) => { const g = e.target.closest('[data-sym]'); if (g && g.dataset.sym) selectSymbol(g.dataset.sym); });
-$('#alloc-mode').addEventListener('click', (e) => {
-  const b = e.target.closest('button'); if (!b) return;
-  $$('#alloc-mode button').forEach((x) => x.classList.remove('active')); b.classList.add('active');
-  allocMode = b.dataset.mode; renderAllocation(lastPositions);
-});
-
-async function loadPerformance() {
-  const box = $('#perf-body');
-  if (!lastPositions.length) { box.innerHTML = '<span class="muted">Add positions to see performance over time.</span>'; return; }
-  box.innerHTML = '<span class="muted">Replaying your trades…</span>';
-  try {
-    const d = await api('/api/portfolio/performance?range=' + perfRange + '&benchmark=' + encodeURIComponent(perfBench) + baseQS().replace('?', '&'));
-    if (!d.points || !d.points.length) { box.innerHTML = '<span class="muted">No data.</span>'; return; }
-    const base = d.base || state.base;
-    const b = d.benchmark;
-    const long = d.spanDays >= 365;
-    const pct = (v) => (v == null ? '—' : signStr(v) + '%');
-    const stat = (k, v, cls, title) => `<div class="pf-stat" title="${esc(title)}"><span class="k">${k}</span><span class="v ${cls || ''}">${v}</span></div>`;
-    const stats = [
-      stat('GAIN', moneySigned(base, d.gain), signClass(d.gain), 'Money made in the window: value change minus net money added, plus dividends'),
-      stat(long ? 'TWR p.a.' : 'TWR', pct(long ? d.twrAnnual : d.twr), signClass(d.twr), 'Time-weighted return: how your holdings performed, ignoring when you added or withdrew money. Compare this with the index.'),
-      stat(long ? 'XIRR p.a.' : 'MONEY-WTD', pct(long ? d.xirr : d.mwr), signClass(d.mwr), 'Money-weighted return (XIRR): your personal return including the timing of your buys and sells.'),
-      b ? stat(esc(b.name), pct(long ? b.twrAnnual : b.twr), signClass(b.twr), `${b.name} return in ${base} (price index, FX-adjusted) over the same window`) : '',
-      b ? stat('VS INDEX', pct((long ? d.twrAnnual - b.twrAnnual : d.twr - b.twr)), signClass(d.twr - b.twr), 'Your TWR minus the benchmark TWR') : '',
-    ].join('');
-    const notes = [];
-    if (d.transfers && d.transfers.length) notes.push(`${d.transfers.length} holding(s) entered at market value — no purchase date, so gains before that aren't counted (${d.transfers.slice(0, 6).map(esc).join(', ')}${d.transfers.length > 6 ? '…' : ''}). Add dates on import for full history.`);
-    if (d.approx && d.approx.length) notes.push(`No trade history for ${d.approx.slice(0, 6).map(esc).join(', ')} — treated as held for the whole window.`);
-    if (d.missing && d.missing.length) notes.push(`No price history for ${d.missing.map(esc).join(', ')} — held flat.`);
-    box.innerHTML = `<div class="perf-headline"><span class="pv">${money(base, d.end)}</span>` +
-      `<span class="muted small">net invested ${money(base, d.start + d.netInvested, 0)}</span></div>` +
-      `<div class="pf-stats">${stats}</div>` +
-      perfChart(d.points, base, b) +
-      `<div class="perf-note">Replays your actual buys &amp; sells with historical prices and FX. ${notes.join(' ')}</div>`;
-    bindPerfHover(d.points, base, b);
-  } catch (e) { box.innerHTML = `<span class="down">${esc(e.message)}</span>`; }
-}
-// Multi-line SVG chart: portfolio value, net invested (dashed), benchmark shadow.
-function perfChart(points, base, bench) {
-  if (points.length < 2) return '<div class="chart muted small">Not enough history yet.</div>';
-  const W = 600, H = 160, pad = 4;
-  const keys = ['value', 'invested'].concat(bench ? ['bench'] : []);
-  const vals = points.flatMap((p) => keys.map((k) => p[k]).filter((v) => v != null));
-  const min = Math.min(...vals), max = Math.max(...vals), span = (max - min) || 1;
-  const x = (i) => pad + i * (W - pad * 2) / (points.length - 1);
-  const y = (v) => pad + (H - pad * 2) * (1 - (v - min) / span);
-  const path = (k) => points.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p[k]).toFixed(1)}`).join(' ');
-  const last = points[points.length - 1];
-  const up = last.value >= last.invested;
-  const col = up ? 'var(--up)' : 'var(--down)';
-  const area = `${path('value')} L${x(points.length - 1).toFixed(1)},${H - pad} L${x(0).toFixed(1)},${H - pad} Z`;
-  return `<div class="pf-chart-wrap"><svg class="chart pf-chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
-    <defs><linearGradient id="pfg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${col}" stop-opacity="0.22"/><stop offset="100%" stop-color="${col}" stop-opacity="0"/></linearGradient></defs>
-    <path d="${area}" fill="url(#pfg)"/>
-    <path d="${path('invested')}" fill="none" stroke="var(--muted)" stroke-width="1" stroke-dasharray="4 3" vector-effect="non-scaling-stroke"/>
-    ${bench ? `<path d="${path('bench')}" fill="none" stroke="var(--cyan)" stroke-width="1.2" vector-effect="non-scaling-stroke"/>` : ''}
-    <path d="${path('value')}" fill="none" stroke="${col}" stroke-width="1.6" vector-effect="non-scaling-stroke"/>
-    <line id="pf-cross" x1="0" x2="0" y1="0" y2="${H}" stroke="var(--dim)" stroke-width="1" vector-effect="non-scaling-stroke" visibility="hidden"/>
-  </svg><div id="pf-tip" class="pf-tip hidden"></div></div>
-  <div class="pf-legend"><span><i style="background:${col}"></i>Portfolio</span><span><i class="dash"></i>Net invested</span>${bench ? `<span><i style="background:var(--cyan)"></i>Same cash in ${esc(bench.name)}</span>` : ''}</div>`;
-}
-function bindPerfHover(points, base, bench) {
-  const svg = $('#perf-body .pf-chart'), tip = $('#pf-tip'), cross = $('#pf-cross');
-  if (!svg || !tip || points.length < 2) return;
-  svg.addEventListener('mousemove', (e) => {
-    const r = svg.getBoundingClientRect();
-    const f = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
-    const i = Math.round(f * (points.length - 1)), p = points[i];
-    const xv = 4 + i * (600 - 8) / (points.length - 1);
-    cross.setAttribute('x1', xv); cross.setAttribute('x2', xv); cross.setAttribute('visibility', 'visible');
-    tip.innerHTML = `<b>${new Date(p.t).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit', timeZone: 'UTC' })}</b>` +
-      `<div>Portfolio ${money(base, p.value, 0)}</div><div class="muted">Invested ${money(base, p.invested, 0)}</div>` +
-      (bench && p.bench != null ? `<div class="cyan">${esc(bench.name)} ${money(base, p.bench, 0)}</div>` : '');
-    tip.classList.remove('hidden');
-    tip.style.left = Math.min(r.width - 150, Math.max(0, e.clientX - r.left + 10)) + 'px';
-  });
-  svg.addEventListener('mouseleave', () => { tip.classList.add('hidden'); cross.setAttribute('visibility', 'hidden'); });
-}
-$('#perf-ranges').addEventListener('click', (e) => {
-  const b = e.target.closest('button'); if (!b) return;
-  $$('#perf-ranges button').forEach((x) => x.classList.remove('active')); b.classList.add('active');
-  perfRange = b.dataset.range; loadPerformance();
-});
-$('#perf-bench').value = perfBench;
-$('#perf-bench').addEventListener('change', (e) => {
-  perfBench = e.target.value;
-  try { localStorage.setItem('finsight-bench', perfBench); } catch {}
-  loadPerformance();
-});
-
-// Called from renderPortfolio whenever positions update.
-function renderAnalytics(positions) {
-  lastPositions = positions || [];
-  renderHeatmap(positions); renderAllocation(positions);
-  ensureCategories(positions.map((p) => p.symbol)).then(() => { renderHeatmap(lastPositions); renderAllocation(lastPositions); loadWealth(); });
-  const sig = state.base + '|' + positions.map((p) => p.symbol + ':' + p.quantity).join(',');
-  if (sig !== perfSig) { perfSig = sig; loadPerformance(); }
-}
 
 // ===========================================================================
 //  UTIL + BOOT + POLLING
@@ -1732,9 +572,8 @@ $('#account-sel').addEventListener('change', async () => {
   const v = $('#account-sel').value;
   if (v === '__new') { $('#account-sel').value = state.account; return newAccountPrompt(); }
   if (v === '__manage') { $('#account-sel').value = state.account; renderAccountsList(); return $('#accounts-modal').classList.remove('hidden'); }
-  state.account = v; localStorage.setItem('finsight-account', v); perfSig = '';
+  state.account = v; localStorage.setItem('finsight-account', v);
   await loadPortfolio();
-  loadCalendar(); // holdings' earnings / ex-div dates follow the account
 });
 async function newAccountPrompt() {
   const name = (prompt('New account name (e.g. Crypto, SGX, IBKR):') || '').trim();
@@ -1742,7 +581,7 @@ async function newAccountPrompt() {
   try {
     const d = await api('/api/accounts/add', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
     accountsCache = d.accounts; state.account = d.newId; localStorage.setItem('finsight-account', d.newId);
-    renderAccountSelector(); perfSig = ''; await loadPortfolio(); setStatus(`Account "${name}" created.`, 'ok');
+    renderAccountSelector(); await loadPortfolio(); setStatus(`Account "${name}" created.`, 'ok');
   } catch (e) { setStatus('Create failed: ' + e.message, 'err'); }
 }
 function setAccountsStatus(m, k) { const el = $('#accounts-status'); el.textContent = m; el.className = 'cmd-status ' + (k || ''); }
@@ -1778,7 +617,7 @@ $('#accounts-list').addEventListener('click', async (e) => {
       const d = await api('/api/accounts/remove', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: del.dataset.id }) });
       accountsCache = d.accounts;
       if (state.account === del.dataset.id) { state.account = d.activeId; localStorage.setItem('finsight-account', state.account); }
-      renderAccountsList(); renderAccountSelector(); perfSig = ''; await afterWrite('account-remove');
+      renderAccountsList(); renderAccountSelector(); await afterWrite('account-remove');
     } catch (err) { setAccountsStatus(err.message, 'err'); }
   }
 });
@@ -1792,11 +631,6 @@ async function boot() {
   applyProfileName();
   if (!profile.setupDone) openSetup(); // first-launch wizard
   await loadPortfolio();
-  loadWatchlist();
-  loadAlerts();
-  loadWorldBank();
-  loadFred();
-  loadCalendar();
   setFooter(`READY · base ${state.base} · live data refreshing every 15s`);
   startPolling();
 }
@@ -1812,13 +646,7 @@ function startPolling() {
   if (document.hidden) return;
   pollTimers.push(
     setInterval(loadPortfolio, 15000),
-    setInterval(loadWatchlist, 15000),
-    setInterval(loadAlerts, 30000), // the server also evaluates alerts every minute and notifies
-    setInterval(() => { if (state.selected) loadDetail({ periodic: true }); }, 30000),
     // macro panels change slowly — auto-refresh every 15 min (the LOAD buttons still work)
-    setInterval(loadWorldBank, 15 * 60000),
-    setInterval(loadFred, 15 * 60000),
-    setInterval(loadCalendar, 15 * 60000),
   );
 }
 function stopTimers() { pollTimers.forEach(clearInterval); pollTimers = []; }
@@ -1828,9 +656,9 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden) { hiddenAt = Date.now(); stopTimers(); return; }
   // back in view: refresh what went stale, then resume the timers
   if (Date.now() - hiddenAt > 10000) {
-    loadPortfolio(); window.FinSight.bus.invalidate('markets'); loadWatchlist(); loadAlerts();
-    if (state.selected) loadDetail({ periodic: true });
-    if (Date.now() - hiddenAt > 15 * 60000) { loadWorldBank(); loadFred(); loadCalendar(); }
+    loadPortfolio(); window.FinSight.bus.invalidate('markets'); window.FinSight.bus.invalidate('watchlist'); window.FinSight.bus.invalidate('alerts');
+    window.FinSight.bus.invalidate('quote'); // the detail island re-reads the quote
+    if (Date.now() - hiddenAt > 15 * 60000) { window.FinSight.bus.invalidate('worldbank'); window.FinSight.bus.invalidate('fred'); window.FinSight.bus.invalidate('calendar'); window.FinSight.bus.invalidate('events'); }
   }
   startPolling();
 });

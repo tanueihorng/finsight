@@ -154,13 +154,13 @@ When a card migrates a loader, it deletes that loader's `boot()` line, its `setI
 | **B3** Dividends + Activity | `loadDividends`, the activity block in `renderPortfolio` | S4 `WHT` (`loadDividends()` → invalidate); S5 side refresh (`loadDividends()` → bus) | PILOT-2 |
 | **C1** Summary + card editor (PILOT-2) ✅ | `card`, `CARD_DEFS`, `ALL_CARDS`, `DEFAULT_CARDS`, `DEFAULT_ORDER`, `cardPrefs`, `saveCardPrefs`, `renderSummary`, `lastCash`, `lastFxRisk`, `applyCards`, `renderCardsEditor` + editor handlers. **Kept:** `lastSummary` (adapter: the legacy FX risk panel reads it until C2); peek (`applyPeek` + button) stays legacy, because body.unpeek must apply synchronously at load, so it moves with F8 | done: S5 summary lines; S6 `lastFxRisk`/`applyCards` (the card uses `useFxRisk()`); S10 `renderCardsEditor()` call; `#cards-reset` handled by the editor island; `[data-cash-card]` kept, so the legacy click still opens the cash editor | — |
 | **C2** FX Risk | `loadFxRisk`, `renderFxRisk`, `fxTools`, `fxPending`, `lastFxRisk` | S5 side refresh; S15 `setCashBalance` (`loadFxRisk()` → invalidate) | C1 |
-| **C3** Analytics + wealth | S30 and S31 symbols (A1 table) | S5 `renderAnalytics(positions)`; S15/S16 `wealthSig = ''`, `loadWealth()`; S15/S17/S33 `perfSig = ''` → invalidate `performance`; S9 `lastPositions` (only if C1 is not merged yet) | D1 (`assetClass`, `useCategories`, `positionsFilter`) |
+| **C3** Analytics + wealth ✅ | S30 and S31 symbols (A1 table) | done: S5 `renderAnalytics(positions)`; `perfSig`/`wealthSig` resets in S15/S16/S17/S33 (the `performance`/`wealth` keys and the holdings-signature query key replace them); `loadWealth` callers; S12 drag pids `#perf-ranges`/`#alloc-mode`/`#heat-metric` → `#perf-body`/`#alloc-body`/`#heatmap-body` (head controls now render through head slots); the D1 legacy `assetClass`/`splitByAccount`/`accountName` copies and D3's `analyticsStale` deleted; `#heatmap-body[data-metric]` kept for peek CSS | D1 (`assetClass`, `useCategories`, `positionsFilter`) |
 | **D1** Positions ✅ | S14 symbols + `priceFlash` | done: S5 table lines; S31 `renderPositionsTable()` call (the island uses `useCategories()`); `assetClass`/`splitByAccount`/`accountName`/`ASSET_CLASSES` ported to `features/positions/table.ts`, legacy copies moved next to `catCache` for C3; S19 row-highlight line (the island reads `store.selected`); S12 drag pid now finds `#positions-view` (the island host, present at boot). **Adapter choice:** `lastTableData` stays fed by legacy `renderPortfolio` instead of a `setTableData` adapter, since legacy still loads the portfolio until X1; E1/E2 delete it. `positionsFilter` was not needed: no legacy caller filters the table | PILOT-2; first in lane D |
-| **D2** Add form | `searchTimer`, `suggestItems`, `suggestIdx`, `pickSuggest` + handlers | buy → invalidate portfolio-set | D1 |
-| **D3** Undo + Cash | `doUndo`, `setCashBalance`, the S16 cash editor symbols | S4 `UNDO`/`CASH`; S17 ledger ↶ (`doUndo`); `#wealth-cash-btn` (C3) and the NET WORTH card (C1) open the editor | D1 |
-| **D4** Ledger + import/export | S17 symbols, S29 import/export handlers, `setImportStatus` | S4 `LEDGER`/`TRADES` (`openLedger`); S15 undo (`loadLedger` → invalidate `ledger`) | D1, D3 |
-| **E1** Detail header + ranges | `loadDetail`, `detailHist`; `selectSymbol` body → store write (name kept) | S10 theme change (`loadDetail()` → chart redraw via E2); S20 calls; S33 30 s detail interval; S5 auto-select | F4; before E2 |
-| **E2** Chart host | S20 symbols (except `sparkline` per A4), `detailChart` → `window.detailChart` from ChartHost | S5 `pushChartWatch()`; S26 (B1 adapter); `agent-panel.js` keeps reading `window.detailChart` | E1 |
+| **D2** Add form ✅ | `searchTimer`, `suggestItems`, `suggestIdx`, `pickSuggest` + handlers | done: buy → `bus.write('buy')`; `#add-toggle` (panel head, legacy) and the S13 wizard "manual" choice now set `state.addFormOpen` (new store key); `blockIfAll` stays global (typed wrapper) | D1 |
+| **D3** Undo + Cash ✅ | `doUndo`, `setCashBalance`, the S16 cash editor symbols | done: `doUndo`/`setCashBalance` are adapters to `FinSight.actions` (S4 UNDO/CASH, S17 ledger ↶ unchanged); `openCashEditor()` sets `state.cashEditorOpen` (CASH button, `#wealth-cash-btn`, `[data-cash-card]`); new legacy `analyticsStale({perf, wealth})` replaces the inline `perfSig = ''`/`wealthSig = ''` in these writes (C3 deletes it) | D1 |
+| **D4** Ledger + import/export ✅ | S17 symbols, S29 import/export handlers, `setImportStatus` | done: `openLedger()` sets `state.ledgerOpen` (S4 LEDGER/TRADES, `#ledger-btn` in the activity head, B3 must keep that listener or move it); S13 wizard import choice and `#import-btn` set `state.importOpen`; `#export-btn` → `FinSight.actions.exportPortfolio`; legacy `ledger`/`realized` bus refreshers removed (queries); `csvCell` kept in S32 for `baseline/import-export` | D1, D3 |
+| **E1** Detail header + ranges ✅ | `loadDetail`, `detailHist`; `selectSymbol` body → store write (name kept) | done (with E2): `loadDetail`, `detailHist`, `statRow`, `visibleStart`, `DETAIL_WARMUP` deleted; `selectSymbol` is a store write + `detail`/`news-selected` bus calls; S10 theme change → `allCharts().forEach(c => c.render())`; S33 30 s detail interval removed and tab-return → `bus.invalidate('quote')`; S5 auto-select moved into the island (on each portfolio load) | F4; before E2 |
+| **E2** Chart host ✅ | S20 symbols (except `sparkline` per A4), `detailChart` → `window.detailChart` from ChartHost | done (with E1): `detailChart` → `window.detailChart` from ChartHost; `CHART_TF_RANGE` moved to `features/detail/detail.ts`; **kept in app.js**: `lastWatch`, `chartWatchItems`, `allCharts`, `pushChartWatch`, `loadChartTrades`, `setupChartHost`, `chartGrid`, `sparkline` (A3), exposed to ChartHost as `window.FinSightChartHooks`; `chart-trades` bus key reloads markers after writes | E1 |
 
 **Merge order inside Phase 2**, derived from the dependencies above:
 
@@ -187,7 +187,7 @@ Lanes are therefore **not** fully independent. Lane D is sequential, C3 waits fo
 ## Part B — generated inventory
 
 <!-- generated:start -->
-_Generated by `node scripts/coupling-inventory.mjs --write` from `public/app.js` (blob `dc8f34d9e4`, 1909 lines). Do not edit by hand._
+_Generated by `node scripts/coupling-inventory.mjs --write` from `public/app.js` (blob `a4d2454f95`, 737 lines). Do not edit by hand._
 
 ### B1. Sections of app.js
 
@@ -197,36 +197,31 @@ _Generated by `node scripts/coupling-inventory.mjs --write` from `public/app.js`
 | S1 | formatting helpers | 29–43 | `fmt`, `fmtBig`, `signClass`, `signStr` |
 | S2 | currency formatting | 44–55 | `CCY_SYM`, `csym`, `money`, `moneyBig`, `moneySigned`, `state`, `accountsCache` |
 | S4 | COMMAND BAR | 56–151 | `setStatus`, `setFooter`, `runCommand` |
-| S5 | PORTFOLIO | 152–215 | `baseQS`, `sideSig`, `sideAt`, `SIDE_MAX_AGE`, `portfolioRequest`, `loadPortfolio`, `afterWrite`, `renderPortfolio` |
-| S6 | FX RISK panel | 216–354 | `loadFxRisk`, `fxTools`, `fxPending`, `renderFxRisk` |
-| S7 | ECON CALENDAR panel | 355–411 | `loadCalendar`, `renderCalendar` |
-| S8 | customizable summary cards | 412–414 | `lastSummary` |
-| S9 | PEEK / UNPEEK: blur personal figures, keep public market data | 415–429 | `applyPeek` |
-| S10 | appearance: switchable theme + font (system fonts only, no downloads) | 430–465 | `THEMES`, `FONTS`, `curTheme`, `curFont`, `applyTheme`, `setTheme`, `setFont`, `renderAppearance` |
-| S11 | show / hide whole panels | 466–487 | `PANELS`, `hiddenPanels`, `panelEl`, `applyPanels`, `renderPanelsEditor` |
-| S12 | drag-to-rearrange panels | 488–559 | `PANEL_PIDS`, `dragInited`, `initDragLayout`, `dragAfter`, `saveLayout`, `applyLayout` |
-| S13 | profile + first-launch setup wizard | 560–593 | `profile`, `saveProfile`, `applyProfileName`, `openSetup`, `commitSetup` |
-| S:POSITIONS | POSITIONS TABLE: React island (D1, web/src/features/positions) | 594–598 | `lastTableData` |
-| S15 | UNDO + CASH | 599–619 | `doUndo`, `setCashBalance` |
-| S16 | CASH EDITOR: all accounts × currencies in one place | 620–712 | `cashDraft`, `setCashStatus`, `openCashEditor`, `renderCashEditor`, `cashTimer`, `cashSaving`, `queueCashSave`, `saveCash`, `closeCashEditor` |
-| S17 | LEDGER | 713–814 | `ledgerRows`, `ledgerEdit`, `ledgerTab`, `lastRealized`, `setLedgerStatus`, `openLedger`, `closeLedger`, `setLedgerTab`, `loadLedger`, `renderLedger`, `loadRealized` |
-| S18 | ADD FORM + SYMBOL SEARCH | 815–871 | `searchTimer`, `suggestItems`, `suggestIdx`, `pickSuggest` |
-| S19 | SECURITY DETAIL + CHART | 872–976 | `selectSymbol`, `detailChart`, `detailHist`, `loadDetail` |
-| S20 | chart host hooks: ledger trades, watchlist feed, multi-chart grid | 977–1057 | `lastWatch`, `chartWatchItems`, `allCharts`, `pushChartWatch`, `loadChartTrades`, `setupChartHost`, `chartGrid`, `CHART_TF_RANGE`, `DETAIL_WARMUP`, `visibleStart`, `statRow`, `sparkline` |
-| S21 | WORLD MARKETS | 1058–1062 | — |
-| S22 | WORLD BANK MACRO | 1063–1091 | `loadWorldBank`, `wbChart` |
-| S23 | FRED | 1092–1113 | `loadFred` |
-| S24 | US INFLATION GAUGES | 1114–1162 | `INFL_GAUGES`, `inflClass`, `loadInflation` |
-| S25 | DIVIDENDS (income received, from broker imports) | 1163–1199 | `loadDividends` |
-| S26 | WATCHLIST | 1200–1236 | `loadWatchlist`, `renderWatchlist` |
-| S27 | PRICE ALERTS + NOTIFICATIONS | 1237–1310 | `notifiedAlerts`, `loadAlerts`, `renderAlerts`, `requestNotify`, `notify`, `toast`, `beep` |
-| S28 | NEWS | 1311–1318 | `loadNews` |
-| S29 | CSV IMPORT / EXPORT | 1319–1381 | `setImportStatus`, `setupSearch` |
-| S30 | PORTFOLIO ANALYTICS | 1382–1501 | `lastPositions`, `heatMetric`, `allocMode`, `perfRange`, `perfSig`, `perfBench`, `catCache`, `ASSET_CLASSES`, `assetClass`, `splitByAccount`, `accountName`, `ensureCategories`, `treemap`, `heatColor`, `renderHeatmap` |
-| S31 | NET WORTH BREAKDOWN: asset classes + cash, overall and per account | 1502–1682 | `CLASS_COLORS`, `wealthSig`, `wealthAt`, `loadWealth`, `renderWealth`, `PALETTE`, `renderAllocation`, `loadPerformance`, `perfChart`, `bindPerfHover`, `renderAnalytics` |
-| S32 | UTIL + BOOT + POLLING | 1683–1703 | `esc`, `csvCell`, `initBaseSelector` |
-| S33 | ACCOUNTS (multiple portfolios) | 1704–1837 | `blockIfAll`, `loadAccounts`, `renderAccountSelector`, `newAccountPrompt`, `setAccountsStatus`, `renderAccountsList`, `boot`, `pollTimers`, `pollWanted`, `hiddenAt`, `startPolling`, `stopTimers`, `stopPolling` |
-| S34 | PIN LOCK | 1838–1909 | `booted`, `lockMode`, `showLock`, `showApp`, `lockMsg`, `submitPin`, `offlineTimer`, `showOffline`, `checkAuth` |
+| S5 | PORTFOLIO | 152–196 | `baseQS`, `dividendSig`, `portfolioRequest`, `loadPortfolio`, `afterWrite`, `renderPortfolio` |
+| S8 | customizable summary cards | 197–198 | — |
+| S9 | PEEK / UNPEEK: blur personal figures, keep public market data | 199–213 | `applyPeek` |
+| S10 | appearance: switchable theme + font (system fonts only, no downloads) | 214–249 | `THEMES`, `FONTS`, `curTheme`, `curFont`, `applyTheme`, `setTheme`, `setFont`, `renderAppearance` |
+| S11 | show / hide whole panels | 250–271 | `PANELS`, `hiddenPanels`, `panelEl`, `applyPanels`, `renderPanelsEditor` |
+| S12 | drag-to-rearrange panels | 272–343 | `PANEL_PIDS`, `dragInited`, `initDragLayout`, `dragAfter`, `saveLayout`, `applyLayout` |
+| S13 | profile + first-launch setup wizard | 344–377 | `profile`, `saveProfile`, `applyProfileName`, `openSetup`, `commitSetup` |
+| S:POSITIONS | POSITIONS TABLE: React island (D1, web/src/features/positions) | 378–382 | `lastTableData` |
+| S15 | UNDO + CASH | 383–401 | `doUndo`, `setCashBalance`, `openCashEditor` |
+| S17 | LEDGER | 402–409 | `openLedger` |
+| S18 | ADD FORM + SYMBOL SEARCH | 410–415 | — |
+| S19 | SECURITY DETAIL + CHART | 416–427 | `selectSymbol` |
+| S20 | chart host hooks: ledger trades, watchlist feed, multi-chart grid | 428–470 | `lastWatch`, `chartWatchItems`, `allCharts`, `pushChartWatch`, `loadChartTrades`, `setupChartHost`, `chartGrid` |
+| S21 | WORLD MARKETS | 471–475 | — |
+| S22 | WORLD BANK MACRO | 476–480 | — |
+| S25 | DIVIDENDS (income received, from broker imports) | 481–486 | `loadDividends` |
+| S26 | WATCHLIST | 487–492 | `loadWatchlist` |
+| S27 | PRICE ALERTS + NOTIFICATIONS | 493–501 | `loadAlerts`, `requestNotify` |
+| S28 | NEWS | 502–509 | `loadNews` |
+| S29 | CSV IMPORT / EXPORT | 510–517 | — |
+| S:PORTFOLIO | PORTFOLIO ANALYTICS: performance, net worth, allocation and heatmap are | 518–518 | — |
+| S:React | React islands (C3, web/src/features/analytics). | 519–522 | — |
+| S32 | UTIL + BOOT + POLLING | 523–543 | `esc`, `csvCell`, `initBaseSelector` |
+| S33 | ACCOUNTS (multiple portfolios) | 544–665 | `blockIfAll`, `loadAccounts`, `renderAccountSelector`, `newAccountPrompt`, `setAccountsStatus`, `renderAccountsList`, `boot`, `pollTimers`, `pollWanted`, `hiddenAt`, `startPolling`, `stopTimers`, `stopPolling` |
+| S34 | PIN LOCK | 666–737 | `booted`, `lockMode`, `showLock`, `showApp`, `lockMsg`, `submitPin`, `offlineTimer`, `showOffline`, `checkAuth` |
 
 ### B2. Cross-section use (who calls into whom)
 
@@ -237,75 +232,65 @@ Each row: the section on the left uses these symbols owned by another section. *
 | S0 prelude (helpers, api, state) | S34: `checkAuth`, `showLock` |
 | S1 formatting helpers | — |
 | S2 currency formatting | S1: `fmt`, `fmtBig` |
-| S4 COMMAND BAR | S0: `$`, `api`<br>S1: `signStr`<br>S5: `afterWrite`, `baseQS`<br>S15: `doUndo`, `setCashBalance`<br>S17: `openLedger`<br>S19: `selectSymbol`<br>S25: `loadDividends`<br>S27: `requestNotify`<br>S28: `loadNews`<br>S33: `blockIfAll` |
-| S5 PORTFOLIO | S0: `$`, `api`<br>S1: `fmt`, `signStr`<br>S2: `state`<br>S4: `setFooter`<br>S6: `loadFxRisk`<br>S8: **`lastSummary`**<br>S:POSITIONS: **`lastTableData`**<br>S17: `ledgerTab`, `loadLedger`, `loadRealized`<br>S19: `selectSymbol`<br>S20: `pushChartWatch`<br>S25: `loadDividends`<br>S26: `loadWatchlist`<br>S27: `loadAlerts`<br>S31: `renderAnalytics`<br>S32: `esc`<br>S33: `loadAccounts` |
-| S6 FX RISK panel | S0: `$`, `api`<br>S1: `fmt`, `signClass`, `signStr`<br>S2: `money`, `moneyBig`, `moneySigned`, `state`<br>S5: `baseQS`<br>S8: `lastSummary`<br>S32: `esc` |
-| S7 ECON CALENDAR panel | S0: `$`, `api`<br>S1: `fmt`<br>S5: `baseQS`<br>S19: `selectSymbol`<br>S32: `esc` |
+| S4 COMMAND BAR | S0: `$`, `api`<br>S1: `signStr`<br>S5: `afterWrite`, `baseQS`<br>S15: `doUndo`, `setCashBalance`<br>S17: `openLedger`<br>S19: `selectSymbol`<br>S27: `requestNotify`<br>S28: `loadNews`<br>S33: `blockIfAll` |
+| S5 PORTFOLIO | S0: `api`<br>S2: `state`<br>S4: `setFooter`<br>S:POSITIONS: **`lastTableData`**<br>S20: `pushChartWatch`<br>S33: `loadAccounts` |
 | S8 customizable summary cards | — |
 | S9 PEEK / UNPEEK: blur personal figures, keep public market data | S0: `$`<br>S2: **`state`** |
-| S10 appearance: switchable theme + font (system fonts only, no downloads) | S0: `$`<br>S2: `state`<br>S11: `renderPanelsEditor`<br>S19: `loadDetail` |
+| S10 appearance: switchable theme + font (system fonts only, no downloads) | S0: `$`<br>S11: `renderPanelsEditor`<br>S20: `allCharts` |
 | S11 show / hide whole panels | S0: `$` |
 | S12 drag-to-rearrange panels | S0: `$` |
 | S13 profile + first-launch setup wizard | S0: `$`<br>S2: **`state`**<br>S4: `setStatus`<br>S5: `loadPortfolio` |
 | S:POSITIONS POSITIONS TABLE: React island (D1, web/src/features/positions) | — |
-| S15 UNDO + CASH | S0: `$`, `api`<br>S1: `fmt`<br>S4: `setStatus`<br>S5: `afterWrite`, `baseQS`<br>S30: **`perfSig`**<br>S31: **`wealthSig`** |
-| S16 CASH EDITOR: all accounts × currencies in one place | S0: `$`, `$$`, `api`<br>S2: `accountsCache`, `state`<br>S5: `afterWrite`<br>S31: `loadWealth`, **`wealthSig`**<br>S32: `esc` |
-| S17 LEDGER | S0: `$`, `$$`, `api`<br>S1: `fmt`<br>S2: `money`, `moneySigned`, `state`<br>S5: `afterWrite`, `baseQS`<br>S15: `doUndo`<br>S30: **`perfSig`**<br>S32: `csvCell`, `esc` |
-| S18 ADD FORM + SYMBOL SEARCH | S0: `$`, `$$`, `api`<br>S4: `setStatus`<br>S5: `afterWrite`, `baseQS`<br>S32: `esc`<br>S33: `blockIfAll` |
-| S19 SECURITY DETAIL + CHART | S0: `$`, `$$`, `api`<br>S1: `fmt`, `fmtBig`, `signStr`<br>S2: `money`, **`state`**<br>S5: `sideAt`<br>S:POSITIONS: `lastTableData`<br>S20: `CHART_TF_RANGE`, `DETAIL_WARMUP`, `chartGrid`, `loadChartTrades`, `setupChartHost`, `sparkline`, `statRow`, `visibleStart`<br>S32: `esc` |
-| S20 chart host hooks: ledger trades, watchlist feed, multi-chart grid | S0: `$`, `$$`, `api`<br>S2: **`state`**<br>S:POSITIONS: `lastTableData`<br>S19: `detailChart`, `loadDetail`, `selectSymbol` |
+| S15 UNDO + CASH | S0: `$`<br>S2: **`state`** |
+| S17 LEDGER | S0: `$`<br>S2: **`state`** |
+| S18 ADD FORM + SYMBOL SEARCH | S0: `$`<br>S2: **`state`** |
+| S19 SECURITY DETAIL + CHART | S2: **`state`** |
+| S20 chart host hooks: ledger trades, watchlist feed, multi-chart grid | S0: `api`<br>S2: `state`<br>S:POSITIONS: `lastTableData`<br>S19: `selectSymbol` |
 | S21 WORLD MARKETS | — |
-| S22 WORLD BANK MACRO | S0: `$`, `api`<br>S1: `fmt`, `fmtBig`<br>S20: `sparkline`<br>S32: `esc` |
-| S23 FRED | S0: `$`, `api`<br>S1: `fmt`, `fmtBig`<br>S20: `sparkline`<br>S32: `esc` |
-| S24 US INFLATION GAUGES | S0: `$`, `api`<br>S1: `fmt`<br>S32: `esc` |
-| S25 DIVIDENDS (income received, from broker imports) | S0: `$`, `api`<br>S1: `fmt`<br>S2: `money`, `state`<br>S5: `baseQS`<br>S32: `esc` |
-| S26 WATCHLIST | S0: `$`, `api`<br>S1: `fmt`, `signStr`<br>S4: `setStatus`<br>S19: `selectSymbol`<br>S20: **`lastWatch`**, `pushChartWatch`<br>S32: `esc` |
-| S27 PRICE ALERTS + NOTIFICATIONS | S0: `$`, `api`<br>S1: `fmt`<br>S4: `setStatus`<br>S19: `selectSymbol`<br>S32: `esc` |
+| S22 WORLD BANK MACRO | — |
+| S25 DIVIDENDS (income received, from broker imports) | — |
+| S26 WATCHLIST | — |
+| S27 PRICE ALERTS + NOTIFICATIONS | — |
 | S28 NEWS | — |
-| S29 CSV IMPORT / EXPORT | S0: `$`, `api`<br>S2: **`state`**<br>S4: `setFooter`<br>S5: `afterWrite`, `baseQS`<br>S32: `csvCell`, `esc` |
-| S30 PORTFOLIO ANALYTICS | S0: `$`, `$$`, `api`<br>S1: `signStr`<br>S2: `accountsCache`, `state`<br>S19: `selectSymbol`<br>S32: `esc` |
-| S31 NET WORTH BREAKDOWN: asset classes + cash, overall and per account | S0: `$`, `$$`, `api`<br>S1: `fmt`, `signClass`, `signStr`<br>S2: `accountsCache`, `money`, `moneySigned`, `state`<br>S5: `baseQS`<br>S19: `selectSymbol`<br>S30: **`allocMode`**, `assetClass`, `catCache`, `ensureCategories`, **`lastPositions`**, **`perfBench`**, **`perfRange`**, **`perfSig`**, `renderHeatmap`, `splitByAccount`<br>S32: `esc` |
+| S29 CSV IMPORT / EXPORT | S0: `$`<br>S2: **`state`** |
+| S:PORTFOLIO PORTFOLIO ANALYTICS: performance, net worth, allocation and heatmap are | — |
+| S:React React islands (C3, web/src/features/analytics). | — |
 | S32 UTIL + BOOT + POLLING | S0: `$`<br>S2: **`state`**<br>S4: `setStatus`<br>S5: `loadPortfolio` |
-| S33 ACCOUNTS (multiple portfolios) | S0: `$`, `api`<br>S2: **`accountsCache`**, **`state`**<br>S4: `setFooter`, `setStatus`<br>S5: `afterWrite`, `loadPortfolio`<br>S7: `loadCalendar`<br>S11: `applyPanels`<br>S12: `applyLayout`, `initDragLayout`<br>S13: `applyProfileName`, `openSetup`, `profile`<br>S19: `loadDetail`<br>S22: `loadWorldBank`<br>S23: `loadFred`<br>S26: `loadWatchlist`<br>S27: `loadAlerts`<br>S30: **`perfSig`**<br>S32: `esc`, `initBaseSelector` |
+| S33 ACCOUNTS (multiple portfolios) | S0: `$`, `api`<br>S2: **`accountsCache`**, **`state`**<br>S4: `setFooter`, `setStatus`<br>S5: `afterWrite`, `loadPortfolio`<br>S11: `applyPanels`<br>S12: `applyLayout`, `initDragLayout`<br>S13: `applyProfileName`, `openSetup`, `profile`<br>S32: `esc`, `initBaseSelector` |
 | S34 PIN LOCK | S0: `$`, `api`<br>S33: `boot`, `startPolling`, `stopPolling` |
 
 ### B3. Callers of each section from outside it
 
 | Section | Its symbols used elsewhere → by |
 |---|---|
-| S0 prelude (helpers, api, state) | `$$` → S16 S17 S18 S19 S20 S30 S31<br>`$` → S4 S5 S6 S7 S9 S10 S11 S12 S13 S15 S16 S17 S18 S19 S20 S22 S23 S24 S25 S26 S27 S29 S30 S31 S32 S33 S34<br>`api` → S4 S5 S6 S7 S15 S16 S17 S18 S19 S20 S22 S23 S24 S25 S26 S27 S29 S30 S31 S33 S34 |
-| S1 formatting helpers | `fmt` → S2 S5 S6 S7 S15 S17 S19 S22 S23 S24 S25 S26 S27 S31<br>`fmtBig` → S2 S19 S22 S23<br>`signClass` → S6 S31<br>`signStr` → S4 S5 S6 S19 S26 S30 S31 |
-| S2 currency formatting | `accountsCache` → S16 S30 S31 S33<br>`money` → S6 S17 S19 S25 S31<br>`moneyBig` → S6<br>`moneySigned` → S6 S17 S31<br>`state` → S5 S6 S9 S10 S13 S16 S17 S19 S20 S25 S29 S30 S31 S32 S33 |
-| S4 COMMAND BAR | `setFooter` → S5 S29 S33<br>`setStatus` → S13 S15 S18 S26 S27 S32 S33 |
-| S5 PORTFOLIO | `afterWrite` → S4 S15 S16 S17 S18 S29 S33<br>`baseQS` → S4 S6 S7 S15 S17 S18 S25 S29 S31<br>`loadPortfolio` → S13 S32 S33<br>`sideAt` → S19 |
-| S6 FX RISK panel | `loadFxRisk` → S5 |
-| S7 ECON CALENDAR panel | `loadCalendar` → S33 |
-| S8 customizable summary cards | `lastSummary` → S5 S6 |
+| S0 prelude (helpers, api, state) | `$` → S4 S9 S10 S11 S12 S13 S15 S17 S18 S29 S32 S33 S34<br>`api` → S4 S5 S20 S33 S34 |
+| S1 formatting helpers | `fmt` → S2<br>`fmtBig` → S2<br>`signStr` → S4 |
+| S2 currency formatting | `accountsCache` → S33<br>`state` → S5 S9 S13 S15 S17 S18 S19 S20 S29 S32 S33 |
+| S4 COMMAND BAR | `setFooter` → S5 S33<br>`setStatus` → S13 S32 S33 |
+| S5 PORTFOLIO | `afterWrite` → S4 S33<br>`baseQS` → S4<br>`loadPortfolio` → S13 S32 S33 |
+| S8 customizable summary cards | — |
 | S9 PEEK / UNPEEK: blur personal figures, keep public market data | — |
 | S10 appearance: switchable theme + font (system fonts only, no downloads) | — |
 | S11 show / hide whole panels | `applyPanels` → S33<br>`renderPanelsEditor` → S10 |
 | S12 drag-to-rearrange panels | `applyLayout` → S33<br>`initDragLayout` → S33 |
 | S13 profile + first-launch setup wizard | `applyProfileName` → S33<br>`openSetup` → S33<br>`profile` → S33 |
-| S:POSITIONS POSITIONS TABLE: React island (D1, web/src/features/positions) | `lastTableData` → S5 S19 S20 |
-| S15 UNDO + CASH | `doUndo` → S4 S17<br>`setCashBalance` → S4 |
-| S16 CASH EDITOR: all accounts × currencies in one place | — |
-| S17 LEDGER | `ledgerTab` → S5<br>`loadLedger` → S5<br>`loadRealized` → S5<br>`openLedger` → S4 |
+| S:POSITIONS POSITIONS TABLE: React island (D1, web/src/features/positions) | `lastTableData` → S5 S20 |
+| S15 UNDO + CASH | `doUndo` → S4<br>`setCashBalance` → S4 |
+| S17 LEDGER | `openLedger` → S4 |
 | S18 ADD FORM + SYMBOL SEARCH | — |
-| S19 SECURITY DETAIL + CHART | `detailChart` → S20<br>`loadDetail` → S10 S20 S33<br>`selectSymbol` → S4 S5 S7 S20 S26 S27 S30 S31 |
-| S20 chart host hooks: ledger trades, watchlist feed, multi-chart grid | `CHART_TF_RANGE` → S19<br>`DETAIL_WARMUP` → S19<br>`chartGrid` → S19<br>`lastWatch` → S26<br>`loadChartTrades` → S19<br>`pushChartWatch` → S5 S26<br>`setupChartHost` → S19<br>`sparkline` → S19 S22 S23<br>`statRow` → S19<br>`visibleStart` → S19 |
+| S19 SECURITY DETAIL + CHART | `selectSymbol` → S4 S20 |
+| S20 chart host hooks: ledger trades, watchlist feed, multi-chart grid | `allCharts` → S10<br>`pushChartWatch` → S5 |
 | S21 WORLD MARKETS | — |
-| S22 WORLD BANK MACRO | `loadWorldBank` → S33 |
-| S23 FRED | `loadFred` → S33 |
-| S24 US INFLATION GAUGES | — |
-| S25 DIVIDENDS (income received, from broker imports) | `loadDividends` → S4 S5 |
-| S26 WATCHLIST | `loadWatchlist` → S5 S33 |
-| S27 PRICE ALERTS + NOTIFICATIONS | `loadAlerts` → S5 S33<br>`requestNotify` → S4 |
+| S22 WORLD BANK MACRO | — |
+| S25 DIVIDENDS (income received, from broker imports) | — |
+| S26 WATCHLIST | — |
+| S27 PRICE ALERTS + NOTIFICATIONS | `requestNotify` → S4 |
 | S28 NEWS | `loadNews` → S4 |
 | S29 CSV IMPORT / EXPORT | — |
-| S30 PORTFOLIO ANALYTICS | `allocMode` → S31<br>`assetClass` → S31<br>`catCache` → S31<br>`ensureCategories` → S31<br>`lastPositions` → S31<br>`perfBench` → S31<br>`perfRange` → S31<br>`perfSig` → S15 S17 S31 S33<br>`renderHeatmap` → S31<br>`splitByAccount` → S31 |
-| S31 NET WORTH BREAKDOWN: asset classes + cash, overall and per account | `loadWealth` → S16<br>`renderAnalytics` → S5<br>`wealthSig` → S15 S16 |
-| S32 UTIL + BOOT + POLLING | `csvCell` → S17 S29<br>`esc` → S5 S6 S7 S16 S17 S18 S19 S22 S23 S24 S25 S26 S27 S29 S30 S31 S33<br>`initBaseSelector` → S33 |
-| S33 ACCOUNTS (multiple portfolios) | `blockIfAll` → S4 S18<br>`boot` → S34<br>`loadAccounts` → S5<br>`startPolling` → S34<br>`stopPolling` → S34 |
+| S:PORTFOLIO PORTFOLIO ANALYTICS: performance, net worth, allocation and heatmap are | — |
+| S:React React islands (C3, web/src/features/analytics). | — |
+| S32 UTIL + BOOT + POLLING | `esc` → S33<br>`initBaseSelector` → S33 |
+| S33 ACCOUNTS (multiple portfolios) | `blockIfAll` → S4<br>`boot` → S34<br>`loadAccounts` → S5<br>`startPolling` → S34<br>`stopPolling` → S34 |
 | S34 PIN LOCK | `checkAuth` → S0<br>`showLock` → S0 |
 
 ### B4. DOM, API, timers, events, storage per section
@@ -316,33 +301,28 @@ Each row: the section on the left uses these symbols owned by another section. *
 | S1 | — | — | — | — | — |
 | S2 | — | — | — | — | — |
 | S4 | `cmd`, `cmd-go`, `cmd-status`, `footer-msg` | `/api/alerts/add`, `/api/portfolio/buy`, `/api/portfolio/delete`, `/api/portfolio/sell`, `/api/settings/withholding`, `/api/watchlist/add`, `/api/watchlist/remove` | — | — | — |
-| S5 | `activity`, `ledger-modal` | `/api/invalidation`, `/api/portfolio` | — | — | — |
-| S6 | `fxr-conv`, `fxr-conv-out`, `fxr-impact`, `fxr-newval`, `fxr-shock`, `fxr-slider`, `fxr-spot`, `fxr-target`, `fxr-target-out`, `fxrisk` | `/api/fx-risk`, `/api/portfolio` | — | — | `finsight-fx-target` |
-| S7 | `calendar` | `/api/calendar`, `/api/events` | — | — | — |
+| S5 | — | `/api/invalidation`, `/api/portfolio` | — | — | — |
 | S8 | — | — | — | — | — |
 | S9 | `peek-btn` | — | — | — | `finsight-unpeek` |
 | S10 | `cards-btn`, `cards-close`, `cards-done`, `cards-modal`, `font-list`, `theme-list` | — | — | — | `finsight-font`, `finsight-theme` |
 | S11 | `panels-list` | — | — | — | `finsight-panels` |
 | S12 | `layout-reset` | — | — | — | `finsight-layout` |
-| S13 | `add-form`, `add-symbol`, `base-ccy`, `import-modal`, `profile-btn`, `profile-name`, `setup-base`, `setup-modal`, `setup-name`, `setup-save`, `setup-skip` | — | — | — | `finsight-base`, `finsight-profile` |
+| S13 | `base-ccy`, `profile-btn`, `profile-name`, `setup-base`, `setup-modal`, `setup-name`, `setup-save`, `setup-skip` | — | — | — | `finsight-base`, `finsight-profile` |
 | S:POSITIONS | — | — | — | — | — |
-| S15 | `undo-btn` | `/api/cash`, `/api/undo` | — | — | — |
-| S16 | `cash-btn`, `cash-cancel`, `cash-close`, `cash-editor`, `cash-modal`, `cash-save`, `cash-status`, `summary`, `wealth-cash-btn` | `/api/cash`, `/api/portfolio` | `setTimeout` | — | — |
-| S17 | `ledger-body`, `ledger-btn`, `ledger-close`, `ledger-filter`, `ledger-modal`, `ledger-realized`, `ledger-status`, `ledger-tabs`, `ledger-trades`, `ledger-undo`, `rz-export` | `/api/ledger`, `/api/ledger/delete`, `/api/ledger/edit`, `/api/realized` | — | — | — |
-| S18 | `add-date`, `add-form`, `add-price`, `add-qty`, `add-suggest`, `add-symbol`, `add-toggle` | `/api/portfolio/buy`, `/api/search` | `setTimeout` | `click` | — |
-| S19 | `detail-body`, `detail-chart-host`, `detail-hdr`, `detail-stats`, `detail-title`, `ranges` | `/api/history`, `/api/quote` | — | — | — |
-| S20 | `ranges` | `/api/chart-trades`, `/api/history` | — | — | — |
+| S15 | `cash-btn`, `summary`, `undo-btn`, `wealth-cash-btn` | — | — | — | — |
+| S17 | `ledger-btn` | — | — | — | — |
+| S18 | `add-toggle` | — | — | — | — |
+| S19 | — | — | — | — | — |
+| S20 | — | `/api/chart-trades`, `/api/history` | — | — | — |
 | S21 | — | — | — | — | — |
-| S22 | `wb-body`, `wb-country`, `wb-go`, `wb-indicator` | `/api/worldbank` | — | — | — |
-| S23 | `fred-body`, `fred-go`, `fred-series` | `/api/fred` | — | — | — |
-| S24 | `infl-body`, `infl-go` | `/api/fred` | — | — | — |
-| S25 | `div-ttm`, `dividends` | `/api/dividends` | — | — | — |
-| S26 | `watch-form`, `watch-suggest`, `watch-symbol`, `watch-toggle`, `watchlist` | `/api/watchlist`, `/api/watchlist/add`, `/api/watchlist/remove` | — | — | — |
-| S27 | `alert-form`, `alert-op`, `alert-price`, `alert-symbol`, `alert-toggle`, `alerts`, `toasts` | `/api/alerts`, `/api/alerts/add`, `/api/alerts/remove` | `setTimeout` | `finsight:alerts` | — |
+| S22 | — | — | — | — | — |
+| S25 | — | — | — | — | — |
+| S26 | — | — | — | — | — |
+| S27 | — | — | — | — | — |
 | S28 | — | — | — | — | — |
-| S29 | `export-btn`, `import-btn`, `import-clear`, `import-close`, `import-do`, `import-file`, `import-modal`, `import-replace`, `import-status`, `import-text`, `watch-suggest`, `watch-symbol` | `/api/portfolio`, `/api/portfolio/import`, `/api/portfolio/reset`, `/api/search` | `setTimeout` | `click` | — |
-| S30 | `heat-metric`, `heatmap-body` | `/api/categories` | — | — | `finsight-bench` |
-| S31 | `alloc-body`, `alloc-mode`, `perf-bench`, `perf-body`, `perf-ranges`, `pf-cross`, `pf-tip`, `wealth-body` | `/api/portfolio`, `/api/portfolio/performance` | — | — | `finsight-bench` |
+| S29 | `export-btn`, `import-btn` | — | — | — | — |
+| S:PORTFOLIO | — | — | — | — | — |
+| S:React | — | — | — | — | — |
 | S32 | `base-ccy` | — | — | — | `finsight-base` |
 | S33 | `account-add-form`, `account-new-name`, `account-new-type`, `account-sel`, `accounts-close`, `accounts-done`, `accounts-list`, `accounts-modal`, `accounts-status` | `/api/accounts`, `/api/accounts/add`, `/api/accounts/remove`, `/api/accounts/rename` | `setInterval` | `visibilitychange` | `finsight-account` |
 | S34 | `lock-btn`, `lock-go`, `lock-msg`, `lock-pin`, `lock-pin2`, `lock-title` | `/api/auth/login`, `/api/auth/logout`, `/api/auth/setup`, `/api/auth/status` | `setTimeout` | `finsight:locked`, `finsight:unlocked` | — |
@@ -353,8 +333,8 @@ Globals between files are the hidden coupling: app.js top-level `let`/`const` ar
 
 | File | app.js symbols it uses (owning section) | window.* it sets → used by app.js | other window.* it reads |
 |---|---|---|---|
-| `public/agent-panel.js` | `state` (S2), `detailChart` (S19) | — | — |
-| `public/chart.js` | — | `PriceChart` → S19<br>`__finAlerts` → S27 | `FinIndicators`, `FinJournal`, `FinStrategies`, `FinStrategy` |
+| `public/agent-panel.js` | `state` (S2) | — | — |
+| `public/chart.js` | — | `PriceChart` → —<br>`__finAlerts` → — | `FinIndicators`, `FinJournal`, `FinStrategies`, `FinStrategy` |
 | `public/chartgrid.js` | — | `ChartGrid` → S20 | `PriceChart` |
 | `public/journal.js` | — | `FinJournal` → — | — |
 | `public/strategy.js` | — | `FinStrategy` → — | — |

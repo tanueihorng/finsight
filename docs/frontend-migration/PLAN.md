@@ -470,13 +470,18 @@ Two esbuild builds (`bootstrap.js` IIFE; `main.js` ESM with splitting), `manifes
 | PILOT-2 (C1) | 1.5 | done (merged 2026-10-25, 853a550) | mig/PILOT-2-summary | Claude | Summary cards + card editor islands, `useFxRisk`; every legacy write goes through `bus.write(kind)` (map completed per COUPLING §A6); fan-out proofs pass. Peek stays legacy (must apply synchronously at load; moves with F8). Intended fix: card order reload bug. Known duplication until D1/C2: `/api/portfolio` and `/api/fx-risk` are each fetched by legacy and by Query |
 | A1 | A | done as PILOT-1 (merged) | mig/PILOT-1-markets | Claude | |
 | A2 | A | done (merged 2026-10-25) | mig/A2-news | Codex | News island + command adapters; intended fix: old-symbol response cannot overwrite current news; 128 unit + 69 E2E on base 8086 |
-| A3 | A | todo | | Codex | |
-| B1–B3 | B | todo | | | |
+| A3 | A | verified on stack (not merged) | mig/A3-macro | Codex | Calendar, WB, FRED, manual inflation; 133 unit + 80 E2E |
+| B1 | B | verified on stack (not merged) | mig/B1-watchlist | Codex | Watchlist, search, chart adapter, Query polling |
+| B2 | B | verified on stack (not merged) | mig/B2-alerts | Codex | Alerts, chart bridge, notification lifecycle |
+| B3 | B | verified on stack (not merged) | mig/B3-income-activity | Codex | Income/activity; intended fix: stale-account response; 120s query replaces side-load duplicate |
 | C1 | C | done as PILOT-2 (merged) | mig/PILOT-2-summary | Claude | |
-| C2–C3 | C | todo | | | |
+| C2 | C | verified on stack (not merged) | mig/C2-fx-risk | Codex | FX tools/history, typed lots, tested arithmetic; shared query replaces legacy duplicate |
+| C3 | C | done (not merged; stacked on D4) | mig/C3-analytics | Claude | Performance, net-worth breakdown, allocation and sector heatmap islands; head controls through head slots; `usePerformance` keyed by the holdings signature (replaces `perfSig`), `useWealth` (60 s, replaces `wealthSig`/`wealthAt`); categories from `useCategories`. Deleted legacy `catCache`, `ensureCategories`, `lastPositions` and the D1/D3 adapters (`assetClass`/`splitByAccount` copies, `analyticsStale`). Drag pids now target the island hosts |
 | D1 | D | done (merged 2026-10-25) | mig/D1-positions | Claude | Positions table island (toolbar, filter chips, search, sort, group, collapse, row S/✕, flash) + `useCategories`, `useAccounts`; `posView` keeps the `finsight-posview` key. Legacy keeps `lastTableData` fed from `renderPortfolio` for detail/chart (E1/E2) and its own `assetClass`/`splitByAccount` copies for allocation (C3). Intended fix: a failed row ✕ delete now shows an error |
-| D2–D4 | D | todo | | | after D1 |
-| E1–E2 | E | todo | | | |
+| D2 | D | done (not merged; stacked on main 246f219) | mig/D2-addform | Claude | Add form + symbol search island; `store.addFormOpen` carries the legacy + ADD button and the setup wizard's "Add manually" choice (a click before the island mounts still counts); debounced search aborts the older request |
+| D3 | D | done (not merged; stacked on D2) | mig/D3-undo-cash | Claude | Undo + CASH as TypeScript actions (`window.FinSight.actions`, installed by main.js; `doUndo`/`setCashBalance`/`openCashEditor` stay as one-line globals for the command bar, ledger ↶, wealth and summary openers); cash editor modal island opened by `store.cashEditorOpen`. Legacy `analyticsStale()` keeps the perf/wealth signature resets until C3 |
+| D4 | D | done (not merged; stacked on D3) | mig/D4-ledger | Claude | Ledger modal (trades + realized, edit/delete buys, realized CSV) and import modal islands, opened by `store.ledgerOpen`/`importOpen`; EXPORT is `FinSight.actions.exportPortfolio`; `useLedger`/`useRealized` fetch only while their tab is open (replaces the legacy `ledger`/`realized` bus refreshers). `csvCell` ported to `ui/csv.ts`; the legacy copy stays for the baseline spec until X1 |
+| E1 + E2 | E | done as one card (not merged; stacked on C3) | mig/E-detail-chart | Claude | Detail island (header, stats, ranges via head slot, manual holdings, auto-select) + `legacy/ChartHost.tsx` wrapping chart.js unchanged (creates its own `#detail-chart-host` root so expand/grid can move it; sets `window.detailChart`). `useHistory`/`useQuote` replace `loadDetail`/`detailHist` and the 30 s poll. **Deviation:** E1 and E2 were done together; split, E1 would have needed a throwaway legacy chart adapter, and both merge in the same batch. Watch feed, trade loader and `chartGrid` stay in app.js behind `window.FinSightChartHooks` so B1 (Codex) keeps its `lastWatch`/`pushChartWatch` contract |
 | F7–F10 | 3 | todo | | | after A–E merged |
 | G1–G3 | 3 | todo | | | after F10 |
 | X1–X2 | 4 | todo | | | |

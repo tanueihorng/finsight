@@ -1,7 +1,0 @@
-{
-  "version": 3,
-  "sources": ["../../../web/src/legacy/app.ts"],
-  "sourcesContent": ["// Typed calls into legacy public/app.js. Its top-level function declarations\n// are window properties. Each wrapper goes away when the owning card migrates\n// that function (docs/frontend-migration/COUPLING.md \u00A7A4).\ninterface LegacyAppGlobals {\n  selectSymbol?: (symbol: string) => void; // E1 turns this into a store write\n  setStatus?: (msg: string, kind?: 'ok' | 'err' | '') => void; // command-bar status line, shell (F7)\n}\nconst legacy = () => window as unknown as LegacyAppGlobals;\n\nexport function selectSymbol(symbol: string): void {\n  legacy().selectSymbol?.(symbol);\n}\n\nexport function setStatus(msg: string, kind: 'ok' | 'err' | '' = ''): void {\n  legacy().setStatus?.(msg, kind);\n}\n"],
-  "mappings": "AAOA,IAAMA,EAAS,IAAM,OAEd,SAASC,EAAaC,EAAsB,CACjDF,EAAO,EAAE,eAAeE,CAAM,CAChC,CAEO,SAASC,EAAUC,EAAaC,EAA0B,GAAU,CACzEL,EAAO,EAAE,YAAYI,EAAKC,CAAI,CAChC",
-  "names": ["legacy", "selectSymbol", "symbol", "setStatus", "msg", "kind"]
-}

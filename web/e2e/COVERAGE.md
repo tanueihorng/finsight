@@ -23,6 +23,29 @@ Card = the migration card(s) that must keep the row green (`docs/frontend-migrat
 | Positions (D1) | All Accounts: "· 2 accts" label; group by account splits a symbol per account | `D1` › All Accounts… | D1 | pass |
 | Positions (D1) | a new price flashes the row and records `lastPrices`; an unchanged refetch clears it | `D1` › a new price flashes… | D1 | pass |
 | Positions (D1) | dragged to the right column it survives reload; a write made while locked shows after unlock | `D1` › dragged to the right column… | D1, F9, F10 | pass |
+| Add form (D2) | + ADD toggles and focuses; suggestions with arrow/Enter pick, Escape, click outside, mouse pick, no-result hide | `D2` | D2 | pass |
+| Add form (D2) | BUY validation, status with date, fields cleared, form stays open, portfolio refreshes; All Accounts blocked; server error reported | `D2` | D2 | pass |
+| Add form (D2) | setup wizard "Add manually" opens the form focused | `D2` › the setup wizard… | D2, F8 | pass |
+| Undo (D3) | ↶ UNDO hover title, click reverts positions + summary; UNDO error reported | `D3` › ↶ UNDO… | D3 | pass |
+| Cash editor (D3) | opens from CASH and the NET WORTH card; base-currency new row focused; ccy/number validation; Enter saves; ✕ removes; close saves pending edit | `D3` › cash editor… | D3, C1 | pass |
+| Cash editor (D3) | All Accounts lists each account; failed save reported and retried on DONE; reopening reloads saved values; CASH command error | `D3` | D3 | pass |
+| Ledger (D4) | LEDGER button, type filter, SELL row not editable, no-match row, cancel edit, dismissed delete keeps, backdrop closes | `D4` › ledger: open… | D4 | pass |
+| Ledger (D4) | edit date + qty updates positions; realized tab, closed trades, realized-gains.csv; ledger ↶ refreshes the open ledger | `D4` › ledger: edit a date… | D4, D3 | pass |
+| Ledger (D4) | All Accounts shows each trade's account | `D4` | D4 | pass |
+| Import (D4) | needs text, file fills the box, server error, All Accounts refused, backdrop closes, CLEAR ALL empties and clears the selection; wizard import choice opens it | `D4` | D4, F8 | pass |
+| Export (D4) | empty portfolio footer message | `D4` › export of an empty portfolio… | D4 | pass |
+| Allocation (C3) | holding/sector/class/account legends with %, 100% ring, legend + slice select a holding (not a group) | `C3` › allocation… | C3 | pass |
+| Heatmap (C3) | 9 tiles grouped by sector, DAY/TOTAL metric (host data-metric for peek), tile selects | `C3` › heatmap… | C3 | pass |
+| Net worth (C3) | class legend, cash note and CASH share, BY ACCOUNT rows in All Accounts, EDIT CASH opens the editor | `C3` › net worth breakdown… | C3, D3 | pass |
+| Performance (C3) | headline end value, stats/legend, range + benchmark requests, benchmark saved / range not, hover tooltip + crosshair | `C3` › performance… | C3 | pass |
+| Analytics (C3) | ADD and UNDO refetch performance; empty account empty states; drag + reload, hide/show via ⚙ Layout | `C3` | C3, F10 | pass |
+| Detail (E) | header, name, price, range %, exchange, six stats, chart canvas; Q selects; same-symbol Q refreshes the quote | `E` › header and stats… | E1, E2 | pass |
+| Detail (E) | ranges fetch warm-up history; chart timeframe clears the active range and the range % | `E` › ranges… | E1, E2 | pass |
+| Detail (E) | manual holding valuation without a chart; a quoted symbol restores the chart | `E` › a manual holding… | E1, E2 | pass |
+| Detail (E) | a slow previous-symbol response never replaces the new one; history errors shown | `E` › a slow response… | E1 | pass |
+| Detail (E) | removing the selected holding auto-selects the first; a sale reloads trade markers | `E` › removing the selected holding… | E1, E2, D1 | pass |
+| Chart (E) | expand and the 2-chart grid move the chart out and back into #detail-body; theme change repaints | `E` › expand and the 2-chart grid… | E2 | pass |
+| Detail (E) | 30 s refresh re-reads the quote, not daily history | `E` › the 30 s refresh… | E1 | pass |
 | Trades | ADD via command bar, UNDO restores | `baseline/add-sell` | F7, D3 | pass |
 | Trades | SELL with a price (realized P/L), SELL at market | `baseline/trades` | F7, D1 | pass |
 | Trades | row S button prompts for quantity and price | `baseline/trades` | D1 | pass |
@@ -77,3 +100,13 @@ Not yet covered here, owned elsewhere: performance and visual comparisons (P0-5)
 | News | delayed previous-symbol response never overwrites current headlines | `A2` › intended fix (A2)… | A2 | pass (intended fix: account-independent symbol-keyed query + abort) |
 | News | drag/reload, hide/reload, one host and one request per selection | `A2` › drag/reload… | A2, F10 | pass |
 | News | no protected request while locked, unlock refreshes, unmount removes command subscriptions | `A2` › lock stops news requests… | A2, F3, F6 | pass |
+
+| Macro (A3) | calendar anchors/company selection; WB/FRED controls and errors; manual partial-failure inflation; 15m poll; lock/unmount | `A3` | A3 | pass |
+
+| Watchlist (B1) | search/pick/add/remove/command, error/empty rows, chart adapter and unmount | `B1` | B1, E2 | pass |
+
+| Alerts (B2) | form/command/remove, chart overlay event, seed/dedup toast/beep/desktop mock, 30s poll and unmount | `B2`, `triggers.test` | B2, E2 | pass |
+
+| Income/activity (B3) | forward/received/WHT, ADD/UNDO transactions, error/empty, account race, single 120s poll and unmount | `B3` | B3 | pass (intended stale-account fix) |
+
+| FX risk (C2) | rates/history, multi/empty/error, shock/target/conversion, persistence/focus, one shared 120s poll/unmount | `C2`, `fxrisk.test` | C2 | pass |

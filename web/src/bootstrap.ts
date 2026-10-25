@@ -1,4 +1,5 @@
 import { createBus, type RefreshBus } from './api/invalidation.ts';
+import type { FinSightActions } from './features/cash/actions.ts';
 import { createUiStore, initialState, createStateBridge, createAuth, setLastPrice, type UiStore, type UiState } from './state/store.ts';
 // Startup contract between legacy code and React islands. Built as a classic
 // script (public/app/bootstrap.js) and loaded before every legacy script, so
@@ -17,6 +18,8 @@ export type FinSightGlobal = {
   // Resolves once main.js has started (islands may still be mounting).
   islandsReady: Promise<void>;
   markIslandsReady(): void;
+  // Set by main.js (D3): TypeScript actions the legacy buttons and command bar call.
+  actions?: FinSightActions;
 };
 
 declare global {
