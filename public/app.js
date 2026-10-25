@@ -1052,7 +1052,9 @@ document.addEventListener('click', (e) => { if (!e.target.closest('.add-field'))
 async function selectSymbol(symbol) {
   state.selected = symbol;
   $$('#positions-body tr').forEach((tr) => tr.classList.toggle('selected', tr.dataset.sym === symbol));
-  loadNews(symbol);
+  // A2 bridge: same-symbol selection exits NEWS's market override and refreshes.
+  // Keep this notification through E1 until F7 owns the command callers.
+  window.FinSight.bus.invalidate('news-selected');
   await loadDetail();
 }
 
@@ -1487,23 +1489,9 @@ function beep() {
 // ===========================================================================
 //  NEWS
 // ===========================================================================
-async function loadNews(symbol) {
-  $('#news-sym').textContent = symbol || 'market';
-  const box = $('#news');
-  box.innerHTML = '<span class="muted">Loading news…</span>';
-  try {
-    const { news } = await api('/api/news' + (symbol ? '?symbol=' + encodeURIComponent(symbol) : ''));
-    if (!news.length) { box.innerHTML = '<span class="muted">No headlines found.</span>'; return; }
-    box.innerHTML = news.map((n) => `<a class="news-item" href="${esc(n.link)}" target="_blank" rel="noopener noreferrer">
-      <div class="news-title">${esc(n.title)}</div>
-      <div class="news-meta">${esc(n.publisher || '')}${n.time ? ' · ' + timeAgo(n.time) : ''}</div></a>`).join('');
-  } catch (e) { box.innerHTML = `<span class="down">News error: ${esc(e.message)}</span>`; }
-}
-function timeAgo(ms) {
-  const s = (Date.now() - ms) / 1000;
-  if (s < 3600) return Math.max(1, Math.floor(s / 60)) + 'm ago';
-  if (s < 86400) return Math.floor(s / 3600) + 'h ago';
-  return Math.floor(s / 86400) + 'd ago';
+// Command-bar adapter until F7; the island owns rendering and requests.
+function loadNews(symbol) {
+  return window.FinSight.bus.invalidate(symbol ? 'news-selected' : 'news-market');
 }
 
 // ===========================================================================
@@ -1960,7 +1948,6 @@ async function boot() {
   await loadPortfolio();
   loadWatchlist();
   loadAlerts();
-  if (!state.selected) loadNews(''); // general market news when nothing selected
   loadWorldBank();
   loadFred();
   loadCalendar();

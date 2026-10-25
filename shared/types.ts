@@ -115,3 +115,10 @@ export interface FxRisk {
   base: string; totalValue: number; foreignBase: number; totalFxPnl: number; exposures: FxExposure[];
   vol: { sigmaWeeklyPct: number; oneSigmaBase: number; var95Base: number }; lots: unknown[];
 }
+
+/** lib/market.js fetchNews, server.js GET /api/news (Yahoo may omit text/URL fields). */
+export interface NewsItem {
+  title?: string; publisher?: string | null; link?: string; time: number | null; tickers: string[];
+}
+/** server.js GET /api/news. */
+export interface NewsResponse { news: NewsItem[] }

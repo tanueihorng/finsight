@@ -1,3 +1,4 @@
+import type { NewsResponse } from '../../../shared/types.ts';
 import { useSyncExternalStore } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from './client.ts';
@@ -54,4 +55,11 @@ export function useFxRisk() {
   const { base, account, enabled } = useScope();
   return useQuery({ queryKey: ['fx-risk', base, account], enabled, staleTime: 120_000, refetchInterval: 120_000,
     queryFn: ({ signal }) => api<FxRisk>(`/api/fx-risk?base=${encodeURIComponent(base)}&account=${encodeURIComponent(account)}`, { signal }) });
+}
+
+// No polling: legacy news fetches only on selection/NEWS and after unlock.
+export function useNews(symbol: string) {
+  const { enabled } = useScope();
+  return useQuery({ queryKey: ['news', symbol], enabled, staleTime: 0,
+    queryFn: ({ signal }) => api<NewsResponse>(`/api/news${symbol ? '?symbol=' + encodeURIComponent(symbol) : ''}`, { signal }) });
 }

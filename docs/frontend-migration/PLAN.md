@@ -469,7 +469,8 @@ Two esbuild builds (`bootstrap.js` IIFE; `main.js` ESM with splitting), `manifes
 | PILOT-1 (A1) | 1.5 | done (not merged) | mig/PILOT-1-markets | Claude | World Markets island; all 5 gate proofs pass (drag/reload, hide, 2 polls per 31 s, lock/unlock, unmount). Found and fixed a contract gap: an island mounting during a lock sent one request; the API client now refuses protected calls while locked. Cold transfer 793,872 B vs 529,973 B baseline (React + Query now load for a real panel); timings within noise |
 | PILOT-2 (C1) | 1.5 | done (not merged) | mig/PILOT-2-summary | Claude | Summary cards + card editor islands, `useFxRisk`; every legacy write goes through `bus.write(kind)` (map completed per COUPLING §A6); fan-out proofs pass. Peek stays legacy (must apply synchronously at load; moves with F8). Intended fix: card order reload bug. Known duplication until D1/C2: `/api/portfolio` and `/api/fx-risk` are each fetched by legacy and by Query |
 | A1 | A | done as PILOT-1 (not merged) | mig/PILOT-1-markets | Claude | |
-| A2–A3 | A | todo | | | |
+| A2 | A | done (verified 2026-10-25, not merged) | mig/A2-news | Codex | News island + command adapters; intended fix: old-symbol response cannot overwrite current news; 128 unit + 69 E2E on base 8086 |
+| A3 | A | todo | | | after owner merges A2 |
 | B1–B3 | B | todo | | | |
 | C1 | C | done as PILOT-2 (not merged) | mig/PILOT-2-summary | Claude | |
 | C2–C3 | C | todo | | | |

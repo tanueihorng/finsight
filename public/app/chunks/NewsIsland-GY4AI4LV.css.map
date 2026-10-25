@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["scoped-css:web/src/features/news/News.module.css"],
+  "sourcesContent": ["/* Legacy news-* classes remain alongside these scoped rules: retained global\n   CSS owns the existing border colour and external selectors until X2. */\n.fs-News-45e55_item { display: block; padding: 7px 0; text-decoration: none; }\n.fs-News-45e55_item:hover .fs-News-45e55_title { color: var(--amber-2); }\n.fs-News-45e55_title { color: var(--text); font-size: 12px; line-height: 1.3; }\n.fs-News-45e55_meta { color: var(--dim); font-size: 10px; margin-top: 2px; }\n"],
+  "mappings": "AAEA,CAAC,mBAAqB,QAAS,MAF/B,QAE+C,IAAI,EAAG,gBAAiB,IAAM,CAC7E,CADC,kBACkB,OAAO,CAAC,oBAAsB,MAAO,IAAI,UAAY,CACxE,CAD2B,oBACJ,MAAO,IAAI,QAAS,UAAW,KAAM,YAAa,GAAK,CAC9E,CAAC,mBAAqB,MAAO,IAAI,OAAQ,UAAW,KAAM,WAAY,GAAK",
+  "names": []
+}
