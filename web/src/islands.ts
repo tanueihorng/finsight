@@ -1,6 +1,5 @@
 import type { ComponentType } from 'react';
 import * as ClockIsland from './features/clock/ClockIsland.tsx';
-import * as MarketsIsland from './features/markets/MarketsIsland.tsx';
 import * as SummaryIsland from './features/summary/SummaryIsland.tsx';
 import * as PositionsIsland from './features/positions/PositionsIsland.tsx';
 import * as NewsIsland from './features/news/NewsIsland.tsx';
@@ -53,10 +52,11 @@ function preloadable(loaders: IslandRegistry): IslandRegistry {
 
 // Append one entry per panel. Light panels are bundled into main.js: each lazy
 // chunk was one more request before the first render (H1). The heavy ones
-// (analytics charts, detail chart, Kestrel) stay lazy chunks.
+// (analytics charts, detail chart, Kestrel) and markets stay lazy chunks.
 export const islands: IslandRegistry = preloadable({
   clock: () => Promise.resolve(ClockIsland),
-  markets: () => Promise.resolve(MarketsIsland),
+  // Stays a chunk: upgrade.sw.spec deletes it to check the SW's hashed-chunk fallback.
+  markets: () => import('./features/markets/MarketsIsland.tsx'),
   summary: () => Promise.resolve(SummaryIsland),
   positions: () => Promise.resolve(PositionsIsland),
   news: () => Promise.resolve(NewsIsland),
