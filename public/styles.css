@@ -399,8 +399,10 @@ body {
 /* ---------------- lock screen ---------------- */
 .lock { position: fixed; inset: 0; z-index: 500; background: radial-gradient(circle at 50% 30%, #0b0f15, #050608); display: none; align-items: center; justify-content: center; }
 body.locked .lock { display: flex; }
-/* hide the app behind the lock */
-body.locked > .topbar, body.locked > .cmdbar, body.locked > .cmd-status, body.locked > .grid, body.locked > .statusbar { display: none !important; }
+/* hide the app behind the lock: since X1 the page renders inside #root, so hide
+   every child of the root except the lock screen. display:none (not just the
+   overlay) also takes it out of the tab order and the accessibility tree. */
+body.locked #root > :not(#lock-screen) { display: none !important; }
 .lock-box { width: 300px; max-width: 88vw; text-align: center; display: flex; flex-direction: column; gap: 12px; }
 .lock-logo { font-size: 20px; font-weight: 700; letter-spacing: 2px; color: var(--text); display: inline-flex; align-items: center; }
 .lock-title { color: var(--muted); font-size: 13px; letter-spacing: .5px; }

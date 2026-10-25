@@ -142,7 +142,6 @@ test('3a. locked: the lock screen covers the whole viewport even over a maximise
 });
 
 test('3b. locked: the app behind the lock is hidden, not just covered (positions, summary, Kestrel dock)', async ({ page }) => {
-  test.fail(true, 'AUTHVAL-001 F1 (X1 regression): styles.css hides only body > .topbar/.grid/…, but X1 renders them inside #root. Remove this line when fixed.');
   await seeded(page);
   await page.evaluate(() => { localStorage.setItem('finsight-agent-mode', 'dock'); localStorage.setItem('finsight-agent-open', '1'); });
   await page.reload();
@@ -234,7 +233,6 @@ test('4a. Kestrel sends the selected account and base as page context across swi
 });
 
 test('4b. locked with Kestrel docked: Tab from the PIN never leaves the lock screen, and the composer cannot send', async ({ page }) => {
-  test.fail(true, 'AUTHVAL-001 F2 (X1 regression, follows F1): elements behind the lock stay in the tab order; the docked composer can be reached and POSTs to /api/agent (401). Remove this line when fixed.');
   await seeded(page);
   await openKestrel(page, 'dock');
   await lockByButton(page);
@@ -257,6 +255,55 @@ test('4b. locked with Kestrel docked: Tab from the PIN never leaves the lock scr
   expect([...outside], 'focusable elements behind the lock').toEqual([]);
   expect(agentPosts, 'agent requests sent while locked').toEqual([]);
   await expect(page.locator('body')).toHaveClass(/\blocked\b/);
+});
+
+// Every element keyboard focus reaches from the PIN field (150 Tabs) that is not part of the lock screen.
+async function tabOutsideLock(page: Page) {
+  await expect(page.locator('#lock-pin')).toBeFocused();
+  const outside = new Set<string>();
+  for (let i = 0; i < 150; i++) {
+    await page.keyboard.press('Tab');
+    const at = await page.evaluate(() => {
+      const el = document.activeElement as HTMLElement | null;
+      return !el || el === document.body || el.closest('#lock-screen') ? null : `${el.tagName.toLowerCase()}${el.id ? '#' + el.id : ''}.${String(el.className).split(' ')[0]}`;
+    });
+    if (at) outside.add(at);
+  }
+  return [...outside];
+}
+// Screen-reader view: accessible controls/landmarks outside the lock screen.
+const exposedOutsideLock = (page: Page) => page.evaluate(() => {
+  const sel = 'button, input, select, textarea, a[href], table, [role="log"], [role="listbox"], [role="separator"]';
+  return [...document.querySelectorAll<HTMLElement>(sel)].filter((el) => !el.closest('#lock-screen') && el.checkVisibility()).map((el) => el.id || el.className || el.tagName).slice(0, 10);
+});
+
+test('3e. locked with the side drawer open: drawer, toggle and app are hidden, out of the tab order and the accessibility tree', async ({ page }) => {
+  await seeded(page);
+  await openKestrel(page, 'side');
+  await lockByButton(page);
+  await expect(page.locator('.agent-panel')).toBeHidden();
+  await expect(page.locator('#agent-toggle')).toBeHidden();
+  await expect(page.getByRole('textbox', { name: 'Message' })).toHaveCount(0);
+  await expect(page.getByRole('combobox')).toHaveCount(0); // account and base selectors
+  expect(await exposedOutsideLock(page)).toEqual([]);
+  expect(await tabOutsideLock(page)).toEqual([]);
+  await unlockWithPin(page);
+  await expect(page.locator('.agent-panel')).toBeVisible();
+  await expect(rows(page)).toHaveCount(9);
+});
+
+test('3f. narrow layout (390×844), Kestrel docked: locked hides everything but the lock form; unlock restores it', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await seeded(page);
+  await openKestrel(page, 'dock');
+  await lockByButton(page);
+  await expect(page.locator('#lock-pin')).toBeVisible();
+  for (const sel of ['#summary', '#positions-body', '#agent-dock', '.topbar', '.statusbar']) await expect(page.locator(sel).first(), sel).toBeHidden();
+  expect(await exposedOutsideLock(page)).toEqual([]);
+  expect(await tabOutsideLock(page)).toEqual([]);
+  await unlockWithPin(page);
+  await expect(page.locator('#agent-dock')).toBeVisible();
+  await expect(page.locator('#summary')).toBeVisible();
 });
 
 test('4c. side drawer open during lock (stream cut while locked): after unlock the history stays and a new reply streams', async ({ page }) => {
