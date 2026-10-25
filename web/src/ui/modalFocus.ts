@@ -2,6 +2,30 @@ import { useLayoutEffect, useRef, type RefObject } from 'react';
 
 const SELECTOR = 'a[href], button, input:not([type="hidden"]), select, textarea, [tabindex], summary';
 const dialogs: HTMLElement[] = [];
+// Native inertness prevents pointer/programmatic focus on the modal background;
+// aria-disabled exposes that temporary state to accessibility clients as well.
+// Preserve existing attributes and recompute from the top dialog for nesting.
+const background = new Map<HTMLElement, { inert: boolean; disabled: string | null }>();
+function syncBackground() {
+  for (const [el, saved] of background) {
+    el.inert = saved.inert;
+    if (saved.disabled === null) el.removeAttribute('aria-disabled'); else el.setAttribute('aria-disabled', saved.disabled);
+  }
+  background.clear();
+  if (document.body.classList.contains('locked')) return;
+  let branch = dialogs.at(-1);
+  while (branch && branch !== document.body) {
+    const parent = branch.parentElement;
+    if (!parent) break;
+    for (const sibling of parent.children) {
+      if (!(sibling instanceof HTMLElement) || sibling === branch || /^(SCRIPT|STYLE|LINK|NOSCRIPT)$/.test(sibling.tagName)) continue;
+      background.set(sibling, { inert: sibling.inert, disabled: sibling.getAttribute('aria-disabled') });
+      sibling.inert = true; sibling.setAttribute('aria-disabled', 'true');
+    }
+    branch = parent;
+  }
+}
+
 export function useModalFocus(open: boolean, onClose: () => void, ref: RefObject<HTMLElement | null>, opts: { initialFocus?: () => HTMLElement | null } = {}) {
   const close = useRef(onClose), initial = useRef(opts.initialFocus);
   close.current = onClose; initial.current = opts.initialFocus;
@@ -10,7 +34,7 @@ export function useModalFocus(open: boolean, onClose: () => void, ref: RefObject
     if (!open || !box) return;
     // Capture before existing passive effects put focus in an input.
     const opener = document.activeElement;
-    dialogs.push(box);
+    dialogs.push(box); syncBackground();
     const active = () => dialogs.at(-1) === box && !document.body.classList.contains('locked') && box.getClientRects().length > 0;
     const items = () => [...box.querySelectorAll<HTMLElement>(SELECTOR)].filter((el) => el.tabIndex >= 0 && !el.matches(':disabled, [inert], [hidden]') && el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden');
     const focus = () => { if (active()) (initial.current?.() ?? items()[0] ?? box).focus({ preventScroll: true }); };
@@ -26,15 +50,18 @@ export function useModalFocus(open: boolean, onClose: () => void, ref: RefObject
       }
     };
     const onFocus = (e: FocusEvent) => { if (active() && !box.contains(e.target as Node)) focus(); };
-    const onUnlock = () => { setTimeout(focus, 0); };
+    const onLock = () => { syncBackground(); };
+    const onUnlock = () => { syncBackground(); setTimeout(focus, 0); };
     document.addEventListener('keydown', onKey, true);
     document.addEventListener('focusin', onFocus);
     window.addEventListener('finsight:unlocked', onUnlock);
+    window.addEventListener('finsight:locked', onLock);
     return () => {
-      clearTimeout(timer); dialogs.splice(dialogs.indexOf(box), 1);
+      clearTimeout(timer); dialogs.splice(dialogs.indexOf(box), 1); syncBackground();
       document.removeEventListener('keydown', onKey, true);
       document.removeEventListener('focusin', onFocus);
       window.removeEventListener('finsight:unlocked', onUnlock);
+      window.removeEventListener('finsight:locked', onLock);
       if (opener instanceof HTMLElement && opener.isConnected && opener.getClientRects().length && !document.body.classList.contains('locked')) opener.focus({ preventScroll: true });
     };
   }, [open, ref]);

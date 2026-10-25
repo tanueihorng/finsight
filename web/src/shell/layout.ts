@@ -108,6 +108,6 @@ export function installKeyboardLayout() {
     else before = cols[side][index + 2] ?? null;
     if (before === pid || to === side && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) return;
     columns.setState(movePanel(cols, pid, to, before), true); saveLayout();
-    requestAnimationFrame(() => grip.focus({ preventScroll: true }));
+    requestAnimationFrame(() => { grip.focus({ preventScroll: true }); grip.scrollIntoView({ block: 'nearest', inline: 'nearest' }); });
   });
 }

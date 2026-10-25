@@ -66,6 +66,7 @@ for (const [name, opener, dialog] of [
     await page.locator(opener).focus(); await page.keyboard.press('Enter');
     const box = page.locator(`${dialog} [role="dialog"]`);
     await expect(box).toBeVisible();
+    await expect(page.locator('#cmd')).toBeDisabled();
     await expect.poll(() => box.evaluate((el) => el.contains(document.activeElement))).toBe(true);
     const controls = box.locator('button:visible:not(:disabled), input:visible:not(:disabled), select:visible:not(:disabled), textarea:visible:not(:disabled)');
     const first = controls.first(), last = controls.last();
@@ -125,6 +126,7 @@ test('keyboard: row selection, sorting and panel rearrangement preserve actions'
   await grip.focus(); await page.keyboard.press('ArrowRight');
   await expect(page.locator('.col-right [data-pid="positions"]')).toBeVisible();
   await expect(grip).toBeFocused();
+  await expect(grip).toBeInViewport();
   await page.reload(); await expect(page.locator('.col-right [data-pid="positions"]')).toBeVisible();
 });
 
