@@ -19,13 +19,18 @@ const hooks = () => chartHooks;
 export function ChartHost({ data, tradesKey }: { data: ChartData | null; tradesKey: string }) {
   const wrap = useRef<HTMLDivElement>(null);
   const chart = useRef<PriceChartInstance | null>(null);
-  // chart.js loads after the app starts (H1); the chart is created once it is in.
-  const [scripts, setScripts] = useState(() => !!window.PriceChart);
+  // chart.js loads after the app starts (H1); the chart is created once it is
+  // in and the app is unlocked: chart.js's own requests (saved layouts) do not
+  // go through the app's lock gate, and nothing may run while locked.
+  const unlocked = () => window.FinSight.auth?.unlocked !== false;
+  const [scripts, setScripts] = useState(() => !!window.PriceChart && unlocked());
   useEffect(() => {
     if (scripts) return;
     let live = true;
-    loadChartScripts().then(() => { if (live) setScripts(true); }, () => { /* no chart, as when chart.js failed to load */ });
-    return () => { live = false; };
+    const ready = () => { if (live && unlocked()) setScripts(true); };
+    window.addEventListener('finsight:unlocked', ready);
+    loadChartScripts().then(ready, () => { /* no chart, as when chart.js failed to load */ });
+    return () => { live = false; window.removeEventListener('finsight:unlocked', ready); };
   }, [scripts]);
 
   useEffect(() => {

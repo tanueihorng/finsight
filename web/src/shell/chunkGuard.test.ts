@@ -78,3 +78,9 @@ test('an import that already resolved stays synchronous through the guard (H1: n
   h.boot();
   assert.equal(h.reloads(), 0);
 });
+test('a prefilled field the user has not typed into is not a draft', () => {
+  const typed = { type: 'text', value: 'typed' }, prefilled = { type: 'text', value: 'US' };
+  const doc = (els: unknown[]) => ({ querySelectorAll: (selector: string) => selector === 'input, textarea' ? els : [] }) as unknown as Document;
+  assert.equal(hasUnsavedInput(doc([prefilled]), (el) => el === (typed as unknown)), false);
+  assert.equal(hasUnsavedInput(doc([prefilled, typed]), (el) => el === (typed as unknown)), true);
+});

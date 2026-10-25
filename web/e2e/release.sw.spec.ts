@@ -11,7 +11,7 @@ const sw = fs.readFileSync(path.join(source, 'sw.js'), 'utf8');
 const main = fs.readFileSync(path.join(source, 'app/main.js'), 'utf8');
 const manifest = JSON.parse(fs.readFileSync(path.join(source, 'app/manifest.json'), 'utf8')).files as string[];
 const market = manifest.find((f) => /\/MarketsIsland-[A-Z0-9]{8}\.js$/.test(f))!;
-const shell = 'finsight-shell-v35-h4';
+const shell = /const SHELL = '([^']+)'/.exec(sw)![1]!; // the current cache name, whatever the release calls it
 const boundary = 'This panel could not load. Reload to try again.';
 function restore() { fs.cpSync(source, publicDir, { recursive: true }); }
 test.beforeEach(restore);
@@ -64,7 +64,7 @@ test('old cached deploy upgrades; stale main hits a removed chunk, reloads once 
   expect(await cachePaths(page)).not.toContain(oldMarket);
 });
 
-test('same-build transient failure reloads once and clears marker only after recovery', async ({ page }) => {
+test('same-build transient failure: the panel retry recovers without a reload, leaving no marker', async ({ page }) => {
   // Inject exactly one real 404 inside the disposable worker. A browser event
   // listener restoring a deleted file can lose a race with the guard's reload.
   fs.writeFileSync(path.join(publicDir, 'sw.js'), sw.replace('e.respondWith(caches.open(SHELL)',
@@ -80,9 +80,12 @@ test('same-build transient failure reloads once and clears marker only after rec
   }));
   const count = navigations(page);
   await page.reload();
-  await expect.poll(count).toBe(2);
+  // Since H1 a host loads its chunk before mounting and the mounted island
+  // imports it again (App.tsx, islands.ts), so a single failed request is
+  // retried in place; a chunk that stays missing still reloads once (next test).
   await expect(page.locator('#markets [data-sym]').first()).toBeVisible();
-  await expect.poll(() => markers(page)).toEqual([]);
+  await page.waitForTimeout(700); expect(count()).toBe(1);
+  expect(await markers(page)).toEqual([]);
 });
 
 test('permanently missing chunk reloads once; later boots retain the boundary and fuse', async ({ page }) => {

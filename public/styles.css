@@ -94,8 +94,10 @@ body {
 .logo-img { height: 22px; width: 22px; border-radius: 5px; margin-right: 8px; vertical-align: middle; object-fit: cover; }
 .lock-logo-img { height: 30px; width: 30px; border-radius: 7px; margin-right: 4px; }
 .topbar-right { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 6px 10px; }
+/* a11y: --dim, not --muted, keeps the neutral (not yet open/closed) pill at
+   4.5:1 or better on its fixed background in every theme. */
 .pill {
-  background: #1a1d22; color: var(--muted); border: 1px solid var(--border-2);
+  background: #1a1d22; color: var(--dim); border: 1px solid var(--border-2);
   padding: 2px 8px; border-radius: 3px; font-size: 11px; letter-spacing: .5px;
 }
 .pill.open  { color: var(--up);   border-color: var(--up);   box-shadow: 0 0 6px rgba(46,194,126,.4); }

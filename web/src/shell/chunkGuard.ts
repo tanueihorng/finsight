@@ -12,11 +12,19 @@ type Environment = {
   reload: () => void;
   afterBoot: (callback: () => void) => void;
 };
-export function hasUnsavedInput(doc: Document): boolean {
+// `edited` limits the check to fields the user has typed into: a prefilled
+// field (the World Bank country, say) is not a draft and must not block recovery.
+export function hasUnsavedInput(doc: Document, edited: (el: Element) => boolean = () => true): boolean {
   // Includes PIN, chat, command and trade forms. Never persist their contents.
   return [...doc.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input, textarea')]
-    .some((el) => !['hidden', 'checkbox', 'radio', 'button', 'submit', 'reset', 'range', 'color'].includes(el.type) && !!el.value)
-    || [...doc.querySelectorAll<HTMLElement>('[contenteditable="true"]')].some((el) => !!el.textContent?.trim());
+    .some((el) => !['hidden', 'checkbox', 'radio', 'button', 'submit', 'reset', 'range', 'color'].includes(el.type) && !!el.value && edited(el))
+    || [...doc.querySelectorAll<HTMLElement>('[contenteditable="true"]')].some((el) => !!el.textContent?.trim() && edited(el));
+}
+// Fields the user has typed into on this page (input events; a script setting
+// a value fires none).
+const typedInto = new WeakSet<Element>();
+if (typeof document !== 'undefined') {
+  document.addEventListener('input', (e) => { if (e.target instanceof Element) typedInto.add(e.target); }, true);
 }
 // Module fetch failures have browser-specific TypeError messages. Syntax errors
 // can indicate a truncated deploy too. Ordinary component/loader exceptions
@@ -70,7 +78,7 @@ let guard: ReturnType<typeof createChunkGuard> | undefined;
 export function guardedIslandLoader<T>(loader: Loader<T>, registry: Record<string, Loader<unknown>>): Loader<T> {
   guard ??= createChunkGuard(chunkBuild(registry), {
     storage: () => window.sessionStorage,
-    hasInput: () => hasUnsavedInput(document),
+    hasInput: () => hasUnsavedInput(document, (el) => typedInto.has(el)),
     reload: () => window.location.reload(),
     afterBoot: (callback) => {
       const defer = () => { setTimeout(callback, 0); };
