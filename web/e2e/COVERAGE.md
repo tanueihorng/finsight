@@ -81,3 +81,5 @@ Not yet covered here, owned elsewhere: performance and visual comparisons (P0-5)
 | Macro (A3) | calendar anchors/company selection; WB/FRED controls and errors; manual partial-failure inflation; 15m poll; lock/unmount | `A3` | A3 | pass |
 
 | Watchlist (B1) | search/pick/add/remove/command, error/empty rows, chart adapter and unmount | `B1` | B1, E2 | pass |
+
+| Alerts (B2) | form/command/remove, chart overlay event, seed/dedup toast/beep/desktop mock, 30s poll and unmount | `B2`, `triggers.test` | B2, E2 | pass |

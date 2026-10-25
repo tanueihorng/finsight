@@ -175,15 +175,10 @@ try { var d = document.documentElement;
       <div class="panel">
         <div class="panel-head">
           <span class="panel-title">PRICE ALERTS</span>
-          <button id="alert-toggle" class="mini-btn">+ ALERT</button>
+          <span data-island-slot="alerts:head"></span>
         </div>
-        <form id="alert-form" class="alert-form hidden" autocomplete="off">
-          <input id="alert-symbol" placeholder="SYMBOL" />
-          <select id="alert-op"><option value=">">rises above ≥</option><option value="<">falls below ≤</option></select>
-          <input id="alert-price" type="number" step="any" min="0" placeholder="PRICE" />
-          <button type="submit" class="mini-btn solid">SET</button>
-        </form>
-        <div id="alerts" class="alerts"></div>
+        <div data-island-slot="alerts-form:head"></div>
+        <div id="alerts" class="alerts" data-island="alerts"></div>
       </div>
 
       <div class="panel">

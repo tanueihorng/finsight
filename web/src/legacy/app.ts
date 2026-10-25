@@ -20,3 +20,18 @@ export function setChartWatch(list: import('../../../shared/types.ts').WatchItem
   const bridge = window as unknown as { FinSightLegacy?: { setChartWatch?: (items: import('../../../shared/types.ts').WatchItem[]) => void } };
   bridge.FinSightLegacy?.setChartWatch?.(list);
 }
+
+export function requestNotify(): void {
+  (window as unknown as { requestNotify?: () => void }).requestNotify?.();
+}
+export function publishAlerts(alerts: import('../../../shared/types.ts').Alert[], broadcast = true): void {
+  (window as unknown as { __finAlerts: import('../../../shared/types.ts').Alert[] }).__finAlerts = alerts;
+  if (broadcast) window.dispatchEvent(new CustomEvent('finsight:alerts', { detail: { alerts, from: 'app' } }));
+}
+export function subscribeChartAlerts(handler: (alerts: import('../../../shared/types.ts').Alert[]) => void): () => void {
+  const listener = (event: Event) => {
+    const detail = (event as CustomEvent<{ from?: string; alerts?: import('../../../shared/types.ts').Alert[] }>).detail;
+    if (detail?.from === 'chart' && Array.isArray(detail.alerts)) handler(detail.alerts);
+  };
+  window.addEventListener('finsight:alerts', listener); return () => window.removeEventListener('finsight:alerts', listener);
+}

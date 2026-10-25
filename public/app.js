@@ -183,7 +183,6 @@ window.FinSight.bus.on('portfolio', () => loadPortfolio());
 window.FinSight.bus.on('accounts', () => loadAccounts());
 window.FinSight.bus.on('ledger', () => { if (!$('#ledger-modal').classList.contains('hidden') && ledgerTab === 'trades') return loadLedger(); });
 window.FinSight.bus.on('realized', () => { if (!$('#ledger-modal').classList.contains('hidden') && ledgerTab === 'realized') return loadRealized(); });
-window.FinSight.bus.on('alerts', () => loadAlerts());
 
 function renderPortfolio(data) {
   const { positions, summary, transactions } = data;
@@ -1057,75 +1056,10 @@ function loadWatchlist() { return window.FinSight.bus.invalidate('watchlist'); }
 // ===========================================================================
 //  PRICE ALERTS + NOTIFICATIONS
 // ===========================================================================
-let notifiedAlerts = null; // seeded on first load so pre-existing triggers don't re-fire
-async function loadAlerts() {
-  try { renderAlerts((await api('/api/alerts')).alerts); } catch {}
-}
-function renderAlerts(alerts, fromChart) {
-  alerts = alerts || [];
-  if (notifiedAlerts === null) {
-    notifiedAlerts = new Set(alerts.filter((a) => a.triggeredAt).map((a) => a.id));
-  } else {
-    alerts.forEach((a) => {
-      if (a.met && a.triggeredAt && !notifiedAlerts.has(a.id)) {
-        notifiedAlerts.add(a.id);
-        notify('ALERT', `${a.label || a.symbol} — now ${a.currentValue != null ? fmt(a.currentValue) : fmt(a.currentPrice)}`);
-      }
-    });
-  }
-  // charts draw their symbol's alerts; they also post here after adding one
-  window.__finAlerts = alerts;
-  if (!fromChart) window.dispatchEvent(new CustomEvent('finsight:alerts', { detail: { alerts, from: 'app' } }));
-  $('#alerts').innerHTML = alerts.length ? alerts.map((a) => `
-    <div class="al-row ${a.met ? 'met' : ''}">
-      <div><span class="al-sym" data-sym="${esc(a.symbol)}">${esc(a.symbol)}</span> <span class="al-cond">${esc((a.label || '').replace(a.symbol + ' ', ''))}</span>
-        <span class="muted small">now ${a.currentValue != null ? fmt(a.currentValue) : '—'}${a.level != null && a.kind !== 'price' ? ' · level ' + fmt(a.level) : ''}</span></div>
-      <span class="al-badge">${a.met ? 'TRIGGERED' : 'armed'}</span>
-      <button class="al-x" data-id="${esc(a.id)}">✕</button></div>`).join('')
-    : '<div class="al-empty">No alerts — add one above, type <b>ALERT AAPL > 320</b>, or use the bell on the chart (price, trend line, RSI, moving average).</div>';
-}
-window.addEventListener('finsight:alerts', (e) => { if (e.detail && e.detail.from === 'chart') renderAlerts(e.detail.alerts, true); });
-$('#alert-toggle').addEventListener('click', () => { $('#alert-form').classList.toggle('hidden'); $('#alert-symbol').focus(); requestNotify(); });
-$('#alert-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const symbol = $('#alert-symbol').value.trim().toUpperCase();
-  const op = $('#alert-op').value, price = $('#alert-price').value;
-  if (!symbol || !price) return setStatus('Alert needs a symbol and a price.', 'err');
-  try {
-    const res = await api('/api/alerts/add', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ symbol, op, price }) });
-    renderAlerts(res.alerts); $('#alert-symbol').value = ''; $('#alert-price').value = '';
-    setStatus(`Alert set: ${symbol} ${op} ${price}`, 'ok'); requestNotify();
-  } catch (err) { setStatus('Alert failed: ' + err.message, 'err'); }
-});
-$('#alerts').addEventListener('click', async (e) => {
-  const sy = e.target.closest('.al-sym'); if (sy) return selectSymbol(sy.dataset.sym);
-  const x = e.target.closest('.al-x'); if (!x) return;
-  const res = await api('/api/alerts/remove', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: x.dataset.id }) });
-  renderAlerts(res.alerts);
-});
+// Alerts are a React island. Keep command permission/refresh adapters until F7.
+function loadAlerts() { return window.FinSight.bus.invalidate('alerts'); }
 function requestNotify() {
   if ('Notification' in window && Notification.permission === 'default') { try { Notification.requestPermission(); } catch {} }
-}
-function notify(head, body) {
-  toast(head, body); beep();
-  if ('Notification' in window && Notification.permission === 'granted') { try { new Notification(head, { body }); } catch {} }
-}
-function toast(head, body) {
-  const el = document.createElement('div');
-  el.className = 'toast';
-  el.innerHTML = `<div class="toast-h">🔔 ${esc(head)}</div><div class="toast-b">${esc(body)}</div>`;
-  $('#toasts').appendChild(el);
-  setTimeout(() => { el.style.transition = 'opacity .4s'; el.style.opacity = '0'; setTimeout(() => el.remove(), 400); }, 9000);
-}
-function beep() {
-  try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const o = ctx.createOscillator(), g = ctx.createGain();
-    o.connect(g); g.connect(ctx.destination);
-    o.type = 'sine'; o.frequency.value = 880; g.gain.value = 0.05;
-    o.start(); o.stop(ctx.currentTime + 0.15);
-    o.onended = () => ctx.close();
-  } catch {}
 }
 
 // ===========================================================================
@@ -1592,7 +1526,6 @@ async function boot() {
   applyProfileName();
   if (!profile.setupDone) openSetup(); // first-launch wizard
   await loadPortfolio();
-  loadAlerts();
   setFooter(`READY · base ${state.base} · live data refreshing every 15s`);
   startPolling();
 }
@@ -1608,7 +1541,6 @@ function startPolling() {
   if (document.hidden) return;
   pollTimers.push(
     setInterval(loadPortfolio, 15000),
-    setInterval(loadAlerts, 30000), // the server also evaluates alerts every minute and notifies
     setInterval(() => { if (state.selected) loadDetail({ periodic: true }); }, 30000),
     // macro panels change slowly — auto-refresh every 15 min (the LOAD buttons still work)
   );
@@ -1620,7 +1552,7 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden) { hiddenAt = Date.now(); stopTimers(); return; }
   // back in view: refresh what went stale, then resume the timers
   if (Date.now() - hiddenAt > 10000) {
-    loadPortfolio(); window.FinSight.bus.invalidate('markets'); window.FinSight.bus.invalidate('watchlist'); loadAlerts();
+    loadPortfolio(); window.FinSight.bus.invalidate('markets'); window.FinSight.bus.invalidate('watchlist'); window.FinSight.bus.invalidate('alerts');
     if (state.selected) loadDetail({ periodic: true });
     if (Date.now() - hiddenAt > 15 * 60000) { window.FinSight.bus.invalidate('worldbank'); window.FinSight.bus.invalidate('fred'); window.FinSight.bus.invalidate('calendar'); window.FinSight.bus.invalidate('events'); }
   }

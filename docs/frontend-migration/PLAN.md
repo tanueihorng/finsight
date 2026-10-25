@@ -472,7 +472,8 @@ Two esbuild builds (`bootstrap.js` IIFE; `main.js` ESM with splitting), `manifes
 | A2 | A | done (merged 2026-10-25) | mig/A2-news | Codex | News island + command adapters; intended fix: old-symbol response cannot overwrite current news; 128 unit + 69 E2E on base 8086 |
 | A3 | A | todo | | Codex | |
 | B1 | B | verified on stack (not merged) | mig/B1-watchlist | Codex | Watchlist, search, chart adapter, Query polling |
-| B2–B3 | B | todo | | | stacked continuation |
+| B2 | B | verified on stack (not merged) | mig/B2-alerts | Codex | Alerts, chart bridge, notification lifecycle |
+| B3 | B | todo | | | stacked continuation |
 | C1 | C | done as PILOT-2 (merged) | mig/PILOT-2-summary | Claude | |
 | C2–C3 | C | todo | | | |
 | D1 | D | done (merged 2026-10-25) | mig/D1-positions | Claude | Positions table island (toolbar, filter chips, search, sort, group, collapse, row S/✕, flash) + `useCategories`, `useAccounts`; `posView` keeps the `finsight-posview` key. Legacy keeps `lastTableData` fed from `renderPortfolio` for detail/chart (E1/E2) and its own `assetClass`/`splitByAccount` copies for allocation (C3). Intended fix: a failed row ✕ delete now shows an error |
