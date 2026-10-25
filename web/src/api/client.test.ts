@@ -29,6 +29,16 @@ test('while locked, protected requests fail without a network call; auth calls s
   locked = false; assert.deepEqual(await api('/api/markets'), { ok: true });
   assert.deepEqual(sent, ['/api/auth/status', '/api/markets']);
 });
+test('bus.write refreshes each key of a mutation in order, legacy readers included', async () => {
+  const bus = createBus(); const calls: string[] = [];
+  bus.connect((key) => { calls.push(key); });
+  const off = bus.on('ledger', () => { calls.push('legacy-ledger'); });
+  await bus.write('ledger-edit');
+  assert.deepEqual(calls.filter((c) => c !== 'legacy-ledger'), [...mutationInvalidations['ledger-edit']]);
+  assert.ok(calls.indexOf('legacy-ledger') === calls.indexOf('ledger') + 1);
+  calls.length = 0; await bus.write('withholding'); assert.deepEqual(calls, ['dividends', 'realized']);
+  off();
+});
 test('abort reasons propagate; cross-origin paths are refused before fetch', async () => {
   const controller = new AbortController(); controller.abort();
   const api = createApi(async (_, init) => { init?.signal?.throwIfAborted(); throw new Error('unexpected fetch'); }, () => {});
@@ -46,5 +56,6 @@ test('bus works before Query, fans out once and cleans subscriptions despite fai
   off(); bad(); disconnect(); calls.length = 0;
   await bus.invalidate('portfolio'); assert.deepEqual(calls, []);
   assert.ok(mutationInvalidations.sell.includes('chart-trades'));
+  assert.equal(mutationInvalidations.undo[0], 'accounts');
   assert.ok(mutationInvalidations.cash.includes('wealth'));
 });

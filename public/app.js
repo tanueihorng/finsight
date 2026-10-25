@@ -75,7 +75,7 @@ async function runCommand(raw) {
       await api('/api/portfolio/buy' + baseQS(), { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ symbol: sym, quantity: qty, price, date: date || null }) });
       setStatus(`BOUGHT ${qty} ${sym.toUpperCase()} @ ${price}${date ? ' on ' + date : ''}`, 'ok');
-      await loadPortfolio(); return;
+      await afterWrite('buy'); return;
     }
     if (cmd === 'SELL') {
       const [, sym, qty, price] = parts;
@@ -84,7 +84,7 @@ async function runCommand(raw) {
         body: JSON.stringify({ symbol: sym, quantity: qty, price: price ?? null }) });
       const r = res.lastRealized;
       setStatus(`SOLD ${qty} ${sym.toUpperCase()}  ·  realized ${signStr(r)} `, r >= 0 ? 'ok' : 'err');
-      renderPortfolio(res); return;
+      await afterWrite('sell'); return;
     }
     if (cmd === 'DEL' || cmd === 'DELETE' || cmd === 'REMOVE') {
       const sym = parts[1];
@@ -92,7 +92,7 @@ async function runCommand(raw) {
       await api('/api/portfolio/delete' + baseQS(), { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ symbol: sym }) });
       setStatus(`REMOVED ${sym.toUpperCase()} from portfolio`, 'ok');
-      await loadPortfolio(); return;
+      await afterWrite('delete'); return;
     }
     if (cmd === 'Q' || cmd === 'QUOTE') {
       const sym = parts[1];
@@ -103,20 +103,20 @@ async function runCommand(raw) {
       const sym = parts[1];
       if (!sym) return setStatus('Usage: WATCH <symbol>', 'err');
       await api('/api/watchlist/add', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ symbol: sym }) });
-      setStatus(`Watching ${sym.toUpperCase()}`, 'ok'); loadWatchlist(); return;
+      setStatus(`Watching ${sym.toUpperCase()}`, 'ok'); afterWrite('watchlist-add'); return;
     }
     if (cmd === 'UNWATCH') {
       const sym = parts[1];
       if (!sym) return setStatus('Usage: UNWATCH <symbol>', 'err');
       await api('/api/watchlist/remove', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ symbol: sym }) });
-      setStatus(`Unwatched ${sym.toUpperCase()}`, 'ok'); loadWatchlist(); return;
+      setStatus(`Unwatched ${sym.toUpperCase()}`, 'ok'); afterWrite('watchlist-remove'); return;
     }
     if (cmd === 'ALERT') {
       const sym = parts[1], op = parts[2], price = parts[3];
       if (!sym || !op || !price) return setStatus('Usage: ALERT <symbol> > <price>   (use > or <)', 'err');
       const o = (op.includes('<') || /below|under/i.test(op)) ? '<' : '>';
       await api('/api/alerts/add', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ symbol: sym, op: o, price }) });
-      setStatus(`Alert set: ${sym.toUpperCase()} ${o} ${price}`, 'ok'); loadAlerts(); requestNotify(); return;
+      setStatus(`Alert set: ${sym.toUpperCase()} ${o} ${price}`, 'ok'); afterWrite('alerts-add'); requestNotify(); return;
     }
     if (cmd === 'NEWS') {
       const sym = parts[1];
@@ -135,7 +135,7 @@ async function runCommand(raw) {
       const [, mkt, pct] = parts;
       if (!mkt || pct == null) return setStatus('Usage: WHT <US|SG|HK|UK|EU|JP|AU|CA|OTHER> <percent>   e.g. WHT US 15', 'err');
       await api('/api/settings/withholding', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ market: mkt, pct }) });
-      setStatus(`Dividend withholding for ${mkt.toUpperCase()} set to ${pct}%`, 'ok'); loadDividends(); return;
+      setStatus(`Dividend withholding for ${mkt.toUpperCase()} set to ${pct}%`, 'ok'); loadDividends(); afterWrite('withholding'); return;
     }
     if (cmd === 'MKT' || cmd === 'MARKETS') { window.FinSight.bus.invalidate('markets'); setStatus('Refreshing world markets…', 'ok'); return; }
     if (cmd === 'CLEAR') { setStatus(''); return; }
@@ -174,12 +174,22 @@ async function loadPortfolio() {
   } catch (e) { if (request === portfolioRequest && query === baseQS()) setFooter('Portfolio load failed: ' + e.message); }
 }
 
+// Every completed write refreshes all readers of what it changed (COUPLING.md
+// §A6, web/src/api/invalidation.ts). Islands refetch through Query; legacy
+// readers registered here refresh themselves. Dividends, FX risk, performance
+// and wealth still follow loadPortfolio's signatures until B3/C2/C3.
+function afterWrite(kind) { return window.FinSight.bus.write(kind); }
+window.FinSight.bus.on('portfolio', () => loadPortfolio());
+window.FinSight.bus.on('accounts', () => loadAccounts());
+window.FinSight.bus.on('ledger', () => { if (!$('#ledger-modal').classList.contains('hidden') && ledgerTab === 'trades') return loadLedger(); });
+window.FinSight.bus.on('realized', () => { if (!$('#ledger-modal').classList.contains('hidden') && ledgerTab === 'realized') return loadRealized(); });
+window.FinSight.bus.on('watchlist', () => loadWatchlist());
+window.FinSight.bus.on('alerts', () => loadAlerts());
+
 function renderPortfolio(data) {
   const { positions, summary, transactions } = data;
   const base = data.base || state.base;
-  lastSummary = summary; // for live card re-render
-  lastCash = data.cash || [];
-  renderSummary(summary, positions, base);
+  lastSummary = summary; // read by the legacy FX risk panel (C2)
   // FX coverage note
   if (data.fxMissing && data.fxMissing.length) setFooter(`Note: no FX rate for ${data.fxMissing.join(', ')} → shown unconverted.`);
 
@@ -208,9 +218,7 @@ function renderPortfolio(data) {
 async function loadFxRisk() {
   try {
     const data = await api('/api/fx-risk' + baseQS());
-    lastFxRisk = data;
-    renderFxRisk(data);
-    applyCards(); // refresh the FX EXPOSURE card now that exposure data is in
+    renderFxRisk(data); // the FX EXPOSURE card reads /api/fx-risk itself (useFxRisk)
   } catch (e) { /* non-fatal — panel just keeps its last state */ }
 }
 
@@ -402,71 +410,9 @@ function renderCalendar(data, ev) {
 }
 $('#calendar').addEventListener('click', (e) => { const r = e.target.closest('[data-sym]'); if (r) selectSymbol(r.dataset.sym); });
 
-function card(label, value, sub, signVal) {
-  const cls = signVal != null ? signClass(signVal) : '';
-  return `<div class="card"><div class="label">${label}</div>
-    <div class="value ${cls}">${value}</div><div class="sub ${cls}">${sub}</div></div>`;
-}
-
 // ---- customizable summary cards --------------------------------------------
-let lastSummary = null;
-let lastCash = []; // [{ ccy, amount, base }] from the latest /api/portfolio
-let lastFxRisk = null; // populated by loadFxRisk(); feeds the FX EXPOSURE card
-const CARD_DEFS = {
-  total_value:  { label: 'TOTAL VALUE',    render: (s, b) => ({ value: money(b, s.totalValue), sub: 'invested · cost ' + moneyBig(b, s.totalCost) }) },
-  net_worth:    { label: 'NET WORTH',      render: (s, b) => ({ value: money(b, s.netWorth ?? s.totalValue), sub: s.cashBase ? 'incl. cash ' + moneyBig(b, s.cashBase) : 'holdings (no cash set)' }) },
-  cash:         { label: 'CASH',           render: (s, b) => ({ value: moneyBig(b, s.cashBase || 0), sub: lastCash.length ? lastCash.map((c) => c.ccy).join(' · ') : 'CASH USD 5000 to set' }) },
-  day_pnl:      { label: 'DAY P&L',        render: (s, b) => ({ value: moneySigned(b, s.dayPnl), sub: 'today', signVal: s.dayPnl }) },
-  unrealized:   { label: 'UNREALIZED P&L', render: (s, b) => ({ value: moneySigned(b, s.totalUnrealized), sub: signStr(s.totalUnrealizedPct) + '%', signVal: s.totalUnrealized }) },
-  stock_pnl:    { label: 'STOCK P&L',      render: (s, b) => ({ value: moneySigned(b, s.totalStockPnl), sub: 'price move', signVal: s.totalStockPnl }) },
-  fx_pnl:       { label: 'FX P&L',         render: (s, b) => ({ value: moneySigned(b, s.totalFxPnl), sub: 'currency move', signVal: s.totalFxPnl }) },
-  fx_exposure:  { label: 'FX EXPOSURE',    render: (s, b) => {
-    const r = lastFxRisk;
-    if (!r || !r.exposures || !r.exposures.length) return { value: '—', sub: 'foreign currency' };
-    const pct = r.totalValue ? (r.foreignBase / r.totalValue) * 100 : 0;
-    return { value: moneyBig(b, r.foreignBase), sub: fmt(pct, 0) + '% in ' + r.exposures.map((e) => e.ccy).join('/') };
-  } },
-  realized:     { label: 'REALIZED P&L',   render: (s, b) => ({ value: moneySigned(b, s.realizedPnl), sub: 'lifetime', signVal: s.realizedPnl }) },
-  realized_fx:  { label: 'REALIZED FX',     render: (s, b) => ({ value: moneySigned(b, s.realizedFxPnl || 0), sub: 'closed · currency', signVal: s.realizedFxPnl || 0 }) },
-  cost_basis:   { label: 'COST BASIS',     render: (s, b) => ({ value: moneyBig(b, s.totalCost), sub: b }) },
-  day_pct:      { label: 'DAY %',          render: (s) => { const pct = s.dayPct ?? 0; return { value: signStr(pct) + '%', sub: 'today', signVal: pct }; } },
-  positions:    { label: 'POSITIONS',      render: (s, b, ps) => ({ value: String(ps.length), sub: 'holdings' }) },
-  best:         { label: 'BEST TODAY',     render: (s, b, ps) => { const x = ps.filter(p => p.changePct != null).sort((a, b) => b.changePct - a.changePct)[0]; return x ? { value: x.symbol, sub: signStr(x.changePct) + '%', signVal: x.changePct } : { value: '—', sub: '' }; } },
-  worst:        { label: 'WORST TODAY',    render: (s, b, ps) => { const x = ps.filter(p => p.changePct != null).sort((a, b) => a.changePct - b.changePct)[0]; return x ? { value: x.symbol, sub: signStr(x.changePct) + '%', signVal: x.changePct } : { value: '—', sub: '' }; } },
-};
-const ALL_CARDS = Object.keys(CARD_DEFS);
-const DEFAULT_CARDS = ['net_worth', 'total_value', 'day_pnl', 'unrealized', 'stock_pnl', 'fx_pnl', 'fx_exposure', 'realized'];
-const DEFAULT_ORDER = [...DEFAULT_CARDS, ...ALL_CARDS.filter((id) => !DEFAULT_CARDS.includes(id))];
-let cardPrefs = (() => {
-  try {
-    const p = JSON.parse(localStorage.getItem('finsight-cards'));
-    if (p && Array.isArray(p.order) && Array.isArray(p.enabled)) {
-      ALL_CARDS.forEach((id) => { if (!p.order.includes(id)) p.order.push(id); });
-      p.order = p.order.filter((id) => CARD_DEFS[id]);
-      p.enabled = p.enabled.filter((id) => CARD_DEFS[id]);
-      if (!p.enabled.length) p.enabled = [...DEFAULT_CARDS]; // never render an empty summary
-      // One-time: NET WORTH (holdings + cash) became a default card; surface it first in saved layouts too.
-      if (!p.nwFirst) {
-        p.nwFirst = true;
-        p.order = ['net_worth', ...p.order.filter((id) => id !== 'net_worth')];
-        if (!p.enabled.includes('net_worth')) p.enabled.unshift('net_worth');
-        try { localStorage.setItem('finsight-cards', JSON.stringify(p)); } catch {}
-      }
-      return p;
-    }
-  } catch {}
-  return { order: [...DEFAULT_ORDER], enabled: [...DEFAULT_CARDS] };
-})();
-function saveCardPrefs() { localStorage.setItem('finsight-cards', JSON.stringify(cardPrefs)); }
-function renderSummary(summary, positions, base) {
-  const enabled = cardPrefs.order.filter((id) => cardPrefs.enabled.includes(id));
-  $('#summary').innerHTML = enabled.map((id) => {
-    const r = CARD_DEFS[id].render(summary, base, positions || []);
-    const html = card(CARD_DEFS[id].label, r.value, r.sub || '', r.signVal);
-    // NET WORTH / CASH cards open the cash editor
-    return (id === 'net_worth' || id === 'cash') ? html.replace('class="card', 'title="Click to edit cash" data-cash-card="1" class="card') : html;
-  }).join('');
-}
+// Summary cards are a React island (web/src/features/summary, PILOT-2).
+let lastSummary = null; // adapter: the legacy FX risk panel reads realized FX from it until C2
 // ---- PEEK / UNPEEK: blur personal figures, keep public market data ----------
 // Purely visual (CSS on body.unpeek) so screen-sharing is safe; nothing is removed from the page.
 
@@ -482,18 +428,6 @@ $('#peek-btn').addEventListener('click', () => {
 });
 applyPeek();
 
-function applyCards() { if (lastSummary) renderSummary(lastSummary, lastPositions, state.base); }
-
-// cards customiser modal
-function renderCardsEditor() {
-  $('#cards-list').innerHTML = cardPrefs.order.map((id) => {
-    const on = cardPrefs.enabled.includes(id);
-    return `<div class="card-edit-row ${on ? '' : 'off'}">
-      <label><input type="checkbox" data-id="${id}" ${on ? 'checked' : ''}> ${CARD_DEFS[id].label}</label>
-      <span class="ce-move"><button data-dir="up" data-id="${id}">▲</button><button data-dir="down" data-id="${id}">▼</button></span>
-    </div>`;
-  }).join('');
-}
 // ---- appearance: switchable theme + font (system fonts only, no downloads) ----
 const THEMES = [
   { id: 'violet',   label: 'Violet',   accent: '#a78bfa' },
@@ -524,25 +458,11 @@ $('#theme-list')?.addEventListener('click', (e) => { const b = e.target.closest(
 $('#font-list')?.addEventListener('click', (e) => { const b = e.target.closest('[data-font]'); if (b) setFont(b.dataset.font); });
 applyTheme(); // also re-assert on script load (head script already set it pre-paint)
 
-$('#cards-btn').addEventListener('click', () => { renderAppearance(); renderCardsEditor(); renderPanelsEditor(); $('#cards-modal').classList.remove('hidden'); });
+$('#cards-btn').addEventListener('click', () => { renderAppearance(); renderPanelsEditor(); $('#cards-modal').classList.remove('hidden'); });
 $('#cards-close').addEventListener('click', () => $('#cards-modal').classList.add('hidden'));
 $('#cards-done').addEventListener('click', () => $('#cards-modal').classList.add('hidden'));
 $('#cards-modal').addEventListener('click', (e) => { if (e.target.id === 'cards-modal') $('#cards-modal').classList.add('hidden'); });
-$('#cards-reset').addEventListener('click', () => { cardPrefs = { order: [...DEFAULT_ORDER], enabled: [...DEFAULT_CARDS] }; saveCardPrefs(); applyCards(); renderCardsEditor(); });
-$('#cards-list').addEventListener('change', (e) => {
-  const cb = e.target.closest('input[type=checkbox]'); if (!cb) return;
-  const id = cb.dataset.id;
-  if (cb.checked) { if (!cardPrefs.enabled.includes(id)) cardPrefs.enabled.push(id); }
-  else cardPrefs.enabled = cardPrefs.enabled.filter((x) => x !== id);
-  saveCardPrefs(); applyCards(); renderCardsEditor();
-});
-$('#cards-list').addEventListener('click', (e) => {
-  const b = e.target.closest('button[data-dir]'); if (!b) return;
-  const id = b.dataset.id, i = cardPrefs.order.indexOf(id), j = b.dataset.dir === 'up' ? i - 1 : i + 1;
-  if (j < 0 || j >= cardPrefs.order.length) return;
-  [cardPrefs.order[i], cardPrefs.order[j]] = [cardPrefs.order[j], cardPrefs.order[i]];
-  saveCardPrefs(); applyCards(); renderCardsEditor();
-});
+// Card prefs, the card list and RESET TO DEFAULT belong to the summary islands (PILOT-2).
 
 // ---- show / hide whole panels ----------------------------------------------
 const PANELS = [
@@ -834,7 +754,7 @@ $('#positions-body').addEventListener('click', async (e) => {
     if (actBtn.dataset.act === 'del') {
       if (!confirm(`Remove ${sym} from your portfolio? (does not record a sale)`)) return;
       await api('/api/portfolio/delete' + baseQS(), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ symbol: sym }) });
-      setStatus(`REMOVED ${sym}`, 'ok'); if (state.selected === sym) state.selected = null; await loadPortfolio();
+      setStatus(`REMOVED ${sym}`, 'ok'); if (state.selected === sym) state.selected = null; await afterWrite('delete');
     } else if (actBtn.dataset.act === 'sell') {
       const held = actBtn.dataset.qty;
       const qty = prompt(`Sell how many ${sym}? (you hold ${held})\nLeave price blank to sell at market.`, held);
@@ -844,7 +764,7 @@ $('#positions-body').addEventListener('click', async (e) => {
         const res = await api('/api/portfolio/sell' + baseQS(), { method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ symbol: sym, quantity: qty, price: price === '' ? null : price }) });
         setStatus(`SOLD ${qty} ${sym} · realized ${signStr(res.lastRealized)}`, res.lastRealized >= 0 ? 'ok' : 'err');
-        renderPortfolio(res);
+        await afterWrite('sell');
       } catch (err) { setStatus('SELL failed: ' + err.message, 'err'); }
     }
     return;
@@ -861,9 +781,7 @@ async function doUndo() {
     const r = await api('/api/undo', { method: 'POST' });
     setStatus(`UNDID: ${r.undone}${r.available ? ` · ${r.available} more step(s) available` : ''}`, 'ok');
     perfSig = '';
-    await loadAccounts();
-    await loadPortfolio();
-    if (!$('#ledger-modal').classList.contains('hidden')) loadLedger();
+    await afterWrite('undo'); // accounts first, then portfolio, ledger, watchlist, alerts…
   } catch (e) { setStatus('UNDO: ' + e.message, 'err'); }
 }
 $('#undo-btn').addEventListener('click', doUndo);
@@ -874,7 +792,7 @@ async function setCashBalance(ccy, amt) {
   try {
     const res = await api('/api/cash' + baseQS(), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ccy, amount: amt }) });
     setStatus(Number(amt) === 0 ? `Cleared ${ccy.toUpperCase()} cash` : `Cash ${ccy.toUpperCase()} set to ${fmt(Number(amt))}`, 'ok');
-    wealthSig = ''; renderPortfolio(res); loadFxRisk();
+    wealthSig = ''; await afterWrite('cash'); // loadPortfolio's holdings/cash signature refreshes FX risk
   } catch (e) { setStatus('CASH failed: ' + e.message, 'err'); }
 }
 // ---- CASH EDITOR: all accounts × currencies in one place ---------------------
@@ -952,7 +870,7 @@ async function saveCash() {
         if (c.amount === 0) delete c.a.orig[c.ccy]; else c.a.orig[c.ccy] = c.amount;
       }
       setCashStatus(`Saved ✓ · net worth updated`, 'ok');
-      wealthSig = ''; await loadPortfolio(); loadWealth();
+      wealthSig = ''; await afterWrite('cash'); loadWealth();
     } catch (e) { setCashStatus('Save failed: ' + e.message, 'err'); }
   })();
   try { await cashSaving; } finally { cashSaving = null; }
@@ -1029,7 +947,7 @@ $('#ledger-body').addEventListener('click', async (e) => {
       setLedgerStatus(`Deleted ${row.symbol} buy. UNDO restores it.`, 'ok');
     }
     ledgerEdit = null; perfSig = '';
-    await loadLedger(); loadPortfolio();
+    await afterWrite(act === 'save' ? 'ledger-edit' : 'ledger-delete');
   } catch (err) { setLedgerStatus(err.message, 'err'); }
 });
 async function loadRealized() {
@@ -1086,7 +1004,7 @@ $('#add-form').addEventListener('submit', async (e) => {
     setStatus(`BOUGHT ${quantity} ${symbol} @ ${price}${date ? ' on ' + date : ''}`, 'ok');
     $('#add-symbol').value = $('#add-qty').value = $('#add-price').value = $('#add-date').value = '';
     $('#add-suggest').classList.add('hidden');
-    await loadPortfolio();
+    await afterWrite('buy');
   } catch (err) { setStatus('ADD failed: ' + err.message, 'err'); }
 });
 
@@ -1605,7 +1523,7 @@ $('#import-do').addEventListener('click', async () => {
     const res = await api('/api/portfolio/import' + baseQS(), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ csv, replace: $('#import-replace').checked }) });
     const r = res.imported;
     setImportStatus(`Imported ${r.added}/${r.total}${r.failed.length ? ' · failed: ' + r.failed.join(', ') : ''}`, r.added ? 'ok' : 'err');
-    renderPortfolio(res);
+    await afterWrite('import');
     if (r.added) setTimeout(() => $('#import-modal').classList.add('hidden'), 1400);
   } catch (e) { setImportStatus('Import failed: ' + e.message, 'err'); }
 });
@@ -1613,7 +1531,7 @@ $('#import-clear').addEventListener('click', async () => {
   if (!confirm('Clear ALL positions and transaction history?\n(Watchlist and alerts are kept.)')) return;
   try {
     const res = await api('/api/portfolio/reset' + baseQS(), { method: 'POST' });
-    state.selected = null; renderPortfolio(res); setImportStatus('Portfolio cleared.', 'ok');
+    state.selected = null; await afterWrite('reset'); setImportStatus('Portfolio cleared.', 'ok');
   } catch (e) { setImportStatus(e.message, 'err'); }
 });
 $('#export-btn').addEventListener('click', async () => {
@@ -2026,7 +1944,7 @@ $('#accounts-list').addEventListener('click', async (e) => {
       const d = await api('/api/accounts/remove', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: del.dataset.id }) });
       accountsCache = d.accounts;
       if (state.account === del.dataset.id) { state.account = d.activeId; localStorage.setItem('finsight-account', state.account); }
-      renderAccountsList(); renderAccountSelector(); perfSig = ''; await loadPortfolio();
+      renderAccountsList(); renderAccountSelector(); perfSig = ''; await afterWrite('account-remove');
     } catch (err) { setAccountsStatus(err.message, 'err'); }
   }
 });

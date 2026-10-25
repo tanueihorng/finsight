@@ -4,4 +4,6 @@ export type IslandRegistry = Record<string, () => Promise<{ default: ComponentTy
 export const islands: IslandRegistry = {
   clock: () => import('./features/clock/ClockIsland.tsx'),
   markets: () => import('./features/markets/MarketsIsland.tsx'),
+  summary: () => import('./features/summary/SummaryIsland.tsx'),
+  'summary-cards': () => import('./features/summary/CardsEditorIsland.tsx'),
 };

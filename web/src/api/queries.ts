@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from './client.ts';
-import type { Alert, Markets, Portfolio, WatchItem } from '../../../shared/types.ts';
+import type { Alert, FxRisk, Markets, Portfolio, WatchItem } from '../../../shared/types.ts';
 import type {} from '../bootstrap.ts';
 
 // F4 supplies this source in bootstrap, before legacy startup. Until then hooks
@@ -47,4 +47,11 @@ export function useAlerts() {
   const { enabled } = useScope();
   return useQuery({ queryKey: ['alerts'], enabled, staleTime: 30_000, refetchInterval: 30_000,
     queryFn: ({ signal }) => api<{ alerts: Alert[] }>('/api/alerts', { signal }) });
+}
+// Legacy loadFxRisk() runs when holdings, cash, account or base change, or at
+// most every 2 minutes; mutations invalidate 'fx-risk' for the first case.
+export function useFxRisk() {
+  const { base, account, enabled } = useScope();
+  return useQuery({ queryKey: ['fx-risk', base, account], enabled, staleTime: 120_000, refetchInterval: 120_000,
+    queryFn: ({ signal }) => api<FxRisk>(`/api/fx-risk?base=${encodeURIComponent(base)}&account=${encodeURIComponent(account)}`, { signal }) });
 }
