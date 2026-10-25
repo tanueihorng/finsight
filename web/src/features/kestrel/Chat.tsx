@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { useStore } from 'zustand';
 import { agentApi } from './api.ts';
 import { addFiles, chat, chooseBrain, deleteThread, menuItems, newChat, openThread, removeFile, setDraft, stop, submit, toggleThreads, type FileChip, type Item } from './chat.ts';
@@ -69,11 +69,16 @@ function Trace({ turnId }: { turnId: string }) {
   );
 }
 
+// Markdown is parsed again only when its segment's text changes (each streamed delta).
+const TextPart = memo(function TextPart({ text }: { text: string }) {
+  return <div className="agent-text" dangerouslySetInnerHTML={{ __html: md(text) }} />;
+});
+
 function TurnView({ t }: { t: Turn }) {
   const [copied, setCopied] = useState(false), [trace, setTrace] = useState(false);
   return (
     <div className="agent-turn">
-      {t.parts.map((p, i) => p.kind === 'text' ? <div key={i} className="agent-text" dangerouslySetInnerHTML={{ __html: md(p.text) }} />
+      {t.parts.map((p, i) => p.kind === 'text' ? <TextPart key={i} text={p.text} />
         : p.kind === 'notice' ? <div key={i} className={'agent-notice ' + p.cls}>{p.text}</div>
         : <details key={i} className={'agent-tool ' + p.state}>
             <summary><span className="nm">{p.name}</span><span className="args">{prettyArgs(p.args)}</span></summary>
@@ -101,7 +106,9 @@ function TurnView({ t }: { t: Turn }) {
   );
 }
 
-function ItemView({ item }: { item: Item }) {
+// Memoised: the chat re-renders on every stream delta, but an item only re-renders
+// when its own turn changes in the store (finished turns are left alone).
+const ItemView = memo(function ItemView({ item }: { item: Item }) {
   const turn = useStore(chat, (s) => (item.kind === 'turn' ? s.turns[item.id] : undefined));
   if (item.kind === 'notice') return <div className={'agent-notice ' + item.cls}>{item.text}</div>;
   if (item.kind === 'turn') return turn ? <TurnView t={turn} /> : null;
@@ -112,7 +119,7 @@ function ItemView({ item }: { item: Item }) {
       {item.ctx && <span className="meta">{item.ctx}</span>}
     </div>
   );
-}
+});
 
 function Welcome({ name, onTry }: { name: string; onTry: (s: string) => void }) {
   return (

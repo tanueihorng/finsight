@@ -47,6 +47,25 @@ test('a fresh chat shows attachment and upload notices under the welcome', async
   await expect(log(page).locator('.agent-notice')).toHaveCount(0);
 });
 
+test('a streaming reply updates with each delta while earlier answers stay rendered', async ({ page }) => {
+  await open(page);
+  await send(page, 'markdown please');
+  const earlier = page.locator('.agent-turn:visible').first().locator('.agent-text');
+  await expect(earlier.locator('td.num')).toHaveText('+1.5%');
+  await send(page, 'slow one please');
+  const text = lastTurn(page).locator('.agent-text');
+  await expect(text).toContainText('w3');
+  await expect(page.locator('.agent-send:visible')).toHaveText('■');
+  const mid = (await text.innerText()).split(/\s+/).length;
+  await expect.poll(async () => (await text.innerText()).split(/\s+/).length).toBeGreaterThan(mid + 2);
+  await expect(page.locator('.agent-send:visible')).toHaveText('■');
+  await expect(text).toContainText('w40', { timeout: 15_000 });
+  expect((await text.innerText()).split(/\s+/)).toEqual(Array.from({ length: 40 }, (_, i) => `w${i + 1}`));
+  await expect(earlier.locator('h2')).toHaveText('Head');
+  await expect(earlier.locator('td.num')).toHaveText('+1.5%');
+  await expect(page.locator('.agent-turn:visible')).toHaveCount(2);
+});
+
 test('Esc in the composer stops a running reply and keeps the panel open', async ({ page }) => {
   await open(page);
   await send(page, 'slow one please');
