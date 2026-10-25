@@ -1,7 +1,7 @@
 // Phase 3 review follow-ups for the Kestrel chat (KESTRELFIX-001). Each test
 // is legacy agent-panel.js (c1f1516) behaviour and passes against it: notices
-// on a fresh chat, Esc to stop, the offline retry and a lock/unlock while the
-// chat is open.
+// on a fresh chat, the welcome's suggestions, Esc to stop, the offline retry
+// and a lock/unlock while the chat is open.
 import { test, expect, type Page } from '@playwright/test';
 import { PIN, seeded } from './helpers';
 
@@ -45,6 +45,19 @@ test('a fresh chat shows attachment and upload notices under the welcome', async
   await expect(lastTurn(page).locator('.agent-text')).toHaveText('Echo: read this (1 attachment)');
   await expect(page.locator('.agent-welcome')).toHaveCount(0);
   await expect(log(page).locator('.agent-notice')).toHaveCount(0);
+});
+
+test('the welcome keeps the suggestions it opened with; the context button follows the selection', async ({ page }) => {
+  await open(page);
+  const first = page.locator('.agent-try .agent-chip').first();
+  await expect(first).toHaveText('What do my strategies say about VOO right now?');
+  await page.locator('#positions-body tr[data-sym="NVDA"]').click();
+  await expect(page.locator('#detail-title')).toHaveText('NVDA · DETAIL');
+  await expect(page.locator('.agent-ctx:visible')).toHaveText('◉ NVDA 1d');
+  await expect(first).toHaveText('What do my strategies say about VOO right now?');
+  // A new chat builds a new welcome from what is selected then.
+  await page.locator('.agent-icon-btn[title="New chat (/new)"]:visible').click();
+  await expect(page.locator('.agent-try .agent-chip').first()).toHaveText('What do my strategies say about NVDA right now?');
 });
 
 test('a streaming reply updates with each delta while earlier answers stay rendered', async ({ page }) => {

@@ -1,6 +1,6 @@
 import { createStore } from 'zustand/vanilla';
 import { agentApi, AgentError, type Brain, type Citation, type Message, type Skill, type Thread } from './api.ts';
-import { COMMANDS, ctxLabel, friendly, LS, ls, offlineWhy, randomVerb, TOOL_VERBS, prettyTool, type PageContext } from './labels.ts';
+import { COMMANDS, ctxLabel, friendly, LS, ls, offlineWhy, randomVerb, suggestions, TOOL_VERBS, prettyTool, type PageContext } from './labels.ts';
 import { addCite, addNotice, addText, addTool, endSegment, finish, newTurn, toolDone, type Turn } from './turns.ts';
 
 // Kestrel chat state and actions (G1/G2). Lives outside React so the chat
@@ -16,11 +16,12 @@ export interface ChatState {
   items: Item[]; turns: Record<string, Turn>; running: string | null; sending: boolean;
   status: { verb: string; start: number; chars: number }; files: FileChip[]; draft: string; threadsOpen: boolean; threads: Thread[] | null;
   stick: number; // bump to scroll the log to the bottom
+  welcome: string[]; // the welcome's suggestions, fixed when it is shown (like legacy)
 }
 const initial = (): ChatState => ({
   name: 'Kestrel', named: false, brains: [], skills: [], defaultBrain: null, brain: '', thread: null, version: 0, lastEventId: 0,
   view: 'idle', offline: null, items: [], turns: {}, running: null, sending: false,
-  status: { verb: '', start: 0, chars: 0 }, files: [], draft: '', threadsOpen: false, threads: null, stick: 0,
+  status: { verb: '', start: 0, chars: 0 }, files: [], draft: '', threadsOpen: false, threads: null, stick: 0, welcome: [],
 });
 export const chat = createStore<ChatState>()(initial);
 const get = () => chat.getState(), set = (p: Partial<ChatState>) => chat.setState(p);
@@ -89,7 +90,21 @@ function openStream() {
 }
 
 // ---- views ----
-export function showWelcome() { set({ view: 'welcome', items: [], turns: {} }); }
+// What the user is looking at, sent with a message and used for the welcome's suggestions.
+export function pageContext(): PageContext {
+  const c: PageContext = { view: 'terminal' };
+  try {
+    const s = window.FinSight.store.getState();
+    if (s.selected) c.symbol = String(s.selected).slice(0, 24);
+    if (s.account) c.account = String(s.account).slice(0, 64);
+    if (s.base) c.base = String(s.base).slice(0, 3);
+    if (s.detailRange?.interval) c.timeframe = String(s.detailRange.interval).slice(0, 10);
+    const strategy = (window.detailChart as unknown as { cfg?: { strategy?: string } } | null | undefined)?.cfg?.strategy;
+    if (strategy) c.strategy = String(strategy).slice(0, 40);
+  } catch { /* app not ready */ }
+  return c;
+}
+export function showWelcome() { set({ view: 'welcome', items: [], turns: {}, welcome: suggestions(pageContext()) }); }
 function clearLog() { set({ view: 'log', items: [], turns: {} }); }
 export function newChat() {
   closeStream(); set({ thread: null, running: null, sending: false }); ls.set(LS.thread, ''); showWelcome();

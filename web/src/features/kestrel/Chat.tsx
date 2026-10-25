@@ -1,28 +1,14 @@
 import { memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { useStore } from 'zustand';
 import { agentApi } from './api.ts';
-import { addFiles, chat, chooseBrain, deleteThread, menuItems, newChat, openThread, removeFile, setDraft, stop, submit, toggleThreads, type FileChip, type Item } from './chat.ts';
-import { costLabel, ctxButton, LS, ls, prettyArgs, suggestions, type PageContext } from './labels.ts';
+import { addFiles, chat, chooseBrain, deleteThread, menuItems, newChat, openThread, pageContext, removeFile, setDraft, stop, submit, toggleThreads, type FileChip, type Item } from './chat.ts';
+import { costLabel, ctxButton, LS, ls, prettyArgs } from './labels.ts';
 import { md } from './md.ts';
 import { citeHost, type Turn } from './turns.ts';
 
 // The Kestrel conversation (G1: log, turns, tool rows, status, markdown;
 // G2: composer, slash menu, attachments, model picker, page context).
 // Rendered into the side drawer or the dock by KestrelIsland (G3).
-export function pageContext(): PageContext {
-  const c: PageContext = { view: 'terminal' };
-  try {
-    const s = window.FinSight.store.getState();
-    if (s.selected) c.symbol = String(s.selected).slice(0, 24);
-    if (s.account) c.account = String(s.account).slice(0, 64);
-    if (s.base) c.base = String(s.base).slice(0, 3);
-    if (s.detailRange?.interval) c.timeframe = String(s.detailRange.interval).slice(0, 10);
-    const strategy = (window.detailChart as unknown as { cfg?: { strategy?: string } } | null | undefined)?.cfg?.strategy;
-    if (strategy) c.strategy = String(strategy).slice(0, 40);
-  } catch { /* app not ready */ }
-  return c;
-}
-
 export function Candles() {
   return (
     <span className="candles" aria-hidden="true">
@@ -121,7 +107,7 @@ const ItemView = memo(function ItemView({ item }: { item: Item }) {
   );
 });
 
-function Welcome({ name, onTry }: { name: string; onTry: (s: string) => void }) {
+function Welcome({ name, list, onTry }: { name: string; list: string[]; onTry: (s: string) => void }) {
   return (
     <>
       <div className="agent-welcome">
@@ -133,7 +119,7 @@ function Welcome({ name, onTry }: { name: string; onTry: (s: string) => void }) 
           <li>switch model at the bottom right; <code>esc</code> stops a reply</li>
         </ul>
       </div>
-      <div className="agent-try"><div className="lbl">Try</div>{suggestions(pageContext()).map((s) => <button key={s} className="agent-chip" onClick={() => onTry(s)}>{s}</button>)}</div>
+      <div className="agent-try"><div className="lbl">Try</div>{list.map((s) => <button key={s} className="agent-chip" onClick={() => onTry(s)}>{s}</button>)}</div>
     </>
   );
 }
@@ -176,7 +162,7 @@ export function Chat({ inputRef, onRetry }: { inputRef: RefObject<HTMLTextAreaEl
   const items = s.items.map((item) => <ItemView key={item.key} item={item} />);
   if (s.view === 'offline' && s.offline) body = <Offline name={s.name} why={s.offline.why} onRetry={onRetry} />;
   // Notices on a fresh chat (a rejected file, "wait for uploads") show under the welcome, like legacy.
-  else if (s.view === 'welcome') body = <><Welcome name={s.name} onTry={send} />{items}</>;
+  else if (s.view === 'welcome') body = <><Welcome name={s.name} list={s.welcome} onTry={send} />{items}</>;
   else body = items;
 
   return (
