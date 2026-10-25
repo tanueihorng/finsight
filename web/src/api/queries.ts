@@ -48,8 +48,7 @@ export function useAlerts() {
   return useQuery({ queryKey: ['alerts'], enabled, staleTime: 30_000, refetchInterval: 30_000,
     queryFn: ({ signal }) => api<{ alerts: Alert[] }>('/api/alerts', { signal }) });
 }
-// Legacy loadFxRisk() runs when holdings, cash, account or base change, or at
-// most every 2 minutes; mutations invalidate 'fx-risk' for the first case.
+// Shared by summary and FX risk: writes invalidate this key; poll every 2 minutes.
 export function useFxRisk() {
   const { base, account, enabled } = useScope();
   return useQuery({ queryKey: ['fx-risk', base, account], enabled, staleTime: 120_000, refetchInterval: 120_000,

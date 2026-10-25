@@ -470,12 +470,13 @@ Two esbuild builds (`bootstrap.js` IIFE; `main.js` ESM with splitting), `manifes
 | PILOT-2 (C1) | 1.5 | done (merged 2026-10-25, 853a550) | mig/PILOT-2-summary | Claude | Summary cards + card editor islands, `useFxRisk`; every legacy write goes through `bus.write(kind)` (map completed per COUPLING §A6); fan-out proofs pass. Peek stays legacy (must apply synchronously at load; moves with F8). Intended fix: card order reload bug. Known duplication until D1/C2: `/api/portfolio` and `/api/fx-risk` are each fetched by legacy and by Query |
 | A1 | A | done as PILOT-1 (merged) | mig/PILOT-1-markets | Claude | |
 | A2 | A | done (merged 2026-10-25) | mig/A2-news | Codex | News island + command adapters; intended fix: old-symbol response cannot overwrite current news; 128 unit + 69 E2E on base 8086 |
-| A3 | A | todo | | Codex | |
+| A3 | A | verified on stack (not merged) | mig/A3-macro | Codex | Calendar, WB, FRED, manual inflation; 133 unit + 80 E2E |
 | B1 | B | verified on stack (not merged) | mig/B1-watchlist | Codex | Watchlist, search, chart adapter, Query polling |
 | B2 | B | verified on stack (not merged) | mig/B2-alerts | Codex | Alerts, chart bridge, notification lifecycle |
 | B3 | B | verified on stack (not merged) | mig/B3-income-activity | Codex | Income/activity; intended fix: stale-account response; 120s query replaces side-load duplicate |
 | C1 | C | done as PILOT-2 (merged) | mig/PILOT-2-summary | Claude | |
-| C2–C3 | C | todo | | | |
+| C2 | C | verified on stack (not merged) | mig/C2-fx-risk | Codex | FX tools/history, typed lots, tested arithmetic; shared query replaces legacy duplicate |
+| C3 | C | todo | | Claude | |
 | D1 | D | done (merged 2026-10-25) | mig/D1-positions | Claude | Positions table island (toolbar, filter chips, search, sort, group, collapse, row S/✕, flash) + `useCategories`, `useAccounts`; `posView` keeps the `finsight-posview` key. Legacy keeps `lastTableData` fed from `renderPortfolio` for detail/chart (E1/E2) and its own `assetClass`/`splitByAccount` copies for allocation (C3). Intended fix: a failed row ✕ delete now shows an error |
 | D2–D4 | D | todo | | | after D1 |
 | E1–E2 | E | todo | | | |

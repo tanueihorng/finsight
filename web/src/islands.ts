@@ -16,4 +16,5 @@ export const islands: IslandRegistry = {
   alerts: () => import('./features/alerts/AlertsIsland.tsx'),
   dividends: () => import('./features/dividends/DividendsIsland.tsx'),
   activity: () => import('./features/activity/ActivityIsland.tsx'),
+  fxrisk: () => import('./features/fxrisk/FxRiskIsland.tsx'),
 };

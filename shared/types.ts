@@ -112,10 +112,15 @@ export interface FxExposure {
   blendedEntry: number; nowRate: number; breakeven: number; driftPct: number; fxPnl: number; fxPnlPct: number;
   sigmaWeeklyPct: number; oneSigmaBase: number; var95Base: number;
 }
-/** lib/portfolio.js fxRisk, server.js GET /api/fx-risk. `lots` is consumed only by the legacy FX panel (C2 types it). */
+/** lib/portfolio.js fxRisk per-buy currency attribution. */
+export interface FxLot {
+  symbol: string; currency: string; t: number | null; q: number; px: number;
+  entryRate: number; nowRate: number; fxPnl: number; dated: boolean; recent: boolean;
+}
+/** lib/portfolio.js fxRisk, server.js GET /api/fx-risk. */
 export interface FxRisk {
   base: string; totalValue: number; foreignBase: number; totalFxPnl: number; exposures: FxExposure[];
-  vol: { sigmaWeeklyPct: number; oneSigmaBase: number; var95Base: number }; lots: unknown[];
+  vol: { sigmaWeeklyPct: number; oneSigmaBase: number; var95Base: number }; lots: FxLot[];
 }
 
 /** lib/market.js fetchNews, server.js GET /api/news (Yahoo may omit text/URL fields). */

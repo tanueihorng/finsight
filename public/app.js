@@ -153,9 +153,8 @@ $('#cmd').addEventListener('keydown', (e) => { if (e.key === 'Enter') { runComma
 // ===========================================================================
 const baseQS = (extra = '') => `?base=${encodeURIComponent(state.base)}&account=${encodeURIComponent(state.account || '')}${extra}`;
 
-// Dividends and FX risk move with holdings, cash and slow FX rates, not every
-// 15s quote tick: refetch them when the holdings/cash/account/base change, or
-// at most every 2 minutes otherwise.
+// Holdings changes invalidate income and FX queries; their 120s polling is owned
+// by Query. The legacy chart still uses sideAt for trade refresh until E2.
 let sideSig = '', sideAt = 0, dividendSig = ''; // B3: separate holdings refresh from Query's 120s timer
 const SIDE_MAX_AGE = 120000;
 let portfolioRequest = 0;
@@ -168,19 +167,19 @@ async function loadPortfolio() {
     const sig = state.account + '|' + state.base + '|' + (data.positions || []).map((p) => p.symbol + ':' + p.quantity).join(',') + '|' + JSON.stringify(data.cash || []);
     if (sig !== dividendSig) {
       const hadPrevious = !!dividendSig; dividendSig = sig;
-      if (hadPrevious) window.FinSight.bus.invalidate('dividends');
+      if (hadPrevious) { window.FinSight.bus.invalidate('dividends'); window.FinSight.bus.invalidate('fx-risk'); }
     }
     if (sig !== sideSig || Date.now() - sideAt > SIDE_MAX_AGE) {
       sideSig = sig; sideAt = Date.now();
-      loadFxRisk();    // keep FX-risk panel + exposure card in sync too
+      // Keep sideAt for the legacy chart trade refresh until E2.
     }
   } catch (e) { if (request === portfolioRequest && query === baseQS()) setFooter('Portfolio load failed: ' + e.message); }
 }
 
 // Every completed write refreshes all readers of what it changed (COUPLING.md
 // §A6, web/src/api/invalidation.ts). Islands refetch through Query; legacy
-// readers registered here refresh themselves. Dividends, FX risk, performance
-// and wealth still follow loadPortfolio's signatures until B3/C2/C3.
+// readers registered here refresh themselves; performance and wealth remain
+// legacy until C3.
 function afterWrite(kind) { return window.FinSight.bus.write(kind); }
 window.FinSight.bus.on('portfolio', () => loadPortfolio());
 window.FinSight.bus.on('accounts', () => loadAccounts());
@@ -190,7 +189,6 @@ window.FinSight.bus.on('realized', () => { if (!$('#ledger-modal').classList.con
 function renderPortfolio(data) {
   const { positions, summary, transactions } = data;
   const base = data.base || state.base;
-  lastSummary = summary; // read by the legacy FX risk panel (C2)
   // FX coverage note
   if (data.fxMissing && data.fxMissing.length) setFooter(`Note: no FX rate for ${data.fxMissing.join(', ')} → shown unconverted.`);
 
@@ -207,150 +205,12 @@ function renderPortfolio(data) {
   if (!state.selected && positions.length) selectSymbol((positions.find((p) => p.quoted !== false) || positions[0]).symbol);
 }
 
-// ---- FX RISK panel ---------------------------------------------------------
-async function loadFxRisk() {
-  try {
-    const data = await api('/api/fx-risk' + baseQS());
-    renderFxRisk(data); // the FX EXPOSURE card reads /api/fx-risk itself (useFxRisk)
-  } catch (e) { /* non-fatal — panel just keeps its last state */ }
-}
-
-// Tool inputs survive the 15s re-render; a render is deferred while you type.
-const fxTools = { conv: '', shock: '0' };
-let fxPending = null;
-function renderFxRisk(data) {
-  const box = $('#fxrisk'); if (!box) return;
-  const ae = document.activeElement;
-  if (ae && box.contains(ae) && ae.tagName === 'INPUT') {
-    fxPending = data;
-    if (!ae.dataset.fxBlur) { ae.dataset.fxBlur = '1'; ae.addEventListener('blur', () => { const d = fxPending; fxPending = null; if (d) renderFxRisk(d); }, { once: true }); }
-    return;
-  }
-  const base = data.base || state.base;
-  const exposures = data.exposures || [];
-  const head = $('#fxr-spot');
-  if (!exposures.length) {
-    if (head) head.textContent = '';
-    box.classList.add('muted');
-    box.innerHTML = (data.totalValue > 0)
-      ? `No foreign-currency holdings — your book is all in ${base}, so there's no FX risk to track.`
-      : `No positions yet — add holdings (in a foreign currency) to track FX risk.`;
-    return;
-  }
-  box.classList.remove('muted');
-  const dom = exposures[0];               // dominant currency (sorted by exposure)
-  const multi = exposures.length > 1;     // >1 foreign currency: label rates per-row, not by dom
-  if (head) head.textContent = `${dom.ccy}/${base} ${fmt(dom.nowRate, 4)}`;
-
-  // header strip — one block per foreign currency
-  const strip = exposures.map((e) => `
-    <div class="fxr-cell"><span class="k">${e.ccy} EXPOSURE</span><span class="v">${moneyBig(base, e.notionalBase)}</span><span class="s">${fmt(e.pct, 0)}% of book · ${money(e.ccy, e.notionalNative, 0)}${e.cashBase ? ' · incl. cash' : ''}</span></div>
-    <div class="fxr-cell"><span class="k">BLENDED ENTRY</span><span class="v">${fmt(e.blendedEntry, 4)}</span><span class="s">avg ${e.ccy}/${base} cost</span></div>
-    <div class="fxr-cell"><span class="k">SPOT</span><span class="v ${signClass(e.driftPct)}">${fmt(e.nowRate, 4)}</span><span class="s ${signClass(e.driftPct)}">${signStr(e.driftPct)}% vs entry</span></div>
-    <div class="fxr-cell"><span class="k">FX P&L</span><span class="v ${signClass(e.fxPnl)}">${moneySigned(base, e.fxPnl)}</span><span class="s ${signClass(e.fxPnl)}">${signStr(e.fxPnlPct)}% · currency only</span></div>`).join('');
-
-  // Realized FX from closed trades (portfolio-wide; from the latest /api/portfolio summary).
-  const rfx = lastSummary ? lastSummary.realizedFxPnl : null;
-  const legacySells = lastSummary ? (lastSummary.realizedLegacy || 0) : 0;
-  const realizedSub = legacySells ? `closed · excl. ${legacySells} pre-FX-tracking` : 'closed trades · currency';
-  const realizedCell = (rfx != null && (rfx || (lastSummary && lastSummary.realizedStockPnl)))
-    ? `<div class="fxr-cell"><span class="k">REALIZED FX</span><span class="v ${signClass(rfx)}">${moneySigned(base, rfx)}</span><span class="s">${realizedSub}</span></div>`
-    : '';
-
-  // 1-week parametric FX VaR from the currency's weekly volatility.
-  const v = data.vol || {};
-  const volCell = v.oneSigmaBase
-    ? `<div class="fxr-cell"><span class="k">1σ MOVE / WK</span><span class="v">±${money(base, v.oneSigmaBase, 0)}</span><span class="s">σ ${fmt(v.sigmaWeeklyPct, 2)}%/wk · 95% ${money(base, v.var95Base, 0)}</span></div>`
-    : '';
-
-  // per-buy FX history
-  const rows = (data.lots || []).map((l) => {
-    const when = l.t ? new Date(l.t).toLocaleDateString('en-US', { year: '2-digit', month: 'short', day: '2-digit' }) : '—';
-    const note = !l.dated ? '<span class="dim"> no date</span>' : (l.recent ? '<span class="dim"> settling</span>' : '');
-    const pair = multi ? `<span class="dim">${l.currency}/${base} </span>` : '';
-    return `<tr>
-      <td>${when}</td><td class="sym">${esc(l.symbol)}</td>
-      <td class="r">${pair}${fmt(l.entryRate, 4)}</td><td class="r">${fmt(l.nowRate, 4)}</td>
-      <td class="r ${signClass(l.fxPnl)}">${moneySigned(base, l.fxPnl)}${note}</td>
-    </tr>`;
-  }).join('') || '<tr><td colspan="5" class="muted small">No purchases recorded yet.</td></tr>';
-
-  const totalExp = data.foreignBase || 0;
-  box.innerHTML = `
-    <div class="fxr-strip">${strip}${realizedCell}${volCell}</div>
-    <div class="fxr-sub">PER-BUY FX HISTORY · gain/loss from currency alone</div>
-    <table class="tbl fxr-tbl">
-      <thead><tr><th>DATE</th><th>SYM</th><th class="r">${multi ? 'FX' : dom.ccy + '/' + base} @BUY</th><th class="r">NOW</th><th class="r">FX P&L</th></tr></thead>
-      <tbody>${rows}</tbody>
-    </table>
-    <div class="fxr-whatif">
-      <div class="fxr-wi-head"><span class="fxr-sub">WHAT-IF · ${multi ? 'foreign-FX' : dom.ccy + '/' + base} shock</span><span id="fxr-shock" class="cyan">0.0%</span></div>
-      <input id="fxr-slider" type="range" min="-15" max="15" value="0" step="0.5">
-      <div class="fxr-wi-out"><span class="muted">impact on book <b id="fxr-impact">—</b></span><span class="muted">new value <b id="fxr-newval">${money(base, totalExp)}</b></span></div>
-    </div>
-    <div class="fxr-tools">
-      <div class="tool"><span class="fxr-sub" style="margin:0">TARGET EXPOSURE</span><br>
-        Keep <input id="fxr-target" type="number" min="0" max="100" step="1" placeholder="e.g. 70"> % in foreign currency
-        <div id="fxr-target-out" class="muted"></div></div>
-      <div class="tool"><span class="fxr-sub" style="margin:0">CONVERT NOW vs LATER · ${dom.ccy}</span><br>
-        Convert <input id="fxr-conv" type="number" min="0" step="100" placeholder="${base} amount"> ${base}
-        <div id="fxr-conv-out" class="muted"></div></div>
-    </div>
-    <div class="fxr-note">Currency risk adds volatility with little long-run expected return — it bites most over short horizons and drawdowns. Informational only; no trades are placed.</div>`;
-
-  const slider = $('#fxr-slider');
-  slider.value = fxTools.shock;
-  const upd = () => {
-    fxTools.shock = slider.value;
-    const pct = parseFloat(slider.value);
-    const impact = totalExp * pct / 100;
-    $('#fxr-shock').textContent = (pct > 0 ? '+' : '') + pct.toFixed(1) + '%';
-    const imp = $('#fxr-impact'); imp.textContent = moneySigned(base, impact); imp.className = signClass(impact);
-    $('#fxr-newval').textContent = money(base, totalExp + impact);
-  };
-  slider.addEventListener('input', upd); upd();
-
-  // Target exposure: gap between today's foreign share and the one you want.
-  const total = data.totalValue || 0;
-  const tIn = $('#fxr-target'), tOut = $('#fxr-target-out');
-  try { tIn.value = localStorage.getItem('finsight-fx-target') || ''; } catch {}
-  const updTarget = () => {
-    const pct = parseFloat(tIn.value);
-    try { localStorage.setItem('finsight-fx-target', tIn.value); } catch {}
-    const cur = total ? (totalExp / total) * 100 : 0;
-    if (!Number.isFinite(pct) || !total) { tOut.innerHTML = `Now <b>${fmt(cur, 1)}%</b> foreign (${money(base, totalExp, 0)} of ${money(base, total, 0)}).`; return; }
-    const gap = (pct / 100) * total - totalExp;
-    tOut.innerHTML = `Now <b>${fmt(cur, 1)}%</b>. ` + (Math.abs(gap) < total * 0.005 ? '<span class="up">On target.</span>'
-      : gap > 0 ? `To reach ${fmt(pct, 0)}%: move <b>${money(base, gap, 0)}</b> into foreign currency.`
-        : `To reach ${fmt(pct, 0)}%: bring <b>${money(base, -gap, 0)}</b> back to ${base}.`);
-  };
-  tIn.addEventListener('input', updTarget); updTarget();
-
-  // Convert now vs later: what the amount buys at spot, and the typical 1-month
-  // range from recent volatility (68% band). Shows the spread, not a forecast.
-  const cIn = $('#fxr-conv'), cOut = $('#fxr-conv-out');
-  cIn.value = fxTools.conv;
-  const sigmaM = (dom.sigmaWeeklyPct || 0) / 100 * Math.sqrt(4.345);
-  const updConv = () => {
-    fxTools.conv = cIn.value;
-    const amt = parseFloat(cIn.value);
-    if (!(amt > 0)) { cOut.innerHTML = `Spot ${fmt(dom.nowRate, 4)} · your blended entry ${fmt(dom.blendedEntry, 4)} (${signStr(dom.driftPct)}%).`; return; }
-    const now = amt / dom.nowRate;
-    let html = `Now: <b>${money(dom.ccy, now, 0)}</b> at ${fmt(dom.nowRate, 4)}.`;
-    if (sigmaM > 0) {
-      const lo = dom.nowRate * Math.exp(-sigmaM), hi = dom.nowRate * Math.exp(sigmaM);
-      html += `<br>In a month, 2 in 3 outcomes: <b>${money(dom.ccy, amt / hi, 0)} – ${money(dom.ccy, amt / lo, 0)}</b> (rate ${fmt(lo, 4)}–${fmt(hi, 4)}). Waiting is a ±${money(dom.ccy, now - amt / hi, 0)} coin flip.`;
-    }
-    cOut.innerHTML = html;
-  };
-  cIn.addEventListener('input', updConv); updConv();
-}
+// FX risk is a React island (C2).
 
 // Calendar is a React island (A3).
 
 // ---- customizable summary cards --------------------------------------------
 // Summary cards are a React island (web/src/features/summary, PILOT-2).
-let lastSummary = null; // adapter: the legacy FX risk panel reads realized FX from it until C2
 // ---- PEEK / UNPEEK: blur personal figures, keep public market data ----------
 // Purely visual (CSS on body.unpeek) so screen-sharing is safe; nothing is removed from the page.
 

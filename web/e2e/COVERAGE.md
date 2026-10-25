@@ -85,3 +85,5 @@ Not yet covered here, owned elsewhere: performance and visual comparisons (P0-5)
 | Alerts (B2) | form/command/remove, chart overlay event, seed/dedup toast/beep/desktop mock, 30s poll and unmount | `B2`, `triggers.test` | B2, E2 | pass |
 
 | Income/activity (B3) | forward/received/WHT, ADD/UNDO transactions, error/empty, account race, single 120s poll and unmount | `B3` | B3 | pass (intended stale-account fix) |
+
+| FX risk (C2) | rates/history, multi/empty/error, shock/target/conversion, persistence/focus, one shared 120s poll/unmount | `C2`, `fxrisk.test` | C2 | pass |
