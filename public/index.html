@@ -21,6 +21,29 @@ try { var d = document.documentElement;
        (store, auth, bus) -> classic chart scripts (window.PriceChart and its
        helpers, still plain JS) -> the app module. See web/src/bootstrap.ts. -->
   <div id="root"></div>
+  <!-- Startup fallback: inline in index.html so it works even when bootstrap or
+       the app bundle fails to load. If React never renders, reveal a retry
+       message instead of a blank page; the first successful render removes it. -->
+  <div id="boot-fallback" class="boot-fallback" hidden>
+    <div class="boot-fallback-box" role="alert">
+      <strong>FinSight could not start</strong>
+      The app files may be incomplete or outdated. Your data is safe on this
+      computer. Reload to try again; if it keeps failing, restart the server
+      (node server.js or start.command).
+      <button id="boot-retry" type="button">Reload</button>
+    </div>
+  </div>
+  <script>
+    (function () {
+      var root = document.getElementById('root'), fb = document.getElementById('boot-fallback');
+      if (root.childElementCount) { fb.remove(); return; }
+      var reveal = setTimeout(function () { if (!root.childElementCount) fb.hidden = false; }, 5000);
+      new MutationObserver(function () {
+        if (root.childElementCount) { clearTimeout(reveal); fb.remove(); }
+      }).observe(root, { childList: true });
+      document.getElementById('boot-retry').addEventListener('click', function () { location.reload(); });
+    })();
+  </script>
   <script src="/app/bootstrap.js"></script>
   <script src="/indicators.js"></script>
   <script src="/strategy.js"></script>
