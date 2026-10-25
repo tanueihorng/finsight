@@ -99,26 +99,9 @@ try { var d = document.documentElement;
       <div class="panel">
         <div class="panel-head">
           <span class="panel-title">PORTFOLIO PERFORMANCE</span>
-          <div class="head-btns">
-            <select id="perf-bench" class="mini-sel" title="Benchmark — the same cash flows put into this index on the same days">
-              <option value="^GSPC">vs S&amp;P 500</option>
-              <option value="URTH">vs MSCI World</option>
-              <option value="VT">vs All-World</option>
-              <option value="^IXIC">vs Nasdaq</option>
-              <option value="^STI">vs STI</option>
-              <option value="none">no benchmark</option>
-            </select>
-            <div class="ranges" id="perf-ranges">
-              <button data-range="1mo">1M</button>
-              <button data-range="6mo">6M</button>
-              <button data-range="ytd">YTD</button>
-              <button data-range="1y" class="active">1Y</button>
-              <button data-range="5y">5Y</button>
-              <button data-range="max">MAX</button>
-            </div>
-          </div>
+          <div class="head-btns" data-island-slot="performance:head"></div>
         </div>
-        <div id="perf-body" class="chart-body muted">Add positions to see performance over time.</div>
+        <div id="perf-body" class="chart-body muted" data-island="performance"></div>
       </div>
 
       <div class="panel">
@@ -127,31 +110,23 @@ try { var d = document.documentElement;
           <div class="head-btns"><span class="muted small">invested by asset class + cash, per account</span>
           <button id="wealth-cash-btn" class="mini-btn" title="Edit cash balances">EDIT CASH</button></div>
         </div>
-        <div id="wealth-body" class="chart-body muted">Loading…</div>
+        <div id="wealth-body" class="chart-body muted" data-island="wealth"></div>
       </div>
 
       <div class="panel">
         <div class="panel-head">
           <span class="panel-title">ALLOCATION</span>
-          <div class="ranges" id="alloc-mode">
-            <button data-mode="holding" class="active">HOLDING</button>
-            <button data-mode="sector">SECTOR</button>
-            <button data-mode="class">CLASS</button>
-            <button data-mode="account">ACCOUNT</button>
-          </div>
+          <span data-island-slot="allocation:head"></span>
         </div>
-        <div id="alloc-body" class="chart-body muted">Add positions to see allocation.</div>
+        <div id="alloc-body" class="chart-body muted" data-island="allocation"></div>
       </div>
 
       <div class="panel">
         <div class="panel-head">
           <span class="panel-title">SECTOR HEATMAP</span>
-          <div class="ranges" id="heat-metric">
-            <button data-metric="day" class="active">DAY %</button>
-            <button data-metric="total">TOTAL %</button>
-          </div>
+          <span data-island-slot="heatmap:head"></span>
         </div>
-        <div id="heatmap-body" class="heatmap-body muted">Add positions — tiles are sized by value, coloured by % change, grouped by sector.</div>
+        <div id="heatmap-body" class="heatmap-body muted" data-island="heatmap" data-metric="day"></div>
       </div>
 
       <div class="panel">

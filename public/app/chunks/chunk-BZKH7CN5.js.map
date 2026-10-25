@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../../../web/src/features/analytics/usePositions.ts"],
+  "sourcesContent": ["import { useStore } from 'zustand';\nimport { useAccounts, useCategories, usePortfolio } from '../../api/queries.ts';\n\n// The held positions with their categories and the active account's name,\n// shared by the analytics islands (one query each, deduplicated by key).\nexport function usePositions() {\n  const portfolio = usePortfolio();\n  const accounts = useAccounts();\n  const positions = portfolio.data?.positions ?? [];\n  const categories = useCategories(positions.map((p) => p.symbol)).data ?? {};\n  const account = useStore(window.FinSight.store, (s) => s.account);\n  const accountName = accounts.data?.accounts.find((a) => a.id === account)?.name || 'Account';\n  return { loaded: !!portfolio.data, positions, categories, accountName, base: portfolio.data?.base || window.FinSight.store.getState().base };\n}\n"],
+  "mappings": "8FAKO,SAASA,GAAe,CAC7B,IAAMC,EAAYC,EAAa,EACzBC,EAAWC,EAAY,EACvBC,EAAYJ,EAAU,MAAM,WAAa,CAAC,EAC1CK,EAAaC,EAAcF,EAAU,IAAKG,GAAMA,EAAE,MAAM,CAAC,EAAE,MAAQ,CAAC,EACpEC,EAAUC,EAAS,OAAO,SAAS,MAAQC,GAAMA,EAAE,OAAO,EAC1DC,EAAcT,EAAS,MAAM,SAAS,KAAMU,GAAMA,EAAE,KAAOJ,CAAO,GAAG,MAAQ,UACnF,MAAO,CAAE,OAAQ,CAAC,CAACR,EAAU,KAAM,UAAAI,EAAW,WAAAC,EAAY,YAAAM,EAAa,KAAMX,EAAU,MAAM,MAAQ,OAAO,SAAS,MAAM,SAAS,EAAE,IAAK,CAC7I",
+  "names": ["usePositions", "portfolio", "usePortfolio", "accounts", "useAccounts", "positions", "categories", "useCategories", "p", "account", "useStore", "s", "accountName", "a"]
+}

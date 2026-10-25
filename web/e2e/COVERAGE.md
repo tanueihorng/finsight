@@ -34,6 +34,11 @@ Card = the migration card(s) that must keep the row green (`docs/frontend-migrat
 | Ledger (D4) | All Accounts shows each trade's account | `D4` | D4 | pass |
 | Import (D4) | needs text, file fills the box, server error, All Accounts refused, backdrop closes, CLEAR ALL empties and clears the selection; wizard import choice opens it | `D4` | D4, F8 | pass |
 | Export (D4) | empty portfolio footer message | `D4` › export of an empty portfolio… | D4 | pass |
+| Allocation (C3) | holding/sector/class/account legends with %, 100% ring, legend + slice select a holding (not a group) | `C3` › allocation… | C3 | pass |
+| Heatmap (C3) | 9 tiles grouped by sector, DAY/TOTAL metric (host data-metric for peek), tile selects | `C3` › heatmap… | C3 | pass |
+| Net worth (C3) | class legend, cash note and CASH share, BY ACCOUNT rows in All Accounts, EDIT CASH opens the editor | `C3` › net worth breakdown… | C3, D3 | pass |
+| Performance (C3) | headline end value, stats/legend, range + benchmark requests, benchmark saved / range not, hover tooltip + crosshair | `C3` › performance… | C3 | pass |
+| Analytics (C3) | ADD and UNDO refetch performance; empty account empty states; drag + reload, hide/show via ⚙ Layout | `C3` | C3, F10 | pass |
 | Trades | ADD via command bar, UNDO restores | `baseline/add-sell` | F7, D3 | pass |
 | Trades | SELL with a price (realized P/L), SELL at market | `baseline/trades` | F7, D1 | pass |
 | Trades | row S button prompts for quantity and price | `baseline/trades` | D1 | pass |

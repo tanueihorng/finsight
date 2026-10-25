@@ -473,7 +473,8 @@ Two esbuild builds (`bootstrap.js` IIFE; `main.js` ESM with splitting), `manifes
 | A3 | A | todo | | Codex | |
 | B1–B3 | B | todo | | | |
 | C1 | C | done as PILOT-2 (merged) | mig/PILOT-2-summary | Claude | |
-| C2–C3 | C | todo | | | |
+| C2 | C | todo | | Codex | |
+| C3 | C | done (not merged; stacked on D4) | mig/C3-analytics | Claude | Performance, net-worth breakdown, allocation and sector heatmap islands; head controls through head slots; `usePerformance` keyed by the holdings signature (replaces `perfSig`), `useWealth` (60 s, replaces `wealthSig`/`wealthAt`); categories from `useCategories`. Deleted legacy `catCache`, `ensureCategories`, `lastPositions` and the D1/D3 adapters (`assetClass`/`splitByAccount` copies, `analyticsStale`). Drag pids now target the island hosts |
 | D1 | D | done (merged 2026-10-25) | mig/D1-positions | Claude | Positions table island (toolbar, filter chips, search, sort, group, collapse, row S/✕, flash) + `useCategories`, `useAccounts`; `posView` keeps the `finsight-posview` key. Legacy keeps `lastTableData` fed from `renderPortfolio` for detail/chart (E1/E2) and its own `assetClass`/`splitByAccount` copies for allocation (C3). Intended fix: a failed row ✕ delete now shows an error |
 | D2 | D | done (not merged; stacked on main 246f219) | mig/D2-addform | Claude | Add form + symbol search island; `store.addFormOpen` carries the legacy + ADD button and the setup wizard's "Add manually" choice (a click before the island mounts still counts); debounced search aborts the older request |
 | D3 | D | done (not merged; stacked on D2) | mig/D3-undo-cash | Claude | Undo + CASH as TypeScript actions (`window.FinSight.actions`, installed by main.js; `doUndo`/`setCashBalance`/`openCashEditor` stay as one-line globals for the command bar, ledger ↶, wealth and summary openers); cash editor modal island opened by `store.cashEditorOpen`. Legacy `analyticsStale()` keeps the perf/wealth signature resets until C3 |

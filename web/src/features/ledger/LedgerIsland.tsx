@@ -2,7 +2,6 @@ import { useEffect, useState, type MouseEvent } from 'react';
 import { useStore } from 'zustand';
 import { api } from '../../api/client.ts';
 import { useLedger, useRealized } from '../../api/queries.ts';
-import { analyticsStale } from '../../legacy/app.ts';
 import { downloadCsv, toCsv } from '../../ui/csv.ts';
 import { fmt, money, moneySigned, signClass } from '../../ui/format.ts';
 import type { LedgerRow, Realized } from '../../../../shared/types.ts';
@@ -100,7 +99,7 @@ export default function LedgerIsland() {
         await post('/api/ledger/delete', { id: r.id });
         setStatus({ m: `Deleted ${r.symbol} buy. UNDO restores it.`, k: 'ok' });
       }
-      setEditing(null); analyticsStale({ perf: true });
+      setEditing(null);
       await window.FinSight.bus.write(act === 'save' ? 'ledger-edit' : 'ledger-delete');
     } catch (err) { setStatus({ m: (err as Error).message, k: 'err' }); }
   }

@@ -1,5 +1,5 @@
 import { api } from '../../api/client.ts';
-import { analyticsStale, setFooter, setStatus } from '../../legacy/app.ts';
+import { setFooter, setStatus } from '../../legacy/app.ts';
 import { downloadCsv, toCsv } from '../../ui/csv.ts';
 import type { Portfolio } from '../../../../shared/types.ts';
 import { portfolioCsvRows } from '../ledger/ledger.ts';
@@ -18,7 +18,6 @@ export async function undo(): Promise<void> {
   try {
     const r = await api<{ undone: string; available?: number }>('/api/undo', { method: 'POST' });
     setStatus(undoStatusText(r), 'ok');
-    analyticsStale({ perf: true });
     await window.FinSight.bus.write('undo'); // accounts first, then portfolio, ledger, watchlist, alerts…
   } catch (e) { setStatus('UNDO: ' + message(e), 'err'); }
 }
@@ -33,7 +32,6 @@ export async function setCashBalance(ccy: string, amt: string): Promise<void> {
   try {
     await api('/api/cash' + qs(), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ccy, amount: amt }) });
     setStatus(cashStatusText(ccy, amt), 'ok');
-    analyticsStale({ wealth: true });
     await window.FinSight.bus.write('cash');
   } catch (e) { setStatus('CASH failed: ' + message(e), 'err'); }
 }

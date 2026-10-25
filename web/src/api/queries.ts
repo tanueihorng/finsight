@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from './client.ts';
-import type { Accounts, Alert, Category, FxRisk, Ledger, Markets, NewsResponse, Portfolio, Realized, WatchItem } from '../../../shared/types.ts';
+import type { Accounts, Alert, Category, FxRisk, Ledger, Markets, NewsResponse, Performance, Portfolio, Realized, WatchItem } from '../../../shared/types.ts';
 import type {} from '../bootstrap.ts';
 
 // F4 supplies this source in bootstrap, before legacy startup. Until then hooks
@@ -87,4 +87,29 @@ export function useRealized(open: boolean) {
   const { base, account, enabled } = useScope();
   return useQuery({ queryKey: ['realized', base, account], enabled: enabled && open, staleTime: 0,
     queryFn: ({ signal }) => api<Realized>(`/api/realized?base=${encodeURIComponent(base)}&account=${encodeURIComponent(account)}`, { signal }) });
+}
+
+// Legacy refetched performance when the base or the held symbols/quantities
+// changed (and after undo/ledger edits, now the 'performance' key). The
+// holdings signature in the key keeps that; nothing polls.
+export function usePerformance(range: string, benchmark: string, holdings: string) {
+  const { base, account, enabled } = useScope();
+  return useQuery({ queryKey: ['performance', base, account, range, benchmark, holdings], enabled: enabled && holdings !== '', staleTime: Infinity,
+    queryFn: ({ signal }) => api<Performance>(`/api/portfolio/performance?range=${range}&benchmark=${encodeURIComponent(benchmark)}&base=${encodeURIComponent(base)}&account=${encodeURIComponent(account)}`, { signal }) });
+}
+// Net-worth breakdown: one portfolio per account in view (all of them in All
+// Accounts), with categories for the asset-class split. Legacy refreshed it at
+// most once a minute and after cash edits ('wealth' key).
+export interface WealthInput { id: string; name: string; portfolio: Portfolio }
+export function useWealth(accounts: { id: string; name: string }[] | undefined) {
+  const { base, account, enabled } = useScope();
+  const ids = !accounts ? [] : account === 'ALL' ? accounts.map((a) => a.id) : [account];
+  return useQuery({ queryKey: ['wealth', base, account, ids.join(',')], enabled: enabled && ids.length > 0, staleTime: 60_000, refetchInterval: 60_000,
+    queryFn: async ({ signal }) => {
+      const list = await Promise.all(ids.map(async (id) => ({ id, name: accounts!.find((a) => a.id === id)?.name || id,
+        portfolio: await api<Portfolio>(`/api/portfolio?base=${encodeURIComponent(base)}&account=${encodeURIComponent(id)}`, { signal }) })));
+      const symbols = [...new Set(list.flatMap((a) => a.portfolio.positions.map((p) => p.symbol)))].sort();
+      const categories = symbols.length ? await api<Record<string, Category>>('/api/categories?symbols=' + encodeURIComponent(symbols.join(',')), { signal }).catch(() => ({})) : {};
+      return { base, accounts: list as WealthInput[], categories };
+    } });
 }

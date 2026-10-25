@@ -1,7 +1,6 @@
 import { useEffect, useReducer, useRef, useState } from 'react';
 import { useStore } from 'zustand';
 import { api } from '../../api/client.ts';
-import { analyticsStale, loadWealth } from '../../legacy/app.ts';
 import type { Accounts, Portfolio } from '../../../../shared/types.ts';
 import { planCashSave, type CashDraft } from './cash.ts';
 
@@ -68,7 +67,7 @@ export default function CashEditorIsland() {
           if (c.amount === 0) delete c.draft.orig[c.ccy]; else c.draft.orig[c.ccy] = c.amount;
         }
         setStatus({ m: 'Saved ✓ · net worth updated', k: 'ok' });
-        analyticsStale({ wealth: true }); await window.FinSight.bus.write('cash'); loadWealth();
+        await window.FinSight.bus.write('cash'); // refreshes net worth ('wealth') too
       } catch (e) { setStatus({ m: 'Save failed: ' + (e as Error).message, k: 'err' }); }
     })();
     saving.current = run;

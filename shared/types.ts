@@ -138,3 +138,12 @@ export interface RealizedYear { year: number; proceeds: number; cost: number; st
 export interface Realized { base: string; account: string; rows: RealizedRow[]; years: RealizedYear[] }
 /** lib/portfolio.js importCsv result, returned as Portfolio.imported. */
 export interface ImportResult { added: number; total: number; failed: string[] }
+
+/** lib/performance.js portfolioPerformance, server.js GET /api/portfolio/performance. Early exits may omit points. */
+export interface Performance {
+  range: string; base: string; points?: { t: number; value: number; invested: number; bench: number | null }[];
+  start: number; end: number; netInvested: number; gain: number; twr: number; twrAnnual: number;
+  xirr: number | null; mwr: number | null; spanDays: number;
+  benchmark: { symbol: string; name: string; twr: number; twrAnnual: number; shadowEnd: number | null } | null;
+  approx?: string[]; missing?: string[]; transfers?: string[];
+}

@@ -204,8 +204,6 @@ function renderPortfolio(data) {
     return `<div class="line"><span class="ts">${when}</span><span class="${cls}">${t.type}</span><span class="sym amber">${esc(t.symbol)}</span><span class="muted">${detail}</span></div>`;
   }).join('') || '<div class="muted small">No transactions yet.</div>';
 
-  // charts + heatmap
-  renderAnalytics(positions);
 
   // re-select detail if needed
   if (!state.selected && positions.length) selectSymbol((positions.find((p) => p.quoted !== false) || positions[0]).symbol);
@@ -487,8 +485,8 @@ $('#panels-list').addEventListener('change', (e) => {
 // Each panel is tagged with a stable pid (via a known child element) so its
 // position can be saved/restored; a ⠿ grip in the header is the drag handle.
 const PANEL_PIDS = [
-  ['#positions-view', 'positions'], ['#wealth-body', 'wealth'], ['#perf-ranges', 'performance'], ['#alloc-mode', 'allocation'],
-  ['#heat-metric', 'heatmap'], ['#fxrisk', 'fxrisk'], ['#dividends', 'dividends'], ['#watchlist', 'watchlist'], ['#alerts', 'alerts'], ['#activity', 'activity'],
+  ['#positions-view', 'positions'], ['#wealth-body', 'wealth'], ['#perf-body', 'performance'], ['#alloc-body', 'allocation'],
+  ['#heatmap-body', 'heatmap'], ['#fxrisk', 'fxrisk'], ['#dividends', 'dividends'], ['#watchlist', 'watchlist'], ['#alerts', 'alerts'], ['#activity', 'activity'],
   ['#detail-panel', 'detail'], ['#agent-dock', 'kestrel'], ['#news', 'news'], ['#markets', 'markets'], ['#calendar', 'calendar'], ['#wb-body', 'worldbank'], ['#fred-body', 'fred'], ['#infl-body', 'inflation'],
 ];
 let dragInited = false;
@@ -601,8 +599,6 @@ let lastTableData = { positions: [], base: 'SGD' };
 function doUndo() { return window.FinSight.actions.undo(); }
 function setCashBalance(ccy, amt) { return window.FinSight.actions.setCashBalance(ccy, amt); }
 function openCashEditor() { state.cashEditorOpen = true; }
-// C3 removes this: D3's writes reset the analytics signatures as legacy did.
-function analyticsStale({ perf = false, wealth = false } = {}) { if (perf) perfSig = ''; if (wealth) wealthSig = ''; }
 $('#undo-btn').addEventListener('click', doUndo);
 $('#undo-btn').addEventListener('mouseenter', async () => {
   const title = await window.FinSight.actions.undoTitle(); if (title) $('#undo-btn').title = title;
@@ -1104,305 +1100,9 @@ function setupSearch(input, box, onPick) {
 setupSearch($('#watch-symbol'), $('#watch-suggest'), (s) => { if (s) $('#watch-symbol').value = s.symbol; });
 
 // ===========================================================================
-//  PORTFOLIO ANALYTICS — performance, allocation donut, sector heatmap
+//  PORTFOLIO ANALYTICS: performance, net worth, allocation and heatmap are
+//  React islands (C3, web/src/features/analytics).
 // ===========================================================================
-let lastPositions = [];
-let heatMetric = 'day', allocMode = 'holding', perfRange = '1y', perfSig = '';
-let perfBench = (() => { try { return localStorage.getItem('finsight-bench') || '^GSPC'; } catch { return '^GSPC'; } })();
-const catCache = {};
-// Legacy copies for the allocation chart until C3 imports
-// web/src/features/positions/table.ts (D1 ported the originals there).
-const ASSET_CLASSES = ['Stocks', 'ETFs', 'Crypto', 'Funds & Other'];
-function assetClass(sym) {
-  const t = catCache[sym]?.type;
-  if (t === 'CRYPTOCURRENCY') return 'Crypto';
-  if (t === 'ETF') return 'ETFs';
-  if (t === 'EQUITY') return 'Stocks';
-  return 'Funds & Other';
-}
-function splitByAccount(p) {
-  const hs = p.holdings;
-  if (!hs || !hs.length) return [{ ...p, account: accountName() }];
-  if (hs.length === 1) return [{ ...p, account: hs[0].account }];
-  const costNative = p.avgCost * p.quantity || 1;
-  return hs.map((h) => {
-    const qf = h.quantity / (p.quantity || 1), cf = (h.avgCost * h.quantity) / costNative;
-    const marketValue = p.marketValue * qf, cost = p.cost * cf, unrealized = marketValue - cost;
-    return { ...p, account: h.account, quantity: h.quantity, avgCost: h.avgCost, marketValue, cost, unrealized,
-      unrealizedPct: cost ? unrealized / cost * 100 : 0, fxPnl: p.fxPnl * cf, weight: p.weight * qf, dayChange: p.dayChange * qf };
-  });
-}
-function accountName() {
-  return (accountsCache.find((a) => a.id === state.account) || {}).name || 'Account';
-}
-
-async function ensureCategories(symbols) {
-  const missing = symbols.filter((s) => !catCache[s]);
-  if (!missing.length) return;
-  try { Object.assign(catCache, await api('/api/categories?symbols=' + encodeURIComponent(missing.join(',')))); } catch {}
-}
-
-// Squarified treemap: data [{value,...}] in rect -> [{...,x,y,w,h}] (validated: fills, no overlap).
-function treemap(data, x, y, w, h) {
-  const nodes = data.filter((d) => d.value > 0).map((d) => ({ d, value: d.value }));
-  const out = [];
-  const total = nodes.reduce((s, n) => s + n.value, 0);
-  if (!total || w <= 0 || h <= 0) return out;
-  const scale = (w * h) / total;
-  nodes.forEach((n) => (n.area = n.value * scale));
-  let rect = { x, y, w, h }, row = [], i = 0;
-  const shortest = () => Math.min(rect.w, rect.h);
-  const worst = (r, side) => {
-    const s = r.reduce((a, q) => a + q.area, 0); let mx = 0, mn = Infinity;
-    for (const q of r) { mx = Math.max(mx, q.area); mn = Math.min(mn, q.area); }
-    return Math.max((side * side * mx) / (s * s), (s * s) / (side * side * mn));
-  };
-  const layout = (r) => {
-    const s = r.reduce((a, q) => a + q.area, 0);
-    if (rect.w >= rect.h) {
-      const rw = s / rect.h; let cy = rect.y;
-      for (const q of r) { const rh = q.area / rw; out.push({ ...q.d, x: rect.x, y: cy, w: rw, h: rh }); cy += rh; }
-      rect.x += rw; rect.w -= rw;
-    } else {
-      const rh = s / rect.w; let cx = rect.x;
-      for (const q of r) { const rw = q.area / rh; out.push({ ...q.d, x: cx, y: rect.y, w: rw, h: rh }); cx += rw; }
-      rect.y += rh; rect.h -= rh;
-    }
-  };
-  while (i < nodes.length) {
-    const n = nodes[i], side = shortest();
-    if (row.length === 0 || worst(row, side) >= worst([...row, n], side)) { row.push(n); i++; }
-    else { layout(row); row = []; }
-  }
-  if (row.length) layout(row);
-  return out;
-}
-
-function heatColor(pct) {
-  const t = Math.max(-1, Math.min(1, (pct || 0) / 3)); // clamp at ±3%
-  const neutral = [26, 31, 38], tgt = t >= 0 ? [38, 175, 110] : [205, 55, 55], a = Math.abs(t);
-  const c = neutral.map((n, i) => Math.round(n + (tgt[i] - n) * a));
-  return `rgb(${c[0]},${c[1]},${c[2]})`;
-}
-
-function renderHeatmap(positions) {
-  const box = $('#heatmap-body');
-  if (!positions || !positions.length) { box.innerHTML = '<span class="muted">Add positions to see the heatmap.</span>'; return; }
-  const W = 800, H = 380, pad = 2, labelH = 14;
-  const groups = {};
-  positions.forEach((p) => {
-    const cat = (catCache[p.symbol]?.category) || 'Other';
-    (groups[cat] || (groups[cat] = { category: cat, value: 0, items: [] }));
-    groups[cat].value += p.marketValue; groups[cat].items.push(p);
-  });
-  const sectors = Object.values(groups).filter((g) => g.value > 0);
-  let svg = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="height:380px">`;
-  for (const sr of treemap(sectors.map((s) => ({ ...s })), 0, 0, W, H)) {
-    svg += `<rect x="${sr.x}" y="${sr.y}" width="${sr.w}" height="${sr.h}" fill="#0a0c10" stroke="#000" stroke-width="2"/>`;
-    const showLbl = sr.w > 56 && sr.h > 26;
-    if (showLbl) svg += `<text x="${sr.x + 4}" y="${sr.y + 10}" fill="#8aa0b5" font-size="9" letter-spacing="0.5">${esc(sr.category.toUpperCase().slice(0, Math.floor(sr.w / 6)))}</text>`;
-    const iy = sr.y + (showLbl ? labelH : pad), ih = sr.h - (showLbl ? labelH : pad) - pad;
-    const ix = sr.x + pad, iw = sr.w - 2 * pad;
-    if (iw <= 2 || ih <= 2) continue;
-    for (const t of treemap(sr.items.map((p) => ({ p, value: p.marketValue })), ix, iy, iw, ih)) {
-      const pct = heatMetric === 'day' ? t.p.changePct : t.p.unrealizedPct;
-      svg += `<g class="hm-tile" data-sym="${esc(t.p.symbol)}" style="cursor:pointer">`;
-      svg += `<rect x="${t.x}" y="${t.y}" width="${t.w}" height="${t.h}" fill="${heatColor(pct)}" stroke="#050608" stroke-width="1"/>`;
-      if (t.w > 32 && t.h > 24) {
-        svg += `<text x="${t.x + t.w / 2}" y="${t.y + t.h / 2 - 1}" fill="#fff" font-size="${Math.min(13, t.w / 4.2)}" font-weight="700" text-anchor="middle">${esc(t.p.symbol)}</text>`;
-        svg += `<text x="${t.x + t.w / 2}" y="${t.y + t.h / 2 + 11}" fill="#e6edf3" font-size="9" text-anchor="middle">${signStr(pct)}%</text>`;
-      }
-      svg += `</g>`;
-    }
-  }
-  box.innerHTML = svg + `</svg>`;
-}
-$('#heatmap-body').addEventListener('click', (e) => { const g = e.target.closest('[data-sym]'); if (g) selectSymbol(g.dataset.sym); });
-$('#heat-metric').addEventListener('click', (e) => {
-  const b = e.target.closest('button'); if (!b) return;
-  $$('#heat-metric button').forEach((x) => x.classList.remove('active')); b.classList.add('active');
-  heatMetric = b.dataset.metric; $('#heatmap-body').dataset.metric = heatMetric; renderHeatmap(lastPositions);
-});
-
-// ---- NET WORTH BREAKDOWN: asset classes + cash, overall and per account -----
-const CLASS_COLORS = { Stocks: '#a78bfa', ETFs: '#38bdf8', Crypto: '#facc15', 'Funds & Other': '#f472b6', Cash: '#2ec27e' };
-let wealthSig = '', wealthAt = 0;
-async function loadWealth() {
-  const box = $('#wealth-body'); if (!box) return;
-  const ids = state.account === 'ALL' ? accountsCache.map((a) => a.id) : [state.account];
-  const sig = state.base + '|' + ids.join(',');
-  if (sig === wealthSig && Date.now() - wealthAt < 60000) return; // per-account fetches are cheap but not free
-  wealthSig = sig; wealthAt = Date.now();
-  try {
-    const accts = await Promise.all(ids.map(async (id) => {
-      const d = await api(`/api/portfolio?base=${encodeURIComponent(state.base)}&account=${encodeURIComponent(id)}`);
-      await ensureCategories(d.positions.map((p) => p.symbol));
-      const parts = {};
-      d.positions.forEach((p) => { const c = assetClass(p.symbol); parts[c] = (parts[c] || 0) + p.marketValue; });
-      const cash = (d.cash || []).reduce((s, c) => s + (c.base || 0), 0);
-      if (cash) parts.Cash = cash;
-      return { id, name: (accountsCache.find((a) => a.id === id) || {}).name || id, parts, cash, cashList: d.cash || [],
-        net: Object.values(parts).reduce((s, v) => s + v, 0) };
-    }));
-    renderWealth(accts, state.base);
-  } catch (e) { wealthSig = ''; box.innerHTML = `<span class="muted">Breakdown unavailable: ${esc(e.message)}</span>`; }
-}
-function renderWealth(accts, base) {
-  const box = $('#wealth-body');
-  const order = [...ASSET_CLASSES, 'Cash'];
-  const tot = {}; accts.forEach((a) => Object.entries(a.parts).forEach(([k, v]) => { tot[k] = (tot[k] || 0) + v; }));
-  const net = Object.values(tot).reduce((s, v) => s + v, 0);
-  if (!net) { box.innerHTML = '<span class="muted">Add positions or cash to see your breakdown.</span>'; return; }
-  const seg = (parts, scale) => order.filter((k) => parts[k] > 0).map((k) =>
-    `<span class="w-seg" style="width:${(parts[k] / scale * 100).toFixed(3)}%;background:${CLASS_COLORS[k]}" title="${esc(k)} · ${money(base, parts[k])} (${(parts[k] / net * 100).toFixed(1)}% of net worth)"></span>`).join('');
-  const legend = order.filter((k) => tot[k] > 0).map((k) =>
-    `<div class="w-lg"><span class="sw" style="background:${CLASS_COLORS[k]}"></span><span class="w-lab">${esc(k.toUpperCase())}</span><span class="w-amt">${money(base, tot[k])}</span><span class="pct">${(tot[k] / net * 100).toFixed(1)}%</span></div>`).join('');
-  const cashCcy = {}; accts.forEach((a) => a.cashList.forEach((c) => { cashCcy[c.ccy] = (cashCcy[c.ccy] || 0) + c.amount; }));
-  const cashNote = Object.keys(cashCcy).length ? `<div class="w-note">CASH · ${Object.entries(cashCcy).map(([c, v]) => `${esc(c)} ${fmt(v)}`).join(' · ')}</div>` : '';
-  const maxNet = Math.max(...accts.map((a) => a.net)) || 1;
-  const rows = accts.length > 1 ? accts.filter((a) => a.net > 0).sort((a, b) => b.net - a.net).map((a) =>
-    `<div class="w-row"><span class="w-name" title="${esc(a.name)}">${esc(a.name)}</span>
-      <span class="w-track"><span class="w-bar" style="width:${(a.net / maxNet * 100).toFixed(2)}%">${seg(a.parts, a.net)}</span></span>
-      <span class="w-amt">${money(base, a.net)}</span><span class="pct">${(a.net / net * 100).toFixed(1)}%</span></div>`).join('') : '';
-  box.innerHTML = `<div class="w-head"><span class="muted small">NET WORTH</span><span class="w-total">${money(base, net)}</span></div>
-    <div class="w-stack">${seg(tot, net)}</div><div class="w-legend">${legend}</div>${cashNote}
-    ${rows ? `<div class="fxr-sub">BY ACCOUNT</div><div class="w-rows">${rows}</div>` : ''}`;
-}
-
-const PALETTE = ['#a78bfa', '#38bdf8', '#2ec27e', '#fb7185', '#f472b6', '#facc15', '#34d399', '#60a5fa', '#2dd4bf', '#c084fc', '#94a3b8'];
-function renderAllocation(positions) {
-  const box = $('#alloc-body');
-  if (!positions || !positions.length) { box.innerHTML = '<span class="muted">Add positions to see allocation.</span>'; return; }
-  let items;
-  if (allocMode === 'sector' || allocMode === 'class' || allocMode === 'account') {
-    const g = {};
-    const rows = allocMode === 'account' ? positions.flatMap(splitByAccount) : positions;
-    rows.forEach((p) => {
-      const c = allocMode === 'sector' ? (catCache[p.symbol]?.category || 'Other') : allocMode === 'class' ? assetClass(p.symbol) : p.account;
-      g[c] = (g[c] || 0) + p.marketValue;
-    });
-    items = Object.entries(g).map(([label, value]) => ({ label, value }));
-  } else items = positions.map((p) => ({ label: p.symbol, value: p.marketValue }));
-  items.sort((a, b) => b.value - a.value);
-  const total = items.reduce((s, i) => s + i.value, 0) || 1;
-  const cx = 70, cy = 70, r = 60, rin = 36; let ang = -Math.PI / 2, paths = '';
-  items.forEach((it, i) => {
-    const frac = it.value / total, a2 = ang + Math.max(frac, 0.0001) * 2 * Math.PI, col = PALETTE[i % PALETTE.length];
-    it.color = col;
-    // A single 100% slice would be a degenerate arc (start==end) that draws nothing —
-    // render it as a full ring (two stacked circles) instead.
-    if (frac >= 0.9999) {
-      paths += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${col}" data-sym="${allocMode === 'holding' ? esc(it.label) : ''}"/><circle cx="${cx}" cy="${cy}" r="${rin}" fill="var(--panel)"/>`;
-      ang = a2; return;
-    }
-    const x1 = cx + r * Math.cos(ang), y1 = cy + r * Math.sin(ang), x2 = cx + r * Math.cos(a2), y2 = cy + r * Math.sin(a2);
-    const xi1 = cx + rin * Math.cos(a2), yi1 = cy + rin * Math.sin(a2), xi2 = cx + rin * Math.cos(ang), yi2 = cy + rin * Math.sin(ang);
-    const large = frac > 0.5 ? 1 : 0;
-    paths += `<path d="M${x1} ${y1} A${r} ${r} 0 ${large} 1 ${x2} ${y2} L${xi1} ${yi1} A${rin} ${rin} 0 ${large} 0 ${xi2} ${yi2} Z" fill="${col}" data-sym="${allocMode === 'holding' ? esc(it.label) : ''}"/>`;
-    ang = a2;
-  });
-  const legend = items.slice(0, 11).map((it) => `<div class="lg" data-sym="${allocMode === 'holding' ? esc(it.label) : ''}"><span class="sw" style="background:${it.color}"></span>${esc(it.label).slice(0, 18)}<span class="pct">${(it.value / total * 100).toFixed(1)}%</span></div>`).join('');
-  box.innerHTML = `<div class="donut-wrap"><svg width="140" height="140" viewBox="0 0 140 140">${paths}</svg><div class="donut-legend">${legend}</div></div>`;
-}
-$('#alloc-body').addEventListener('click', (e) => { const g = e.target.closest('[data-sym]'); if (g && g.dataset.sym) selectSymbol(g.dataset.sym); });
-$('#alloc-mode').addEventListener('click', (e) => {
-  const b = e.target.closest('button'); if (!b) return;
-  $$('#alloc-mode button').forEach((x) => x.classList.remove('active')); b.classList.add('active');
-  allocMode = b.dataset.mode; renderAllocation(lastPositions);
-});
-
-async function loadPerformance() {
-  const box = $('#perf-body');
-  if (!lastPositions.length) { box.innerHTML = '<span class="muted">Add positions to see performance over time.</span>'; return; }
-  box.innerHTML = '<span class="muted">Replaying your trades…</span>';
-  try {
-    const d = await api('/api/portfolio/performance?range=' + perfRange + '&benchmark=' + encodeURIComponent(perfBench) + baseQS().replace('?', '&'));
-    if (!d.points || !d.points.length) { box.innerHTML = '<span class="muted">No data.</span>'; return; }
-    const base = d.base || state.base;
-    const b = d.benchmark;
-    const long = d.spanDays >= 365;
-    const pct = (v) => (v == null ? '—' : signStr(v) + '%');
-    const stat = (k, v, cls, title) => `<div class="pf-stat" title="${esc(title)}"><span class="k">${k}</span><span class="v ${cls || ''}">${v}</span></div>`;
-    const stats = [
-      stat('GAIN', moneySigned(base, d.gain), signClass(d.gain), 'Money made in the window: value change minus net money added, plus dividends'),
-      stat(long ? 'TWR p.a.' : 'TWR', pct(long ? d.twrAnnual : d.twr), signClass(d.twr), 'Time-weighted return: how your holdings performed, ignoring when you added or withdrew money. Compare this with the index.'),
-      stat(long ? 'XIRR p.a.' : 'MONEY-WTD', pct(long ? d.xirr : d.mwr), signClass(d.mwr), 'Money-weighted return (XIRR): your personal return including the timing of your buys and sells.'),
-      b ? stat(esc(b.name), pct(long ? b.twrAnnual : b.twr), signClass(b.twr), `${b.name} return in ${base} (price index, FX-adjusted) over the same window`) : '',
-      b ? stat('VS INDEX', pct((long ? d.twrAnnual - b.twrAnnual : d.twr - b.twr)), signClass(d.twr - b.twr), 'Your TWR minus the benchmark TWR') : '',
-    ].join('');
-    const notes = [];
-    if (d.transfers && d.transfers.length) notes.push(`${d.transfers.length} holding(s) entered at market value — no purchase date, so gains before that aren't counted (${d.transfers.slice(0, 6).map(esc).join(', ')}${d.transfers.length > 6 ? '…' : ''}). Add dates on import for full history.`);
-    if (d.approx && d.approx.length) notes.push(`No trade history for ${d.approx.slice(0, 6).map(esc).join(', ')} — treated as held for the whole window.`);
-    if (d.missing && d.missing.length) notes.push(`No price history for ${d.missing.map(esc).join(', ')} — held flat.`);
-    box.innerHTML = `<div class="perf-headline"><span class="pv">${money(base, d.end)}</span>` +
-      `<span class="muted small">net invested ${money(base, d.start + d.netInvested, 0)}</span></div>` +
-      `<div class="pf-stats">${stats}</div>` +
-      perfChart(d.points, base, b) +
-      `<div class="perf-note">Replays your actual buys &amp; sells with historical prices and FX. ${notes.join(' ')}</div>`;
-    bindPerfHover(d.points, base, b);
-  } catch (e) { box.innerHTML = `<span class="down">${esc(e.message)}</span>`; }
-}
-// Multi-line SVG chart: portfolio value, net invested (dashed), benchmark shadow.
-function perfChart(points, base, bench) {
-  if (points.length < 2) return '<div class="chart muted small">Not enough history yet.</div>';
-  const W = 600, H = 160, pad = 4;
-  const keys = ['value', 'invested'].concat(bench ? ['bench'] : []);
-  const vals = points.flatMap((p) => keys.map((k) => p[k]).filter((v) => v != null));
-  const min = Math.min(...vals), max = Math.max(...vals), span = (max - min) || 1;
-  const x = (i) => pad + i * (W - pad * 2) / (points.length - 1);
-  const y = (v) => pad + (H - pad * 2) * (1 - (v - min) / span);
-  const path = (k) => points.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p[k]).toFixed(1)}`).join(' ');
-  const last = points[points.length - 1];
-  const up = last.value >= last.invested;
-  const col = up ? 'var(--up)' : 'var(--down)';
-  const area = `${path('value')} L${x(points.length - 1).toFixed(1)},${H - pad} L${x(0).toFixed(1)},${H - pad} Z`;
-  return `<div class="pf-chart-wrap"><svg class="chart pf-chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
-    <defs><linearGradient id="pfg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${col}" stop-opacity="0.22"/><stop offset="100%" stop-color="${col}" stop-opacity="0"/></linearGradient></defs>
-    <path d="${area}" fill="url(#pfg)"/>
-    <path d="${path('invested')}" fill="none" stroke="var(--muted)" stroke-width="1" stroke-dasharray="4 3" vector-effect="non-scaling-stroke"/>
-    ${bench ? `<path d="${path('bench')}" fill="none" stroke="var(--cyan)" stroke-width="1.2" vector-effect="non-scaling-stroke"/>` : ''}
-    <path d="${path('value')}" fill="none" stroke="${col}" stroke-width="1.6" vector-effect="non-scaling-stroke"/>
-    <line id="pf-cross" x1="0" x2="0" y1="0" y2="${H}" stroke="var(--dim)" stroke-width="1" vector-effect="non-scaling-stroke" visibility="hidden"/>
-  </svg><div id="pf-tip" class="pf-tip hidden"></div></div>
-  <div class="pf-legend"><span><i style="background:${col}"></i>Portfolio</span><span><i class="dash"></i>Net invested</span>${bench ? `<span><i style="background:var(--cyan)"></i>Same cash in ${esc(bench.name)}</span>` : ''}</div>`;
-}
-function bindPerfHover(points, base, bench) {
-  const svg = $('#perf-body .pf-chart'), tip = $('#pf-tip'), cross = $('#pf-cross');
-  if (!svg || !tip || points.length < 2) return;
-  svg.addEventListener('mousemove', (e) => {
-    const r = svg.getBoundingClientRect();
-    const f = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
-    const i = Math.round(f * (points.length - 1)), p = points[i];
-    const xv = 4 + i * (600 - 8) / (points.length - 1);
-    cross.setAttribute('x1', xv); cross.setAttribute('x2', xv); cross.setAttribute('visibility', 'visible');
-    tip.innerHTML = `<b>${new Date(p.t).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit', timeZone: 'UTC' })}</b>` +
-      `<div>Portfolio ${money(base, p.value, 0)}</div><div class="muted">Invested ${money(base, p.invested, 0)}</div>` +
-      (bench && p.bench != null ? `<div class="cyan">${esc(bench.name)} ${money(base, p.bench, 0)}</div>` : '');
-    tip.classList.remove('hidden');
-    tip.style.left = Math.min(r.width - 150, Math.max(0, e.clientX - r.left + 10)) + 'px';
-  });
-  svg.addEventListener('mouseleave', () => { tip.classList.add('hidden'); cross.setAttribute('visibility', 'hidden'); });
-}
-$('#perf-ranges').addEventListener('click', (e) => {
-  const b = e.target.closest('button'); if (!b) return;
-  $$('#perf-ranges button').forEach((x) => x.classList.remove('active')); b.classList.add('active');
-  perfRange = b.dataset.range; loadPerformance();
-});
-$('#perf-bench').value = perfBench;
-$('#perf-bench').addEventListener('change', (e) => {
-  perfBench = e.target.value;
-  try { localStorage.setItem('finsight-bench', perfBench); } catch {}
-  loadPerformance();
-});
-
-// Called from renderPortfolio whenever positions update.
-function renderAnalytics(positions) {
-  lastPositions = positions || [];
-  renderHeatmap(positions); renderAllocation(positions);
-  ensureCategories(positions.map((p) => p.symbol)).then(() => { renderHeatmap(lastPositions); renderAllocation(lastPositions); loadWealth(); });
-  const sig = state.base + '|' + positions.map((p) => p.symbol + ':' + p.quantity).join(',');
-  if (sig !== perfSig) { perfSig = sig; loadPerformance(); }
-}
 
 // ===========================================================================
 //  UTIL + BOOT + POLLING
@@ -1457,7 +1157,7 @@ $('#account-sel').addEventListener('change', async () => {
   const v = $('#account-sel').value;
   if (v === '__new') { $('#account-sel').value = state.account; return newAccountPrompt(); }
   if (v === '__manage') { $('#account-sel').value = state.account; renderAccountsList(); return $('#accounts-modal').classList.remove('hidden'); }
-  state.account = v; localStorage.setItem('finsight-account', v); perfSig = '';
+  state.account = v; localStorage.setItem('finsight-account', v);
   await loadPortfolio();
   loadCalendar(); // holdings' earnings / ex-div dates follow the account
 });
@@ -1467,7 +1167,7 @@ async function newAccountPrompt() {
   try {
     const d = await api('/api/accounts/add', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
     accountsCache = d.accounts; state.account = d.newId; localStorage.setItem('finsight-account', d.newId);
-    renderAccountSelector(); perfSig = ''; await loadPortfolio(); setStatus(`Account "${name}" created.`, 'ok');
+    renderAccountSelector(); await loadPortfolio(); setStatus(`Account "${name}" created.`, 'ok');
   } catch (e) { setStatus('Create failed: ' + e.message, 'err'); }
 }
 function setAccountsStatus(m, k) { const el = $('#accounts-status'); el.textContent = m; el.className = 'cmd-status ' + (k || ''); }
@@ -1503,7 +1203,7 @@ $('#accounts-list').addEventListener('click', async (e) => {
       const d = await api('/api/accounts/remove', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: del.dataset.id }) });
       accountsCache = d.accounts;
       if (state.account === del.dataset.id) { state.account = d.activeId; localStorage.setItem('finsight-account', state.account); }
-      renderAccountsList(); renderAccountSelector(); perfSig = ''; await afterWrite('account-remove');
+      renderAccountsList(); renderAccountSelector(); await afterWrite('account-remove');
     } catch (err) { setAccountsStatus(err.message, 'err'); }
   }
 });

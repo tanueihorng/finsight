@@ -12,4 +12,8 @@ export const islands: IslandRegistry = {
   'cash-editor': () => import('./features/cash/CashEditorIsland.tsx'),
   ledger: () => import('./features/ledger/LedgerIsland.tsx'),
   import: () => import('./features/ledger/ImportIsland.tsx'),
+  performance: () => import('./features/analytics/PerformanceIsland.tsx'),
+  wealth: () => import('./features/analytics/WealthIsland.tsx'),
+  allocation: () => import('./features/analytics/AllocationIsland.tsx'),
+  heatmap: () => import('./features/analytics/HeatmapIsland.tsx'),
 };
