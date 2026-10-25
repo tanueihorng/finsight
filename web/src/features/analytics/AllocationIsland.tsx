@@ -1,3 +1,4 @@
+import { keyboardClick } from '../../ui/keyboard.ts';
 import { useState } from 'react';
 import { selectSymbol } from '../../legacy/app.ts';
 import { PanelHeadSlot } from '../../ui/PanelHeadSlot.tsx';
@@ -12,7 +13,7 @@ export default function AllocationIsland() {
   const head = (
     <PanelHeadSlot island="allocation">
       <div className="ranges" id="alloc-mode">
-        {MODES.map(([m, l]) => <button key={m} data-mode={m} className={mode === m ? 'active' : ''} onClick={() => setMode(m)}>{l}</button>)}
+        {MODES.map(([m, l]) => <button key={m} data-mode={m} aria-pressed={mode === m} className={mode === m ? 'active' : ''} onClick={() => setMode(m)}>{l}</button>)}
       </div>
     </PanelHeadSlot>
   );
@@ -26,13 +27,13 @@ export default function AllocationIsland() {
       <div className="donut-wrap">
         <svg width="140" height="140" viewBox="0 0 140 140">
           {slices.map((s) => s.path
-            ? <path key={s.label} d={s.path} fill={s.color} data-sym={sym(s.label)} onClick={() => pick(s.label)} />
-            : [<circle key={s.label} cx="70" cy="70" r="60" fill={s.color} data-sym={sym(s.label)} onClick={() => pick(s.label)} />,
+            ? <path key={s.label} d={s.path} fill={s.color} data-sym={sym(s.label)} role={mode === 'holding' ? 'button' : undefined} tabIndex={mode === 'holding' ? 0 : undefined} aria-label={mode === 'holding' ? `${s.label.slice(0, 18)} ${(s.frac * 100).toFixed(1)}%` : undefined} onKeyDown={keyboardClick} onClick={() => pick(s.label)} />
+            : [<circle key={s.label} cx="70" cy="70" r="60" fill={s.color} data-sym={sym(s.label)} role={mode === 'holding' ? 'button' : undefined} tabIndex={mode === 'holding' ? 0 : undefined} aria-label={mode === 'holding' ? `${s.label.slice(0, 18)} ${(s.frac * 100).toFixed(1)}%` : undefined} onKeyDown={keyboardClick} onClick={() => pick(s.label)} />,
               <circle key={s.label + ':in'} cx="70" cy="70" r="36" fill="var(--panel)" />])}
         </svg>
         <div className="donut-legend">
           {slices.slice(0, 11).map((s) => (
-            <div key={s.label} className="lg" data-sym={sym(s.label)} onClick={() => pick(s.label)}>
+            <div key={s.label} className="lg" data-sym={sym(s.label)} role={mode === 'holding' ? 'button' : undefined} tabIndex={mode === 'holding' ? 0 : undefined} onKeyDown={keyboardClick} onClick={() => pick(s.label)}>
               <span className="sw" style={{ background: s.color }}></span>{s.label.slice(0, 18)}<span className="pct">{(s.frac * 100).toFixed(1)}%</span>
             </div>
           ))}

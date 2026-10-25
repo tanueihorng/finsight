@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useStore } from 'zustand';
+import { useModalFocus } from '../../ui/modalFocus.ts';
 import type { Accounts } from '../../../../shared/types.ts';
 import { accountDetail, afterRemove } from './topbar.ts';
 import { post } from './actions.ts';
@@ -12,7 +13,9 @@ export default function AccountsModalIsland() {
   const accounts = useStore(store(), (s) => s.accounts);
   const [name, setName] = useState(''), [type, setType] = useState('');
   const [status, setStatus] = useState<Status>({ m: '', k: '' });
+  const boxRef = useRef<HTMLDivElement>(null);
   const close = () => store().setState({ accountsOpen: false });
+  useModalFocus(open, close, boxRef);
   const fail = (e: unknown) => setStatus({ m: (e as Error).message, k: 'err' });
 
   async function add() {
@@ -39,10 +42,10 @@ export default function AccountsModalIsland() {
 
   return (
     <div id="accounts-modal" className={open ? 'modal' : 'modal hidden'} onClick={(e) => { if (e.target === e.currentTarget) close(); }}>
-      <div className="modal-box">
+      <div className="modal-box" ref={boxRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Manage accounts">
         <div className="modal-head">
           <span className="panel-title">MANAGE ACCOUNTS</span>
-          <button id="accounts-close" className="x-btn" onClick={close}>✕</button>
+          <button id="accounts-close" aria-label="Close dialog" className="x-btn" onClick={close}>✕</button>
         </div>
         <div className="modal-body">
           <p className="muted small">Each account is a separate portfolio (e.g. IBKR, Crypto, SGX). Switch them from the

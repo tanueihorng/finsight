@@ -36,6 +36,7 @@ export default function KestrelIsland() {
   const setHeight = (px: number, save: boolean) => {
     const v = clampHeight(px, window.innerHeight);
     dockEl()?.style.setProperty('--agent-dock-h', v + 'px');
+    dockEl()?.querySelector('.agent-dock-resize')?.setAttribute('aria-valuenow', String(v));
     if (save) ls.set(LS.dockH, v);
   };
   const curHeight = () => parseInt(dockEl()?.style.getPropertyValue('--agent-dock-h') || '', 10) || DEFAULT_H;
@@ -48,6 +49,7 @@ export default function KestrelIsland() {
   };
   const toggle = (force?: boolean, restoring = false, as: Mode = mode) => {
     const next = force ?? !open;
+    if (!next && !document.body.classList.contains('locked')) document.getElementById('agent-toggle')?.focus({ preventScroll: true });
     setOpen(next); ls.set(LS.open, next ? '1' : '0');
     if (as === 'dock' && next && !restoring) setCollapsed(false); // a reload keeps it collapsed
     if (next) {
@@ -142,7 +144,7 @@ export default function KestrelIsland() {
       {mode === 'dock' && dockHead && createPortal(<>{title}{tools}</>, dockHead)}
       {mode === 'dock' && dockBody && createPortal(body, dockBody)}
       {dockSlot && createPortal(
-        <div className="agent-dock-resize" role="separator" aria-orientation="horizontal" aria-label="Resize chat height" tabIndex={0}
+        <div className="agent-dock-resize" role="separator" aria-orientation="horizontal" aria-label="Resize chat height" aria-valuenow={curHeight()} tabIndex={0}
           title="Drag to resize · double-click to reset · ↑ ↓ keys" onPointerDown={drag('y')} onDoubleClick={() => setHeight(DEFAULT_H, true)} onKeyDown={heightKeys}>
           <span className="agent-grip">⋯</span>
         </div>, dockSlot)}

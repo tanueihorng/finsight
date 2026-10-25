@@ -15,7 +15,7 @@ export default function WorldBankIsland() {
     void client.invalidateQueries({ queryKey: ['worldbank', country, indicator], refetchType: 'none' });
     setSelection({ country, indicator });
   };
-  const head = <PanelHeadSlot island="worldbank"><input id="wb-country" value={draft} maxLength={3} title="ISO country code (US, GB, DE, JP, CN, IN, SG, WLD...)" onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') load(); }} /><select id="wb-indicator" value={selection.indicator} onChange={(e) => load(e.target.value)}>{worldBankOptions.map((o) => <option value={o.value} key={o.value}>{o.label}</option>)}</select><button id="wb-go" className="mini-btn" onClick={() => load()}>LOAD</button></PanelHeadSlot>;
+  const head = <PanelHeadSlot island="worldbank"><input id="wb-country" aria-label="Country ISO code" value={draft} maxLength={3} title="ISO country code (US, GB, DE, JP, CN, IN, SG, WLD...)" onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') load(); }} /><select id="wb-indicator" aria-label="World Bank indicator" value={selection.indicator} onChange={(e) => load(e.target.value)}>{worldBankOptions.map((o) => <option value={o.value} key={o.value}>{o.label}</option>)}</select><button id="wb-go" className="mini-btn" onClick={() => load()}>LOAD</button></PanelHeadSlot>;
   if (q.isFetching || (!q.data && !q.isError)) return <>{head}<span className="muted">Loading World Bank data…</span></>;
   if (q.isError) return <>{head}<span className="down">World Bank error: {q.error.message}</span></>;
   const d = q.data, latest = d?.series.at(-1);

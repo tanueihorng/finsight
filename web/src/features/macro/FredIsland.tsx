@@ -14,7 +14,7 @@ export default function FredIsland() {
     const [s, t = 'lin'] = next.split('|');
     void client.invalidateQueries({ queryKey: ['fred', s, t], refetchType: 'none' }); setValue(next);
   };
-  const head = <PanelHeadSlot island="fred"><select id="fred-series" value={value} onChange={(e) => load(e.target.value)}>{fredOptions.map((o) => <option value={o.value} key={o.value}>{o.label}</option>)}</select><button id="fred-go" className="mini-btn" onClick={() => load(value)}>LOAD</button></PanelHeadSlot>;
+  const head = <PanelHeadSlot island="fred"><select id="fred-series" aria-label="FRED series" value={value} onChange={(e) => load(e.target.value)}>{fredOptions.map((o) => <option value={o.value} key={o.value}>{o.label}</option>)}</select><button id="fred-go" className="mini-btn" onClick={() => load(value)}>LOAD</button></PanelHeadSlot>;
   if (q.isFetching || (!q.data && !q.isError)) return <>{head}<span className="muted">Loading FRED…</span></>;
   if (q.isError) return <>{head}<span className="down">FRED error: {q.error.message}</span></>;
   const d = q.data, last = d?.points.at(-1);

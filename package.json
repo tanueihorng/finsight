@@ -38,6 +38,7 @@
     "no-dependencies"
   ],
   "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
     "@playwright/test": "1.64.0",
     "@tanstack/react-query": "5.104.1",
     "@types/node": "24.19.2",
