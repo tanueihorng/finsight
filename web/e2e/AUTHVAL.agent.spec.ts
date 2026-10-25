@@ -5,9 +5,8 @@
 // nothing runs while locked, cancel on lock, refresh once on unlock, the lock
 // screen hides the app) and the retained Kestrel contract (page context sent
 // with a message; the chat itself is not per account and is not erased by a lock).
-// Tests marked test.fail() are failing repros of findings reported to the
-// Phase 4 owner (harness/runs/*AUTHVAL-001*/REPORT.md): they pass while the
-// defect exists and flip to "unexpectedly passed" once it is fixed.
+// Findings F1–F4 (harness/runs/*AUTHVAL-001*/REPORT.md) were fixed in
+// AUTHFIX-001; their repros (3a, 3b, 4b, 4c) now run as ordinary tests.
 import { test, expect, type Page, type Route } from '@playwright/test';
 import { PIN, seeded } from './helpers';
 
@@ -337,7 +336,6 @@ test('3f. narrow layout (390×844), Kestrel docked: locked hides everything but 
 });
 
 test('4c. side drawer open during lock (stream cut while locked): after unlock the history stays and a new reply streams', async ({ page }) => {
-  test.fail(true, 'AUTHVAL-001 F4 (pre-existing in legacy c1f1516): an EventSource reconnect refused with 401 while locked is never reopened after unlock. Remove this line when fixed.');
   test.setTimeout(60_000);
   await seeded(page);
   await openKestrel(page, 'side');
@@ -348,8 +346,32 @@ test('4c. side drawer open during lock (stream cut while locked): after unlock t
   const r = await page.request.post(`${FAKE_AGENT}/v1/__test/drop`);
   expect((await r.json()).dropped).toBeGreaterThan(0);
   await page.waitForTimeout(1500); // EventSource retry: 300 ms
+  const streams: string[] = [];
+  page.on('request', (r) => { if (/^\/api\/agent\/threads\/[^/]+\/events$/.test(new URL(r.url()).pathname)) streams.push(r.url()); });
   await unlockWithPin(page);
   await expect(page.locator('.agent-user:visible').first()).toContainText('before lock');
   await sendKestrel(page, 'after unlock');
   await expect(page.locator('.agent-turn:visible').last().locator('.agent-text')).toHaveText('Echo: after unlock', { timeout: 10_000 });
+  // One stream reopened, no replayed or doubled messages.
+  await expect(page.locator('.agent-send:visible')).toHaveText('⏎');
+  expect(streams.length, 'event streams opened after unlock').toBe(1);
+  await expect(page.locator('.agent-user:visible')).toHaveCount(2);
+  await expect(page.locator('.agent-turn:visible .agent-text')).toHaveText(['Echo: before lock', 'Echo: after unlock']);
+});
+
+test('4d. docked, lock and unlock without a cut stream: no second stream, each reply once', async ({ page }) => {
+  await seeded(page);
+  await openKestrel(page, 'dock');
+  await sendKestrel(page, 'one');
+  await expect(page.locator('.agent-turn:visible').last().locator('.agent-text')).toHaveText('Echo: one');
+  await expect(page.locator('.agent-send:visible')).toHaveText('⏎');
+  await lockByButton(page);
+  const streams: string[] = [];
+  page.on('request', (r) => { if (/^\/api\/agent\/threads\/[^/]+\/events$/.test(new URL(r.url()).pathname)) streams.push(r.url()); });
+  await unlockWithPin(page);
+  await sendKestrel(page, 'two');
+  await expect(page.locator('.agent-turn:visible').last().locator('.agent-text')).toHaveText('Echo: two');
+  await expect(page.locator('.agent-send:visible')).toHaveText('⏎');
+  expect(streams, 'the live stream is reused').toEqual([]);
+  await expect(page.locator('.agent-turn:visible .agent-text')).toHaveText(['Echo: one', 'Echo: two']);
 });

@@ -92,6 +92,12 @@ function openStream() {
   on<D>('turn.failed', (d) => { updateTurn(d.turnId, (t) => finish(addNotice(t, friendly(d.code as string, d.message as string), 'error'), { label: t.label })); done(d.turnId); });
   es.onerror = () => { /* EventSource reconnects by itself with Last-Event-ID */ };
 }
+// After an unlock (intended fix, AUTHVAL F4): a reconnect the session gate
+// refused while locked (401) closes an EventSource for good, so reopen the
+// open thread's stream from the last event seen. A live stream is left alone.
+export function resumeStream() {
+  if (get().thread && (!es || es.readyState === EventSource.CLOSED)) openStream();
+}
 
 // ---- views ----
 // What the user is looking at, sent with a message and used for the welcome's suggestions.

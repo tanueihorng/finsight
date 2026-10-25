@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useStore } from 'zustand';
-import { boot, chat, newChat, stop, toggleThreads } from './chat.ts';
+import { boot, chat, newChat, resumeStream, stop, toggleThreads } from './chat.ts';
 import { Chat } from './Chat.tsx';
 import { kestrelDock } from './dock.ts';
 import { clampHeight, clampWidth, DEFAULT_H, DEFAULT_W, LS, ls, nextWidth } from './labels.ts';
@@ -67,7 +67,7 @@ export default function KestrelIsland() {
     setWidth(Number(ls.get(LS.width, String(DEFAULT_W))) || DEFAULT_W, false);
     setHeight(Number(ls.get(LS.dockH, String(DEFAULT_H))) || DEFAULT_H, false);
     if (ls.get(LS.open, '0') === '1') toggle(true, true);
-    const onUnlock = () => { if (ls.get(LS.open, '0') === '1') maybeBoot(); };
+    const onUnlock = () => { resumeStream(); if (ls.get(LS.open, '0') === '1') maybeBoot(); };
     const onResize = () => { if (cssWidth() > Math.max(320, Math.round(window.innerWidth * 0.6))) setWidth(window.innerWidth * 0.6, false); };
     window.addEventListener('finsight:unlocked', onUnlock);
     window.addEventListener('resize', onResize);
