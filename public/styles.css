@@ -240,11 +240,6 @@ body {
 /* ---------------- activity log ---------------- */
 /* ---------------- dividends ---------------- */
 .dividends { max-height: 240px; overflow: auto; padding: 8px 10px; }
-.div-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; }
-.div-head .dv { font-size: 18px; font-weight: 700; color: var(--up); font-variant-numeric: tabular-nums; }
-.div-sub { color: var(--muted); font-size: 11px; }
-.div-row { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px solid #11151a; font-size: 11px; font-variant-numeric: tabular-nums; }
-.div-row .ds { color: var(--amber-2); font-weight: 700; }
 .div-recent { margin-top: 8px; }
 .div-recent .dr { display: flex; justify-content: space-between; gap: 10px; padding: 2px 0; font-size: 10px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .div-recent .dr .ds { color: var(--text); }
@@ -271,7 +266,6 @@ body {
 /* ---- interactive price chart (chart.js) ---- */
 .chart-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; margin: 8px 0 6px; }
 .chart-toolbar .grp { display: flex; align-items: center; gap: 2px; }
-.chart-toolbar .ct-label { color: var(--dim); font-size: 9px; letter-spacing: .5px; margin: 0 2px 0 0; }
 .chart-toolbar .sep { width: 1px; height: 13px; background: var(--border-2); margin: 0 4px; }
 .ctbtn { background: #14181e; color: var(--muted); border: 1px solid var(--border); padding: 1px 6px; cursor: pointer; font-family: inherit; font-size: 10px; line-height: 1.5; border-radius: 2px; }
 .ctbtn:hover { color: var(--amber); border-color: var(--amber); }
