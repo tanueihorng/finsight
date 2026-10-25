@@ -1,4 +1,5 @@
-import { api } from '../api/client.ts';
+import { earlyAuthStatus, loadAccountsList } from '../api/early.ts';
+import { installKeyboardLayout } from './layout.ts';
 import { setFooter } from '../legacy/app.ts';
 import type { Accounts } from '../../../shared/types.ts';
 
@@ -8,10 +9,14 @@ import type { Accounts } from '../../../shared/types.ts';
 // refresh what went stale. Query owns polling; it pauses while locked or hidden.
 const store = () => window.FinSight.store;
 const body = () => document.body.classList;
+// "Signed in last time": lets index.html start the first data requests without
+// waiting for the session check (H1). Cleared whenever the app locks.
+const SIGNED_IN = 'finsight-signed-in';
+const signedIn = (yes: boolean) => { try { if (yes) localStorage.setItem(SIGNED_IN, '1'); else localStorage.removeItem(SIGNED_IN); } catch { /* storage blocked */ } };
 
 export async function loadAccounts() {
   try {
-    const d = await api<Accounts>('/api/accounts');
+    const d = await loadAccountsList();
     const accounts = d.accounts || [];
     const exists = (id: string | null) => id === 'ALL' || accounts.some((a) => a.id === id);
     let account = store().getState().account;
@@ -29,6 +34,7 @@ async function boot() {
 export function showLock(mode: 'enter' | 'create') {
   const wasLocked = body().contains('locked');
   body().add('locked');
+  signedIn(false);
   window.FinSight.auth.lock();
   // Only a fresh lock clears the fields: a re-entrant 401 mustn't wipe a PIN being typed.
   const l = store().getState().lock;
@@ -36,6 +42,7 @@ export function showLock(mode: 'enter' | 'create') {
 }
 function showApp() {
   body().remove('locked');
+  signedIn(true);
   window.FinSight.auth.unlock();
   if (!booted) { booted = true; void boot(); }
 }
@@ -43,6 +50,7 @@ function showApp() {
 let offlineTimer: ReturnType<typeof setTimeout> | undefined;
 function showOffline() {
   body().add('locked');
+  signedIn(false);
   window.FinSight.auth.lock();
   store().setState({ lock: { ...store().getState().lock, mode: 'offline', msg: 'Start it with  node server.js  (or start.command). Retrying…' } });
   clearTimeout(offlineTimer);
@@ -51,9 +59,10 @@ function showOffline() {
 export async function checkAuth() {
   let st: { authed?: boolean; pinSet?: boolean };
   try {
-    const r = await fetch('/api/auth/status');
-    if (!r.ok) throw new Error();
-    st = await r.json();
+    st = await (earlyAuthStatus() ?? fetch('/api/auth/status').then((r) => {
+      if (!r.ok) throw new Error();
+      return r.json();
+    }));
   } catch { return showOffline(); }
   if (st.authed) showApp();
   else { store().setState({ lock: { ...store().getState().lock, msg: '' } }); showLock(st.pinSet ? 'enter' : 'create'); }
@@ -62,6 +71,7 @@ export async function checkAuth() {
 let started = false;
 export function startShell() {
   if (started) return; started = true;
+  installKeyboardLayout();
   window.addEventListener('finsight:locked', () => { if (!body().contains('locked')) showLock('enter'); });
   window.addEventListener('finsight:unlocked', () => { if (body().contains('locked')) showApp(); });
   window.FinSight.bus.on('accounts', () => loadAccounts());

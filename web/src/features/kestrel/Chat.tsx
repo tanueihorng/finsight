@@ -167,15 +167,17 @@ export function Chat({ inputRef, onRetry }: { inputRef: RefObject<HTMLTextAreaEl
 
   return (
     <div className="agent-chat">
-      <div className="agent-threads" id="agent-threads" hidden={!s.threadsOpen} role="listbox" aria-label="Chats">
-        {s.threads?.length === 0 && <div className="agent-thread-row"><span className="t">No chats yet</span></div>}
+      <div className="agent-threads" id="agent-threads" hidden={!s.threadsOpen} role="list" aria-label="Chats">
+        {s.threads?.length === 0 && <div className="agent-thread-row" role="listitem"><span className="t">No chats yet</span></div>}
         {s.threads?.map((t) => {
           const active = s.thread?.id === t.id;
           const open = () => { void openThread(t.id); toggleThreads(false); };
           return (
-            <div key={t.id} className={'agent-thread-row' + (active ? ' active' : '')} role="option" tabIndex={0} aria-selected={active}
-              onClick={open} onKeyDown={(e) => { if (e.key === 'Enter') open(); }}>
-              <span className="t">{t.title}</span><span className="d">{new Date(t.updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
+            <div key={t.id} className={'agent-thread-row' + (active ? ' active' : '')} role="listitem"
+              onClick={open}>
+              <button className="agent-thread-open" aria-current={active ? 'page' : undefined} onClick={(e) => { e.stopPropagation(); open(); }}>
+                <span className="t">{t.title}</span><span className="d">{new Date(t.updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
+              </button>
               <button className="agent-icon-btn x" title="Delete chat" aria-label={`Delete ${t.title}`} onClick={(e) => { e.stopPropagation(); void deleteThread(t); }}>✕</button>
             </div>
           );
@@ -191,12 +193,12 @@ export function Chat({ inputRef, onRetry }: { inputRef: RefObject<HTMLTextAreaEl
         {!stick && <button className="agent-jump" onClick={() => scrollBottom(true)}>↓ latest</button>}
       </div>
       <div className="agent-compose">
-        <div className="agent-menu" hidden={!menu} role="listbox" aria-label="Commands and skills">
+        <div id="agent-command-menu" className="agent-menu" hidden={!menu} role="listbox" aria-label="Commands and skills">
           {menu && <>
             {menu.skills.length > 0 && <div className="grp">SKILLS</div>}
-            {menu.skills.map((it, i) => <MenuRow key={it.k} k={it.k} v={it.v} on={i === sel} onPick={() => pick(i)} />)}
+            {menu.skills.map((it, i) => <MenuRow key={it.k} id={`agent-option-${i}`} k={it.k} v={it.v} on={i === sel} onPick={() => pick(i)} />)}
             {menu.cmds.length > 0 && <div className="grp">COMMANDS</div>}
-            {menu.cmds.map((it, i) => <MenuRow key={it.k} k={it.k} v={it.v} on={i + menu.skills.length === sel} onPick={() => pick(i + menu.skills.length)} />)}
+            {menu.cmds.map((it, i) => <MenuRow key={it.k} id={`agent-option-${i + menu.skills.length}`} k={it.k} v={it.v} on={i + menu.skills.length === sel} onPick={() => pick(i + menu.skills.length)} />)}
           </>}
         </div>
         <div className={'agent-box' + (drag ? ' drag' : '')} onDragOver={(e) => { e.preventDefault(); setDrag(true); }} onDragLeave={() => setDrag(false)}
@@ -209,7 +211,7 @@ export function Chat({ inputRef, onRetry }: { inputRef: RefObject<HTMLTextAreaEl
           </div>
           <div className="agent-row">
             <span className="agent-prompt-glyph">&gt;</span>
-            <textarea ref={inputRef} className="agent-input" rows={1} maxLength={12000} aria-label="Message"
+            <textarea ref={inputRef} className="agent-input" rows={1} maxLength={12000} aria-label="Message" aria-autocomplete="list" aria-controls={menu ? 'agent-command-menu' : undefined} aria-activedescendant={menu && all.length ? `agent-option-${sel}` : undefined}
               placeholder={s.named ? `Ask ${s.name} anything…  (/ for skills)` : 'Ask anything about your portfolio, a stock, a strategy…  (/ for skills)'}
               value={s.draft} onChange={(e) => { setDraft(e.target.value); setMenuOpen(true); }}
               onBlur={() => setTimeout(() => setMenuOpen(false), 120)} onFocus={() => setMenuOpen(true)}
@@ -246,9 +248,9 @@ export function Chat({ inputRef, onRetry }: { inputRef: RefObject<HTMLTextAreaEl
     </div>
   );
 }
-function MenuRow({ k, v, on, onPick }: { k: string; v: string; on: boolean; onPick: () => void }) {
+function MenuRow({ id, k, v, on, onPick }: { id: string; k: string; v: string; on: boolean; onPick: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => { if (on) ref.current?.scrollIntoView({ block: 'nearest' }); }, [on]);
-  return <div ref={ref} className={'it' + (on ? ' sel' : '')} role="option" aria-selected={on} onMouseDown={(e) => { e.preventDefault(); onPick(); }}><span className="k">{k}</span><span className="v">{v}</span></div>;
+  return <div id={id} ref={ref} className={'it' + (on ? ' sel' : '')} role="option" aria-selected={on} onMouseDown={(e) => { e.preventDefault(); onPick(); }}><span className="k">{k}</span><span className="v">{v}</span></div>;
 }
 export { newChat, toggleThreads };

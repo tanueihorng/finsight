@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { api } from './client.ts';
+import { loadPortfolio } from './early.ts';
 import type { Accounts, Alert, Category, FxRisk, History, Ledger, Markets, NewsResponse, Performance, Portfolio, Quote, QuotedQuote, Realized, WatchItem } from '../../../shared/types.ts';
 import type {} from '../bootstrap.ts';
 
@@ -31,7 +32,7 @@ export const queryDefaults = {
 export function usePortfolio() {
   const { base, account, enabled } = useScope();
   return useQuery({ queryKey: ['portfolio', base, account], enabled, staleTime: 15_000, refetchInterval: 15_000,
-    queryFn: ({ signal }) => api<Portfolio>(`/api/portfolio?base=${encodeURIComponent(base)}&account=${encodeURIComponent(account)}`, { signal }) });
+    queryFn: ({ signal }) => loadPortfolio(`/api/portfolio?base=${encodeURIComponent(base)}&account=${encodeURIComponent(account)}`, signal) });
 }
 export function useMarkets() {
   const { enabled } = useScope();

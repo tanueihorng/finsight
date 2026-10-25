@@ -1,3 +1,4 @@
+import { useModalFocus } from '../../ui/modalFocus.ts';
 import { useEffect, useRef, useState } from 'react';
 import { useStore } from 'zustand';
 import { setStatus } from '../../legacy/app.ts';
@@ -19,6 +20,8 @@ export default function SetupIsland() {
     nameRef.current?.focus();
   }, [open]);
   const close = () => store().setState({ setupOpen: false });
+  const boxRef = useRef<HTMLDivElement>(null);
+  useModalFocus(open, close, boxRef, { initialFocus: () => nameRef.current });
   const commit = () => {
     const next = { ...profile.getState(), name: name.trim(), base, setupDone: true };
     saveProfile(next);
@@ -37,7 +40,7 @@ export default function SetupIsland() {
 
   return (
     <div id="setup-modal" className={open ? 'modal' : 'modal hidden'}>
-      <div className="modal-box">
+      <div className="modal-box" ref={boxRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Set up your terminal">
         <div className="modal-head">
           <span className="panel-title">WELCOME · SET UP YOUR TERMINAL</span>
           <button id="setup-skip" className="x-btn" title="Skip" onClick={() => { saveProfile({ ...profile.getState(), setupDone: true }); close(); }}>✕</button>

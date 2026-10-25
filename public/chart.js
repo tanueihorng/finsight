@@ -354,6 +354,7 @@
     this.root = root;
     root.__priceChart = this;
     root.classList.add('pc-root');
+    root.setAttribute('role', 'region'); root.setAttribute('aria-label', 'Price chart');
     this.cfg = loadLocalCfg(this.opts.cfgKey);
     this.alerts = window.__finAlerts || [];
     this.tradeData = null; this.watch = [];
@@ -388,12 +389,12 @@
     const self = this;
     this.root.innerHTML = '';
     const el = function (tag, cls, html) { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
-    const btn = function (html, title, cls) { const b = el('button', 'ctbtn' + (cls ? ' ' + cls : ''), html); b.type = 'button'; if (title) b.title = title; return b; };
+    const btn = function (html, title, cls) { const b = el('button', 'ctbtn' + (cls ? ' ' + cls : ''), html); b.type = 'button'; if (title) { b.title = title; if (!/[a-z0-9]/i.test(b.textContent)) b.setAttribute('aria-label', title); } return b; };
 
     // top toolbar
-    const tb = el('div', 'chart-toolbar');
+    const tb = el('div', 'chart-toolbar'); tb.setAttribute('role', 'group'); tb.setAttribute('aria-label', 'Chart controls');
     this.toolbar = tb;
-    this.symInput = el('input', 'pc-sym'); this.symInput.placeholder = 'Symbol'; this.symInput.spellcheck = false;
+    this.symInput = el('input', 'pc-sym'); this.symInput.placeholder = 'Symbol'; this.symInput.setAttribute('aria-label', 'Chart symbol'); this.symInput.spellcheck = false;
     this.symInput.addEventListener('keydown', function (e) {
       e.stopPropagation();
       if (e.key === 'Enter') { const s = self.symInput.value.trim().toUpperCase(); if (s && self.onSymbol) self.onSymbol(s); self.symInput.blur(); }
@@ -410,7 +411,7 @@
     tb.appendChild(tfg);
     tb.appendChild(el('span', 'sep'));
     this.typeSel = el('select', 'pc-select');
-    this.typeSel.title = 'Chart type';
+    this.typeSel.title = 'Chart type'; this.typeSel.setAttribute('aria-label', 'Chart type');
     CHART_TYPES.forEach(function (t) { const o = el('option', null, t[1]); o.value = t[0]; self.typeSel.appendChild(o); });
     this.typeSel.addEventListener('change', function () { self.cfg.chartType = self.typeSel.value; self._cfgChanged(true); });
     tb.appendChild(this.typeSel);
@@ -581,6 +582,7 @@
 
   PriceChart.prototype._syncControls = function () {
     const c = this.cfg, self = this;
+    [[this.logScaleBtn, c.scale === 'log'], [this.pctBtn, !!c.pct], [this.magnetBtn, !!c.magnet], [this.tradesBtn, !!c.showTrades], [this.listBtn, !!c.showList]].forEach(function (item) { item[0].setAttribute('aria-pressed', String(item[1])); });
     this.typeSel.value = c.chartType;
     this.logScaleBtn.classList.toggle('on', c.scale === 'log');
     this.pctBtn.classList.toggle('on', !!c.pct);
@@ -600,7 +602,7 @@
       const gb = this.groupBtns[g], active = gb.tools.indexOf(this.tool) >= 0;
       gb.main.classList.toggle('on', active);
       const shown = active ? this.tool : (this.groupLast[g] || gb.tools[0]);
-      if (gb.shown !== shown) { gb.main.innerHTML = ICON[shown]; gb.main.title = TOOLS[shown].name; gb.shown = shown; }
+      if (gb.shown !== shown) { gb.main.innerHTML = ICON[shown]; gb.main.title = TOOLS[shown].name; gb.main.setAttribute('aria-label', TOOLS[shown].name); gb.shown = shown; }
     }
     this.undoBtn.disabled = !this.undoStack.length;
     this.redoBtn.disabled = !this.redoStack.length;

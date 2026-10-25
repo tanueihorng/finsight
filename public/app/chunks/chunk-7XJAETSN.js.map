@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../../../web/src/ui/keyboard.ts"],
+  "sourcesContent": ["import type { KeyboardEvent } from 'react';\n// Give existing non-native click targets the same Enter/Space activation as a\n// button, without reactivating a parent when its child control is used.\nexport function keyboardClick(e: KeyboardEvent<Element>) {\n  if (e.target !== e.currentTarget || (e.key !== 'Enter' && e.key !== ' ')) return;\n  e.preventDefault();\n  e.currentTarget.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));\n}\n"],
+  "mappings": "AAGO,SAASA,EAAc,EAA2B,CACnD,EAAE,SAAW,EAAE,eAAkB,EAAE,MAAQ,SAAW,EAAE,MAAQ,MACpE,EAAE,eAAe,EACjB,EAAE,cAAc,cAAc,IAAI,WAAW,QAAS,CAAE,QAAS,GAAM,WAAY,EAAK,CAAC,CAAC,EAC5F",
+  "names": ["keyboardClick"]
+}

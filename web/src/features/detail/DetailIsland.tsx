@@ -80,7 +80,7 @@ export default function DetailIsland() {
     <PanelHeadSlot island="detail">
       <div className="ranges" id="ranges">
         {RANGES.map((r) => (
-          <button key={r.range} data-range={r.range} data-interval={r.interval}
+          <button key={r.range} data-range={r.range} aria-pressed={!dr.tf && dr.range === r.range && dr.interval === r.interval} data-interval={r.interval}
             className={!dr.tf && dr.range === r.range && dr.interval === r.interval ? 'active' : ''}
             onClick={() => store().setState({ detailRange: { range: r.range, interval: r.interval } })}>{r.label}</button>
         ))}

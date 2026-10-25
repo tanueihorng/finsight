@@ -2,6 +2,7 @@ import { api } from '../api/client.ts';
 import type { ChartHooks, PriceChartInstance } from '../legacy/chart.d.ts';
 import type { History, Position, WatchItem } from '../../../shared/types.ts';
 import { selectSymbol } from '../legacy/app.ts';
+import { loadChartScripts } from '../legacy/chartScripts.ts';
 
 // Chart host hooks (E2; TypeScript since X1, from public/app.js S20): the
 // chart's watch list (holdings + watchlist), trade markers and the
@@ -48,11 +49,17 @@ function setupChartHost(chart: GridChart) {
   chart.onTrades = (sym) => void loadChartTrades(chart, sym);
   chart.setWatchlist(watchItems());
 }
-const grid: ChartGridInstance | null = window.ChartGrid ? new window.ChartGrid({
-  loader: (sym, iv, range) => api<History>(`/api/history?symbol=${encodeURIComponent(sym)}&range=${range}&interval=${iv}`),
-  onMainSymbol: (sym) => selectSymbol(sym),
-  setupChart: (c) => setupChartHost(c),
-}) : null;
+// The grid exists once the chart scripts have loaded; this module asks for
+// them first, so the grid is ready before ChartHost creates the main chart.
+let grid: ChartGridInstance | null = null;
+void loadChartScripts().then(() => {
+  if (!window.ChartGrid) return;
+  grid = new window.ChartGrid({
+    loader: (sym, iv, range) => api<History>(`/api/history?symbol=${encodeURIComponent(sym)}&range=${range}&interval=${iv}`),
+    onMainSymbol: (sym) => selectSymbol(sym),
+    setupChart: (c) => setupChartHost(c),
+  });
+}, () => { /* no chart scripts: no grid, as when chartgrid.js failed to load */ });
 
 export const chartHooks: ChartHooks = {
   attached(chart) { setupChartHost(chart as GridChart); grid?.attach(chart as GridChart); },

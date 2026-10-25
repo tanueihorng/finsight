@@ -1,4 +1,5 @@
-import { useEffect, useState, type MouseEvent } from 'react';
+import { useModalFocus } from '../../ui/modalFocus.ts';
+import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import { useStore } from 'zustand';
 import { api } from '../../api/client.ts';
 import { useLedger, useRealized } from '../../api/queries.ts';
@@ -21,8 +22,8 @@ function TradeRow({ r, base, showAcct, editing, onAct }: { r: LedgerRow; base: s
   const cls = typeClass(r.type);
   if (editing) {
     return (
-      <tr data-id={r.id}><td><input type="date" className="le-date" defaultValue={r.time ? isoDate(r.time) : ''} /></td><td className={cls}>{r.type}</td><td className="sym">{r.symbol}</td>
-        <td className="r"><input type="number" step="any" className="le-qty" defaultValue={r.quantity ?? ''} /></td><td className="r"><input type="number" step="any" className="le-px" defaultValue={r.price ?? ''} /></td>
+      <tr data-id={r.id}><td><input type="date" aria-label="Trade date" className="le-date" defaultValue={r.time ? isoDate(r.time) : ''} /></td><td className={cls}>{r.type}</td><td className="sym">{r.symbol}</td>
+        <td className="r"><input type="number" step="any" aria-label="Trade quantity" className="le-qty" defaultValue={r.quantity ?? ''} /></td><td className="r"><input type="number" step="any" aria-label="Trade price" className="le-px" defaultValue={r.price ?? ''} /></td>
         <td></td><td></td><td><div className="lg-act"><button className="mini-btn solid" data-act="save" onClick={(e) => onAct('save', r, e)}>SAVE</button><button className="mini-btn" data-act="cancel" onClick={(e) => onAct('cancel', r, e)}>✕</button></div></td></tr>
     );
   }
@@ -82,6 +83,8 @@ export default function LedgerIsland() {
 
   useEffect(() => { if (open) setStatus({ m: '', k: '' }); }, [open]); // legacy cleared it on every open
   const close = () => { store().setState({ ledgerOpen: false }); setEditing(null); };
+  const boxRef = useRef<HTMLDivElement>(null);
+  useModalFocus(open, close, boxRef);
   const switchTab = (t: Tab) => { setTab(t); setStatus({ m: '', k: '' }); };
   async function onAct(act: string, r: LedgerRow, e: MouseEvent) {
     if (act === 'edit') { setEditing(r.id ?? null); return; }
@@ -109,31 +112,35 @@ export default function LedgerIsland() {
   const rows = filterLedger(ledger.data?.rows ?? [], filter);
   return (
     <div id="ledger-modal" className={open ? 'modal' : 'modal hidden'} onClick={(e) => { if (e.target === e.currentTarget) close(); }}>
-      <div className="modal-box wide">
+      <div className="modal-box wide" ref={boxRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Trades and realized gains">
         <div className="modal-head">
-          <div className="ranges" id="ledger-tabs">
-            <button data-tab="trades" className={tab === 'trades' ? 'active' : ''} onClick={() => switchTab('trades')}>TRADES</button>
-            <button data-tab="realized" className={tab === 'realized' ? 'active' : ''} onClick={() => switchTab('realized')}>REALIZED GAINS</button>
+          <div className="ranges" id="ledger-tabs" role="tablist" aria-label="Ledger view" onKeyDown={(e) => {
+            if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+            e.preventDefault(); const next = e.key === 'Home' ? 'trades' : e.key === 'End' ? 'realized' : tab === 'trades' ? 'realized' : 'trades';
+            switchTab(next); document.getElementById(`ledger-tab-${next}`)?.focus();
+          }}>
+            <button id="ledger-tab-trades" role="tab" tabIndex={tab === 'trades' ? 0 : -1} aria-selected={tab === 'trades'} aria-controls="ledger-trades" data-tab="trades" className={tab === 'trades' ? 'active' : ''} onClick={() => switchTab('trades')}>TRADES</button>
+            <button id="ledger-tab-realized" role="tab" tabIndex={tab === 'realized' ? 0 : -1} aria-selected={tab === 'realized'} aria-controls="ledger-realized" data-tab="realized" className={tab === 'realized' ? 'active' : ''} onClick={() => switchTab('realized')}>REALIZED GAINS</button>
           </div>
           <div className="head-btns">
             <button id="ledger-undo" className="mini-btn" title="Undo the last change" onClick={() => void window.FinSight.actions?.undo()}>↶ UNDO</button>
-            <button id="ledger-close" className="x-btn" onClick={close}>✕</button>
+            <button id="ledger-close" aria-label="Close ledger" className="x-btn" onClick={close}>✕</button>
           </div>
         </div>
         <div className="modal-body">
-          <div id="ledger-trades" className={tab === 'trades' ? undefined : 'hidden'}>
+          <div id="ledger-trades" role="tabpanel" aria-labelledby="ledger-tab-trades" className={tab === 'trades' ? undefined : 'hidden'}>
             <div className="ledger-tools">
               <input id="ledger-filter" placeholder="Filter by symbol or type…" autoComplete="off" value={filter} onChange={(e) => setFilter(e.target.value)} />
               <span className="muted small">✎ fix a buy's date / price / quantity (a date re-fetches that day's FX). Sales can be reversed with UNDO.</span>
             </div>
             <div className="table-wrap"><table className="tbl ledger-tbl"><thead><tr>
-              <th>DATE</th><th>TYPE</th><th>SYMBOL</th><th className="r">QTY</th><th className="r">PRICE</th><th className="r">VALUE</th><th className="r">REALIZED</th><th></th>
+              <th>DATE</th><th>TYPE</th><th>SYMBOL</th><th className="r">QTY</th><th className="r">PRICE</th><th className="r">VALUE</th><th className="r">REALIZED</th><th><span className="sr-only">Actions</span></th>
             </tr></thead><tbody id="ledger-body">
               {rows.length ? rows.map((r, i) => <TradeRow key={r.id ?? i} r={r} base={base} showAcct={account === 'ALL'} editing={editing != null && editing === r.id} onAct={(a, row, e) => void onAct(a, row, e)} />)
                 : ledger.data ? <tr><td colSpan={8} className="empty">No transactions.</td></tr> : null}
             </tbody></table></div>
           </div>
-          <div id="ledger-realized" className={tab === 'realized' ? undefined : 'hidden'}>
+          <div id="ledger-realized" role="tabpanel" aria-labelledby="ledger-tab-realized" className={tab === 'realized' ? undefined : 'hidden'}>
             {tab === 'realized' && (realized.error ? <span className="down">{realized.error.message}</span>
               : realized.data ? <RealizedView d={realized.data} /> : <span className="muted">Loading…</span>)}
           </div>

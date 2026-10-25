@@ -1,3 +1,4 @@
+import { keyboardClick } from '../../ui/keyboard.ts';
 import { useEffect, useState } from 'react';
 import { selectSymbol } from '../../legacy/app.ts';
 import { signStr } from '../../ui/format.ts';
@@ -19,7 +20,7 @@ export default function HeatmapIsland() {
     <PanelHeadSlot island="heatmap">
       <div className="ranges" id="heat-metric">
         {([['day', 'DAY %'], ['total', 'TOTAL %']] as const).map(([m, l]) =>
-          <button key={m} data-metric={m} className={metric === m ? 'active' : ''} onClick={() => setMetric(m)}>{l}</button>)}
+          <button key={m} data-metric={m} aria-pressed={metric === m} className={metric === m ? 'active' : ''} onClick={() => setMetric(m)}>{l}</button>)}
       </div>
     </PanelHeadSlot>
   );
@@ -38,7 +39,7 @@ export default function HeatmapIsland() {
               {iw > 2 && ih > 2 && treemap(sr.items.map((p) => ({ p, value: p.marketValue })), ix, iy, iw, ih).map((t) => {
                 const pct = metric === 'day' ? t.p.changePct : t.p.unrealizedPct;
                 return (
-                  <g key={t.p.symbol} className="hm-tile" data-sym={t.p.symbol} style={{ cursor: 'pointer' }} onClick={() => selectSymbol(t.p.symbol)}>
+                  <g key={t.p.symbol} className="hm-tile" data-sym={t.p.symbol} role="button" tabIndex={0} aria-label={`View ${t.p.symbol}, ${signStr(pct)}%`} onKeyDown={keyboardClick} style={{ cursor: 'pointer' }} onClick={() => selectSymbol(t.p.symbol)}>
                     <rect x={t.x} y={t.y} width={t.w} height={t.h} fill={heatColor(pct)} stroke="#050608" strokeWidth="1" />
                     {t.w > 32 && t.h > 24 && <>
                       <text x={t.x + t.w / 2} y={t.y + t.h / 2 - 1} fill="#fff" fontSize={Math.min(13, t.w / 4.2)} fontWeight="700" textAnchor="middle">{t.p.symbol}</text>
