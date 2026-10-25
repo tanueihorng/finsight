@@ -10,7 +10,8 @@ export const mutationInvalidations = {
   undo: ['accounts', ...holdings.filter((key) => key !== 'accounts'), 'watchlist', 'chart-watch', 'alerts', 'chart-alerts'],
   cash: ['portfolio', 'fx-risk', 'wealth'],
   withholding: ['dividends', 'realized'],
-  'watchlist-add': ['watchlist', 'chart-watch'], 'watchlist-remove': ['watchlist', 'chart-watch'],
+  // Intended fix (Phase 2 audit): the company calendar also includes watched symbols.
+  'watchlist-add': ['watchlist', 'chart-watch', 'events'], 'watchlist-remove': ['watchlist', 'chart-watch', 'events'],
   'alerts-add': ['alerts', 'chart-alerts'], 'alerts-update': ['alerts', 'chart-alerts'], 'alerts-remove': ['alerts', 'chart-alerts'],
   // Adding or renaming changes names and counts only; switching is a store change (keys include the account).
   'account-add': ['accounts'], 'account-rename': ['accounts'],

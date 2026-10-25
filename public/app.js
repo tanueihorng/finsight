@@ -182,9 +182,15 @@ function chartWatchItems() {
 }
 function allCharts() { return chartGrid && chartGrid.active() ? chartGrid.charts() : (detailChart ? [detailChart] : []); }
 function pushChartWatch() { const items = chartWatchItems(); allCharts().forEach((c) => c.setWatchlist(items)); }
+// Intended fix (Phase 2 audit): symbol alone cannot identify account-scoped
+// overlays. Reject an older request even after switching A → B → A.
+const chartTradeRequests = new WeakMap();
 async function loadChartTrades(chart, symbol) {
+  const account = state.account || '', request = (chartTradeRequests.get(chart) || 0) + 1;
+  chartTradeRequests.set(chart, request);
   try {
-    const d = await api(`/api/chart-trades?symbol=${encodeURIComponent(symbol)}&account=${encodeURIComponent(state.account || '')}`);
+    const d = await api(`/api/chart-trades?symbol=${encodeURIComponent(symbol)}&account=${encodeURIComponent(account)}`);
+    if (account !== (state.account || '') || chartTradeRequests.get(chart) !== request) return;
     chart.setTrades(symbol, d);
   } catch { /* trades are an overlay; the chart works without them */ }
 }
@@ -209,6 +215,18 @@ window.FinSightChartHooks = {
   trades(chart, symbol) { return loadChartTrades(chart, symbol); },
   detached() { if (chartGrid && chartGrid.active()) chartGrid.set({ n: 1 }); },
 };
+// The selected symbol can stay the same across accounts. Refresh every chart,
+// including grid charts, and clear the previous account's overlays immediately.
+let chartTradesAccount = state.account;
+window.FinSight.store.subscribe((next) => {
+  if (next.account === chartTradesAccount) return;
+  chartTradesAccount = next.account;
+  allCharts().forEach((chart) => {
+    if (!chart.symbol) return;
+    chart.setTrades(chart.symbol, null);
+    void loadChartTrades(chart, chart.symbol);
+  });
+});
 
 
 // ===========================================================================
