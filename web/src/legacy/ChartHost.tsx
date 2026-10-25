@@ -22,8 +22,11 @@ export function ChartHost({ data, tradesKey }: { data: ChartData | null; tradesK
   // chart.js loads after the app starts (H1); the chart is created once it is
   // in and the app is unlocked: chart.js's own requests (saved layouts) do not
   // go through the app's lock gate, and nothing may run while locked.
+  // Always wait for loadChartScripts(), even if window.PriceChart is already
+  // there: chart.js defines it before chartgrid.js has run and chartHooks has
+  // built the grid, and a chart created in between never gets grid support.
   const unlocked = () => window.FinSight.auth?.unlocked !== false;
-  const [scripts, setScripts] = useState(() => !!window.PriceChart && unlocked());
+  const [scripts, setScripts] = useState(false);
   useEffect(() => {
     if (scripts) return;
     let live = true;
