@@ -138,3 +138,6 @@ export interface CalendarResponse {
 }
 /** lib/dividends.js upcomingEvents. */
 export interface EventsResponse { events: EventItem[]; ok: boolean }
+
+/** lib/market.js fetchSearch. */
+export interface SearchItem { symbol: string; name: string; exchange: string; type: string }

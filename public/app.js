@@ -183,7 +183,6 @@ window.FinSight.bus.on('portfolio', () => loadPortfolio());
 window.FinSight.bus.on('accounts', () => loadAccounts());
 window.FinSight.bus.on('ledger', () => { if (!$('#ledger-modal').classList.contains('hidden') && ledgerTab === 'trades') return loadLedger(); });
 window.FinSight.bus.on('realized', () => { if (!$('#ledger-modal').classList.contains('hidden') && ledgerTab === 'realized') return loadRealized(); });
-window.FinSight.bus.on('watchlist', () => loadWatchlist());
 window.FinSight.bus.on('alerts', () => loadAlerts());
 
 function renderPortfolio(data) {
@@ -921,6 +920,8 @@ async function loadDetail(opts) {
 }
 // ---- chart host hooks: ledger trades, watchlist feed, multi-chart grid ----
 let lastWatch = [];
+// B1 adapter: E2 replaces this legacy chart feed after the lanes integrate.
+window.FinSightLegacy = { ...window.FinSightLegacy, setChartWatch(list) { lastWatch = list || []; pushChartWatch(); } };
 function chartWatchItems() {
   const held = (lastTableData.positions || []).filter((p) => p.quoted !== false);
   const seen = new Set();
@@ -1050,39 +1051,8 @@ async function loadDividends() {
 // ===========================================================================
 //  WATCHLIST
 // ===========================================================================
-async function loadWatchlist() {
-  try { renderWatchlist((await api('/api/watchlist')).watchlist); } catch {}
-}
-function renderWatchlist(list) {
-  lastWatch = list || []; pushChartWatch();
-  $('#watchlist').innerHTML = (list && list.length) ? list.map((w) => {
-    if (w.error) return `<div class="wl-row"><span class="wl-sym">${esc(w.symbol)}</span><span class="muted small">n/a</span><span></span><button class="wl-x" data-sym="${esc(w.symbol)}">✕</button></div>`;
-    return `<div class="wl-row" data-sym="${esc(w.symbol)}">
-      <div><span class="wl-sym">${esc(w.symbol)}</span> <span class="wl-name">${esc(w.name || '').slice(0, 16)}</span></div>
-      <span class="wl-px">${fmt(w.price, w.price < 10 ? 4 : 2)}</span>
-      <span class="wl-chg ${signClass(w.changePct)}">${signStr(w.changePct)}%</span>
-      <button class="wl-x" data-sym="${esc(w.symbol)}">✕</button></div>`;
-  }).join('') : '<div class="wl-empty">Empty — add a symbol above, or type <b>WATCH NVDA</b>.</div>';
-}
-$('#watch-toggle').addEventListener('click', () => { $('#watch-form').classList.toggle('hidden'); $('#watch-symbol').focus(); });
-$('#watch-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const s = $('#watch-symbol').value.trim().toUpperCase();
-  if (!s) return;
-  try {
-    const res = await api('/api/watchlist/add', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ symbol: s }) });
-    renderWatchlist(res.watchlist); $('#watch-symbol').value = ''; $('#watch-suggest').classList.add('hidden'); setStatus(`Watching ${s}`, 'ok');
-  } catch (err) { setStatus('Watch failed: ' + err.message, 'err'); }
-});
-$('#watchlist').addEventListener('click', async (e) => {
-  const x = e.target.closest('.wl-x');
-  if (x) {
-    e.stopPropagation();
-    const res = await api('/api/watchlist/remove', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ symbol: x.dataset.sym }) });
-    return renderWatchlist(res.watchlist);
-  }
-  const row = e.target.closest('[data-sym]'); if (row) selectSymbol(row.dataset.sym);
-});
+// Command adapter until F7; the watchlist query owns loading and polling.
+function loadWatchlist() { return window.FinSight.bus.invalidate('watchlist'); }
 
 // ===========================================================================
 //  PRICE ALERTS + NOTIFICATIONS
@@ -1208,26 +1178,6 @@ $('#export-btn').addEventListener('click', async () => {
   } catch (e) { setFooter('Export failed: ' + e.message); }
 });
 
-// reusable symbol search for the watchlist field
-function setupSearch(input, box, onPick) {
-  let timer = null, items = [];
-  input.addEventListener('input', () => {
-    clearTimeout(timer);
-    const q = input.value.trim();
-    if (q.length < 1) { box.classList.add('hidden'); return; }
-    timer = setTimeout(async () => {
-      try {
-        items = await api('/api/search?q=' + encodeURIComponent(q));
-        if (!items.length) { box.classList.add('hidden'); return; }
-        box.innerHTML = items.map((s, i) => `<div data-i="${i}"><span class="s-sym">${esc(s.symbol)}</span> <span class="s-meta">${esc(s.name).slice(0, 26)} · ${esc(s.exchange)}</span></div>`).join('');
-        box.classList.remove('hidden');
-      } catch { box.classList.add('hidden'); }
-    }, 200);
-  });
-  box.addEventListener('click', (e) => { const d = e.target.closest('[data-i]'); if (d) { onPick(items[+d.dataset.i]); box.classList.add('hidden'); } });
-  document.addEventListener('click', (e) => { if (!box.parentElement.contains(e.target)) box.classList.add('hidden'); });
-}
-setupSearch($('#watch-symbol'), $('#watch-suggest'), (s) => { if (s) $('#watch-symbol').value = s.symbol; });
 
 // ===========================================================================
 //  PORTFOLIO ANALYTICS — performance, allocation donut, sector heatmap
@@ -1642,7 +1592,6 @@ async function boot() {
   applyProfileName();
   if (!profile.setupDone) openSetup(); // first-launch wizard
   await loadPortfolio();
-  loadWatchlist();
   loadAlerts();
   setFooter(`READY · base ${state.base} · live data refreshing every 15s`);
   startPolling();
@@ -1659,7 +1608,6 @@ function startPolling() {
   if (document.hidden) return;
   pollTimers.push(
     setInterval(loadPortfolio, 15000),
-    setInterval(loadWatchlist, 15000),
     setInterval(loadAlerts, 30000), // the server also evaluates alerts every minute and notifies
     setInterval(() => { if (state.selected) loadDetail({ periodic: true }); }, 30000),
     // macro panels change slowly — auto-refresh every 15 min (the LOAD buttons still work)
@@ -1672,7 +1620,7 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden) { hiddenAt = Date.now(); stopTimers(); return; }
   // back in view: refresh what went stale, then resume the timers
   if (Date.now() - hiddenAt > 10000) {
-    loadPortfolio(); window.FinSight.bus.invalidate('markets'); loadWatchlist(); loadAlerts();
+    loadPortfolio(); window.FinSight.bus.invalidate('markets'); window.FinSight.bus.invalidate('watchlist'); loadAlerts();
     if (state.selected) loadDetail({ periodic: true });
     if (Date.now() - hiddenAt > 15 * 60000) { window.FinSight.bus.invalidate('worldbank'); window.FinSight.bus.invalidate('fred'); window.FinSight.bus.invalidate('calendar'); window.FinSight.bus.invalidate('events'); }
   }

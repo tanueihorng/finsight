@@ -106,3 +106,9 @@ export function useInflation(requested: boolean) {
       return { gauges, funds };
     } });
 }
+
+export function useSearch(text: string) {
+  const { enabled } = useScope();
+  return useQuery<import('../../../shared/types.ts').SearchItem[]>({ queryKey: ['search', text], enabled: enabled && text.length > 0, staleTime: 0, placeholderData: (previous) => previous,
+    queryFn: ({ signal }) => api<import('../../../shared/types.ts').SearchItem[]>('/api/search?q=' + encodeURIComponent(text), { signal }) });
+}

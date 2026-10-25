@@ -14,3 +14,9 @@ export function selectSymbol(symbol: string): void {
 export function setStatus(msg: string, kind: 'ok' | 'err' | '' = ''): void {
   legacy().setStatus?.(msg, kind);
 }
+
+// B1 adapter; E2 redirects this to its ChartHost when the chart lane integrates.
+export function setChartWatch(list: import('../../../shared/types.ts').WatchItem[]): void {
+  const bridge = window as unknown as { FinSightLegacy?: { setChartWatch?: (items: import('../../../shared/types.ts').WatchItem[]) => void } };
+  bridge.FinSightLegacy?.setChartWatch?.(list);
+}

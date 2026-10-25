@@ -79,3 +79,5 @@ Not yet covered here, owned elsewhere: performance and visual comparisons (P0-5)
 | News | no protected request while locked, unlock refreshes, unmount removes command subscriptions | `A2` › lock stops news requests… | A2, F3, F6 | pass |
 
 | Macro (A3) | calendar anchors/company selection; WB/FRED controls and errors; manual partial-failure inflation; 15m poll; lock/unmount | `A3` | A3 | pass |
+
+| Watchlist (B1) | search/pick/add/remove/command, error/empty rows, chart adapter and unmount | `B1` | B1, E2 | pass |
