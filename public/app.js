@@ -137,7 +137,7 @@ async function runCommand(raw) {
       await api('/api/settings/withholding', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ market: mkt, pct }) });
       setStatus(`Dividend withholding for ${mkt.toUpperCase()} set to ${pct}%`, 'ok'); loadDividends(); return;
     }
-    if (cmd === 'MKT' || cmd === 'MARKETS') { loadMarkets(); setStatus('Refreshing world markets…', 'ok'); return; }
+    if (cmd === 'MKT' || cmd === 'MARKETS') { window.FinSight.bus.invalidate('markets'); setStatus('Refreshing world markets…', 'ok'); return; }
     if (cmd === 'CLEAR') { setStatus(''); return; }
     // Bare symbol → quote it
     selectSymbol(cmd); setStatus(`Loading ${cmd}…`, 'ok');
@@ -1316,35 +1316,7 @@ function sparkline(points, up) {
 // ===========================================================================
 //  WORLD MARKETS
 // ===========================================================================
-async function loadMarkets() {
-  try {
-    const groups = await api('/api/markets');
-    const wrap = $('#markets');
-    wrap.innerHTML = Object.entries(groups).map(([name, items]) => `
-      <div class="mkt-group">
-        <div class="mkt-h">${name.toUpperCase()}</div>
-        ${items.map((q) => {
-          if (q.error) return `<div class="mkt-row"><span class="mkt-label">${esc(q.label || q.symbol)}</span><span class="muted small">n/a</span></div>`;
-          return `<div class="mkt-row" data-sym="${esc(q.symbol)}">
-            <span class="mkt-label">${esc(q.label || q.symbol)}</span>
-            <span class="mkt-px">${fmt(q.price, q.price < 10 ? 4 : 2)}</span>
-            <span class="mkt-chg ${signClass(q.changePct)}">${signStr(q.changePct)}%</span></div>`;
-        }).join('')}
-      </div>`).join('');
-    $('#markets-time').textContent = 'upd ' + new Date().toLocaleTimeString('en-US', { hour12: false });
-    // market state pill from S&P time
-    const sp = groups.Indices && groups.Indices.find((x) => x.symbol === '^GSPC');
-    if (sp && sp.marketTime) {
-      const fresh = Date.now() - sp.marketTime < 6 * 60000;
-      const pill = $('#market-state');
-      pill.textContent = fresh ? 'LIVE' : 'CLOSED';
-      pill.className = 'pill ' + (fresh ? 'open' : 'closed');
-    }
-  } catch (e) { $('#markets').innerHTML = `<div class="down small">Markets failed: ${esc(e.message)}</div>`; }
-}
-$('#markets').addEventListener('click', (e) => {
-  const row = e.target.closest('[data-sym]'); if (row) selectSymbol(row.dataset.sym);
-});
+// World Markets is a React island (web/src/features/markets, PILOT-1).
 
 // ===========================================================================
 //  WORLD BANK MACRO
@@ -2071,7 +2043,6 @@ async function boot() {
   loadWatchlist();
   loadAlerts();
   if (!state.selected) loadNews(''); // general market news when nothing selected
-  await loadMarkets();
   loadWorldBank();
   loadFred();
   loadCalendar();
@@ -2090,7 +2061,6 @@ function startPolling() {
   if (document.hidden) return;
   pollTimers.push(
     setInterval(loadPortfolio, 15000),
-    setInterval(loadMarkets, 15000),
     setInterval(loadWatchlist, 15000),
     setInterval(loadAlerts, 30000), // the server also evaluates alerts every minute and notifies
     setInterval(() => { if (state.selected) loadDetail({ periodic: true }); }, 30000),
@@ -2107,7 +2077,7 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden) { hiddenAt = Date.now(); stopTimers(); return; }
   // back in view: refresh what went stale, then resume the timers
   if (Date.now() - hiddenAt > 10000) {
-    loadPortfolio(); loadMarkets(); loadWatchlist(); loadAlerts();
+    loadPortfolio(); window.FinSight.bus.invalidate('markets'); loadWatchlist(); loadAlerts();
     if (state.selected) loadDetail({ periodic: true });
     if (Date.now() - hiddenAt > 15 * 60000) { loadWorldBank(); loadFred(); loadCalendar(); }
   }

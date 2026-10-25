@@ -292,12 +292,6 @@ body {
 
 /* ---------------- markets ---------------- */
 .markets { padding: 8px 10px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px 16px; }
-.mkt-group .mkt-h { color: var(--cyan); font-size: 10px; letter-spacing: 1px; border-bottom: 1px solid var(--border); padding-bottom: 3px; margin-bottom: 3px; }
-.mkt-row { display: flex; justify-content: space-between; align-items: center; padding: 2px 0; font-size: 11px; cursor: pointer; }
-.mkt-row:hover { background: #11161c; }
-.mkt-row .mkt-label { color: var(--text); }
-.mkt-row .mkt-px { font-variant-numeric: tabular-nums; }
-.mkt-row .mkt-chg { font-variant-numeric: tabular-nums; min-width: 56px; text-align: right; }
 
 /* ---------------- world bank ---------------- */
 .wb-controls { display: flex; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--border); }

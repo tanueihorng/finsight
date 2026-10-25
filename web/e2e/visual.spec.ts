@@ -7,7 +7,7 @@ for (const viewport of [{ width: 1600, height: 1000 }, { width: 390, height: 844
     await page.clock.setFixedTime(new Date('2026-10-25T04:00:00Z'));
     await seeded(page);
     await expect(page.locator('#summary')).toContainText('S$92,967.48');
-    await expect(page.locator('#markets .mkt-row').first()).toBeVisible();
+    await expect(page.locator('#markets [data-sym]').first()).toBeVisible();
     await expect(page.locator('#detail-body canvas').first()).toBeVisible();
     await page.waitForLoadState('networkidle');
     // Fake market histories roll with the server day. Keep the price curve,

@@ -1,0 +1,8 @@
+/* Copied from the legacy .mkt-* rules in public/styles.css (removed there).
+   The host keeps the global .markets grid class (legacy layout owns it). */
+.group .h { color: var(--cyan); font-size: 10px; letter-spacing: 1px; border-bottom: 1px solid var(--border); padding-bottom: 3px; margin-bottom: 3px; }
+.row { display: flex; justify-content: space-between; align-items: center; padding: 2px 0; font-size: 11px; cursor: pointer; }
+.row:hover { background: #11161c; }
+.row .label { color: var(--text); }
+.row .px { font-variant-numeric: tabular-nums; }
+.row .chg { font-variant-numeric: tabular-nums; min-width: 56px; text-align: right; }

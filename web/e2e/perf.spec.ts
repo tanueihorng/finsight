@@ -31,7 +31,7 @@ for (const viewport of [{ width: 1600, height: 1000 }, { width: 390, height: 844
       assets = new Map();
       await page.reload();
       await expect(page.locator('#positions-body tr[data-sym]')).toHaveCount(9);
-      await expect(page.locator('#markets .mkt-row').first()).toBeVisible();
+      await expect(page.locator('#markets [data-sym]').first()).toBeVisible();
       await page.waitForLoadState('networkidle');
       const metrics = await page.evaluate(() => {
         return {

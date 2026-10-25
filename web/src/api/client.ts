@@ -7,9 +7,13 @@ export class ApiError extends Error {
 }
 
 // Injectable dependencies keep HTTP/error tests independent of the browser.
-export function createApi(fetcher: typeof fetch, lock: () => void) {
+// While locked, protected requests fail without touching the network: an
+// island that renders just before a lock can subscribe just after it, and
+// Query would otherwise send one request with the expired session (PILOT-1).
+export function createApi(fetcher: typeof fetch, lock: () => void, isLocked: () => boolean = () => false) {
   return async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
     if (!path.startsWith('/api/') || path.includes('\\')) throw new TypeError('Expected a same-origin /api/ path');
+    if (isLocked() && !path.startsWith('/api/auth/')) throw new ApiError(401, 'Locked. Enter your PIN.');
     const headers = new Headers(init.headers);
     if (!headers.has('Accept')) headers.set('Accept', 'application/json');
     const response = await fetcher(path, { ...init, headers, credentials: 'same-origin' });
@@ -27,4 +31,4 @@ export function createApi(fetcher: typeof fetch, lock: () => void) {
 export const api = createApi((...args) => fetch(...args), () => {
   if (window.FinSight.auth) window.FinSight.auth.lock();
   else window.dispatchEvent(new Event('finsight:locked')); // F4 installs the auth bridge.
-});
+}, () => window.FinSight.auth?.unlocked === false);

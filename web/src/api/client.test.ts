@@ -21,6 +21,14 @@ test('401 locks before surfacing the HTTP error; successful calls carry cookies 
   }, () => assert.fail('success must not lock'));
   assert.deepEqual(await ok('/api/test', { signal: controller.signal }), { ok: true });
 });
+test('while locked, protected requests fail without a network call; auth calls still go out', async () => {
+  let locked = true; const sent: string[] = [];
+  const api = createApi(async (path) => { sent.push(String(path)); return new Response('{"ok":true}'); }, () => {}, () => locked);
+  await assert.rejects(api('/api/markets'), (e: unknown) => e instanceof ApiError && e.status === 401);
+  assert.deepEqual(await api('/api/auth/status'), { ok: true });
+  locked = false; assert.deepEqual(await api('/api/markets'), { ok: true });
+  assert.deepEqual(sent, ['/api/auth/status', '/api/markets']);
+});
 test('abort reasons propagate; cross-origin paths are refused before fetch', async () => {
   const controller = new AbortController(); controller.abort();
   const api = createApi(async (_, init) => { init?.signal?.throwIfAborted(); throw new Error('unexpected fetch'); }, () => {});

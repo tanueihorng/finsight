@@ -38,6 +38,12 @@ Card = the migration card(s) that must keep the row green (`docs/frontend-migrat
 | Themes | theme switch sets `data-theme`, persists | `baseline/themes` | F8 | pass |
 | Failure | empty portfolio after CLEAR ALL: empty table, S$0.00, no errors | `baseline/failures` | C1, D1, D4 | pass |
 | Failure | failing market feed: markets empty, rest of the page works | `baseline/failures` | A1 | pass |
+| Markets (PILOT-1) | island renders groups, 4-decimal small prices, `upd` time, LIVE pill; row click selects | `PILOT-1` | A1 | pass |
+| Markets (PILOT-1) | `MKT` refetches; drag to other column keeps the root, survives reload, one host, exactly 2 polls in 31 s | `PILOT-1` | A1, F10 | pass |
+| Markets (PILOT-1) | hide/reload/unhide keeps content | `PILOT-1` | A1, F10 | pass |
+| Markets (PILOT-1) | lock: no markets request for 16 s; unlock resumes | `PILOT-1` | A1, F3, F9 | pass |
+| Markets (PILOT-1) | host removed → island unmounted, no further requests | `PILOT-1` | F6 | pass |
+| Islands | protected API calls are refused while locked, even from an island mounting during the lock | `web/src/api/client.test.ts`, `baseline/session` | F3 | pass |
 | Failure | holding with no quote: LAST falls back to the avg price | `baseline/failures` | D1 | pass |
 | Narrow | 390 px wide: summary, positions, command bar, no horizontal scroll, no errors | `baseline/narrow` | all | pass |
 | Kestrel | offline panel explains why (agent off) | `baseline/kestrel` | G1 | pass |
