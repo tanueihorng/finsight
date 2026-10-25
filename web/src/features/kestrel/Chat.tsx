@@ -1,28 +1,14 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { useStore } from 'zustand';
 import { agentApi } from './api.ts';
-import { addFiles, chat, chooseBrain, deleteThread, menuItems, newChat, openThread, removeFile, setDraft, stop, submit, toggleThreads, type FileChip, type Item } from './chat.ts';
-import { costLabel, ctxButton, LS, ls, prettyArgs, suggestions, type PageContext } from './labels.ts';
+import { addFiles, chat, chooseBrain, deleteThread, menuItems, newChat, openThread, pageContext, removeFile, setDraft, stop, submit, toggleThreads, type FileChip, type Item } from './chat.ts';
+import { costLabel, ctxButton, LS, ls, prettyArgs } from './labels.ts';
 import { md } from './md.ts';
 import { citeHost, type Turn } from './turns.ts';
 
 // The Kestrel conversation (G1: log, turns, tool rows, status, markdown;
 // G2: composer, slash menu, attachments, model picker, page context).
 // Rendered into the side drawer or the dock by KestrelIsland (G3).
-export function pageContext(): PageContext {
-  const c: PageContext = { view: 'terminal' };
-  try {
-    const s = window.FinSight.store.getState();
-    if (s.selected) c.symbol = String(s.selected).slice(0, 24);
-    if (s.account) c.account = String(s.account).slice(0, 64);
-    if (s.base) c.base = String(s.base).slice(0, 3);
-    if (s.detailRange?.interval) c.timeframe = String(s.detailRange.interval).slice(0, 10);
-    const strategy = (window.detailChart as unknown as { cfg?: { strategy?: string } } | null | undefined)?.cfg?.strategy;
-    if (strategy) c.strategy = String(strategy).slice(0, 40);
-  } catch { /* app not ready */ }
-  return c;
-}
-
 export function Candles() {
   return (
     <span className="candles" aria-hidden="true">
@@ -69,11 +55,16 @@ function Trace({ turnId }: { turnId: string }) {
   );
 }
 
+// Markdown is parsed again only when its segment's text changes (each streamed delta).
+const TextPart = memo(function TextPart({ text }: { text: string }) {
+  return <div className="agent-text" dangerouslySetInnerHTML={{ __html: md(text) }} />;
+});
+
 function TurnView({ t }: { t: Turn }) {
   const [copied, setCopied] = useState(false), [trace, setTrace] = useState(false);
   return (
     <div className="agent-turn">
-      {t.parts.map((p, i) => p.kind === 'text' ? <div key={i} className="agent-text" dangerouslySetInnerHTML={{ __html: md(p.text) }} />
+      {t.parts.map((p, i) => p.kind === 'text' ? <TextPart key={i} text={p.text} />
         : p.kind === 'notice' ? <div key={i} className={'agent-notice ' + p.cls}>{p.text}</div>
         : <details key={i} className={'agent-tool ' + p.state}>
             <summary><span className="nm">{p.name}</span><span className="args">{prettyArgs(p.args)}</span></summary>
@@ -101,7 +92,9 @@ function TurnView({ t }: { t: Turn }) {
   );
 }
 
-function ItemView({ item }: { item: Item }) {
+// Memoised: the chat re-renders on every stream delta, but an item only re-renders
+// when its own turn changes in the store (finished turns are left alone).
+const ItemView = memo(function ItemView({ item }: { item: Item }) {
   const turn = useStore(chat, (s) => (item.kind === 'turn' ? s.turns[item.id] : undefined));
   if (item.kind === 'notice') return <div className={'agent-notice ' + item.cls}>{item.text}</div>;
   if (item.kind === 'turn') return turn ? <TurnView t={turn} /> : null;
@@ -112,9 +105,9 @@ function ItemView({ item }: { item: Item }) {
       {item.ctx && <span className="meta">{item.ctx}</span>}
     </div>
   );
-}
+});
 
-function Welcome({ name, onTry }: { name: string; onTry: (s: string) => void }) {
+function Welcome({ name, list, onTry }: { name: string; list: string[]; onTry: (s: string) => void }) {
   return (
     <>
       <div className="agent-welcome">
@@ -126,7 +119,7 @@ function Welcome({ name, onTry }: { name: string; onTry: (s: string) => void }) 
           <li>switch model at the bottom right; <code>esc</code> stops a reply</li>
         </ul>
       </div>
-      <div className="agent-try"><div className="lbl">Try</div>{suggestions(pageContext()).map((s) => <button key={s} className="agent-chip" onClick={() => onTry(s)}>{s}</button>)}</div>
+      <div className="agent-try"><div className="lbl">Try</div>{list.map((s) => <button key={s} className="agent-chip" onClick={() => onTry(s)}>{s}</button>)}</div>
     </>
   );
 }
@@ -166,9 +159,11 @@ export function Chat({ inputRef, onRetry }: { inputRef: RefObject<HTMLTextAreaEl
   const pc = pageContext();
 
   let body: ReactNode;
+  const items = s.items.map((item) => <ItemView key={item.key} item={item} />);
   if (s.view === 'offline' && s.offline) body = <Offline name={s.name} why={s.offline.why} onRetry={onRetry} />;
-  else if (s.view === 'welcome') body = <Welcome name={s.name} onTry={send} />;
-  else body = s.items.map((item) => <ItemView key={item.key} item={item} />);
+  // Notices on a fresh chat (a rejected file, "wait for uploads") show under the welcome, like legacy.
+  else if (s.view === 'welcome') body = <><Welcome name={s.name} list={s.welcome} onTry={send} />{items}</>;
+  else body = items;
 
   return (
     <div className="agent-chat">
