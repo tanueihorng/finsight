@@ -1,9 +1,11 @@
 // E2E: throwaway FinSight servers with fake market data and fresh temp data
 // folders per run. Never touches ~/FinSightData or a real Kestrel agent.
-//   chromium  :8099  agent off (AGENT_URL is a closed port)      most specs
-//   agent     :8098  -> fake agent :8097 (web/e2e/fake-agent.mjs) *.agent.spec.ts
-//   sw        :8096  copy of the app in a temp folder, service    *.sw.spec.ts
-//                    workers allowed (the spec edits that copy)
+// Ports are E2E_PORT_BASE (default 8096) + offset, so two worktrees can run
+// E2E at once with different bases (e.g. E2E_PORT_BASE=8086).
+//   chromium  base+3  agent off (AGENT_URL is a closed port)       most specs
+//   agent     base+2  -> fake agent base+1 (web/e2e/fake-agent.mjs) *.agent.spec.ts
+//   sw        base    copy of the app in a temp folder, service     *.sw.spec.ts
+//                     workers allowed (the spec edits that copy)
 import { defineConfig, devices } from '@playwright/test';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -14,7 +16,8 @@ const tmp = (key: string, prefix: string) => (process.env[key] ||= fs.mkdtempSyn
 const DATA = tmp('FINSIGHT_E2E_DIR', 'finsight-e2e-');
 const AGENT_DATA = tmp('FINSIGHT_E2E_AGENT_DIR', 'finsight-e2e-agent-');
 const SW_ROOT = tmp('FINSIGHT_E2E_SW_ROOT', 'finsight-e2e-sw-');
-const PORT = 8099, AGENT_FINSIGHT_PORT = 8098, FAKE_AGENT_PORT = 8097, SW_PORT = 8096;
+const BASE = Number(process.env.E2E_PORT_BASE || 8096);
+const PORT = BASE + 3, AGENT_FINSIGHT_PORT = BASE + 2, FAKE_AGENT_PORT = BASE + 1, SW_PORT = BASE;
 
 const finsightEnv = (data: string, port: number, agentUrl: string) => ({
   FINSIGHT_FAKE_MARKET: '1',

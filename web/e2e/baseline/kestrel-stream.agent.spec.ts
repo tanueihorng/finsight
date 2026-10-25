@@ -3,7 +3,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { unlock } from '../helpers';
 
-const FAKE_AGENT = 'http://127.0.0.1:8097';
+const FAKE_AGENT = `http://127.0.0.1:${Number(process.env.E2E_PORT_BASE || 8096) + 1}`;
 
 async function openChat(page: Page) {
   await unlock(page);
