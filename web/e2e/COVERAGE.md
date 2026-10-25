@@ -63,6 +63,13 @@ Card = the migration card(s) that must keep the row green (`docs/frontend-migrat
 | Lock (F9) | server unreachable: offline message, no PIN field, recovers by itself | `F9` › server unreachable… | F9 | pass |
 | Layout (F10) | ⚙ Layout opens/closes (✕, backdrop, DONE); panels editor lists all 14 panels, off state, show/hide live; appearance + card editor in the same modal | `F10` › ⚙ Layout opens… | F10, F8, C1 | pass |
 | Layout (F10) | every panel tagged with a pid and one grip; drag saves finsight-layout; Reset order restores the default | `F10` › every panel gets a grip… | F10 | pass |
+| Kestrel (G) | welcome + suggestion chips follow the selection, page context on the message and ◉/○ toggle, model list, placeholder | `G.agent` › welcome… | G2 | pass |
+| Kestrel (G) | tool rows (name, args, result, time), citations (class + host), cost/meta; markdown rendered with script/HTML neutralised; failures shown | `G.agent` › tool rows… | G1 | pass |
+| Kestrel (G) | slash menu (SKILLS/COMMANDS, arrows, Tab/Enter pick), /model, /cost, /skills, /new | `G.agent` › slash menu… | G2 | pass |
+| Kestrel (G) | chats list open/delete; the open chat and drawer state survive reload | `G.agent` › chats list… | G1, G3 | pass |
+| Kestrel (G) | ⌘/, Esc close vs keep a draft, width presets/dblclick/arrow keys persist | `G.agent` › ⌘/ and Esc… | G3 | pass |
+| Kestrel (G) | dock: pid kestrel with grip, collapse persists across reload, height keys, pop out | `G.agent` › dock mode… | G3, F10 | pass |
+| Kestrel (G) | a turn failing before the send reply does not stick on ■ | `G.agent` › a turn that fails… | G1 | pass (intended fix; fails on legacy) |
 | Trades | ADD via command bar, UNDO restores | `baseline/add-sell` | F7, D3 | pass |
 | Trades | SELL with a price (realized P/L), SELL at market | `baseline/trades` | F7, D1 | pass |
 | Trades | row S button prompts for quantity and price | `baseline/trades` | D1 | pass |

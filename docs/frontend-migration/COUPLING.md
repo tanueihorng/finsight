@@ -61,13 +61,13 @@ Section ids (S0…S34) refer to Part B, table B1. Line ranges are at the baselin
 | Global | Defined in | Read/written by | Migration contract |
 |---|---|---|---|
 | `state` (`selected`, `account`, `base`, `detailRange`, `lastPrices`) | app.js S2 | 15 app.js sections; **`agent-panel.js` `pageContext()` reads `selected`, `account`, `base`, `detailRange.interval`** | F4's Proxy keeps `state.x` working everywhere; G1 reads `FinSight.store` directly |
-| `detailChart` | app.js S19 | S20; **`agent-panel.js` reads `detailChart.cfg.strategy`** | E2 keeps `window.detailChart` (set from `ChartHost`) until G1 |
+| `detailChart` | app.js S19 | S20; **`agent-panel.js` reads `detailChart.cfg.strategy`** | E2 keeps `window.detailChart` (set from `ChartHost`); G ✅ reads it from `features/kestrel/Chat.tsx` `pageContext()` |
 | `window.__finAlerts` + event `finsight:alerts` | app.js S27 and `chart.js` (both set it) | the chart's alert bell ↔ the alerts panel | B2 keeps setting `window.__finAlerts` and dispatching `finsight:alerts` with `{alerts, from: 'app'}`, and listens for `from: 'chart'` |
 | `PriceChart` | `chart.js` | app.js S19 (`new PriceChart`) | E2 wraps it (`legacy/ChartHost.tsx`, typed by `legacy/chart.d.ts`) |
 | `ChartGrid` | `chartgrid.js` | app.js S20 | E2 |
 | `FinIndicators`, `FinStrategy`, `FinStrategies`, `FinJournal` | their files (UMD) | `chart.js` only | untouched; load order before `chart.js` stays |
-| `body.locked` class | app.js S34 | `agent-panel.js` (MutationObserver boots the chat after unlock) | F9 keeps toggling `body.locked` until G1 |
-| `finsight-agent-*` localStorage keys | `agent-panel.js` | itself | G3 keeps the keys |
+| `body.locked` class | app.js S34 | `agent-panel.js` (MutationObserver boots the chat after unlock) | G ✅: the Kestrel island boots on `finsight:unlocked` and checks `body.locked`; CSS still hides the drawer while locked |
+| `finsight-agent-*` localStorage keys | `agent-panel.js` | itself | G ✅ keeps the keys (`features/kestrel/labels.ts` `LS`) |
 
 ### A3. The `renderPortfolio()` hub: who removes what
 
@@ -325,7 +325,6 @@ Globals between files are the hidden coupling: app.js top-level `let`/`const` ar
 
 | File | app.js symbols it uses (owning section) | window.* it sets → used by app.js | other window.* it reads |
 |---|---|---|---|
-| `public/agent-panel.js` | `state` (S2) | — | — |
 | `public/chart.js` | — | `PriceChart` → —<br>`__finAlerts` → — | `FinIndicators`, `FinJournal`, `FinStrategies`, `FinStrategy` |
 | `public/chartgrid.js` | — | `ChartGrid` → S20 | `PriceChart` |
 | `public/journal.js` | — | `FinJournal` → — | — |

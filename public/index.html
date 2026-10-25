@@ -32,6 +32,7 @@ try { var d = document.documentElement;
       <img class="logo-img" src="/icon.png" alt="" aria-hidden="true" /> FINSIGHT<span class="dim">//</span><span class="amber">PERSONAL&nbsp;TERMINAL</span>
     </div>
     <div class="topbar-right">
+      <span id="agent-toggle-slot" style="display:contents"></span>
       <label class="base-sel" title="Account / portfolio — each holds its own positions" data-island="account"></label>
       <span data-island="profile" style="display:contents"></span>
       <span data-island="peek" style="display:contents"></span>
@@ -149,6 +150,12 @@ try { var d = document.documentElement;
         <div id="detail-body" class="detail-body" data-island="detail"></div>
       </div>
 
+      <!-- Kestrel docked mode (G3): the island fills the head and body; the layout system gives it a grip (pid "kestrel"). -->
+      <div class="panel agent-dock" id="agent-dock" hidden aria-label="Agent chat">
+        <div class="panel-head agent-dock-head"></div>
+        <div class="agent-dock-body"></div>
+      </div>
+
       <div class="panel">
         <div class="panel-head">
           <span class="panel-title">NEWS</span>
@@ -228,6 +235,6 @@ try { var d = document.documentElement;
   <script src="/app.js"></script>
   <link rel="stylesheet" href="/app/main.css" />
   <script type="module" src="/app/main.js"></script>
-  <script src="/agent-panel.js"></script>
+  <div data-island="kestrel"></div>
 </body>
 </html>

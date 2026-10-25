@@ -29,6 +29,7 @@ export const islands: IslandRegistry = {
   'lock-button': () => import('./features/lock/LockButtonIsland.tsx'),
   layout: () => import('./features/layout/LayoutModalIsland.tsx'),
   'layout-button': () => import('./features/layout/LayoutButtonIsland.tsx'),
+  kestrel: () => import('./features/kestrel/KestrelIsland.tsx'),
   calendar: () => import('./features/macro/CalendarIsland.tsx'),
   worldbank: () => import('./features/macro/WorldBankIsland.tsx'),
   fred: () => import('./features/macro/FredIsland.tsx'),

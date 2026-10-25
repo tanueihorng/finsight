@@ -5,6 +5,10 @@
 // Replies echo the prompt word by word; a prompt containing "slow" streams
 // for ~10 s so a test can stop it or drop the connection mid-turn.
 // Test hook: POST /v1/__test/drop[?mode=end] closes every open event stream.
+// Prompt words for the G (Kestrel) spec: "tools" adds a tool row, a citation
+// and a cost; "markdown" replies with markdown plus an HTML/script payload;
+// "fail" ends the turn with an error; "quickfail" fails it before the
+// POST /messages reply arrives (the race the G card fixes).
 import http from 'node:http';
 
 const PORT = Number(process.env.FAKE_AGENT_PORT || 8097);
@@ -30,13 +34,25 @@ function runTurn(t, turnId, content, attachments) {
   const started = Date.now();
   t.running = turnId;
   emit(t, 'turn.started', { turnId, label: 'Fake model' });
+  if (/\bquickfail\b/i.test(content)) { t.running = null; emit(t, 'turn.failed', { turnId, code: 'MODEL_ERROR', message: 'model exploded' }); return; }
+  if (/\bfail\b/i.test(content)) {
+    // after the POST /messages reply (legacy agent-panel.js mis-handles a turn that ends before it)
+    setTimeout(() => { t.running = null; emit(t, 'turn.failed', { turnId, code: 'MODEL_ERROR', message: 'model exploded' }); }, 300);
+    return;
+  }
+  if (/\btools\b/i.test(content)) {
+    emit(t, 'tool.started', { turnId, callId: 'c1', name: 'mcp__finsight__get_portfolio', argsSummary: '{"account":"main"}' });
+    emit(t, 'tool.finished', { turnId, callId: 'c1', name: 'mcp__finsight__get_portfolio', ok: true, resultSummary: '9 positions', ms: 1200 });
+    emit(t, 'citation', { turnId, url: 'https://www.example.com/report', title: 'Report', class: 'primary', retrievedAt: '2026-10-25T00:00:00Z' });
+  }
+  if (/\bmarkdown\b/i.test(content)) chunks.splice(0, chunks.length, '## Head\n**bold** <script>window.__xss = 1</script> <img src=x onerror="window.__xss = 2">\n\n| Sym | Chg |\n|---|---|\n| AAPL | +1.5% |');
   let i = 0, text = '';
   const tick = () => {
     if (t.running !== turnId) return; // stopped
     if (i < chunks.length) { text += chunks[i]; emit(t, 'message.delta', { turnId, text: chunks[i++] }); setTimeout(tick, slow ? 250 : 20); return; }
     t.running = null;
     t.messages.push({ id: `m${++ids}`, role: 'assistant', turnId, blocks: [{ type: 'text', text }] });
-    emit(t, 'turn.finished', { turnId, costUsd: 0, ms: Date.now() - started });
+    emit(t, 'turn.finished', { turnId, costUsd: /\btools\b/i.test(content) ? 0.0123 : 0, ms: Date.now() - started });
   };
   setTimeout(tick, 20);
 }
@@ -49,7 +65,8 @@ const server = http.createServer(async (req, res) => {
 
   if (req.method === 'GET' && p === '/info') return json(res, 200, { name: 'Kestrel', version: 'fake' });
   if (req.method === 'GET' && p === '/brains') return json(res, 200, { brains: [{ id: 'fake', label: 'Fake model', costTier: '$', available: true }], default: 'fake' });
-  if (req.method === 'GET' && p === '/skills') return json(res, 200, { skills: [] });
+  if (req.method === 'GET' && p === '/skills') return json(res, 200, { skills: [{ name: 'pre-trade-check', description: 'Check a trade against the policy' }] });
+  if (req.method === 'GET' && p === '/cost') return json(res, 200, { period: u.searchParams.get('period') || 'day', totalUsd: 0.5, capUsdPerDay: 2 });
   if (req.method === 'GET' && p === '/threads') return json(res, 200, { threads: [...threads.values()].map(publicThread).reverse() });
   if (req.method === 'POST' && p === '/threads') {
     const b = await readBody(req);
@@ -82,6 +99,7 @@ const server = http.createServer(async (req, res) => {
     t.messages.push({ id: `m${++ids}`, role: 'user', turnId, blocks: [{ type: 'text', text: b.content }, ...files.map((f) => ({ type: 'attachment', name: f.name, kind: f.kind }))] });
     t.version++; t.updatedAt = Date.now();
     if (t.title === 'New chat') t.title = String(b.content || '').slice(0, 40);
+    if (/\bquickfail\b/i.test(b.content || '')) { runTurn(t, turnId, b.content, 0); return void setTimeout(() => json(res, 200, { turnId, version: t.version }), 300); }
     json(res, 200, { turnId, version: t.version });
     return runTurn(t, turnId, b.content || '', files.length);
   }
