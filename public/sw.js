@@ -2,7 +2,7 @@
    shell instantly. Only static files are cached. API responses (your portfolio)
    are never stored in the browser: they stay behind the PIN on the server. */
 'use strict';
-const SHELL = 'finsight-shell-v35-h1'; // v35-h1: index.html starts the first requests and no longer loads the chart scripts; light panels bundled into main.js (H1)
+const SHELL = 'finsight-shell-v35'; // v35: Phase 5 (H1 startup and bundling, H3 accessibility, H4 cache pruning); supersedes v35-h1/-h3/-h4
 const FILES = ['/', '/index.html', '/styles.css', '/chart.js', '/chartgrid.js', '/strategy.js', '/strategies.js', '/indicators.js', '/journal.js', '/agent-panel.css', '/app/manifest.json', '/icon.png', '/icon-192.png', '/manifest.webmanifest'];
 // Content-hashed chunk URLs (esbuild 8-char hash): immutable, so a cached copy
 // is exactly the bytes the loaded manifest asked for.
@@ -18,6 +18,23 @@ self.addEventListener('install', (e) => {
 self.addEventListener('activate', (e) => {
   e.waitUntil(caches.keys()
     .then((keys) => Promise.all(keys.filter((k) => k !== SHELL).map((k) => caches.delete(k))))
+    .then(async () => {
+      // Fetch the deploy's manifest, never a stale SW/cache response. Offline or
+      // malformed manifests must not delete working assets or block activation.
+      try {
+        const response = await fetch('/app/manifest.json', { cache: 'no-store', signal: AbortSignal.timeout(5000) });
+        if (!response.ok) return;
+        const manifest = await response.json();
+        if (!Array.isArray(manifest.files) || !manifest.files.length ||
+            !manifest.files.every((f) => typeof f === 'string' && f.startsWith('/app/'))) return;
+        const keep = new Set([...manifest.files, '/app/manifest.json'].map((f) => new URL(f, location.origin).href));
+        const cache = await caches.open(SHELL);
+        await Promise.all((await cache.keys()).filter((r) => {
+          const url = new URL(r.url);
+          return url.origin === location.origin && url.pathname.startsWith('/app/') && !keep.has(url.href);
+        }).map((r) => cache.delete(r)));
+      } catch { /* offline activation keeps the precached shell intact */ }
+    })
     .then(() => self.clients.claim()));
 });
 // Static files: network first (the server is local, so this is instant) so an
