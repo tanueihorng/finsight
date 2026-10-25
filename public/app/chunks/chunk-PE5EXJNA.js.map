@@ -1,7 +1,0 @@
-{
-  "version": 3,
-  "sources": ["../../../web/src/ui/csv.ts"],
-  "sourcesContent": ["// CSV export helpers, ported from public/app.js S32 csvCell. Cells that start\n// with = + - @ are prefixed with ' so spreadsheets don't run them as formulas.\nexport function csvCell(v: unknown): string {\n  if (typeof v === 'number') return String(v);\n  const s = v == null ? '' : String(v);\n  return /[\",\\n]/.test(s) || /^[=+\\-@]/.test(s) ? '\"' + s.replace(/\"/g, '\"\"').replace(/^([=+\\-@])/, \"'$1\") + '\"' : s;\n}\nexport const toCsv = (rows: unknown[][]) => rows.map((r) => r.map(csvCell).join(',')).join('\\n');\nexport function downloadCsv(name: string, csv: string): void {\n  const a = document.createElement('a');\n  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));\n  a.download = name; a.click(); URL.revokeObjectURL(a.href);\n}\n"],
-  "mappings": "AAEO,SAASA,EAAQC,EAAoB,CAC1C,GAAI,OAAOA,GAAM,SAAU,OAAO,OAAOA,CAAC,EAC1C,IAAMC,EAAID,GAAK,KAAO,GAAK,OAAOA,CAAC,EACnC,MAAO,SAAS,KAAKC,CAAC,GAAK,WAAW,KAAKA,CAAC,EAAI,IAAMA,EAAE,QAAQ,KAAM,IAAI,EAAE,QAAQ,aAAc,KAAK,EAAI,IAAMA,CACnH,CACO,IAAMC,EAASC,GAAsBA,EAAK,IAAKC,GAAMA,EAAE,IAAIL,CAAO,EAAE,KAAK,GAAG,CAAC,EAAE,KAAK;AAAA,CAAI,EACxF,SAASM,EAAYC,EAAcC,EAAmB,CAC3D,IAAMC,EAAI,SAAS,cAAc,GAAG,EACpCA,EAAE,KAAO,IAAI,gBAAgB,IAAI,KAAK,CAACD,CAAG,EAAG,CAAE,KAAM,UAAW,CAAC,CAAC,EAClEC,EAAE,SAAWF,EAAME,EAAE,MAAM,EAAG,IAAI,gBAAgBA,EAAE,IAAI,CAC1D",
-  "names": ["csvCell", "v", "s", "toCsv", "rows", "r", "downloadCsv", "name", "csv", "a"]
-}

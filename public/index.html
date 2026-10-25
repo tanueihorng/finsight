@@ -10,16 +10,53 @@
 <meta name="theme-color" content="#0b0b14" />
 <link rel="stylesheet" href="/styles.css" />
 <link rel="stylesheet" href="/agent-panel.css" />
+<!-- app:modulepreload -->
+<link rel="modulepreload" href="/app/chunks/chunk-6IIDZ6B3.js" />
+<link rel="modulepreload" href="/app/chunks/chunk-AE5GQWXD.js" />
+<link rel="modulepreload" href="/app/chunks/chunk-KVMUXFPB.js" />
+<link rel="modulepreload" href="/app/chunks/chunk-QOFZVLKV.js" />
+<link rel="modulepreload" href="/app/chunks/chunk-TA2L7IRX.js" />
+<link rel="modulepreload" href="/app/chunks/chunk-WO3NRQMO.js" />
+<link rel="modulepreload" href="/app/chunks/chunk-Z34GYMTO.js" />
+<link rel="modulepreload" href="/app/chunks/chunk-ZAKOFWOT.js" />
+<link rel="modulepreload" href="/app/chunks/chunk-ZICP32QN.js" />
+<link rel="modulepreload" href="/app/chunks/chunk-ZXQ3BOPP.js" />
+<!-- /app:modulepreload -->
 <script>/* apply saved theme/font before first paint (no flash) */
 try { var d = document.documentElement;
   d.dataset.theme = localStorage.getItem('finsight-theme') || 'violet';
   d.dataset.font  = localStorage.getItem('finsight-font')  || 'mono';
 } catch (e) {}</script>
+<script>/* start the first requests now, while the scripts load (H1). For a
+   signed-in session that is its accounts and the portfolio the app will show
+   first, chosen as web/src/state/store.ts and shell/boot.ts choose them; the
+   app takes each once (web/src/api/early.ts) and fetches anything that does
+   not match. Bodies are read at once: an unread one would hold a connection.
+   A locked page sends no protected request. */
+try { (function () {
+  var get = function (k) { try { return localStorage.getItem(k); } catch (e) { return null; } };
+  var opts = { credentials: 'same-origin', headers: { Accept: 'application/json' } };
+  var body = function (r) { return r.ok ? r.json() : null; };
+  var early = window.finsightEarly = {};
+  early.auth = fetch('/api/auth/status', { credentials: 'same-origin' }).then(function (r) { if (!r.ok) throw new Error(); return r.json(); });
+  early.accounts = early.auth.then(function (s) { return s.authed ? fetch('/api/accounts', opts).then(body) : null; });
+  var portfolio = early.accounts.then(function (d) {
+    if (!d) return;
+    var list = d.accounts || [], exists = function (id) { return id === 'ALL' || list.some(function (a) { return a.id === id; }); };
+    var account = get('finsight-account') || get('fincept-account') || '', base = (get('finsight-base') || get('fincept-base') || 'SGD').toUpperCase();
+    if (!exists(account)) account = exists(get('finsight-account')) ? get('finsight-account') : d.activeId;
+    var url = '/api/portfolio?base=' + encodeURIComponent(base) + '&account=' + encodeURIComponent(account);
+    early.portfolio = { url: url, data: fetch(url, opts).then(body) };
+    early.portfolio.data.catch(function () {});
+  });
+  early.auth.catch(function () {}); early.accounts.catch(function () {}); portfolio.catch(function () {});
+})(); } catch (e) {}</script>
 </head>
 <body class="locked">
   <!-- The page is one React app (X1, web/src/App.tsx). Startup order: bootstrap
-       (store, auth, bus) -> classic chart scripts (window.PriceChart and its
-       helpers, still plain JS) -> the app module. See web/src/bootstrap.ts. -->
+       (store, auth, bus) -> the app module, which loads the classic chart
+       scripts (window.PriceChart and its helpers, still plain JS) when it
+       starts (web/src/legacy/chartScripts.ts). See web/src/bootstrap.ts. -->
   <div id="root"></div>
   <!-- Startup fallback: inline in index.html so it works even when bootstrap or
        the app bundle fails to load. If React never renders, reveal a retry
@@ -45,12 +82,6 @@ try { var d = document.documentElement;
     })();
   </script>
   <script src="/app/bootstrap.js"></script>
-  <script src="/indicators.js"></script>
-  <script src="/strategy.js"></script>
-  <script src="/strategies.js"></script>
-  <script src="/chart.js"></script>
-  <script src="/chartgrid.js"></script>
-  <script src="/journal.js"></script>
   <link rel="stylesheet" href="/app/main.css" />
   <script type="module" src="/app/main.js"></script>
 </body>

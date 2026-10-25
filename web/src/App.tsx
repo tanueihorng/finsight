@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useStore } from 'zustand';
 import { createStore } from 'zustand/vanilla';
 import { usePortfolio } from './api/queries.ts';
+import { islands } from './islands.ts';
 import { kestrelDock } from './features/kestrel/dock.ts';
 import { setFooter } from './legacy/app.ts';
 import { setChartHoldings } from './shell/chartHooks.ts';
@@ -17,9 +18,29 @@ import { columns, dropBefore, hiddenPanels, HIDE_ID, movePanel, saveLayout, type
 // layout moves between the columns, as legacy did, with their head and body
 // rendered into them through portals. Order and visibility: shell/layout.ts.
 type HostProps = { id?: string; className?: string; title?: string; style?: object; [k: `data-${string}`]: string };
+// H1: a host gets its data-island (so main.tsx mounts it) once the island's
+// chunk has loaded, failed, or taken 300 ms, React's reveal throttle (islands.ts).
+// Until then it stays empty instead of showing a fallback, so one slow chunk
+// neither delays nor is delayed by the others. The positions table and the
+// controls around it mount first; the other panels once the browser is idle.
+const FIRST = new Set(['positions', 'summary', 'lock', 'command', 'status', 'account', 'base', 'clock']);
+const idle = (go: () => void) => {
+  if (!('requestIdleCallback' in window)) { const t = setTimeout(go, 0); return () => clearTimeout(t); }
+  const id = requestIdleCallback(go, { timeout: 200 });
+  return () => cancelIdleCallback(id);
+};
 const Host = ({ island, as = 'div', ...rest }: { island: string; as?: 'div' | 'span' | 'label' } & HostProps) => {
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    if (!Object.hasOwn(islands, island)) { setReady(true); return; }
+    let live = true, timer: ReturnType<typeof setTimeout> | undefined;
+    const go = () => { if (live) setReady(true); };
+    const load = () => { timer = setTimeout(go, 300); islands[island]!().then(go, go); };
+    const cancelIdle = FIRST.has(island) ? (load(), undefined) : idle(load);
+    return () => { live = false; clearTimeout(timer); cancelIdle?.(); };
+  }, [island]);
   const Tag = as;
-  return <Tag data-island={island} {...rest} />;
+  return <Tag data-island={ready ? island : undefined} {...rest} />;
 };
 const contents = { display: 'contents' } as const;
 const store = () => window.FinSight.store;

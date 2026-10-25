@@ -1,0 +1,2 @@
+import{a as s}from"./chunk-ZAKOFWOT.js";import{a as i}from"./chunk-Z34GYMTO.js";import{c as n}from"./chunk-KVMUXFPB.js";var o=n(i(),1),a=n(s(),1),r=t=>Array.from(document.querySelectorAll("[data-island-slot]")).find(l=>l.getAttribute("data-island-slot")===`${t}:head`)??null;function c({island:t,children:l}){let[e,d]=(0,o.useState)(()=>r(t));return(0,o.useLayoutEffect)(()=>{(!e||!e.isConnected)&&d(r(t))}),e?(0,a.createPortal)(l,e):null}export{c as a};
+//# sourceMappingURL=chunk-ZICP32QN.js.map

@@ -16,7 +16,10 @@ export const queryClient = new QueryClient({ defaultOptions: { queries: queryDef
 window.FinSight.actions = actions;
 window.FinSight.bus.connect((key) => queryClient.invalidateQueries({ queryKey: [key] }));
 window.addEventListener('finsight:locked', () => { void queryClient.cancelQueries(); });
-window.addEventListener('finsight:unlocked', () => { void queryClient.invalidateQueries(); });
+// The first unlock (startup) has nothing cached to refresh; invalidating then
+// only made each panel that mounted afterwards fetch its data twice (H1).
+let unlockedBefore = false;
+window.addEventListener('finsight:unlocked', () => { if (unlockedBefore) void queryClient.invalidateQueries(); unlockedBefore = true; });
 
 // The island runtime (F6). Since X1 the page is one React app (App.tsx); this
 // stays for [data-island] nodes added outside it (embeds and the F6 specs).

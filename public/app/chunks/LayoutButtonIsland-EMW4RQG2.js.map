@@ -1,7 +1,0 @@
-{
-  "version": 3,
-  "sources": ["../../../web/src/features/layout/LayoutButtonIsland.tsx"],
-  "sourcesContent": ["// \u2699 Layout in the topbar (F10).\nexport default function LayoutButtonIsland() {\n  return <button id=\"cards-btn\" className=\"topbar-btn\" title=\"Customise cards & panels\" onClick={() => window.FinSight.store.setState({ layoutOpen: true })}>\u2699 Layout</button>;\n}\n"],
-  "mappings": "gFAES,IAAAA,EAAA,SADM,SAARC,GAAsC,CAC3C,SAAO,OAAC,UAAO,GAAG,YAAY,UAAU,aAAa,MAAM,2BAA2B,QAAS,IAAM,OAAO,SAAS,MAAM,SAAS,CAAE,WAAY,EAAK,CAAC,EAAG,yBAAQ,CACrK",
-  "names": ["import_jsx_runtime", "LayoutButtonIsland"]
-}

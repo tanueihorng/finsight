@@ -4,6 +4,7 @@
 //   bootstrap.js   classic script, loaded before every legacy script; owns window.FinSight
 //   main.js/.css   ES module islands entry; lazy panels become chunks/*.js
 //   manifest.json  every runtime file, for the service worker's offline cache
+// and keeps public/index.html's modulepreload list (main.js's static chunks) current.
 // Usage:
 //   node scripts/build-web.mjs           build
 //   node scripts/build-web.mjs --watch   rebuild on change (refresh the browser)
@@ -53,6 +54,23 @@ function manifest(...metafiles) {
   return JSON.stringify({ files }, null, 2) + '\n';
 }
 
+// main.js cannot run until its statically imported chunks have loaded, and
+// the browser only finds them once main.js has arrived. index.html lists them
+// so they load alongside main.js (H1). Lazy island chunks are left out.
+const INDEX = path.join(root, 'public/index.html');
+const PRELOAD = /(<!-- app:modulepreload -->\n)[\s\S]*?(<!-- \/app:modulepreload -->)/;
+function withPreloads(html, meta) {
+  const seen = new Set(), walk = (out) => {
+    for (const i of meta.outputs[out]?.imports ?? []) {
+      if (i.kind === 'import-statement' && !seen.has(i.path)) { seen.add(i.path); walk(i.path); }
+    }
+  };
+  walk(`${OUT}/main.js`);
+  const links = [...seen].sort().map((f) => `<link rel="modulepreload" href="/${path.posix.relative('public', f)}" />\n`).join('');
+  if (!PRELOAD.test(html)) throw new Error('public/index.html has no <!-- app:modulepreload --> block');
+  return html.replace(PRELOAD, (_, open, close) => open + links + close);
+}
+
 function listFiles(dir, base = dir) {
   if (!fs.existsSync(dir)) return [];
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
@@ -66,7 +84,9 @@ if (args.has('--check')) {
   const expected = new Map(results.flatMap((r) => r.outputFiles.map((f) => [path.relative(outAbs, f.path), Buffer.from(f.contents)])));
   expected.set('manifest.json', Buffer.from(manifest(...results.map((r) => r.metafile))));
   const actual = listFiles(outAbs);
+  const index = fs.readFileSync(INDEX, 'utf8');
   const problems = [
+    ...(withPreloads(index, results[1].metafile) === index ? [] : ['outdated public/index.html modulepreload list']),
     ...[...expected.keys()].filter((f) => !actual.includes(f)).map((f) => `missing  ${OUT}/${f}`),
     ...actual.filter((f) => !expected.has(f)).map((f) => `stale    ${OUT}/${f}`),
     ...actual.filter((f) => expected.has(f) && !expected.get(f).equals(fs.readFileSync(path.join(outAbs, f)))).map((f) => `outdated ${OUT}/${f}`),
@@ -86,6 +106,10 @@ if (args.has('--check')) {
       build.onEnd((r) => {
         if (!r.metafile) return;
         metas[name] = r.metafile;
+        if (name === 'islands') {
+          const html = fs.readFileSync(INDEX, 'utf8'), next = withPreloads(html, r.metafile);
+          if (next !== html) fs.writeFileSync(INDEX, next);
+        }
         if (metas.bootstrap && metas.islands) fs.writeFileSync(path.join(outAbs, 'manifest.json'), manifest(metas.bootstrap, metas.islands));
       });
     },
