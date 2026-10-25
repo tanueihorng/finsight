@@ -466,8 +466,10 @@ Two esbuild builds (`bootstrap.js` IIFE; `main.js` ESM with splitting), `manifes
 | F5 | 1 | done (merged 2026-10-25, db26138) | mig/F5 | Codex | 20-value legacy format comparisons and UI primitives; 119 unit + 49 E2E |
 | F6 | 1 | done (merged 2026-10-25, c43c7a9) | mig/F6 | Codex | 119 unit + 52 E2E; lazy clock, move/unmount lifecycle, failure isolation; stop before I1/pilots |
 | I1 | 1.5 | done (not merged) | mig/I1-coupling | Claude | `COUPLING.md` (baseline `31437a0`, refreshed after F6) + `scripts/coupling-inventory.mjs`; found 4 misplaced helpers and the C1↔C2, C3↔D1, E2↔B1/A3 couplings |
-| PILOT-1, PILOT-2 | 1.5 | todo | | | gate for Phase 2 |
-| A1–A3 | A | todo | | | A1 is PILOT-1 |
+| PILOT-1 (A1) | 1.5 | done (not merged) | mig/PILOT-1-markets | Claude | World Markets island; all 5 gate proofs pass (drag/reload, hide, 2 polls per 31 s, lock/unlock, unmount). Found and fixed a contract gap: an island mounting during a lock sent one request; the API client now refuses protected calls while locked. Cold transfer 793,872 B vs 529,973 B baseline (React + Query now load for a real panel); timings within noise |
+| PILOT-2 (C1) | 1.5 | todo | | | gate for Phase 2 |
+| A1 | A | done as PILOT-1 (not merged) | mig/PILOT-1-markets | Claude | |
+| A2–A3 | A | todo | | | |
 | B1–B3 | B | todo | | | |
 | C1–C3 | C | todo | | | C1 is PILOT-2 |
 | D1–D4 | D | todo | | | D1 first |

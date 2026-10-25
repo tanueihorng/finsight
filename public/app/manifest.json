@@ -2,7 +2,10 @@
   "files": [
     "/app/bootstrap.js",
     "/app/chunks/ClockIsland-4RFURDPR.js",
+    "/app/chunks/MarketsIsland-VRJOUY2N.js",
+    "/app/chunks/MarketsIsland-XI4JT4ID.css",
     "/app/chunks/chunk-JH3F6H34.js",
+    "/app/chunks/chunk-T5AI6GXZ.js",
     "/app/main.css",
     "/app/main.js"
   ]

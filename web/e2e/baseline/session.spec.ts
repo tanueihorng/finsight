@@ -6,7 +6,8 @@ test('an expired session locks the app, stops polling, keeps a typed PIN, and un
   await seeded(page);
   await context.clearCookies(); // the server no longer knows this browser
   // The next API call gets 401 (a poll may get there first; either way the app locks).
-  await page.evaluate(() => { void (window as any).loadMarkets(); }); // legacy-any
+  // loadMarkets moved to a React island (PILOT-1); any legacy API loader triggers the same 401 path.
+  await page.evaluate(() => { void (window as any).loadWatchlist(); }); // legacy-any
   await expect(page.locator('body')).toHaveClass(/\blocked\b/);
   await expect(page.locator('#lock-title')).toHaveText('Enter your PIN');
 

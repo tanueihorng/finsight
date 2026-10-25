@@ -1,0 +1,11 @@
+// Typed calls into legacy public/app.js. Its top-level function declarations
+// are window properties. Each wrapper goes away when the owning card migrates
+// that function (docs/frontend-migration/COUPLING.md §A4).
+interface LegacyAppGlobals {
+  selectSymbol?: (symbol: string) => void; // E1 turns this into a store write
+}
+const legacy = () => window as unknown as LegacyAppGlobals;
+
+export function selectSymbol(symbol: string): void {
+  legacy().selectSymbol?.(symbol);
+}
