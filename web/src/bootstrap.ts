@@ -31,5 +31,8 @@ const islandsReady = new Promise<void>((resolve) => {
   markIslandsReady = () => { resolve(); window.dispatchEvent(new Event('finsight:islands-ready')); };
 });
 const store = createUiStore(initialState(localStorage));
+// PEEK (F8): body.unpeek must apply at load, before any lazy island, and follow the store.
+const applyPeek = () => document.body?.classList.toggle('unpeek', !store.getState().peek);
+applyPeek(); store.subscribe(applyPeek);
 window.FinSight = { store, legacyState: createStateBridge(store), auth: createAuth(window),
   setLastPrice: (symbol, value) => setLastPrice(store, symbol, value), contract: 1, bus: createBus(), islandsReady, markIslandsReady: () => markIslandsReady() };

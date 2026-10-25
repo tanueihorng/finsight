@@ -50,7 +50,6 @@ const moneySigned = (c, n, d = 2) => (n == null || Number.isNaN(n)) ? '—' : (n
 
 // Reads always use the current store snapshot; top-level writes notify React.
 const state = window.FinSight.legacyState;
-let accountsCache = [];
 
 // ===========================================================================
 //  COMMAND BAR
@@ -109,51 +108,12 @@ function renderPortfolio(data) {
 // ---- customizable summary cards --------------------------------------------
 // Summary cards are a React island (web/src/features/summary, PILOT-2).
 // ---- PEEK / UNPEEK: blur personal figures, keep public market data ----------
-// Purely visual (CSS on body.unpeek) so screen-sharing is safe; nothing is removed from the page.
-
-function applyPeek() {
-  document.body.classList.toggle('unpeek', !state.peek);
-  const b = $('#peek-btn');
-  if (b) { b.textContent = !state.peek ? '◌ PEEK' : '◉ UNPEEK'; b.classList.toggle('active', !state.peek); }
-}
-$('#peek-btn').addEventListener('click', () => {
-  state.peek = !state.peek;
-  try { localStorage.setItem('finsight-unpeek', !state.peek ? '1' : '0'); } catch {}
-  applyPeek();
-});
-applyPeek();
+// Peek is a React island (F8); bootstrap applies body.unpeek from the store.
 
 // ---- appearance: switchable theme + font (system fonts only, no downloads) ----
-const THEMES = [
-  { id: 'violet',   label: 'Violet',   accent: '#a78bfa' },
-  { id: 'amber',    label: 'Amber',    accent: '#ff9e16' },
-  { id: 'teal',     label: 'Teal',     accent: '#2dd4bf' },
-  { id: 'phosphor', label: 'Phosphor', accent: '#4ade80' },
-];
-const FONTS = [
-  { id: 'mono', label: 'Mono' },
-  { id: 'sans', label: 'Sans' },
-  { id: 'slab', label: 'Serif' },
-];
-let curTheme = localStorage.getItem('finsight-theme') || 'violet';
-let curFont  = localStorage.getItem('finsight-font')  || 'mono';
-function applyTheme() { document.documentElement.dataset.theme = curTheme; document.documentElement.dataset.font = curFont; }
-function setTheme(id) {
-  curTheme = id; localStorage.setItem('finsight-theme', id); applyTheme();
-  renderAppearance(); allCharts().forEach((c) => c.render()); // repaint canvas charts with the new colours
-}
-function setFont(id) { curFont = id; localStorage.setItem('finsight-font', id); applyTheme(); renderAppearance(); }
-function renderAppearance() {
-  const tl = $('#theme-list'); if (tl) tl.innerHTML = THEMES.map((t) =>
-    `<button class="swatch ${t.id === curTheme ? 'on' : ''}" data-theme="${t.id}"><span class="dot" style="background:${t.accent}"></span>${t.label}</button>`).join('');
-  const fl = $('#font-list'); if (fl) fl.innerHTML = FONTS.map((f) =>
-    `<button class="font-btn ${f.id === curFont ? 'on' : ''}" data-font="${f.id}">${f.label}</button>`).join('');
-}
-$('#theme-list')?.addEventListener('click', (e) => { const b = e.target.closest('[data-theme]'); if (b) setTheme(b.dataset.theme); });
-$('#font-list')?.addEventListener('click', (e) => { const b = e.target.closest('[data-font]'); if (b) setFont(b.dataset.font); });
-applyTheme(); // also re-assert on script load (head script already set it pre-paint)
+// Theme and font are the appearance island (F8); the head script applies them pre-paint.
 
-$('#cards-btn').addEventListener('click', () => { renderAppearance(); renderPanelsEditor(); $('#cards-modal').classList.remove('hidden'); });
+$('#cards-btn').addEventListener('click', () => { renderPanelsEditor(); $('#cards-modal').classList.remove('hidden'); });
 $('#cards-close').addEventListener('click', () => $('#cards-modal').classList.add('hidden'));
 $('#cards-done').addEventListener('click', () => $('#cards-modal').classList.add('hidden'));
 $('#cards-modal').addEventListener('click', (e) => { if (e.target.id === 'cards-modal') $('#cards-modal').classList.add('hidden'); });
@@ -254,38 +214,7 @@ function applyLayout() {
 $('#layout-reset').addEventListener('click', () => { localStorage.removeItem('finsight-layout'); location.reload(); });
 
 // ---- profile + first-launch setup wizard -----------------------------------
-let profile = (() => { try { return JSON.parse(localStorage.getItem('finsight-profile')) || {}; } catch { return {}; } })();
-function saveProfile() { localStorage.setItem('finsight-profile', JSON.stringify(profile)); }
-function applyProfileName() { $('#profile-name').textContent = profile.name ? profile.name.split(' ')[0] : 'Profile'; }
-function openSetup() {
-  $('#setup-name').value = profile.name || '';
-  $('#setup-base').value = state.base;
-  $('#setup-modal').classList.remove('hidden');
-  $('#setup-name').focus();
-}
-function commitSetup() {
-  profile.name = $('#setup-name').value.trim();
-  profile.base = $('#setup-base').value;
-  profile.setupDone = true;
-  saveProfile();
-  if (profile.base && profile.base !== state.base) {
-    state.base = profile.base; localStorage.setItem('finsight-base', state.base); $('#base-ccy').value = state.base;
-    loadPortfolio();
-  }
-  applyProfileName();
-}
-$('#profile-btn').addEventListener('click', openSetup);
-$('#setup-skip').addEventListener('click', () => { profile.setupDone = true; saveProfile(); $('#setup-modal').classList.add('hidden'); });
-$('#setup-save').addEventListener('click', () => { commitSetup(); $('#setup-modal').classList.add('hidden'); });
-document.querySelector('.setup-choices').addEventListener('click', (e) => {
-  const c = e.target.closest('.setup-choice'); if (!c) return;
-  commitSetup();
-  $('#setup-modal').classList.add('hidden');
-  const a = c.dataset.action;
-  if (a === 'import') state.importOpen = true; // the D4 island opens the import modal
-  else if (a === 'manual') state.addFormOpen = true; // the D2 island opens and focuses the form
-  setStatus(profile.name ? `Welcome, ${profile.name}.` : 'Terminal ready.', 'ok');
-});
+// Profile and the setup wizard are React islands (F8, web/src/features/topbar).
 
 // ---- POSITIONS TABLE: React island (D1, web/src/features/positions) ----------
 // lastTableData feeds the chart watch list (chartWatchItems) until X1.
@@ -371,6 +300,7 @@ const chartGrid = window.ChartGrid ? new ChartGrid({
 // null until the island mounts; allCharts() reads it by its bare name.
 window.detailChart = null;
 window.FinSightChartHooks = {
+  repaint() { allCharts().forEach((c) => c.render()); },
   attached(chart) { setupChartHost(chart); if (chartGrid) chartGrid.attach(chart); },
   loaded() { if (chartGrid) chartGrid.syncSymbols(); },
   trades(chart, symbol) { return loadChartTrades(chart, symbol); },
@@ -435,17 +365,6 @@ function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => (
 // (= + - @) the same way the journal CSV export does (lib/journal.js toCsv).
 const csvCell = (v) => { if (typeof v === 'number') return String(v); const s = v == null ? '' : String(v); return /[",\n]/.test(s) || /^[=+\-@]/.test(s) ? '"' + s.replace(/"/g, '""').replace(/^([=+\-@])/, "'$1") + '"' : s; };
 
-// base-currency selector
-function initBaseSelector() {
-  const sel = $('#base-ccy');
-  sel.value = state.base;
-  sel.addEventListener('change', () => {
-    state.base = sel.value.toUpperCase();
-    localStorage.setItem('finsight-base', state.base);
-    setStatus(`Base currency → ${state.base}. Converting…`, 'ok');
-    loadPortfolio();
-  });
-}
 
 // ===========================================================================
 //  ACCOUNTS (multiple portfolios)
@@ -454,89 +373,27 @@ function blockIfAll() {
   if (state.account === 'ALL') { setStatus('Switch from "All Accounts" to a specific account to add or trade.', 'err'); return true; }
   return false;
 }
-async function loadAccounts(selectId) {
+// Startup account resolution stays here until X1: every query waits for
+// accountReady, and boot needs the account before the first portfolio load.
+// The selector and MANAGE ACCOUNTS are React islands (F8).
+async function loadAccounts() {
   try {
     const d = await api('/api/accounts');
-    accountsCache = d.accounts || [];
-    if (selectId) state.account = selectId;
-    const exists = (id) => id === 'ALL' || accountsCache.some((a) => a.id === id);
+    const accounts = d.accounts || [];
+    const exists = (id) => id === 'ALL' || accounts.some((a) => a.id === id);
     if (!exists(state.account)) state.account = exists(localStorage.getItem('finsight-account')) ? localStorage.getItem('finsight-account') : d.activeId;
     localStorage.setItem('finsight-account', state.account);
-    renderAccountSelector();
+    state.accounts = accounts; // the selector and MANAGE ACCOUNTS render this
     state.accountReady = true;
   } catch {}
 }
-function renderAccountSelector() {
-  const sel = $('#account-sel');
-  if (!sel) return;
-  sel.innerHTML = ['<option value="ALL">All Accounts</option>']
-    .concat(accountsCache.map((a) => `<option value="${esc(a.id)}">${esc(a.name)}${a.count ? ` (${a.count})` : ''}</option>`))
-    .concat(['<option value="__new">＋ New account…</option>', '<option value="__manage">⚙ Manage…</option>'])
-    .join('');
-  sel.value = state.account;
-}
-$('#account-sel').addEventListener('change', async () => {
-  const v = $('#account-sel').value;
-  if (v === '__new') { $('#account-sel').value = state.account; return newAccountPrompt(); }
-  if (v === '__manage') { $('#account-sel').value = state.account; renderAccountsList(); return $('#accounts-modal').classList.remove('hidden'); }
-  state.account = v; localStorage.setItem('finsight-account', v);
-  await loadPortfolio();
-});
-async function newAccountPrompt() {
-  const name = (prompt('New account name (e.g. Crypto, SGX, IBKR):') || '').trim();
-  if (!name) return;
-  try {
-    const d = await api('/api/accounts/add', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
-    accountsCache = d.accounts; state.account = d.newId; localStorage.setItem('finsight-account', d.newId);
-    renderAccountSelector(); await loadPortfolio(); setStatus(`Account "${name}" created.`, 'ok');
-  } catch (e) { setStatus('Create failed: ' + e.message, 'err'); }
-}
-function setAccountsStatus(m, k) { const el = $('#accounts-status'); el.textContent = m; el.className = 'cmd-status ' + (k || ''); }
-function renderAccountsList() {
-  $('#accounts-list').innerHTML = accountsCache.map((a) => `<div class="card-edit-row">
-    <label>${esc(a.name)} <span class="muted small">${a.type ? esc(a.type) + ' · ' : ''}${a.count} holdings</span></label>
-    <span class="ce-move"><button class="acct-rename" data-id="${esc(a.id)}">Rename</button><button class="acct-del" data-id="${esc(a.id)}">Delete</button></span>
-  </div>`).join('');
-}
-$('#accounts-close').addEventListener('click', () => $('#accounts-modal').classList.add('hidden'));
-$('#accounts-done').addEventListener('click', () => $('#accounts-modal').classList.add('hidden'));
-$('#accounts-modal').addEventListener('click', (e) => { if (e.target.id === 'accounts-modal') $('#accounts-modal').classList.add('hidden'); });
-$('#account-add-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const name = $('#account-new-name').value.trim(); if (!name) return;
-  try {
-    const d = await api('/api/accounts/add', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, type: $('#account-new-type').value.trim() }) });
-    accountsCache = d.accounts; $('#account-new-name').value = ''; $('#account-new-type').value = '';
-    renderAccountsList(); renderAccountSelector(); setAccountsStatus(`Added "${name}".`, 'ok');
-  } catch (err) { setAccountsStatus(err.message, 'err'); }
-});
-$('#accounts-list').addEventListener('click', async (e) => {
-  const ren = e.target.closest('.acct-rename'), del = e.target.closest('.acct-del');
-  if (ren) {
-    const a = accountsCache.find((x) => x.id === ren.dataset.id);
-    const name = prompt('Rename account:', a ? a.name : ''); if (name == null) return;
-    try { const d = await api('/api/accounts/rename', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: ren.dataset.id, name }) }); accountsCache = d.accounts; renderAccountsList(); renderAccountSelector(); }
-    catch (err) { setAccountsStatus(err.message, 'err'); }
-  } else if (del) {
-    const a = accountsCache.find((x) => x.id === del.dataset.id);
-    if (!confirm(`Delete account "${a ? a.name : ''}" and all its holdings?`)) return;
-    try {
-      const d = await api('/api/accounts/remove', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: del.dataset.id }) });
-      accountsCache = d.accounts;
-      if (state.account === del.dataset.id) { state.account = d.activeId; localStorage.setItem('finsight-account', state.account); }
-      renderAccountsList(); renderAccountSelector(); await afterWrite('account-remove');
-    } catch (err) { setAccountsStatus(err.message, 'err'); }
-  }
-});
 
 async function boot() {
-  initBaseSelector();
   initDragLayout();
   applyLayout();
   applyPanels();
   await loadAccounts();
-  applyProfileName();
-  if (!profile.setupDone) openSetup(); // first-launch wizard
+  // the setup island opens the first-launch wizard once accountReady is set (F8)
   await loadPortfolio();
   setFooter(`READY · base ${state.base} · live data refreshing every 15s`);
   startPolling();

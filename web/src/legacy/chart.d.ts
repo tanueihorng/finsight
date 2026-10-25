@@ -20,6 +20,7 @@ export interface ChartHooks {
   loaded(): void;
   trades(chart: PriceChartInstance, symbol: string): Promise<void>;
   detached(): void;
+  repaint(): void; // re-read theme colours (F8 appearance)
 }
 declare global {
   interface Window {

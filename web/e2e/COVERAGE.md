@@ -52,6 +52,11 @@ Card = the migration card(s) that must keep the row green (`docs/frontend-migrat
 | Command bar (F7) | Q, bare symbol, NEWS [sym], NEWS alone (market news, selection kept), MKT | `F7` › Q, bare symbols… | F7, A2, E1 | pass |
 | Command bar (F7) | WATCH/UNWATCH, ALERT below, WHT, TRADES, CASH, UNDO | `F7` › WATCH/UNWATCH… | F7, B1, B2, D3, D4 | pass |
 | Footer (F7) | ready line and FX coverage note | `F7` › the footer… | F7, C1 | pass |
+| Topbar (F8) | account options and counts, New account… creates and selects, cancel keeps, selection persists | `F8` › account selector… | F8 | pass |
+| Topbar (F8) | MANAGE ACCOUNTS: add with type, rename, delete active falls back, backdrop/DONE close | `F8` › manage accounts… | F8 | pass |
+| Topbar (F8) | base currency status, conversion, persistence | `F8` › base currency… | F8, C1 | pass |
+| Topbar (F8) | first-launch wizard, save name + base, reopen from Profile, choice status, skip | `F8` › profile… | F8, D2, D4 | pass |
+| Topbar (F8) | PEEK/UNPEEK body class + persistence; theme and font swatches persist, chart repaints | `F8` › peek… | F8, E2 | pass |
 | Trades | ADD via command bar, UNDO restores | `baseline/add-sell` | F7, D3 | pass |
 | Trades | SELL with a price (realized P/L), SELL at market | `baseline/trades` | F7, D1 | pass |
 | Trades | row S button prompts for quantity and price | `baseline/trades` | D1 | pass |

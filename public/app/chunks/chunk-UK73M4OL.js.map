@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../../../web/src/features/topbar/profile.ts"],
+  "sourcesContent": ["import { createStore } from 'zustand/vanilla';\n\n// Profile + setup state (F8), saved under the legacy key finsight-profile.\nexport interface Profile { name?: string; base?: string; setupDone?: boolean }\nconst KEY = 'finsight-profile';\nexport function parseProfile(raw: string | null): Profile {\n  try { return JSON.parse(raw || 'null') || {}; } catch { return {}; }\n}\nexport const firstName = (p: Profile) => (p.name ? p.name.split(' ')[0]! : 'Profile');\nexport const profile = createStore<Profile>()(() => { try { return parseProfile(localStorage.getItem(KEY)); } catch { return {}; } });\nexport function saveProfile(next: Profile) {\n  profile.setState(next, true);\n  try { localStorage.setItem(KEY, JSON.stringify(next)); } catch { /* storage blocked */ }\n}\n"],
+  "mappings": "wCAIA,IAAMA,EAAM,mBACL,SAASC,EAAaC,EAA6B,CACxD,GAAI,CAAE,OAAO,KAAK,MAAMA,GAAO,MAAM,GAAK,CAAC,CAAG,MAAQ,CAAE,MAAO,CAAC,CAAG,CACrE,CACO,IAAMC,EAAaC,GAAgBA,EAAE,KAAOA,EAAE,KAAK,MAAM,GAAG,EAAE,CAAC,EAAK,UAC9DC,EAAUC,EAAqB,EAAE,IAAM,CAAE,GAAI,CAAE,OAAOL,EAAa,aAAa,QAAQD,CAAG,CAAC,CAAG,MAAQ,CAAE,MAAO,CAAC,CAAG,CAAE,CAAC,EAC7H,SAASO,EAAYC,EAAe,CACzCH,EAAQ,SAASG,EAAM,EAAI,EAC3B,GAAI,CAAE,aAAa,QAAQR,EAAK,KAAK,UAAUQ,CAAI,CAAC,CAAG,MAAQ,CAAwB,CACzF",
+  "names": ["KEY", "parseProfile", "raw", "firstName", "p", "profile", "createStore", "saveProfile", "next"]
+}

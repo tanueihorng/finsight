@@ -112,9 +112,11 @@ test('expand and the 2-chart grid move the chart out and back; a theme change ke
   await page.evaluate(() => detailChart.onGrid({ n: 1 }));
   await expect(page.locator('.pc-grid')).toHaveCount(0);
   await expect(page.locator('#detail-body #detail-chart-host')).toHaveCount(1);
-  await page.evaluate(() => (window as any).setTheme('teal')); // legacy-any: appearance (F8)
+  await page.click('#cards-btn'); // theme swatches live in ⚙ Layout (F8 moved setTheme into the appearance island)
+  await page.click('#theme-list [data-theme="teal"]');
   await expect(page.locator('#detail-body canvas').first()).toBeAttached();
-  await page.evaluate(() => (window as any).setTheme('violet')); // legacy-any
+  await page.click('#theme-list [data-theme="violet"]');
+  await page.click('#cards-done');
 });
 
 test('the 30 s refresh re-reads the quote but not daily history', async ({ page }) => {
