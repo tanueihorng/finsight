@@ -128,7 +128,6 @@ test('2. base SGD→USD→SGD with USD held: no SGD amount is labelled in USD, a
 
 // ---------------------------------------------------------------- 3 lock
 test('3a. locked: the lock screen covers the whole viewport even over a maximised chart', async ({ page }) => {
-  test.fail(true, 'AUTHVAL-001 F3 (pre-existing in legacy c1f1516): chart.js re-parents a maximised chart to <body> at z-index 1000, above the lock (500). Remove this line when fixed.');
   await seeded(page);
   await page.locator('#detail-panel [title^="Expand chart"]').first().click();
   await expect(page.locator('.chart-max')).toBeVisible();
@@ -139,6 +138,37 @@ test('3a. locked: the lock screen covers the whole viewport even over a maximise
     const top = await page.evaluate(([x, y]) => { const el = document.elementFromPoint(x!, y!); return el?.closest('#lock-screen') ? 'lock' : `${el?.tagName}.${el?.className}`; }, [x, y]);
     expect(top, `topmost element at ${x},${y}`).toBe('lock');
   }
+});
+
+test('3g. a maximised chart and a 2-chart grid are hidden while locked and come back working after unlock', async ({ page }) => {
+  await seeded(page);
+  const max = page.locator('.chart-max');
+  await page.locator('#detail-panel [title^="Expand chart"]').first().click();
+  await expect(max).toBeVisible();
+  await lockBySessionExpiry(page); // the 🔒 button is under the expanded chart
+  await expect(max).toBeHidden();
+  await expect(page.locator('.chart-max canvas').first()).toBeHidden();
+  await unlockWithPin(page);
+  // Still maximised, redrawn at full size, and Esc restores it into the detail panel.
+  await expect(max).toBeVisible();
+  await expect.poll(() => max.evaluate((el) => el.getBoundingClientRect().width)).toBeGreaterThan(1000);
+  await expect.poll(() => page.evaluate(() => { const c = document.querySelector('.chart-max canvas') as HTMLCanvasElement | null; return c ? c.width : 0; })).toBeGreaterThan(1000);
+  await page.keyboard.press('Escape');
+  await expect(max).toHaveCount(0);
+  await expect(page.locator('#detail-panel canvas').first()).toBeVisible();
+
+  await page.evaluate(() => (window as any).detailChart.onGrid({ n: 2 })); // legacy-any: chart.js global
+  const grid = page.locator('.pc-grid');
+  await expect(grid).toBeVisible();
+  await lockBySessionExpiry(page);
+  await expect(grid).toBeHidden();
+  const vp = page.viewportSize()!;
+  expect(await page.evaluate(([x, y]) => !!document.elementFromPoint(x!, y!)?.closest('#lock-screen'), [vp.width / 2, vp.height / 2])).toBe(true);
+  await unlockWithPin(page);
+  await expect(grid).toBeVisible();
+  await expect(grid.locator('.pc-gslot')).toHaveCount(2);
+  await page.evaluate(() => (window as any).detailChart.onGrid({ n: 1 }));
+  await expect(grid).toHaveCount(0);
 });
 
 test('3b. locked: the app behind the lock is hidden, not just covered (positions, summary, Kestrel dock)', async ({ page }) => {
