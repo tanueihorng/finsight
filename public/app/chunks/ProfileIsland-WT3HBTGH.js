@@ -1,2 +1,0 @@
-import{a as i,b as n}from"./chunk-UK73M4OL.js";import{b as r}from"./chunk-SCNVJ2GP.js";import{b as e}from"./chunk-JRCUWYJH.js";import{b as o}from"./chunk-FY3BTKY4.js";var t=o(e(),1);function s(){let p=r(n);return(0,t.jsxs)("button",{id:"profile-btn",className:"topbar-btn",title:"Your profile & setup",onClick:()=>window.FinSight.store.setState({setupOpen:!0}),children:["\u25D0 ",(0,t.jsx)("span",{id:"profile-name",children:i(p)})]})}export{s as default};
-//# sourceMappingURL=ProfileIsland-WT3HBTGH.js.map

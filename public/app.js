@@ -429,21 +429,18 @@ document.addEventListener('visibilitychange', () => {
 // ===========================================================================
 //  PIN LOCK
 // ===========================================================================
-let booted = false, lockMode = 'enter';
+// Startup and lock orchestration stay here until X1 (they drive boot and
+// polling). The lock screen's form and the 🔒 button are React islands (F9),
+// which render store.lock; unlocking goes through FinSight.auth.
+let booted = false;
 function showLock(mode) {
   const wasLocked = document.body.classList.contains('locked');
-  lockMode = mode;
   document.body.classList.add('locked');
   stopPolling(); // no background 401s while locked
   window.FinSight.auth.lock();
-  $('#lock-title').textContent = mode === 'create' ? 'Create a PIN (4–12 digits)' : 'Enter your PIN';
-  $('#lock-pin2').classList.toggle('hidden', mode !== 'create');
-  $('#lock-go').textContent = mode === 'create' ? 'SET PIN' : 'UNLOCK';
-  // Only reset the field on a fresh lock — a re-entrant 401 mustn't wipe a PIN being typed.
-  if (!wasLocked) {
-    $('#lock-pin').value = ''; $('#lock-pin2').value = ''; $('#lock-msg').textContent = '';
-    setTimeout(() => $('#lock-pin').focus(), 60);
-  }
+  // Only a fresh lock clears the fields: a re-entrant 401 mustn't wipe a PIN being typed.
+  const l = state.lock;
+  state.lock = { mode, msg: wasLocked ? l.msg : '', fresh: wasLocked ? l.fresh : l.fresh + 1 };
 }
 function showApp() {
   document.body.classList.remove('locked');
@@ -453,24 +450,6 @@ function showApp() {
 }
 window.addEventListener('finsight:locked', () => { if (!document.body.classList.contains('locked')) showLock('enter'); });
 window.addEventListener('finsight:unlocked', () => { if (document.body.classList.contains('locked')) showApp(); });
-function lockMsg(m) { $('#lock-msg').textContent = m || ''; }
-async function submitPin() {
-  const pin = $('#lock-pin').value.trim();
-  if (!/^\d{4,12}$/.test(pin)) return lockMsg('PIN must be 4–12 digits');
-  try {
-    if (lockMode === 'create') {
-      if (pin !== $('#lock-pin2').value.trim()) { lockMsg('PINs do not match'); return; }
-      await api('/api/auth/setup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin }) });
-    } else {
-      await api('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin }) });
-    }
-    showApp();
-  } catch (e) { lockMsg(e.message); $('#lock-pin').value = ''; $('#lock-pin').focus(); }
-}
-$('#lock-go').addEventListener('click', submitPin);
-$('#lock-pin').addEventListener('keydown', (e) => { if (e.key === 'Enter') { if (lockMode === 'create') $('#lock-pin2').focus(); else submitPin(); } });
-$('#lock-pin2').addEventListener('keydown', (e) => { if (e.key === 'Enter') submitPin(); });
-$('#lock-btn').addEventListener('click', async () => { try { await api('/api/auth/logout', { method: 'POST' }); } catch {} showLock('enter'); });
 
 // Server unreachable (not started, or stopped): say so instead of offering to
 // "create a PIN", and keep retrying so the app comes back by itself.
@@ -478,9 +457,7 @@ let offlineTimer = null;
 function showOffline() {
   document.body.classList.add('locked');
   stopPolling();
-  $('#lock-title').textContent = "Can't reach the FinSight server";
-  $('#lock-pin').classList.add('hidden'); $('#lock-pin2').classList.add('hidden'); $('#lock-go').classList.add('hidden');
-  lockMsg('Start it with  node server.js  (or start.command). Retrying…');
+  state.lock = { ...state.lock, mode: 'offline', msg: 'Start it with  node server.js  (or start.command). Retrying…' };
   clearTimeout(offlineTimer);
   offlineTimer = setTimeout(checkAuth, 5000);
 }
@@ -491,9 +468,8 @@ async function checkAuth() {
     if (!r.ok) throw new Error();
     st = await r.json();
   } catch { return showOffline(); }
-  $('#lock-pin').classList.remove('hidden'); $('#lock-go').classList.remove('hidden');
   if (st.authed) showApp();
-  else { lockMsg(''); showLock(st.pinSet ? 'enter' : 'create'); }
+  else { state.lock = { ...state.lock, msg: '' }; showLock(st.pinSet ? 'enter' : 'create'); }
 }
 checkAuth();
 // Installable app + instant shell (static files only — see sw.js).

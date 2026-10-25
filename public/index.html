@@ -21,11 +21,7 @@ try { var d = document.documentElement;
   <div id="lock-screen" class="lock">
     <div class="lock-box">
       <div class="lock-logo"><img class="logo-img lock-logo-img" src="/icon.png" alt="" aria-hidden="true" /> FINSIGHT</div>
-      <div id="lock-title" class="lock-title">Enter your PIN</div>
-      <input id="lock-pin" class="lock-input" type="password" inputmode="numeric" autocomplete="off" maxlength="12" placeholder="● ● ● ●" />
-      <input id="lock-pin2" class="lock-input hidden" type="password" inputmode="numeric" autocomplete="off" maxlength="12" placeholder="Confirm PIN" />
-      <button id="lock-go" class="lock-btn">UNLOCK</button>
-      <div id="lock-msg" class="lock-msg"></div>
+      <div data-island="lock" style="display:contents"></div>
       <div class="lock-hint muted small">Locked behind your PIN. Data stays on this computer only.</div>
     </div>
   </div>
@@ -43,7 +39,7 @@ try { var d = document.documentElement;
       <label class="base-sel" title="Base currency — your whole portfolio is converted into this. You deposit SGD." data-island="base"></label>
       <span id="market-state" class="pill">MKT</span>
       <span id="clock" class="clock" data-island="clock">--:--:--</span>
-      <button id="lock-btn" class="topbar-btn" title="Lock now">🔒</button>
+      <span data-island="lock-button" style="display:contents"></span>
     </div>
   </header>
 

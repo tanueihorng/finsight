@@ -1,2 +1,0 @@
-import{b as s}from"./chunk-SCNVJ2GP.js";import{b as r}from"./chunk-JRCUWYJH.js";import{b as i}from"./chunk-FY3BTKY4.js";var n=i(r(),1);function d(){let t=s(window.FinSight.store,o=>o.status);return(0,n.jsx)("div",{id:"cmd-status",className:"cmd-status "+t.kind,children:t.msg})}function a(){let t=s(window.FinSight.store,o=>o.footer);return(0,n.jsx)("span",{id:"footer-msg",children:t})}export{d as a,a as b};
-//# sourceMappingURL=chunk-C4CZJH2C.js.map

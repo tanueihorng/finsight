@@ -57,6 +57,10 @@ Card = the migration card(s) that must keep the row green (`docs/frontend-migrat
 | Topbar (F8) | base currency status, conversion, persistence | `F8` › base currency… | F8, C1 | pass |
 | Topbar (F8) | first-launch wizard, save name + base, reopen from Profile, choice status, skip | `F8` › profile… | F8, D2, D4 | pass |
 | Topbar (F8) | PEEK/UNPEEK body class + persistence; theme and font swatches persist, chart repaints | `F8` › peek… | F8, E2 | pass |
+| Lock (F9) | enter mode: format check, server error text (e.g. too many attempts), field cleared + refocused, Enter unlocks | `F9` › enter mode… | F9 | pass |
+| Lock (F9) | create mode: second field, Enter moves to it, mismatch, setup unlocks | `F9` › create mode… | F9 | pass |
+| Lock (F9) | 🔒 logs out and locks; unlock resumes the app | `F9` › 🔒 locks… | F9, F3 | pass |
+| Lock (F9) | server unreachable: offline message, no PIN field, recovers by itself | `F9` › server unreachable… | F9 | pass |
 | Trades | ADD via command bar, UNDO restores | `baseline/add-sell` | F7, D3 | pass |
 | Trades | SELL with a price (realized P/L), SELL at market | `baseline/trades` | F7, D1 | pass |
 | Trades | row S button prompts for quantity and price | `baseline/trades` | D1 | pass |
