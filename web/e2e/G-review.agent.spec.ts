@@ -60,20 +60,45 @@ test('the welcome keeps the suggestions it opened with; the context button follo
   await expect(page.locator('.agent-try .agent-chip').first()).toHaveText('What do my strategies say about NVDA right now?');
 });
 
-test('the status verb rotates every 3 s while a reply runs', async ({ page }) => {
-  // Deterministic verbs: each Math.random() call picks the next verb in the list.
+// The send reply and the turn.started event can each start a reply (whichever
+// comes first), and each picks a verb, so a second pick may follow within
+// moments. After that the verb holds, then changes every 3 s. Every shown verb
+// is recorded with its time (no sampling, no fixed waits).
+async function verbRotation(page: Page, lateTurnStarted: boolean) {
+  if (lateTurnStarted) {
+    // The order seen under load: the send reply first, turn.started 400 ms later.
+    await page.addInitScript(() => {
+      const add = EventSource.prototype.addEventListener;
+      EventSource.prototype.addEventListener = function (this: EventSource, type: string, fn: EventListener, o?: boolean | AddEventListenerOptions) {
+        return add.call(this, type, type === 'turn.started' ? (e: Event) => { setTimeout(() => fn(e), 400); } : fn, o);
+      } as typeof add;
+    });
+  }
+  // Deterministic verbs: each Math.random() call picks the next verb in the list, so every pick is a visible change.
   await page.addInitScript(() => { let n = 0; Math.random = () => ((n++ % 18) + 0.5) / 18; });
   await open(page);
+  type Shown = { t: number; v: string };
+  await page.evaluate(() => {
+    const w = window as unknown as { __verbs: Shown[] };
+    w.__verbs = [];
+    const record = () => { const v = document.querySelector('.agent-status .verb')?.textContent; if (v && v !== w.__verbs.at(-1)?.v) w.__verbs.push({ t: performance.now(), v }); };
+    new MutationObserver(record).observe(document.body, { subtree: true, childList: true, characterData: true });
+  });
+  const shown = () => page.evaluate(() => (window as unknown as { __verbs: Shown[] }).__verbs);
+  const rotations = (list: Shown[]) => {
+    const gaps = list.slice(1).map((x, i) => x.t - list[i]!.t);
+    return gaps[0] !== undefined && gaps[0] < 1000 ? gaps.slice(1) : gaps;
+  };
   await send(page, 'slow one please');
-  const verb = page.locator('.agent-status .verb');
-  await expect(verb).toBeVisible();
-  const before = await verb.innerText();
-  await page.waitForTimeout(1500);
-  await expect(verb).toHaveText(before);
-  await expect(verb).not.toHaveText(before, { timeout: 3000 });
+  await expect.poll(async () => rotations(await shown()).length, { timeout: 15_000 }).toBeGreaterThanOrEqual(2);
+  const list = await shown();
+  for (const gap of rotations(list)) expect(gap, JSON.stringify(list)).toBeGreaterThan(2400); // holds between rotations
+  for (const gap of rotations(list)) expect(gap, JSON.stringify(list)).toBeLessThan(4000); // and does rotate
   await page.locator('.agent-send:visible').click();
   await expect(lastTurn(page)).toContainText('Interrupted by you.');
-});
+}
+test('the status verb rotates every 3 s while a reply runs', async ({ page }) => { await verbRotation(page, false); });
+test('the status verb rotates every 3 s when turn.started arrives after the send reply', async ({ page }) => { await verbRotation(page, true); });
 
 test('a streaming reply updates with each delta while earlier answers stay rendered', async ({ page }) => {
   await open(page);
