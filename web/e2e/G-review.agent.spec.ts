@@ -1,7 +1,7 @@
 // Phase 3 review follow-ups for the Kestrel chat (KESTRELFIX-001). Each test
 // is legacy agent-panel.js (c1f1516) behaviour and passes against it: notices
-// on a fresh chat, the welcome's suggestions, Esc to stop, the offline retry
-// and a lock/unlock while the chat is open.
+// on a fresh chat, the welcome's suggestions, the rotating status verb, Esc to
+// stop, the offline retry and a lock/unlock while the chat is open.
 import { test, expect, type Page } from '@playwright/test';
 import { PIN, seeded } from './helpers';
 
@@ -58,6 +58,21 @@ test('the welcome keeps the suggestions it opened with; the context button follo
   // A new chat builds a new welcome from what is selected then.
   await page.locator('.agent-icon-btn[title="New chat (/new)"]:visible').click();
   await expect(page.locator('.agent-try .agent-chip').first()).toHaveText('What do my strategies say about NVDA right now?');
+});
+
+test('the status verb rotates every 3 s while a reply runs', async ({ page }) => {
+  // Deterministic verbs: each Math.random() call picks the next verb in the list.
+  await page.addInitScript(() => { let n = 0; Math.random = () => ((n++ % 18) + 0.5) / 18; });
+  await open(page);
+  await send(page, 'slow one please');
+  const verb = page.locator('.agent-status .verb');
+  await expect(verb).toBeVisible();
+  const before = await verb.innerText();
+  await page.waitForTimeout(1500);
+  await expect(verb).toHaveText(before);
+  await expect(verb).not.toHaveText(before, { timeout: 3000 });
+  await page.locator('.agent-send:visible').click();
+  await expect(lastTurn(page)).toContainText('Interrupted by you.');
 });
 
 test('a streaming reply updates with each delta while earlier answers stay rendered', async ({ page }) => {

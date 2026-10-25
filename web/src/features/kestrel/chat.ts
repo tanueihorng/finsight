@@ -43,8 +43,12 @@ function turn(id: string): Turn {
   return created;
 }
 function updateTurn(id: string, fn: (t: Turn) => Turn) { const t = fn(turn(id)); set({ turns: { ...get().turns, [id]: t } }); }
+let verbTimer: ReturnType<typeof setInterval> | undefined;
 export function setRunning(id: string | null) {
   set({ running: id, sending: false, status: id ? { verb: randomVerb(), start: Date.now(), chars: 0 } : get().status });
+  // Like legacy, a new verb every 3 s while a reply runs (it also replaces a tool's verb).
+  clearInterval(verbTimer);
+  if (id) verbTimer = setInterval(() => set({ status: { ...get().status, verb: randomVerb() } }), 3000);
 }
 function done(id: string) { ended.add(id); if (get().running === id) setRunning(null); scrollDown(); }
 
@@ -107,7 +111,7 @@ export function pageContext(): PageContext {
 export function showWelcome() { set({ view: 'welcome', items: [], turns: {}, welcome: suggestions(pageContext()) }); }
 function clearLog() { set({ view: 'log', items: [], turns: {} }); }
 export function newChat() {
-  closeStream(); set({ thread: null, running: null, sending: false }); ls.set(LS.thread, ''); showWelcome();
+  closeStream(); set({ thread: null }); setRunning(null); ls.set(LS.thread, ''); showWelcome();
 }
 function renderHistory(messages: Message[], citations: Citation[]) {
   const byTurn = new Map<string, Message[]>();
