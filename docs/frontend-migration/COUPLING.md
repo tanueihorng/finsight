@@ -20,16 +20,16 @@ Section ids (S0…S34) refer to Part B, table B1. Line ranges are at the baselin
 | S1, S2 formatting (`fmt`, `fmtBig`, `signClass`, `signStr`, `csym`, `money`, `moneyBig`, `moneySigned`) | 29–50 | **shared**; F5 ports them to `ui/format.ts` | legacy copies stay until X1 (17 sections use them) |
 | S2 globals `state`, `accountsCache` | 51–58 | F4 ✅ (`state` is now `window.FinSight.legacyState`, a Proxy over the store); F8 (`accountsCache`) | `state` is read by 15 sections **and by `agent-panel.js`**; the Proxy throws on unknown keys |
 | S3 CLOCK (`tick`) | 61–70 | **F6 ✅ migrated** (`features/clock`) | deleted from app.js |
-| S4 COMMAND BAR (`runCommand`, `setStatus`, `setFooter`) | 71–166 | **F7** | `setStatus` ← 8 sections, `setFooter` ← 3: keep both global (shell utilities) until X1 |
+| S4 COMMAND BAR (`runCommand`, `setStatus`, `setFooter`) | 71–166 | **F7 ✅** (`runCommand` → `features/command`; `setStatus`/`setFooter` now write the store) | `setStatus` ← 8 sections, `setFooter` ← 3: keep both global (shell utilities) until X1 |
 | S5 PORTFOLIO hub (`baseQS`, `loadPortfolio`, `renderPortfolio`, `sideSig`, `sideAt`, `SIDE_MAX_AGE`, `portfolioRequest`) | 167–218 | **shared hub**: PILOT-2 makes it the legacy refresher for `bus 'portfolio'`; each card removes its own line from `renderPortfolio()`; X1 deletes it | see A3 |
 | S6 FX RISK (`loadFxRisk`, `renderFxRisk`, `fxTools`, `fxPending`) | 219–359 | **C2** | writes `lastFxRisk` (read by the FX EXPOSURE card, C1) and calls `applyCards` |
 | S7 ECON CALENDAR (`loadCalendar`, `renderCalendar`) | 360–416 | **A3** | `card()` at line 417 sits here but belongs to C1 |
 | `card()` (S7 tail) + S8 summary cards (`CARD_DEFS`, `ALL_CARDS`, `DEFAULT_*`, `cardPrefs`, `saveCardPrefs`, `renderSummary`, `lastSummary`, `lastCash`, `lastFxRisk`) | 417–481 | **C1 / PILOT-2** | |
 | S9 PEEK + card editor (`unpeek`, `applyPeek`, `applyCards`, `renderCardsEditor`) | 482–508 | **C1** | `applyCards` ← S6, S10; reads `lastPositions` (S30) |
-| S10 appearance (`THEMES`, `FONTS`, `curTheme`, `curFont`, `applyTheme`, `setTheme`, `setFont`, `renderAppearance`) | 509–558 | **F8** | the ⚙ Layout modal also renders the cards editor (C1) and panels editor (F10); calls `loadDetail` to redraw the chart |
-| S11 panels show/hide (`PANELS`, `hiddenPanels`, `panelEl`, `applyPanels`, `renderPanelsEditor`) | 559–580 | **F10** | |
-| S12 drag layout (`PANEL_PIDS`, `dragInited`, `initDragLayout`, `dragAfter`, `saveLayout`, `applyLayout`) | 581–652 | **F10** | one-shot `dragInited`; hosts must exist in `index.html` at boot (§1.7) |
-| S13 profile + setup wizard (`profile`, `saveProfile`, `applyProfileName`, `openSetup`, `commitSetup`) | 653–686 | **F8** | `commitSetup` writes `state.base` and calls `loadPortfolio` |
+| S10 appearance (`THEMES`, `FONTS`, `curTheme`, `curFont`, `applyTheme`, `setTheme`, `setFont`, `renderAppearance`) | 509–558 | **F8 ✅** (appearance island; the ⚙ Layout frame stays with F10) | the ⚙ Layout modal also renders the cards editor (C1) and panels editor (F10); calls `loadDetail` to redraw the chart |
+| S11 panels show/hide (`PANELS`, `hiddenPanels`, `panelEl`, `applyPanels`, `renderPanelsEditor`) | 559–580 | **F10 ✅** | |
+| S12 drag layout (`PANEL_PIDS`, `dragInited`, `initDragLayout`, `dragAfter`, `saveLayout`, `applyLayout`) | 581–652 | **F10 ✅** (`features/layout/layout.ts`) | one-shot `dragInited`; hosts must exist in `index.html` at boot (§1.7) |
+| S13 profile + setup wizard (`profile`, `saveProfile`, `applyProfileName`, `openSetup`, `commitSetup`) | 653–686 | **F8 ✅** | `commitSetup` writes `state.base` and calls `loadPortfolio` |
 | `priceFlash()` (end of S13) | 687–693 | **D1** | its nested write now uses `FinSight.setLastPrice` (F4 ✅) |
 | S14 POSITIONS TABLE (`ASSET_CLASSES`, `lastFlash`, `lastTableData`, `posView`, `savePosView`, `assetClass`, `splitByAccount`, `accountName`, `groupKey`, `sortRows`, `posRowHtml`, `sumRows`, `renderPosFilter`, `renderPositionsTable`) | 694–868 | **D1** | `assetClass`, `splitByAccount` ← S31 (C3); `lastTableData` ← S19, S20 (E1/E2); row S/✕ actions sell/delete |
 | S15 UNDO + `setCashBalance` | 869–891 | **D3** | `doUndo` ← S4 (UNDO), S17 (ledger ↶); `setCashBalance` ← S4 (CASH) |
@@ -61,13 +61,13 @@ Section ids (S0…S34) refer to Part B, table B1. Line ranges are at the baselin
 | Global | Defined in | Read/written by | Migration contract |
 |---|---|---|---|
 | `state` (`selected`, `account`, `base`, `detailRange`, `lastPrices`) | app.js S2 | 15 app.js sections; **`agent-panel.js` `pageContext()` reads `selected`, `account`, `base`, `detailRange.interval`** | F4's Proxy keeps `state.x` working everywhere; G1 reads `FinSight.store` directly |
-| `detailChart` | app.js S19 | S20; **`agent-panel.js` reads `detailChart.cfg.strategy`** | E2 keeps `window.detailChart` (set from `ChartHost`) until G1 |
+| `detailChart` | app.js S19 | S20; **`agent-panel.js` reads `detailChart.cfg.strategy`** | E2 keeps `window.detailChart` (set from `ChartHost`); G ✅ reads it from `features/kestrel/Chat.tsx` `pageContext()` |
 | `window.__finAlerts` + event `finsight:alerts` | app.js S27 and `chart.js` (both set it) | the chart's alert bell ↔ the alerts panel | B2 keeps setting `window.__finAlerts` and dispatching `finsight:alerts` with `{alerts, from: 'app'}`, and listens for `from: 'chart'` |
 | `PriceChart` | `chart.js` | app.js S19 (`new PriceChart`) | E2 wraps it (`legacy/ChartHost.tsx`, typed by `legacy/chart.d.ts`) |
 | `ChartGrid` | `chartgrid.js` | app.js S20 | E2 |
 | `FinIndicators`, `FinStrategy`, `FinStrategies`, `FinJournal` | their files (UMD) | `chart.js` only | untouched; load order before `chart.js` stays |
-| `body.locked` class | app.js S34 | `agent-panel.js` (MutationObserver boots the chat after unlock) | F9 keeps toggling `body.locked` until G1 |
-| `finsight-agent-*` localStorage keys | `agent-panel.js` | itself | G3 keeps the keys |
+| `body.locked` class | app.js S34 | `agent-panel.js` (MutationObserver boots the chat after unlock) | G ✅: the Kestrel island boots on `finsight:unlocked` and checks `body.locked`; CSS still hides the drawer while locked |
+| `finsight-agent-*` localStorage keys | `agent-panel.js` | itself | G ✅ keeps the keys (`features/kestrel/labels.ts` `LS`) |
 
 ### A3. The `renderPortfolio()` hub: who removes what
 
@@ -186,158 +186,8 @@ Lanes are therefore **not** fully independent. Lane D is sequential, C3 waits fo
 
 ## Part B — generated inventory
 
+> X1 deleted `public/app.js`; Part A is the historical map of how it was taken apart.
+
 <!-- generated:start -->
-_Generated by `node scripts/coupling-inventory.mjs --write` from `public/app.js` (blob `a4d2454f95`, 737 lines). Do not edit by hand._
-
-### B1. Sections of app.js
-
-| # | Section | Lines | Top-level symbols |
-|---|---|---|---|
-| S0 | prelude (helpers, api, state) | 1–28 | `$`, `$$`, `netCheckPending`, `onNetError`, `api` |
-| S1 | formatting helpers | 29–43 | `fmt`, `fmtBig`, `signClass`, `signStr` |
-| S2 | currency formatting | 44–55 | `CCY_SYM`, `csym`, `money`, `moneyBig`, `moneySigned`, `state`, `accountsCache` |
-| S4 | COMMAND BAR | 56–151 | `setStatus`, `setFooter`, `runCommand` |
-| S5 | PORTFOLIO | 152–196 | `baseQS`, `dividendSig`, `portfolioRequest`, `loadPortfolio`, `afterWrite`, `renderPortfolio` |
-| S8 | customizable summary cards | 197–198 | — |
-| S9 | PEEK / UNPEEK: blur personal figures, keep public market data | 199–213 | `applyPeek` |
-| S10 | appearance: switchable theme + font (system fonts only, no downloads) | 214–249 | `THEMES`, `FONTS`, `curTheme`, `curFont`, `applyTheme`, `setTheme`, `setFont`, `renderAppearance` |
-| S11 | show / hide whole panels | 250–271 | `PANELS`, `hiddenPanels`, `panelEl`, `applyPanels`, `renderPanelsEditor` |
-| S12 | drag-to-rearrange panels | 272–343 | `PANEL_PIDS`, `dragInited`, `initDragLayout`, `dragAfter`, `saveLayout`, `applyLayout` |
-| S13 | profile + first-launch setup wizard | 344–377 | `profile`, `saveProfile`, `applyProfileName`, `openSetup`, `commitSetup` |
-| S:POSITIONS | POSITIONS TABLE: React island (D1, web/src/features/positions) | 378–382 | `lastTableData` |
-| S15 | UNDO + CASH | 383–401 | `doUndo`, `setCashBalance`, `openCashEditor` |
-| S17 | LEDGER | 402–409 | `openLedger` |
-| S18 | ADD FORM + SYMBOL SEARCH | 410–415 | — |
-| S19 | SECURITY DETAIL + CHART | 416–427 | `selectSymbol` |
-| S20 | chart host hooks: ledger trades, watchlist feed, multi-chart grid | 428–470 | `lastWatch`, `chartWatchItems`, `allCharts`, `pushChartWatch`, `loadChartTrades`, `setupChartHost`, `chartGrid` |
-| S21 | WORLD MARKETS | 471–475 | — |
-| S22 | WORLD BANK MACRO | 476–480 | — |
-| S25 | DIVIDENDS (income received, from broker imports) | 481–486 | `loadDividends` |
-| S26 | WATCHLIST | 487–492 | `loadWatchlist` |
-| S27 | PRICE ALERTS + NOTIFICATIONS | 493–501 | `loadAlerts`, `requestNotify` |
-| S28 | NEWS | 502–509 | `loadNews` |
-| S29 | CSV IMPORT / EXPORT | 510–517 | — |
-| S:PORTFOLIO | PORTFOLIO ANALYTICS: performance, net worth, allocation and heatmap are | 518–518 | — |
-| S:React | React islands (C3, web/src/features/analytics). | 519–522 | — |
-| S32 | UTIL + BOOT + POLLING | 523–543 | `esc`, `csvCell`, `initBaseSelector` |
-| S33 | ACCOUNTS (multiple portfolios) | 544–665 | `blockIfAll`, `loadAccounts`, `renderAccountSelector`, `newAccountPrompt`, `setAccountsStatus`, `renderAccountsList`, `boot`, `pollTimers`, `pollWanted`, `hiddenAt`, `startPolling`, `stopTimers`, `stopPolling` |
-| S34 | PIN LOCK | 666–737 | `booted`, `lockMode`, `showLock`, `showApp`, `lockMsg`, `submitPin`, `offlineTimer`, `showOffline`, `checkAuth` |
-
-### B2. Cross-section use (who calls into whom)
-
-Each row: the section on the left uses these symbols owned by another section. **Bold** = it also assigns to them (shared mutable state).
-
-| Section | Uses from other sections |
-|---|---|
-| S0 prelude (helpers, api, state) | S34: `checkAuth`, `showLock` |
-| S1 formatting helpers | — |
-| S2 currency formatting | S1: `fmt`, `fmtBig` |
-| S4 COMMAND BAR | S0: `$`, `api`<br>S1: `signStr`<br>S5: `afterWrite`, `baseQS`<br>S15: `doUndo`, `setCashBalance`<br>S17: `openLedger`<br>S19: `selectSymbol`<br>S27: `requestNotify`<br>S28: `loadNews`<br>S33: `blockIfAll` |
-| S5 PORTFOLIO | S0: `api`<br>S2: `state`<br>S4: `setFooter`<br>S:POSITIONS: **`lastTableData`**<br>S20: `pushChartWatch`<br>S33: `loadAccounts` |
-| S8 customizable summary cards | — |
-| S9 PEEK / UNPEEK: blur personal figures, keep public market data | S0: `$`<br>S2: **`state`** |
-| S10 appearance: switchable theme + font (system fonts only, no downloads) | S0: `$`<br>S11: `renderPanelsEditor`<br>S20: `allCharts` |
-| S11 show / hide whole panels | S0: `$` |
-| S12 drag-to-rearrange panels | S0: `$` |
-| S13 profile + first-launch setup wizard | S0: `$`<br>S2: **`state`**<br>S4: `setStatus`<br>S5: `loadPortfolio` |
-| S:POSITIONS POSITIONS TABLE: React island (D1, web/src/features/positions) | — |
-| S15 UNDO + CASH | S0: `$`<br>S2: **`state`** |
-| S17 LEDGER | S0: `$`<br>S2: **`state`** |
-| S18 ADD FORM + SYMBOL SEARCH | S0: `$`<br>S2: **`state`** |
-| S19 SECURITY DETAIL + CHART | S2: **`state`** |
-| S20 chart host hooks: ledger trades, watchlist feed, multi-chart grid | S0: `api`<br>S2: `state`<br>S:POSITIONS: `lastTableData`<br>S19: `selectSymbol` |
-| S21 WORLD MARKETS | — |
-| S22 WORLD BANK MACRO | — |
-| S25 DIVIDENDS (income received, from broker imports) | — |
-| S26 WATCHLIST | — |
-| S27 PRICE ALERTS + NOTIFICATIONS | — |
-| S28 NEWS | — |
-| S29 CSV IMPORT / EXPORT | S0: `$`<br>S2: **`state`** |
-| S:PORTFOLIO PORTFOLIO ANALYTICS: performance, net worth, allocation and heatmap are | — |
-| S:React React islands (C3, web/src/features/analytics). | — |
-| S32 UTIL + BOOT + POLLING | S0: `$`<br>S2: **`state`**<br>S4: `setStatus`<br>S5: `loadPortfolio` |
-| S33 ACCOUNTS (multiple portfolios) | S0: `$`, `api`<br>S2: **`accountsCache`**, **`state`**<br>S4: `setFooter`, `setStatus`<br>S5: `afterWrite`, `loadPortfolio`<br>S11: `applyPanels`<br>S12: `applyLayout`, `initDragLayout`<br>S13: `applyProfileName`, `openSetup`, `profile`<br>S32: `esc`, `initBaseSelector` |
-| S34 PIN LOCK | S0: `$`, `api`<br>S33: `boot`, `startPolling`, `stopPolling` |
-
-### B3. Callers of each section from outside it
-
-| Section | Its symbols used elsewhere → by |
-|---|---|
-| S0 prelude (helpers, api, state) | `$` → S4 S9 S10 S11 S12 S13 S15 S17 S18 S29 S32 S33 S34<br>`api` → S4 S5 S20 S33 S34 |
-| S1 formatting helpers | `fmt` → S2<br>`fmtBig` → S2<br>`signStr` → S4 |
-| S2 currency formatting | `accountsCache` → S33<br>`state` → S5 S9 S13 S15 S17 S18 S19 S20 S29 S32 S33 |
-| S4 COMMAND BAR | `setFooter` → S5 S33<br>`setStatus` → S13 S32 S33 |
-| S5 PORTFOLIO | `afterWrite` → S4 S33<br>`baseQS` → S4<br>`loadPortfolio` → S13 S32 S33 |
-| S8 customizable summary cards | — |
-| S9 PEEK / UNPEEK: blur personal figures, keep public market data | — |
-| S10 appearance: switchable theme + font (system fonts only, no downloads) | — |
-| S11 show / hide whole panels | `applyPanels` → S33<br>`renderPanelsEditor` → S10 |
-| S12 drag-to-rearrange panels | `applyLayout` → S33<br>`initDragLayout` → S33 |
-| S13 profile + first-launch setup wizard | `applyProfileName` → S33<br>`openSetup` → S33<br>`profile` → S33 |
-| S:POSITIONS POSITIONS TABLE: React island (D1, web/src/features/positions) | `lastTableData` → S5 S20 |
-| S15 UNDO + CASH | `doUndo` → S4<br>`setCashBalance` → S4 |
-| S17 LEDGER | `openLedger` → S4 |
-| S18 ADD FORM + SYMBOL SEARCH | — |
-| S19 SECURITY DETAIL + CHART | `selectSymbol` → S4 S20 |
-| S20 chart host hooks: ledger trades, watchlist feed, multi-chart grid | `allCharts` → S10<br>`pushChartWatch` → S5 |
-| S21 WORLD MARKETS | — |
-| S22 WORLD BANK MACRO | — |
-| S25 DIVIDENDS (income received, from broker imports) | — |
-| S26 WATCHLIST | — |
-| S27 PRICE ALERTS + NOTIFICATIONS | `requestNotify` → S4 |
-| S28 NEWS | `loadNews` → S4 |
-| S29 CSV IMPORT / EXPORT | — |
-| S:PORTFOLIO PORTFOLIO ANALYTICS: performance, net worth, allocation and heatmap are | — |
-| S:React React islands (C3, web/src/features/analytics). | — |
-| S32 UTIL + BOOT + POLLING | `esc` → S33<br>`initBaseSelector` → S33 |
-| S33 ACCOUNTS (multiple portfolios) | `blockIfAll` → S4<br>`boot` → S34<br>`loadAccounts` → S5<br>`startPolling` → S34<br>`stopPolling` → S34 |
-| S34 PIN LOCK | `checkAuth` → S0<br>`showLock` → S0 |
-
-### B4. DOM, API, timers, events, storage per section
-
-| Section | DOM ids | Endpoints | Timers | Events | localStorage |
-|---|---|---|---|---|---|
-| S0 | — | `/api/auth` | `setTimeout` | — | — |
-| S1 | — | — | — | — | — |
-| S2 | — | — | — | — | — |
-| S4 | `cmd`, `cmd-go`, `cmd-status`, `footer-msg` | `/api/alerts/add`, `/api/portfolio/buy`, `/api/portfolio/delete`, `/api/portfolio/sell`, `/api/settings/withholding`, `/api/watchlist/add`, `/api/watchlist/remove` | — | — | — |
-| S5 | — | `/api/invalidation`, `/api/portfolio` | — | — | — |
-| S8 | — | — | — | — | — |
-| S9 | `peek-btn` | — | — | — | `finsight-unpeek` |
-| S10 | `cards-btn`, `cards-close`, `cards-done`, `cards-modal`, `font-list`, `theme-list` | — | — | — | `finsight-font`, `finsight-theme` |
-| S11 | `panels-list` | — | — | — | `finsight-panels` |
-| S12 | `layout-reset` | — | — | — | `finsight-layout` |
-| S13 | `base-ccy`, `profile-btn`, `profile-name`, `setup-base`, `setup-modal`, `setup-name`, `setup-save`, `setup-skip` | — | — | — | `finsight-base`, `finsight-profile` |
-| S:POSITIONS | — | — | — | — | — |
-| S15 | `cash-btn`, `summary`, `undo-btn`, `wealth-cash-btn` | — | — | — | — |
-| S17 | `ledger-btn` | — | — | — | — |
-| S18 | `add-toggle` | — | — | — | — |
-| S19 | — | — | — | — | — |
-| S20 | — | `/api/chart-trades`, `/api/history` | — | — | — |
-| S21 | — | — | — | — | — |
-| S22 | — | — | — | — | — |
-| S25 | — | — | — | — | — |
-| S26 | — | — | — | — | — |
-| S27 | — | — | — | — | — |
-| S28 | — | — | — | — | — |
-| S29 | `export-btn`, `import-btn` | — | — | — | — |
-| S:PORTFOLIO | — | — | — | — | — |
-| S:React | — | — | — | — | — |
-| S32 | `base-ccy` | — | — | — | `finsight-base` |
-| S33 | `account-add-form`, `account-new-name`, `account-new-type`, `account-sel`, `accounts-close`, `accounts-done`, `accounts-list`, `accounts-modal`, `accounts-status` | `/api/accounts`, `/api/accounts/add`, `/api/accounts/remove`, `/api/accounts/rename` | `setInterval` | `visibilitychange` | `finsight-account` |
-| S34 | `lock-btn`, `lock-go`, `lock-msg`, `lock-pin`, `lock-pin2`, `lock-title` | `/api/auth/login`, `/api/auth/logout`, `/api/auth/setup`, `/api/auth/status` | `setTimeout` | `finsight:locked`, `finsight:unlocked` | — |
-
-### B5. Other legacy scripts
-
-Globals between files are the hidden coupling: app.js top-level `let`/`const` are shared by name across classic scripts.
-
-| File | app.js symbols it uses (owning section) | window.* it sets → used by app.js | other window.* it reads |
-|---|---|---|---|
-| `public/agent-panel.js` | `state` (S2) | — | — |
-| `public/chart.js` | — | `PriceChart` → —<br>`__finAlerts` → — | `FinIndicators`, `FinJournal`, `FinStrategies`, `FinStrategy` |
-| `public/chartgrid.js` | — | `ChartGrid` → S20 | `PriceChart` |
-| `public/journal.js` | — | `FinJournal` → — | — |
-| `public/strategy.js` | — | `FinStrategy` → — | — |
-| `public/strategies.js` | — | `FinStrategies` → — | — |
-| `public/indicators.js` | — | `FinIndicators` → — | — |
+_`public/app.js` was deleted in X1 (the page is one React app, `web/src/App.tsx`). The generated inventory of its sections and globals is in git history (last generated before commit X1)._
 <!-- generated:end -->

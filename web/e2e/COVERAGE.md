@@ -46,6 +46,32 @@ Card = the migration card(s) that must keep the row green (`docs/frontend-migrat
 | Detail (E) | removing the selected holding auto-selects the first; a sale reloads trade markers | `E` › removing the selected holding… | E1, E2, D1 | pass |
 | Chart (E) | expand and the 2-chart grid move the chart out and back into #detail-body; theme change repaints | `E` › expand and the 2-chart grid… | E2 | pass |
 | Detail (E) | 30 s refresh re-reads the quote, not daily history | `E` › the 30 s refresh… | E1 | pass |
+| Command bar (F7) | HELP/?, CLEAR, Enter and GO clear the input, blank ignored | `F7` › HELP and ?… | F7 | pass |
+| Command bar (F7) | usage error for every command that needs arguments | `F7` › usage errors… | F7 | pass |
+| Command bar (F7) | ADD with date, SELL at market, DEL, ERROR path, All Accounts blocks ADD/CASH | `F7` › ADD with a date… | F7, D1 | pass |
+| Command bar (F7) | Q, bare symbol, NEWS [sym], NEWS alone (market news, selection kept), MKT | `F7` › Q, bare symbols… | F7, A2, E1 | pass |
+| Command bar (F7) | WATCH/UNWATCH, ALERT below, WHT, TRADES, CASH, UNDO | `F7` › WATCH/UNWATCH… | F7, B1, B2, D3, D4 | pass |
+| Footer (F7) | ready line and FX coverage note | `F7` › the footer… | F7, C1 | pass |
+| Topbar (F8) | account options and counts, New account… creates and selects, cancel keeps, selection persists | `F8` › account selector… | F8 | pass |
+| Topbar (F8) | MANAGE ACCOUNTS: add with type, rename, delete active falls back, backdrop/DONE close | `F8` › manage accounts… | F8 | pass |
+| Topbar (F8) | base currency status, conversion, persistence | `F8` › base currency… | F8, C1 | pass |
+| Topbar (F8) | first-launch wizard, save name + base, reopen from Profile, choice status, skip | `F8` › profile… | F8, D2, D4 | pass |
+| Topbar (F8) | PEEK/UNPEEK body class + persistence; theme and font swatches persist, chart repaints | `F8` › peek… | F8, E2 | pass |
+| Lock (F9) | enter mode: format check, server error text (e.g. too many attempts), field cleared + refocused, Enter unlocks | `F9` › enter mode… | F9 | pass |
+| Lock (F9) | create mode: second field, Enter moves to it, mismatch, setup unlocks | `F9` › create mode… | F9 | pass |
+| Lock (F9) | 🔒 logs out and locks; unlock resumes the app | `F9` › 🔒 locks… | F9, F3 | pass |
+| Lock (F9) | server unreachable: offline message, no PIN field, recovers by itself | `F9` › server unreachable… | F9 | pass |
+| Layout (F10) | ⚙ Layout opens/closes (✕, backdrop, DONE); panels editor lists all 14 panels, off state, show/hide live; appearance + card editor in the same modal | `F10` › ⚙ Layout opens… | F10, F8, C1 | pass |
+| Layout (F10) | every panel tagged with a pid and one grip; drag saves finsight-layout; Reset order restores the default | `F10` › every panel gets a grip… | F10 | pass |
+| Kestrel (G) | welcome + suggestion chips follow the selection, page context on the message and ◉/○ toggle, model list, placeholder | `G.agent` › welcome… | G2 | pass |
+| Kestrel (G) | tool rows (name, args, result, time), citations (class + host), cost/meta; markdown rendered with script/HTML neutralised; failures shown | `G.agent` › tool rows… | G1 | pass |
+| Kestrel (G) | slash menu (SKILLS/COMMANDS, arrows, Tab/Enter pick), /model, /cost, /skills, /new | `G.agent` › slash menu… | G2 | pass |
+| Kestrel (G) | chats list open/delete; the open chat and drawer state survive reload | `G.agent` › chats list… | G1, G3 | pass |
+| Kestrel (G) | ⌘/, Esc close vs keep a draft, width presets/dblclick/arrow keys persist | `G.agent` › ⌘/ and Esc… | G3 | pass |
+| Kestrel (G) | dock: pid kestrel with grip, collapse persists across reload, height keys, pop out | `G.agent` › dock mode… | G3, F10 | pass |
+| Kestrel (G) | a turn failing before the send reply does not stick on ■ | `G.agent` › a turn that fails… | G1 | pass (intended fix; fails on legacy) |
+| Audit fixes (Phase 2 audit) | 6M↔1Y changes the chart context and header; account switch refreshes and clears chart markers (main + grid); late old-account markers rejected (A→B→A); watchlist add/remove refreshes the company calendar; cash-only account counted in All Accounts wealth | `phase2-regressions`, `phase2-accounts-regression` | E1, E2, B1, A3, F8 | pass |
+| One app (X1) | the page renders from App.tsx; every baseline and lane spec passes with app.js deleted; SW precaches the classic chart scripts (`/chart.js`) instead of the deleted `/app.js` | all; `baseline/upgrade.sw` | X1 | pass |
 | Trades | ADD via command bar, UNDO restores | `baseline/add-sell` | F7, D3 | pass |
 | Trades | SELL with a price (realized P/L), SELL at market | `baseline/trades` | F7, D1 | pass |
 | Trades | row S button prompts for quantity and price | `baseline/trades` | D1 | pass |

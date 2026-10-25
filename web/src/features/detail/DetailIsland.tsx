@@ -71,7 +71,7 @@ export default function DetailIsland() {
     const points = history.data!.points || [];
     const visibleFrom = dr.tf ? null : visibleStart(points, dr.range);
     return { symbol: selected, points, meta: mergeMeta(history.data!.meta, quoteAtLoad.current), ctx: { range: dr.range, interval: dr.interval, visibleFrom, fetchRange } };
-  }, [ready, history.data]); // deliberately: a new key always brings new history data
+  }, [ready, history.data, selected, dr.range, dr.interval, dr.tf, fetchRange]); // intended fix (Phase 2 audit): 6M/1Y share cached history but have different views
   const lastChart = useRef<ChartData | null>(null), lastMeta = useRef<Partial<QuotedQuote> | null>(null), lastTf = useRef<boolean | undefined>(undefined);
   if (loaded) { lastChart.current = loaded; lastMeta.current = mergeMeta(history.data!.meta, quote.data); lastTf.current = dr.tf; }
   const chart = lastChart.current, meta = lastMeta.current;

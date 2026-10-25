@@ -17,315 +17,33 @@ try { var d = document.documentElement;
 } catch (e) {}</script>
 </head>
 <body class="locked">
-  <!-- ===================== LOCK SCREEN ===================== -->
-  <div id="lock-screen" class="lock">
-    <div class="lock-box">
-      <div class="lock-logo"><img class="logo-img lock-logo-img" src="/icon.png" alt="" aria-hidden="true" /> FINSIGHT</div>
-      <div id="lock-title" class="lock-title">Enter your PIN</div>
-      <input id="lock-pin" class="lock-input" type="password" inputmode="numeric" autocomplete="off" maxlength="12" placeholder="● ● ● ●" />
-      <input id="lock-pin2" class="lock-input hidden" type="password" inputmode="numeric" autocomplete="off" maxlength="12" placeholder="Confirm PIN" />
-      <button id="lock-go" class="lock-btn">UNLOCK</button>
-      <div id="lock-msg" class="lock-msg"></div>
-      <div class="lock-hint muted small">Locked behind your PIN. Data stays on this computer only.</div>
+  <!-- The page is one React app (X1, web/src/App.tsx). Startup order: bootstrap
+       (store, auth, bus) -> classic chart scripts (window.PriceChart and its
+       helpers, still plain JS) -> the app module. See web/src/bootstrap.ts. -->
+  <div id="root"></div>
+  <!-- Startup fallback: inline in index.html so it works even when bootstrap or
+       the app bundle fails to load. If React never renders, reveal a retry
+       message instead of a blank page; the first successful render removes it. -->
+  <div id="boot-fallback" class="boot-fallback" hidden>
+    <div class="boot-fallback-box" role="alert">
+      <strong>FinSight could not start</strong>
+      The app files may be incomplete or outdated. Your data is safe on this
+      computer. Reload to try again; if it keeps failing, restart the server
+      (node server.js or start.command).
+      <button id="boot-retry" type="button">Reload</button>
     </div>
   </div>
-
-  <!-- ===================== TOP BAR ===================== -->
-  <header class="topbar">
-    <div class="brand">
-      <img class="logo-img" src="/icon.png" alt="" aria-hidden="true" /> FINSIGHT<span class="dim">//</span><span class="amber">PERSONAL&nbsp;TERMINAL</span>
-    </div>
-    <div class="topbar-right">
-      <label class="base-sel" title="Account / portfolio — each holds its own positions">
-        ACCT
-        <select id="account-sel"></select>
-      </label>
-      <button id="profile-btn" class="topbar-btn" title="Your profile & setup">◐ <span id="profile-name">Profile</span></button>
-      <button id="peek-btn" class="topbar-btn" title="Hide or show your personal figures (holdings, values, P&amp;L, cash). Prices and market data stay visible.">◉ UNPEEK</button>
-      <button id="cards-btn" class="topbar-btn" title="Customise cards & panels">⚙ Layout</button>
-      <label class="base-sel" title="Base currency — your whole portfolio is converted into this. You deposit SGD.">
-        BASE
-        <select id="base-ccy">
-          <option value="SGD">SGD</option>
-          <option value="USD">USD</option>
-          <option value="EUR">EUR</option>
-          <option value="GBP">GBP</option>
-          <option value="JPY">JPY</option>
-          <option value="HKD">HKD</option>
-          <option value="AUD">AUD</option>
-          <option value="CNY">CNY</option>
-          <option value="INR">INR</option>
-        </select>
-      </label>
-      <span id="market-state" class="pill">MKT</span>
-      <span id="clock" class="clock" data-island="clock">--:--:--</span>
-      <button id="lock-btn" class="topbar-btn" title="Lock now">🔒</button>
-    </div>
-  </header>
-
-  <!-- ===================== COMMAND BAR ===================== -->
-  <div class="cmdbar">
-    <span class="prompt">CMD&nbsp;&gt;</span>
-    <input id="cmd" autocomplete="off" spellcheck="false"
-      placeholder="ADD AAPL 10 195.50   |   SELL AAPL 5   |   CASH USD 5000   |   UNDO   |   LEDGER   |   HELP" />
-    <button id="cmd-go" class="go">GO</button>
-  </div>
-  <div id="cmd-status" class="cmd-status"></div>
-
-  <!-- ===================== MAIN GRID ===================== -->
-  <main class="grid">
-
-    <!-- LEFT: portfolio -->
-    <section class="col-left">
-      <div class="summary" id="summary" data-island="summary"></div>
-
-      <div class="panel">
-        <div class="panel-head">
-          <span class="panel-title">PORTFOLIO &nbsp;·&nbsp; POSITIONS</span>
-          <div class="head-btns">
-            <button id="add-toggle" class="mini-btn">+ ADD</button>
-            <button id="cash-btn" class="mini-btn" title="Set uninvested cash per currency (counts toward net worth and FX exposure)">CASH</button>
-            <button id="import-btn" class="mini-btn">IMPORT</button>
-            <button id="export-btn" class="mini-btn">EXPORT</button>
-            <button id="undo-btn" class="mini-btn" title="Undo the last change">↶ UNDO</button>
-          </div>
-        </div>
-
-        <div id="add-view" data-island="add-form"></div>
-
-        <div id="positions-view" data-island="positions"></div>
-      </div>
-
-      <div class="panel">
-        <div class="panel-head">
-          <span class="panel-title">PORTFOLIO PERFORMANCE</span>
-          <div class="head-btns" data-island-slot="performance:head"></div>
-        </div>
-        <div id="perf-body" class="chart-body muted" data-island="performance"></div>
-      </div>
-
-      <div class="panel">
-        <div class="panel-head">
-          <span class="panel-title">NET WORTH &nbsp;·&nbsp; BREAKDOWN</span>
-          <div class="head-btns"><span class="muted small">invested by asset class + cash, per account</span>
-          <button id="wealth-cash-btn" class="mini-btn" title="Edit cash balances">EDIT CASH</button></div>
-        </div>
-        <div id="wealth-body" class="chart-body muted" data-island="wealth"></div>
-      </div>
-
-      <div class="panel">
-        <div class="panel-head">
-          <span class="panel-title">ALLOCATION</span>
-          <span data-island-slot="allocation:head"></span>
-        </div>
-        <div id="alloc-body" class="chart-body muted" data-island="allocation"></div>
-      </div>
-
-      <div class="panel">
-        <div class="panel-head">
-          <span class="panel-title">SECTOR HEATMAP</span>
-          <span data-island-slot="heatmap:head"></span>
-        </div>
-        <div id="heatmap-body" class="heatmap-body muted" data-island="heatmap" data-metric="day"></div>
-      </div>
-
-      <div class="panel">
-        <div class="panel-head">
-          <span class="panel-title">WATCHLIST</span>
-          <span data-island-slot="watchlist:head"></span>
-        </div>
-        <div data-island-slot="watchlist-form:head"></div>
-        <div id="watchlist" class="watchlist" data-island="watchlist"></div>
-      </div>
-
-      <div class="panel">
-        <div class="panel-head">
-          <span class="panel-title">PRICE ALERTS</span>
-          <span data-island-slot="alerts:head"></span>
-        </div>
-        <div data-island-slot="alerts-form:head"></div>
-        <div id="alerts" class="alerts" data-island="alerts"></div>
-      </div>
-
-      <div class="panel">
-        <div class="panel-head"><span class="panel-title">FX RISK</span><span id="fxr-spot" class="dim small" data-island-slot="fxrisk:head"></span></div>
-        <div id="fxrisk" class="fxrisk" data-island="fxrisk">Hold foreign-currency stocks (e.g. USD) on an SGD base to track currency exposure.</div>
-      </div>
-
-      <div class="panel">
-        <div class="panel-head"><span class="panel-title">DIVIDENDS</span><span id="div-ttm" class="dim small" data-island-slot="dividends:head"></span></div>
-        <div id="dividends" class="dividends muted" data-island="dividends"></div>
-      </div>
-
-      <div class="panel">
-        <div class="panel-head"><span class="panel-title">RECENT ACTIVITY</span>
-          <button id="ledger-btn" class="mini-btn" title="All trades — fix dates/prices, realized gains by year">LEDGER</button></div>
-        <div id="activity" class="activity" data-island="activity"></div>
-      </div>
-    </section>
-
-    <!-- RIGHT: markets + detail + macro -->
-    <section class="col-right">
-      <div class="panel" id="detail-panel">
-        <div class="panel-head">
-          <span class="panel-title" id="detail-title">SECURITY DETAIL</span>
-          <span data-island-slot="detail:head"></span>
-        </div>
-        <div id="detail-body" class="detail-body" data-island="detail"></div>
-      </div>
-
-      <div class="panel">
-        <div class="panel-head">
-          <span class="panel-title">NEWS</span>
-          <span id="news-sym" class="dim small" data-island-slot="news:head"></span>
-        </div>
-        <div id="news" class="news muted" data-island="news"></div>
-      </div>
-
-      <div class="panel">
-        <div class="panel-head"><span class="panel-title">WORLD MARKETS</span><span id="markets-time" class="dim small" data-island-slot="markets:head"></span></div>
-        <div id="markets" class="markets" data-island="markets"></div>
-      </div>
-
-      <div class="panel">
-        <div class="panel-head"><span class="panel-title">ECON CALENDAR · FED · CPI · PCE</span><span class="dim small">no key</span></div>
-        <div id="calendar" class="calendar" data-island="calendar"></div>
-      </div>
-
-      <div class="panel">
-        <div class="panel-head">
-          <span class="panel-title">WORLD BANK · MACRO</span>
-        </div>
-        <div class="wb-controls" data-island-slot="worldbank:head"></div>
-        <div id="wb-body" class="wb-body muted" data-island="worldbank"></div>
-      </div>
-
-      <div class="panel">
-        <div class="panel-head"><span class="panel-title">US FED · MACRO (FRED)</span><span class="dim small">no key</span></div>
-        <div class="wb-controls" data-island-slot="fred:head"></div>
-        <div id="fred-body" class="wb-body muted" data-island="fred"></div>
-      </div>
-
-      <div class="panel">
-        <div class="panel-head">
-          <span class="panel-title">US INFLATION · FED GAUGES</span>
-          <span data-island-slot="inflation:head"></span>
-        </div>
-        <div id="infl-body" class="wb-body muted" data-island="inflation"></div>
-      </div>
-    </section>
-  </main>
-
-  <footer class="statusbar">
-    <span id="footer-msg">READY.</span>
-    <span class="dim">FREE DATA · NO API KEYS · YAHOO FINANCE + WORLD BANK + FRED · DATA MAY BE DELAYED · NOT INVESTMENT ADVICE</span>
-  </footer>
-
-  <!-- CSV import modal -->
-  <div id="import-modal-host" data-island="import"></div>
-
-  <!-- first-launch / profile setup -->
-  <div id="setup-modal" class="modal hidden">
-    <div class="modal-box">
-      <div class="modal-head">
-        <span class="panel-title">WELCOME · SET UP YOUR TERMINAL</span>
-        <button id="setup-skip" class="x-btn" title="Skip">✕</button>
-      </div>
-      <div class="modal-body">
-        <p class="muted small">Set up your profile, then choose how to add your holdings. Everything stays on your machine — nothing is uploaded.</p>
-        <div class="setup-grid">
-          <label class="setup-field"><span>YOUR NAME</span><input id="setup-name" placeholder="e.g. Tan" autocomplete="off" /></label>
-          <label class="setup-field"><span>BASE CURRENCY</span>
-            <select id="setup-base">
-              <option value="SGD">SGD</option><option value="USD">USD</option><option value="EUR">EUR</option>
-              <option value="GBP">GBP</option><option value="JPY">JPY</option><option value="HKD">HKD</option>
-              <option value="AUD">AUD</option><option value="CNY">CNY</option><option value="INR">INR</option>
-            </select>
-          </label>
-        </div>
-        <div class="setup-label muted small">HOW DO YOU WANT TO ADD YOUR HOLDINGS?</div>
-        <div class="setup-choices">
-          <button class="setup-choice" data-action="import">
-            <div class="sc-title">📥 Import from CSV</div>
-            <div class="sc-desc">Paste or upload a spreadsheet (symbol, quantity, avg price, optional date).</div>
-          </button>
-          <button class="setup-choice" data-action="manual">
-            <div class="sc-title">➕ Add manually</div>
-            <div class="sc-desc">Type each position with quantity & average price — full control.</div>
-          </button>
-          <button class="setup-choice" data-action="empty">
-            <div class="sc-title">▦ Start empty</div>
-            <div class="sc-desc">Go straight to the terminal and add positions later.</div>
-          </button>
-        </div>
-      </div>
-      <div class="modal-foot">
-        <span class="muted small">Reopen any time from the <b>Profile</b> button.</span>
-        <button id="setup-save" class="mini-btn solid">SAVE &amp; CONTINUE</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- customise summary cards -->
-  <div id="cards-modal" class="modal hidden">
-    <div class="modal-box">
-      <div class="modal-head">
-        <span class="panel-title">CUSTOMISE LAYOUT</span>
-        <button id="cards-close" class="x-btn">✕</button>
-      </div>
-      <div class="modal-body">
-        <div class="setup-label muted small">APPEARANCE — theme</div>
-        <div id="theme-list" class="swatch-row"></div>
-        <div class="setup-label muted small" style="margin-top:12px">APPEARANCE — font</div>
-        <div id="font-list" class="swatch-row"></div>
-        <div style="border-top:1px solid var(--border); margin:16px 0 12px"></div>
-        <p class="muted small">Summary cards — tick the ones you want and use ▲▼ to reorder. Changes apply instantly.</p>
-        <div id="cards-list" class="cards-list" data-island="summary-cards"></div>
-        <div class="setup-label muted small" style="margin-top:14px">PANELS — show / hide whole widgets</div>
-        <div id="panels-list" class="cards-list"></div>
-        <div class="muted small" style="margin-top:8px">Tip: drag the <b>⠿</b> grip in any panel's header to rearrange widgets (even between columns).
-          <button id="layout-reset" class="mini-btn">Reset order</button></div>
-      </div>
-      <div class="modal-foot">
-        <button id="cards-reset" class="mini-btn">RESET TO DEFAULT</button>
-        <button id="cards-done" class="mini-btn solid">DONE</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- manage accounts -->
-  <div id="accounts-modal" class="modal hidden">
-    <div class="modal-box">
-      <div class="modal-head">
-        <span class="panel-title">MANAGE ACCOUNTS</span>
-        <button id="accounts-close" class="x-btn">✕</button>
-      </div>
-      <div class="modal-body">
-        <p class="muted small">Each account is a separate portfolio (e.g. IBKR, Crypto, SGX). Switch them from the
-          <b>ACCT</b> dropdown; pick <b>All Accounts</b> for a combined view.</p>
-        <div id="accounts-list" class="cards-list"></div>
-        <form id="account-add-form" class="add-form" style="grid-template-columns:1.4fr 1fr auto" autocomplete="off">
-          <input id="account-new-name" placeholder="New account name (e.g. Crypto)" />
-          <input id="account-new-type" placeholder="Type (optional, e.g. Crypto)" />
-          <button type="submit" class="mini-btn solid">ADD</button>
-        </form>
-        <div id="accounts-status" class="cmd-status"></div>
-      </div>
-      <div class="modal-foot"><span class="muted small">Deleting an account removes its holdings.</span>
-        <button id="accounts-done" class="mini-btn solid">DONE</button></div>
-    </div>
-  </div>
-
-  <!-- ledger: all trades + realized gains -->
-  <!-- cash editor: every account's uninvested cash, per currency -->
-  <div id="cash-modal-host" data-island="cash-editor"></div>
-
-  <div id="ledger-modal-host" data-island="ledger"></div>
-
-  <!-- alert/notification toasts -->
-  <div id="toasts" class="toasts"></div>
-
-  <!-- startup order: bootstrap -> legacy scripts -> island modules (see web/src/bootstrap.ts) -->
+  <script>
+    (function () {
+      var root = document.getElementById('root'), fb = document.getElementById('boot-fallback');
+      if (root.childElementCount) { fb.remove(); return; }
+      var reveal = setTimeout(function () { if (!root.childElementCount) fb.hidden = false; }, 5000);
+      new MutationObserver(function () {
+        if (root.childElementCount) { clearTimeout(reveal); fb.remove(); }
+      }).observe(root, { childList: true });
+      document.getElementById('boot-retry').addEventListener('click', function () { location.reload(); });
+    })();
+  </script>
   <script src="/app/bootstrap.js"></script>
   <script src="/indicators.js"></script>
   <script src="/strategy.js"></script>
@@ -333,9 +51,7 @@ try { var d = document.documentElement;
   <script src="/chart.js"></script>
   <script src="/chartgrid.js"></script>
   <script src="/journal.js"></script>
-  <script src="/app.js"></script>
   <link rel="stylesheet" href="/app/main.css" />
   <script type="module" src="/app/main.js"></script>
-  <script src="/agent-panel.js"></script>
 </body>
 </html>

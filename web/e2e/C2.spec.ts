@@ -23,7 +23,8 @@ test('input focus and drafts survive portfolio refresh, then new data applies af
   await seeded(page); await expect(page.locator('#fxr-conv')).toBeVisible();
   await page.locator('#fxr-slider').press('End'); await page.fill('#fxr-conv', '1290');
   try {
-    await page.evaluate(async () => { await (window as unknown as { runCommand(command: string): Promise<void> }).runCommand('CASH USD 100'); });
+    // The CASH command's write, without moving focus (runCommand is not global since F7).
+    await page.evaluate(async () => { await window.FinSight.actions!.setCashBalance('USD', '100'); });
     await expect(page.locator('#fxr-conv')).toBeFocused(); await expect(page.locator('#fxr-conv')).toHaveValue('1290');
     await page.click('#fxr-spot');
     await expect(page.locator('#fxr-slider')).toHaveValue('15'); await expect(page.locator('#fxr-conv')).toHaveValue('1290');

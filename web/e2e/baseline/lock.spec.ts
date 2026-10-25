@@ -1,8 +1,9 @@
 import { test, expect } from '@playwright/test';
 import { ensurePin, PIN } from '../helpers';
 
-test('wrong PIN shows the error; the right PIN unlocks', async ({ page }) => {
+test('wrong PIN shows the error; the right PIN unlocks', async ({ page, context }) => {
   await ensurePin(page.request);
+  await context.clearCookies(); // creating the PIN signs this context in
   await page.goto('/');
   await expect(page.locator('body')).toHaveClass(/\blocked\b/);
   await expect(page.locator('#lock-title')).toHaveText('Enter your PIN');

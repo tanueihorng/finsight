@@ -1,0 +1,2 @@
+var c=[{id:"violet",label:"Violet",accent:"#a78bfa"},{id:"amber",label:"Amber",accent:"#ff9e16"},{id:"teal",label:"Teal",accent:"#2dd4bf"},{id:"phosphor",label:"Phosphor",accent:"#4ade80"}],n=[{id:"mono",label:"Mono"},{id:"sans",label:"Sans"},{id:"slab",label:"Serif"}],a=["SGD","USD","EUR","GBP","JPY","HKD","AUD","CNY","INR"],l=t=>`${t.name}${t.count?` (${t.count})`:""}`,s=t=>`${t.type?t.type+" \xB7 ":""}${t.count} holdings`,i=(t,e,o)=>t===e?o:t;export{c as a,n as b,a as c,l as d,s as e,i as f};
+//# sourceMappingURL=chunk-KOLQV7YP.js.map

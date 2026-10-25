@@ -3,16 +3,17 @@ import { selectSymbol } from './app.ts';
 import type { ChartLoadContext, PriceChartInstance } from './chart.d.ts';
 import type { HistoryPoint, QuotedQuote } from '../../../shared/types.ts';
 import { CHART_TF_RANGE } from '../features/detail/detail.ts';
+import { chartHooks } from '../shell/chartHooks.ts';
 
 // Wraps the legacy canvas chart (public/chart.js) without rewriting it (E2).
 // React owns only the wrapper div. The chart's own root (#detail-chart-host)
 // is created here, because chart.js moves it to <body> when expanded and into
 // the multi-chart grid. The instance survives range switches and refreshes,
 // so zoom, drawings and indicators stay. window.detailChart is kept for
-// agent-panel.js and the legacy chart hooks (watch feed, grid, trades).
+// the Kestrel page context, specs and the chart hooks (watch feed, grid, trades).
 export interface ChartData { symbol: string; points: HistoryPoint[]; meta: Partial<QuotedQuote>; ctx: ChartLoadContext }
 const store = () => window.FinSight.store;
-const hooks = () => window.FinSightChartHooks;
+const hooks = () => chartHooks;
 
 export function ChartHost({ data, tradesKey }: { data: ChartData | null; tradesKey: string }) {
   const wrap = useRef<HTMLDivElement>(null);

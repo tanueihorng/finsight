@@ -16,7 +16,11 @@ export function createApi(fetcher: typeof fetch, lock: () => void, isLocked: () 
     if (isLocked() && !path.startsWith('/api/auth/')) throw new ApiError(401, 'Locked. Enter your PIN.');
     const headers = new Headers(init.headers);
     if (!headers.has('Accept')) headers.set('Accept', 'application/json');
-    const response = await fetcher(path, { ...init, headers, credentials: 'same-origin' });
+    const response = await fetcher(path, { ...init, headers, credentials: 'same-origin' }).catch((e: unknown) => {
+      // The server may have stopped: the shell re-checks and shows the offline screen (X1, from app.js onNetError).
+      if (!(e instanceof DOMException && e.name === 'AbortError')) globalThis.dispatchEvent?.(new Event('finsight:network-error'));
+      throw e;
+    });
     if (response.status === 401) lock();
     const body: unknown = await response.json().catch(() => undefined);
     if (!response.ok) {

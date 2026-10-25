@@ -19,6 +19,20 @@ const read = (f) => fs.readFileSync(path.join(root, f), 'utf8');
 const APP = 'public/app.js';
 const OTHERS = ['public/agent-panel.js', 'public/chart.js', 'public/chartgrid.js', 'public/journal.js', 'public/strategy.js', 'public/strategies.js', 'public/indicators.js'];
 
+// X1 deleted public/app.js: the inventory is history now. Keep Part A, and
+// replace the generated Part B with a note instead of failing.
+if (!fs.existsSync(path.join(root, APP))) {
+  const note = '_`public/app.js` was deleted in X1 (the page is one React app, `web/src/App.tsx`). The generated inventory of its sections and globals is in git history (last generated before commit X1)._\n';
+  if (process.argv.includes('--write')) {
+    const file = path.join(root, 'docs/frontend-migration/COUPLING.md');
+    const doc = fs.readFileSync(file, 'utf8');
+    const a = '<!-- generated:start -->', b = '<!-- generated:end -->';
+    fs.writeFileSync(file, doc.slice(0, doc.indexOf(a) + a.length) + '\n' + note + doc.slice(doc.indexOf(b)));
+    console.log('Updated docs/frontend-migration/COUPLING.md (app.js removed)');
+  } else process.stdout.write(note);
+  process.exit(0);
+}
+
 // Blank out comments and plain '…' / "…" strings (keep template literals: they hold ${code}),
 // preserving line breaks so line numbers stay valid.
 function codeOnly(src) {

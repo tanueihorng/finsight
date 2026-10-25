@@ -1,18 +1,11 @@
-import { useEffect } from 'react';
 import { useStore } from 'zustand';
 import { CARD_DEFS, moveCard, toggleCard } from './cards.ts';
-import { cardPrefs, resetCardPrefs, setCardPrefs } from './cardPrefs.ts';
+import { cardPrefs, setCardPrefs } from './cardPrefs.ts';
 
-// The summary-card part of the ⚙ Layout modal (#cards-list). The modal itself,
-// themes and the panels list stay legacy until F8/F10.
-export default function CardsEditorIsland() {
+// The summary-card part of the ⚙ Layout modal (#cards-list), rendered by the
+// layout modal (F10); its RESET TO DEFAULT resets only the cards.
+export default function CardsEditor() {
   const prefs = useStore(cardPrefs);
-  // "RESET TO DEFAULT" sits in the legacy modal footer and resets only the cards.
-  useEffect(() => {
-    const btn = document.getElementById('cards-reset');
-    btn?.addEventListener('click', resetCardPrefs);
-    return () => btn?.removeEventListener('click', resetCardPrefs);
-  }, []);
   return (
     <>
       {prefs.order.map((id) => {

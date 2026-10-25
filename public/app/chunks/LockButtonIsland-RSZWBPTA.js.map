@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../../../web/src/features/lock/LockButtonIsland.tsx"],
+  "sourcesContent": ["import { api } from '../../api/client.ts';\n\n// \uD83D\uDD12 in the topbar (F9): log out, then lock. The auth event shows the lock\n// screen and stops polling (legacy showLock).\nexport default function LockButtonIsland() {\n  const lockNow = async () => {\n    try { await api('/api/auth/logout', { method: 'POST' }); } catch { /* lock anyway */ }\n    window.FinSight.auth.lock();\n  };\n  return <button id=\"lock-btn\" className=\"topbar-btn\" title=\"Lock now\" onClick={() => void lockNow()}>\uD83D\uDD12</button>;\n}\n"],
+  "mappings": "wHASS,IAAAA,EAAA,SALM,SAARC,GAAoC,CACzC,IAAMC,EAAU,SAAY,CAC1B,GAAI,CAAE,MAAMC,EAAI,mBAAoB,CAAE,OAAQ,MAAO,CAAC,CAAG,MAAQ,CAAoB,CACrF,OAAO,SAAS,KAAK,KAAK,CAC5B,EACA,SAAO,OAAC,UAAO,GAAG,WAAW,UAAU,aAAa,MAAM,WAAW,QAAS,IAAG,CAAQD,EAAQ,GAAG,qBAAE,CACxG",
+  "names": ["import_jsx_runtime", "LockButtonIsland", "lockNow", "api"]
+}

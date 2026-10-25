@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../../../web/src/ui/PanelHeadSlot.tsx"],
+  "sourcesContent": ["import { useLayoutEffect, useState, type ReactNode } from 'react';\nimport { createPortal } from 'react-dom';\n// Renders a panel's head controls into its [data-island-slot=\"<island>:head\"].\n// Since X1 the slot can be committed in the same render as the body, so it is\n// looked up again after mount.\nconst find = (island: string) => Array.from(document.querySelectorAll('[data-island-slot]')).find((node) => node.getAttribute('data-island-slot') === `${island}:head`) ?? null;\nexport function PanelHeadSlot({ island, children }: { island: string; children: ReactNode }) {\n  const [slot, setSlot] = useState<Element | null>(() => find(island));\n  useLayoutEffect(() => { if (!slot || !slot.isConnected) setSlot(find(island)); });\n  return slot ? createPortal(children, slot) : null;\n}\n"],
+  "mappings": "wHAAA,IAAAA,EAA0D,SAC1DC,EAA6B,SAIvBC,EAAQC,GAAmB,MAAM,KAAK,SAAS,iBAAiB,oBAAoB,CAAC,EAAE,KAAMC,GAASA,EAAK,aAAa,kBAAkB,IAAM,GAAGD,CAAM,OAAO,GAAK,KACpK,SAASE,EAAc,CAAE,OAAAF,EAAQ,SAAAG,CAAS,EAA4C,CAC3F,GAAM,CAACC,EAAMC,CAAO,KAAI,YAAyB,IAAMN,EAAKC,CAAM,CAAC,EACnE,4BAAgB,IAAM,EAAM,CAACI,GAAQ,CAACA,EAAK,cAAaC,EAAQN,EAAKC,CAAM,CAAC,CAAG,CAAC,EACzEI,KAAO,gBAAaD,EAAUC,CAAI,EAAI,IAC/C",
+  "names": ["import_react", "import_react_dom", "find", "island", "node", "PanelHeadSlot", "children", "slot", "setSlot"]
+}

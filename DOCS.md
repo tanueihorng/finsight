@@ -33,25 +33,49 @@ browser ──HTTP──▶ server.js ──┬─▶ public/*  (static terminal
 | `csv.js` | CSV / IBKR statement parsing (pure) |
 | `auth.js` | PIN hashing, sessions, throttling |
 
-Tests: `npm test` (Node's built-in `node:test`, no dependencies). `test/helpers.js` swaps `fetch` for
-an in-memory fake Yahoo and points `FINSIGHT_DATA_DIR` at a temp dir, so the suite is offline and
-never touches your data.
+Tests: `npm test` (Node's built-in `node:test`). `test/helpers.js` swaps `fetch` for
+an in-memory fake Yahoo and points `FINSIGHT_DATA_DIR` at a temp dir, so the server suite is offline and
+never touches your data. The same run executes the web unit tests (`web/src/**/*.test.ts`, pure logic)
+and the committed-bundle check (`test/webbuild.test.js` → `npm run check:web`). Browser E2E is
+`npm run e2e` (Playwright): it starts throwaway servers with fake market data and fresh temp data
+folders — never your `~/FinSightData` — on ports `E2E_PORT_BASE` (default 8096) + offset, so two
+worktrees can run E2E at once with different bases. `npm run verify` = typecheck + unit + bundle check
++ E2E. Use **Node 24** for development; running the server alone needs Node 18+.
 
-- **Frontend** (`public/`): vanilla JS, no framework/build. `app.js` is the terminal shell; `chart.js`
-  is a self-contained `window.PriceChart` class (loaded **before** `app.js`) that renders the interactive
+- **Frontend** (`web/` → built to `public/app/`): React 19 + TypeScript.
+  The source lives in `web/src` (never served directly) and is bundled by esbuild
+  (`scripts/build-web.mjs`, `npm run build`; `npm run dev` watches) into **committed** build output in
+  `public/app/` — `bootstrap.js` (classic script), `main.js`/`main.css` (ESM, code-split), lazy chunks in
+  `public/app/chunks/`, and `manifest.json` (every runtime file). `npm run check:web` (also part of
+  `npm test`) fails if `public/app` differs from a fresh build, so a fresh clone runs with no install.
+  Script order in `index.html`: `/app/bootstrap.js` first (creates `window.FinSight` — a Zustand UI
+  store, a refresh bus, and the PIN lock/auth state — synchronously, before anything else), then the
+  plain-JS chart scripts (`indicators.js`, `strategy.js`, `strategies.js`, `chart.js`, `chartgrid.js`,
+  `journal.js`), then the module `/app/main.js`, which mounts the app.
+  `web/src/App.tsx` renders the whole page (topbar, columns, modals). Each panel's mount point is an
+  *island host* (`data-island`): `web/src/main.tsx`'s runtime mounts it lazily from the registry in
+  `web/src/islands.ts`, inside its own error boundary and React root — a failing chunk stays in its
+  panel, a dragged panel keeps its state, and a removed host is unmounted. Server data belongs to
+  TanStack Query (`web/src/api/queries.ts`: polling stops while locked or hidden, and waits for the
+  account); UI state belongs to the Zustand store (`window.FinSight.store`); mutations invalidate
+  queries through the map in `web/src/api/invalidation.ts` (`FinSight.bus`). Startup/lock orchestration
+  lives in `web/src/shell/boot.ts`, the panel layout in `web/src/shell/layout.ts`, and a few
+  compatibility globals that specs and console users still call (`window.detailChart`, `csvCell`,
+  `loadPortfolio`, …) in `web/src/shell/compat.ts`.
+- **Chart** (`public/chart.js`, plain JS, kept): a self-contained `window.PriceChart` class that renders the interactive
   security chart — candles/line/area, SMA/EMA/Bollinger overlays, RSI/MACD/volume panes, a crosshair,
   pan/zoom, and the trendline/H-line/Fibonacci drawing tools — on a two-layer HiDPI `<canvas>`. It's
   driven by Pointer Events (mouse, pen and touch: one finger pans or draws, two fingers pinch-zoom, a long
   press opens the crosshair). `chartgrid.js` (`window.ChartGrid`) wraps it for the 2- and 4-chart
   full-screen workspace (linked symbol, crosshair synced by date, shared per-symbol drawings).
-  Chart extras: compare symbols (as-of joined, % scale), ledger trades/dividends/average cost
+  React drives both through typed hooks in `web/src/shell/chartHooks.ts`. Chart extras: compare symbols (as-of joined, % scale), ledger trades/dividends/average cost
   (`GET /api/chart-trades?symbol=&account=`), alerts drawn on the chart, older history loaded when you pan
   past the first bar, and a watchlist side panel (↑/↓ steps). NB: Yahoo's `range=max` returns *quarterly*
   bars for every interval, so the chart asks for explicit years (`10y`, `20y`, `50y`). It's
-  wrapped in an IIFE so it shares no globals with `app.js`. Polls the API every 15s for live
-  data. User preferences (profile name, base currency, summary-card layout, chart type & indicators)
+  wrapped in an IIFE so it shares no globals with the app. Live data refreshes on the Query poll
+  (15 s for portfolio/markets). User preferences (profile name, base currency, summary-card layout, chart type & indicators)
   live in the browser's `localStorage` (`finsight-profile`, `finsight-base`, `finsight-cards`,
-  `finsight-chart-cfg`); per-symbol chart drawings live under `finsight-draw:<SYMBOL>`.
+  `finsight-chart-cfg`; panel order/visibility in `finsight-layout`/`finsight-panels`); per-symbol chart drawings live under `finsight-draw:<SYMBOL>`.
 - **Backend** (`server.js`): serves static files from `public/` and a JSON API under `/api/`. It
   proxies the free upstream data sources (so the browser avoids CORS and no keys are exposed) and
   persists the portfolio locally.
@@ -100,8 +124,11 @@ never touches your data.
   chained; XIRR solves the dated cash flows. A BUY whose price is outside that day's trading range (an
   average cost with no real purchase date) enters at market value and is reported in `transfers`;
   holdings without any transaction history are treated as held for the whole window (`approx`).
-- **Service worker** (`public/sw.js`): caches only static files (installable app, instant shell).
-  API responses are never cached in the browser, so portfolio data stays behind the PIN.
+- **Service worker** (`public/sw.js`): makes the app installable and the shell instant. It precaches
+  the static files plus every runtime file listed in `public/app/manifest.json` (written by the build)
+  and serves them network-first — the server is local, so an update always shows on the next load and
+  the cache is only the offline fallback. API responses are never cached in the browser, so portfolio
+  data stays behind the PIN.
 
 ---
 
@@ -375,14 +402,16 @@ are bucketed by instrument type.
 ## Extending it
 
 - **New data source**: add a fetch helper in `lib/` wrapped in `cached(...)` (stay friendly to free
-  APIs), a `/api/...` route in `server.js`, then render it in `public/app.js`. Add a test with the fake
-  market in `test/helpers.js`.
+  APIs), a `/api/...` route in `server.js`, then render it in the React app — a component in
+  `web/src/features/` registered in `web/src/islands.ts` (recipe: `web/src/features/README.md`).
+  Add a test with the fake market in `test/helpers.js`.
 - **New market symbols**: edit `MARKET_GROUPS` in `lib/market.js`.
+- **New FRED/World Bank series**: add an entry to `fredOptions` / `worldBankOptions` in
+  `web/src/features/macro/options.ts` (the FRED / World Bank islands render them as `<select>`s).
 - **New portfolio mutation**: wrap it as `withLock(() => withUndo('Label', () => { … }))` so it's
   serialized and undoable.
-- **New FRED/World Bank series**: add `<option>`s to `#fred-series` / `#wb-indicator` in `public/index.html`.
-- **New summary card**: add an entry to `CARD_DEFS` in `public/app.js` — it appears automatically in
-  the ⚙ Layout customizer.
+- **New summary card**: add an entry to `CARD_DEFS` in `web/src/features/summary/cards.ts` — it appears
+  automatically in the ⚙ Layout customizer.
 - **New chart indicator/overlay**: add a pure function (aligned 1:1 with bars, `null` during warm-up) to
   `public/indicators.js` (tested in `test/indicators.test.js` / `test/chartfeatures.test.js`), then register
   it in the `IND` table in `public/chart.js` (`pane: true` for a sub-pane). `calc(bars, params, ctx, inst)`
@@ -390,8 +419,9 @@ are bucketed by instrument type.
   `ctx.series(sym)` gives another symbol's bars (used by RS). A new drawing tool: add it to `TOOLS` and
   `GROUPS`, then handle it in `_drawOne`, `_hit` and (if it has unusual handles) `_handles`. Indicators are
   computed when data or settings change, not on pan/zoom.
-- **Draggable panels**: each panel is tagged with a stable `data-pid` (see `PANEL_PIDS` in `app.js`); a ⠿
-  grip in the header drives HTML5 drag-and-drop. Order is saved per column in `localStorage`
+- **Draggable panels**: each panel is tagged with a stable `data-pid` (ids, default order and the
+  show/hide list live in `web/src/shell/layout.ts`); a ⠿ grip in the header drives HTML5
+  drag-and-drop. Order is saved per column in `localStorage`
   (`finsight-layout`); show/hide in `finsight-panels`; card layout in `finsight-cards`. All layout state
   is client-side (per browser), not on the server.
 - **Rule**: a lock-wrapped function must never call another lock-wrapped function (it would deadlock the

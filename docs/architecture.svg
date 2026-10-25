@@ -37,7 +37,7 @@
   <!-- ================= BROWSER ================= -->
   <rect x="38" y="100" width="242" height="124" rx="8" class="box"/>
   <text x="52" y="122" class="t">Terminal UI</text>
-  <text x="52" y="142" class="s">app.js · index.html</text>
+  <text x="52" y="142" class="s">React app (App.tsx) · app/ bundle</text>
   <text x="52" y="160" class="s">chart.js · chartgrid.js</text>
   <text x="52" y="178" class="s">strategies.js (engines)</text>
   <text x="52" y="196" class="s">journal.js · indicators.js</text>
@@ -45,7 +45,7 @@
 
   <rect x="38" y="238" width="242" height="140" rx="8" class="boxv"/>
   <text x="52" y="260" class="tv">↗ Kestrel chat panel</text>
-  <text x="52" y="280" class="s">agent-panel.js · .css</text>
+  <text x="52" y="280" class="s">kestrel island (React) · .css</text>
   <text x="52" y="298" class="s">EventSource (SSE stream)</text>
   <text x="52" y="316" class="s">/ menu · model picker</text>
   <text x="52" y="334" class="s">uploads · trace · page ctx</text>
@@ -54,7 +54,7 @@
 
   <rect x="38" y="392" width="242" height="72" rx="8" class="box"/>
   <text x="52" y="414" class="t">Service worker</text>
-  <text x="52" y="434" class="s">sw.js · static shell only</text>
+  <text x="52" y="434" class="s">sw.js · static shell + manifest</text>
   <text x="52" y="452" class="m">/api/* never cached</text>
 
   <rect x="38" y="478" width="242" height="72" rx="8" class="box"/>

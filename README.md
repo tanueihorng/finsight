@@ -5,7 +5,7 @@
 <h1>FinSight <sub>// personal terminal</sub></h1>
 
 <p><b>A free, Bloomberg-style portfolio terminal that runs entirely on your own machine.</b><br>
-Live market data, FX-risk tracking, and an economic calendar — no accounts, no API keys, no build step.<br>
+Live market data, FX-risk tracking, and an economic calendar — no accounts, no API keys, nothing to install.<br>
 Now with <b>↗ Kestrel</b>, a built-in AI research agent that knows your portfolio.</p>
 
 <p>
@@ -34,7 +34,7 @@ Now with <b>↗ Kestrel</b>, a built-in AI research agent that knows your portfo
 
 ## ✨ Why FinSight
 
-A personal trading terminal that's **small, hackable, and 100% free** — inspired by the Bloomberg-terminal idea but rebuilt as a ~250 KB zero-dependency web app you run locally. Your portfolio lives in a single `data/portfolio.json` on your machine and **never leaves it**. No sign-up, no paid feeds, no telemetry — just `node server.js` and a browser tab.
+A personal trading terminal that's **small, hackable, and 100% free** — inspired by the Bloomberg-terminal idea but rebuilt as a web app you run locally: a zero-dependency Node server and a pre-built React UI, so a clone plus `node server.js` is all it takes. Your portfolio lives in a single `data/portfolio.json` on your machine and **never leaves it**. No sign-up, no paid feeds, no telemetry — just `node server.js` and a browser tab.
 
 It's built for the investor who **funds in one currency and invests in another** (e.g. convert SGD → USD to buy US stocks): it separates how much of your return came from the **stock moving** vs the **currency moving**, and gives you a real **FX-risk cockpit**.
 
@@ -80,7 +80,7 @@ Then press **⌘/** (or the **↗ KESTREL** button). Use it as a **side panel** 
 
 ## 🚀 Quick start
 
-> Requires **Node.js 18+** (no `npm install` — there are no dependencies).
+> Requires **Node.js 18+** to run — the web UI ships pre-built, so there is nothing to `npm install`. (Rebuilding the UI or running the tests yourself is done on Node 24; see [DOCS.md](DOCS.md).)
 
 ```bash
 git clone https://github.com/tanueihorng/finsight.git
@@ -222,7 +222,7 @@ Every component, how they talk to each other, and where data lives. FinSight own
 
 | Layer | Pieces |
 |---|---|
-| **Browser** | Terminal UI (`public/app.js`, `chart.js`), ↗ Kestrel panel (`agent-panel.js`, SSE stream), service worker (static files only), PIN lock |
+| **Browser** | Terminal UI — one React app (`web/src/App.tsx`, built to `public/app/`) with the plain-JS `chart.js` canvas chart · ↗ Kestrel panel (React island, SSE stream) · service worker (static shell + build manifest) · PIN lock |
 | **FinSight server** (`:8001`) | `server.js` router with security headers and Host check · `lib/auth` PIN sessions · `lib/agentlink` GET-only agent token and `/api/agent/*` proxy · `lib/agentproc` agent supervisor · domain logic in `lib/` (portfolio, ledger, dividends, performance, market, macro, charts, journal, cache) |
 | **Kestrel agent** (`127.0.0.1:8100`) | HTTP API (`/v1`, loopback and secret gate) · chat engine (tool loop, limits, retries, SSE events) · model adapters (OpenAI-compatible, Anthropic SDK, Claude Code CLI) · 35 read-only tools · MCP server (stdio) · strategy sandbox · SSRF-guarded fetch · uploads · skills · interaction log |
 | **Storage** | `~/FinSightData`: portfolio and app JSON files (0600) · `agent/agent.db` SQLite (threads, messages, turns, events, traces, cost, cache, proposals, FTS) · logs, uploads, skills, config · macOS Keychain for API keys |
@@ -235,26 +235,32 @@ Every component, how they talk to each other, and where data lives. FinSight own
 finsight/
 ├── server.js              # Zero-dependency Node HTTP server (routes only)
 ├── lib/                   # Market data, cache, portfolio math, performance, dividends, ledger…
-├── test/                  # npm test — offline, zero-dependency (node:test)
+├── web/                   # React 19 + TypeScript frontend source (built, never served as-is)
+│   ├── src/App.tsx        #   the whole page as one React app
+│   ├── src/shell/         #   startup/lock, panel layout, chart hooks (TypeScript)
+│   ├── src/features/      #   one folder per panel — lazy-loaded islands
+│   └── e2e/               #   Playwright specs
+├── test/                  # npm test — offline (node:test): server + web unit tests
 ├── agent/                 # ↗ Kestrel AI agent (TypeScript, own deps: npm run agent:install)
 │   ├── src/               #   chat engine, model adapters, tools, MCP server, sandbox
 │   ├── skills/            #   bundled playbooks (/pre-trade-check …)
 │   └── plugins/brains/    #   one manifest per model (DeepSeek, Claude…)
+├── scripts/build-web.mjs  # esbuild: web/ → public/app (npm run build · check:web)
 ├── scripts/demo.js        # Demo mode on a made-up portfolio
 ├── start.command          # Double-click launcher (macOS)
 ├── DOCS.md                # Developer docs: architecture, config, full API reference
 ├── data/                  # Your data — git-ignored, never leaves your machine
 │   └── portfolio.json
-└── public/
-    ├── index.html         # Terminal UI
-    ├── styles.css         # Themeable dark "terminal" styles
-    ├── chart.js           # Self-contained canvas trading chart
-    ├── app.js             # Frontend logic
-    ├── agent-panel.js     # Kestrel chat panel
-    └── sw.js              # Service worker (installable app; static files only)
+└── public/                # Served as-is
+    ├── index.html         # <div id="root"> + scripts (bootstrap → chart scripts → app bundle)
+    ├── app/               # Committed build output: bootstrap.js, main.js/.css, chunks/, manifest.json
+    ├── chart.js           # Self-contained canvas trading chart (plain JS)
+    ├── chartgrid.js, indicators.js, strategy.js, strategies.js, journal.js   # chart helpers (plain JS)
+    ├── styles.css         # Themeable dark "terminal" styles (+ agent-panel.css for Kestrel)
+    └── sw.js              # Service worker (installable app; static shell + build manifest)
 ```
 
-> **Developers:** see **[DOCS.md](DOCS.md)** for architecture, env-var config, and the full HTTP API reference.
+> **Developers:** see **[DOCS.md](DOCS.md)** for architecture, env-var config, the full HTTP API reference, and the web build (`npm run build`, `npm run check:web`, `npm run verify`).
 
 ## 📄 License
 

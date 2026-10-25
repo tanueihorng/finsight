@@ -2,8 +2,11 @@
    shell instantly. Only static files are cached. API responses (your portfolio)
    are never stored in the browser: they stay behind the PIN on the server. */
 'use strict';
-const SHELL = 'finsight-shell-v24';
-const FILES = ['/', '/index.html', '/styles.css', '/app.js', '/chart.js', '/chartgrid.js', '/strategy.js', '/strategies.js', '/indicators.js', '/journal.js', '/agent-panel.js', '/agent-panel.css', '/app/manifest.json', '/icon.png', '/icon-192.png', '/manifest.webmanifest'];
+const SHELL = 'finsight-shell-v34'; // v34: supersedes v33 (startup fallback) and v32-authfix3 (lock fixes); both changed cached html/styles
+const FILES = ['/', '/index.html', '/styles.css', '/chart.js', '/chartgrid.js', '/strategy.js', '/strategies.js', '/indicators.js', '/journal.js', '/agent-panel.css', '/app/manifest.json', '/icon.png', '/icon-192.png', '/manifest.webmanifest'];
+// Content-hashed chunk URLs (esbuild 8-char hash): immutable, so a cached copy
+// is exactly the bytes the loaded manifest asked for.
+const HASHED_CHUNK = /^\/app\/chunks\/.+-[A-Z0-9]{8}\.(js|css)$/;
 
 self.addEventListener('install', (e) => {
   // Island files (bootstrap, main.js/css, lazy chunks) come from the build manifest.
@@ -26,7 +29,14 @@ self.addEventListener('fetch', (e) => {
   e.respondWith(caches.open(SHELL).then(async (cache) => {
     try {
       const res = await fetch(e.request, { cache: 'no-cache' });
-      if (res.ok) cache.put(e.request, res.clone());
+      if (res.ok) { cache.put(e.request, res.clone()); return res; }
+      // A damaged/partial deploy (404/500) may serve a hashed chunk from the
+      // cache — never an unhashed file (html, manifest, main.js, classic
+      // scripts), whose stale copy could mismatch the loaded page.
+      if (HASHED_CHUNK.test(url.pathname)) {
+        const hit = await cache.match(e.request);
+        if (hit) return hit;
+      }
       return res;
     } catch (err) {
       const hit = await cache.match(e.request, { ignoreSearch: true });
