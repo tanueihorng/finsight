@@ -7,4 +7,5 @@ export const islands: IslandRegistry = {
   summary: () => import('./features/summary/SummaryIsland.tsx'),
   'summary-cards': () => import('./features/summary/CardsEditorIsland.tsx'),
   positions: () => import('./features/positions/PositionsIsland.tsx'),
+  news: () => import('./features/news/NewsIsland.tsx'),
 };

@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../../../web/src/ui/PanelHeadSlot.tsx"],
+  "sourcesContent": ["import type { ReactNode } from 'react';\nimport { createPortal } from 'react-dom';\nexport function PanelHeadSlot({ island, children }: { island: string; children: ReactNode }) {\n  const slot = Array.from(document.querySelectorAll('[data-island-slot]')).find((node) => node.getAttribute('data-island-slot') === `${island}:head`);\n  return slot ? createPortal(children, slot) : null;\n}\n"],
+  "mappings": "gFACA,IAAAA,EAA6B,SACtB,SAASC,EAAc,CAAE,OAAAC,EAAQ,SAAAC,CAAS,EAA4C,CAC3F,IAAMC,EAAO,MAAM,KAAK,SAAS,iBAAiB,oBAAoB,CAAC,EAAE,KAAMC,GAASA,EAAK,aAAa,kBAAkB,IAAM,GAAGH,CAAM,OAAO,EAClJ,OAAOE,KAAO,gBAAaD,EAAUC,CAAI,EAAI,IAC/C",
+  "names": ["import_react_dom", "PanelHeadSlot", "island", "children", "slot", "node"]
+}

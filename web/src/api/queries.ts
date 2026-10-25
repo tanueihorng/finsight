@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from './client.ts';
-import type { Accounts, Alert, Category, FxRisk, Markets, Portfolio, WatchItem } from '../../../shared/types.ts';
+import type { Accounts, Alert, Category, FxRisk, Markets, NewsResponse, Portfolio, WatchItem } from '../../../shared/types.ts';
 import type {} from '../bootstrap.ts';
 
 // F4 supplies this source in bootstrap, before legacy startup. Until then hooks
@@ -67,4 +67,11 @@ export function useCategories(symbols: string[]) {
   const key = [...new Set(symbols)].sort();
   return useQuery({ queryKey: ['categories', key.join(',')], enabled: enabled && key.length > 0, staleTime: Infinity,
     queryFn: ({ signal }) => api<Record<string, Category>>('/api/categories?symbols=' + encodeURIComponent(key.join(',')), { signal }) });
+}
+
+// No polling: legacy news fetches only on selection/NEWS and after unlock.
+export function useNews(symbol: string) {
+  const { enabled } = useScope();
+  return useQuery({ queryKey: ['news', symbol], enabled, staleTime: 0,
+    queryFn: ({ signal }) => api<NewsResponse>(`/api/news${symbol ? '?symbol=' + encodeURIComponent(symbol) : ''}`, { signal }) });
 }

@@ -66,3 +66,14 @@ Card = the migration card(s) that must keep the row green (`docs/frontend-migrat
 | Service worker | precaches shell + manifest files, network-first update, offline shell | `baseline/upgrade.sw` | F1, H4, X1 | pass |
 
 Not yet covered here, owned elsewhere: performance and visual comparisons (P0-5); chart replay, strategies, journal and drawings (add with E2); multi-chart grid (E2); Kestrel slash commands and model picker (G2); desktop notifications and alert beeps (B2).
+
+## A2 · News migration
+
+| Area | Behaviour | Spec › test | Card(s) | Status |
+|---|---|---|---|---|
+| News | selection, escaped headline text, publisher/age and safe external-link attributes | `A2` › headlines follow selection… | A2 | pass (legacy and React) |
+| News | NEWS market override keeps detail selection; same-symbol NEWS/Q refresh | `A2` › NEWS without a symbol… | A2, E1, F7 | pass (legacy and React) |
+| News | loading, empty, HTTP error; empty portfolio starts with market news | `A2` › loading…; an empty portfolio… | A2 | pass (legacy and React) |
+| News | delayed previous-symbol response never overwrites current headlines | `A2` › intended fix (A2)… | A2 | pass (intended fix: account-independent symbol-keyed query + abort) |
+| News | drag/reload, hide/reload, one host and one request per selection | `A2` › drag/reload… | A2, F10 | pass |
+| News | no protected request while locked, unlock refreshes, unmount removes command subscriptions | `A2` › lock stops news requests… | A2, F3, F6 | pass |
