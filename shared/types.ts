@@ -30,6 +30,8 @@ export interface Accounts { accounts: Account[]; activeId: string; newId?: strin
 export type WatchItem = Quote;
 
 /** lib/store.js viewPositions (holdings exists only for the ALL view). */
+/** lib/market.js fetchCategory (/api/categories maps symbol → this). */
+export interface Category { symbol: string; sector: string | null; type: string | null; category: string }
 export interface AccountHolding { accountId: string; account: string; quantity: number; avgCost: number }
 /** lib/portfolio.js portfolioWithQuotes. quoted=false is a cost-valued manual asset. */
 export interface Position {

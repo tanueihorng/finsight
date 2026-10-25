@@ -1,16 +1,19 @@
 {
   "files": [
     "/app/bootstrap.js",
-    "/app/chunks/CardsEditorIsland-MEYR4WD3.js",
+    "/app/chunks/CardsEditorIsland-QPEI7LPD.js",
     "/app/chunks/ClockIsland-4RFURDPR.js",
-    "/app/chunks/MarketsIsland-M6JRL44N.js",
+    "/app/chunks/MarketsIsland-4BKSNAI4.js",
     "/app/chunks/MarketsIsland-XI4JT4ID.css",
-    "/app/chunks/SummaryIsland-ZF7WEXGF.js",
+    "/app/chunks/PositionsIsland-IHLZ3MYS.js",
+    "/app/chunks/SummaryIsland-ZPYOIABL.js",
+    "/app/chunks/chunk-24T7LIO4.js",
+    "/app/chunks/chunk-EMHBEP7D.js",
     "/app/chunks/chunk-JH3F6H34.js",
     "/app/chunks/chunk-JXFOW37A.js",
     "/app/chunks/chunk-KJ6LLNDS.js",
-    "/app/chunks/chunk-O25CWOER.js",
-    "/app/chunks/chunk-S5OCW6BR.js",
+    "/app/chunks/chunk-LZ6BUUJF.js",
+    "/app/chunks/chunk-YJ2R6MOB.js",
     "/app/main.css",
     "/app/main.js"
   ]

@@ -193,10 +193,9 @@ function renderPortfolio(data) {
   // FX coverage note
   if (data.fxMissing && data.fxMissing.length) setFooter(`Note: no FX rate for ${data.fxMissing.join(', ')} → shown unconverted.`);
 
-  // positions table (filter / sort / group applied client-side; see renderPositionsTable)
-  lastFlash = Object.fromEntries(positions.map((p) => [p.symbol, priceFlash(p.symbol, p.last)]));
+  // The positions table is a React island (D1). The detail view and the chart
+  // watch feed still read lastTableData until E1/E2.
   lastTableData = { positions, base };
-  renderPositionsTable();
   pushChartWatch();
   // activity
   $('#activity').innerHTML = (transactions || []).map((t) => {
@@ -490,7 +489,7 @@ $('#panels-list').addEventListener('change', (e) => {
 // Each panel is tagged with a stable pid (via a known child element) so its
 // position can be saved/restored; a ⠿ grip in the header is the drag handle.
 const PANEL_PIDS = [
-  ['#positions', 'positions'], ['#wealth-body', 'wealth'], ['#perf-ranges', 'performance'], ['#alloc-mode', 'allocation'],
+  ['#positions-view', 'positions'], ['#wealth-body', 'wealth'], ['#perf-ranges', 'performance'], ['#alloc-mode', 'allocation'],
   ['#heat-metric', 'heatmap'], ['#fxrisk', 'fxrisk'], ['#dividends', 'dividends'], ['#watchlist', 'watchlist'], ['#alerts', 'alerts'], ['#activity', 'activity'],
   ['#detail-panel', 'detail'], ['#agent-dock', 'kestrel'], ['#news', 'news'], ['#markets', 'markets'], ['#calendar', 'calendar'], ['#wb-body', 'worldbank'], ['#fred-body', 'fred'], ['#infl-body', 'inflation'],
 ];
@@ -592,186 +591,9 @@ document.querySelector('.setup-choices').addEventListener('click', (e) => {
   setStatus(profile.name ? `Welcome, ${profile.name}.` : 'Terminal ready.', 'ok');
 });
 
-function priceFlash(sym, last) {
-  const prev = state.lastPrices[sym];
-  window.FinSight.setLastPrice(sym, last);
-  if (prev == null || prev === last) return '';
-  return last > prev ? 'flash-up' : 'flash-down';
-}
-
-// ---- POSITIONS TABLE: filter by asset class, search, sort, group ------------
-const ASSET_CLASSES = ['Stocks', 'ETFs', 'Crypto', 'Funds & Other'];
-let lastFlash = {}, lastTableData = { positions: [], base: 'SGD' };
-const posView = (() => {
-  const d = { filter: 'ALL', group: 'none', sortKey: 'marketValue', sortDir: -1, q: '', collapsed: [] };
-  try { return { ...d, ...JSON.parse(localStorage.getItem('finsight-posview') || '{}') }; } catch { return d; }
-})();
-function savePosView() { try { localStorage.setItem('finsight-posview', JSON.stringify(posView)); } catch {} }
-
-// Yahoo quoteType -> asset class. Unquoted manual holdings (e.g. a unit trust) land in Funds & Other.
-function assetClass(sym) {
-  const t = catCache[sym]?.type;
-  if (t === 'CRYPTOCURRENCY') return 'Crypto';
-  if (t === 'ETF') return 'ETFs';
-  if (t === 'EQUITY') return 'Stocks';
-  return 'Funds & Other';
-}
-// In the combined view a symbol held in several accounts is split into one row per
-// account (value pro rata by quantity, cost by that account's own average cost).
-function splitByAccount(p) {
-  const hs = p.holdings;
-  if (!hs || !hs.length) return [{ ...p, account: accountName() }];
-  if (hs.length === 1) return [{ ...p, account: hs[0].account }];
-  const costNative = p.avgCost * p.quantity || 1;
-  return hs.map((h) => {
-    const qf = h.quantity / (p.quantity || 1), cf = (h.avgCost * h.quantity) / costNative;
-    const marketValue = p.marketValue * qf, cost = p.cost * cf, unrealized = marketValue - cost;
-    return { ...p, account: h.account, quantity: h.quantity, avgCost: h.avgCost, marketValue, cost, unrealized,
-      unrealizedPct: cost ? unrealized / cost * 100 : 0, fxPnl: p.fxPnl * cf, weight: p.weight * qf, dayChange: p.dayChange * qf };
-  });
-}
-function accountName() {
-  return (accountsCache.find((a) => a.id === state.account) || {}).name || 'Account';
-}
-function groupKey(p) {
-  switch (posView.group) {
-    case 'class': return assetClass(p.symbol);
-    case 'account': return p.account || 'Account';
-    case 'sector': return catCache[p.symbol]?.category || 'Other';
-    case 'currency': return p.currency;
-    default: return '';
-  }
-}
-function sortRows(rows) {
-  const k = posView.sortKey, d = posView.sortDir;
-  return rows.sort((a, b) => {
-    const x = a[k], y = b[k];
-    if (k === 'symbol') return d * String(x).localeCompare(String(y));
-    return d * ((x == null ? -Infinity : x) - (y == null ? -Infinity : y));
-  });
-}
-function posRowHtml(p, base) {
-  const acct = posView.group !== 'account' && p.holdings && p.holdings.length > 1 ? ` · ${p.holdings.length} accts` : '';
-  return `<tr class="clickable ${state.selected === p.symbol ? 'selected' : ''} ${lastFlash[p.symbol] || ''}" data-sym="${esc(p.symbol)}">
-    <td><span class="sym">${esc(p.symbol)}</span><div class="name">${esc(String(p.name || '').slice(0, 20))} · <span class="ccy">${esc(p.currency)}</span>${acct}</div></td>
-    <td class="r">${fmt(p.quantity, p.quantity % 1 ? 4 : 0)}</td>
-    <td class="r">${fmt(p.avgCost)}</td>
-    <td class="r">${fmt(p.last)}</td>
-    <td class="r ${signClass(p.changePct)}">${signStr(p.changePct)}%</td>
-    <td class="r">${money(base, p.marketValue)}</td>
-    <td class="r ${signClass(p.unrealized)}">${moneySigned(base, p.unrealized)}</td>
-    <td class="r ${signClass(p.unrealizedPct)}">${signStr(p.unrealizedPct)}%</td>
-    <td class="r ${signClass(p.fxPnl)}">${p.currency === base ? '<span class="dim">—</span>' : moneySigned(base, p.fxPnl)}</td>
-    <td class="r">${fmt(p.weight, 1)}</td>
-    <td><div class="row-actions">
-      <button class="x-btn sell" data-act="sell" data-sym="${esc(p.symbol)}" data-qty="${p.quantity}">S</button>
-      <button class="x-btn del"  data-act="del"  data-sym="${esc(p.symbol)}">✕</button>
-    </div></td></tr>`;
-}
-function sumRows(rows) {
-  const s = { marketValue: 0, cost: 0, unrealized: 0, fxPnl: 0, weight: 0 };
-  rows.forEach((r) => { s.marketValue += r.marketValue; s.cost += r.cost; s.unrealized += r.unrealized; s.fxPnl += r.fxPnl || 0; s.weight += r.weight; });
-  s.unrealizedPct = s.cost ? s.unrealized / s.cost * 100 : 0;
-  return s;
-}
-function renderPosFilter(positions, base) {
-  const total = positions.reduce((s, p) => s + p.marketValue, 0) || 1;
-  const byCls = {}; positions.forEach((p) => { const c = assetClass(p.symbol); byCls[c] = (byCls[c] || 0) + p.marketValue; });
-  const chip = (id, label, v) => `<button data-cls="${esc(id)}" class="${posView.filter === id ? 'active' : ''}" title="${money(base, v)}">${esc(label)}${id === 'ALL' ? '' : ` <span class="dim">${(v / total * 100).toFixed(0)}%</span>`}</button>`;
-  $('#pos-filter').innerHTML = chip('ALL', 'ALL', total) +
-    ASSET_CLASSES.filter((c) => byCls[c] || posView.filter === c).map((c) => chip(c, c.toUpperCase(), byCls[c] || 0)).join('');
-}
-function renderPositionsTable() {
-  const { positions, base } = lastTableData;
-  const body = $('#positions-body'), scope = $('#pos-scope');
-  $$('#pos-head th[data-sort]').forEach((th) => {
-    th.classList.toggle('sorted', th.dataset.sort === posView.sortKey);
-    th.dataset.dir = th.dataset.sort === posView.sortKey ? (posView.sortDir > 0 ? '▲' : '▼') : '';
-  });
-  $('#pos-group').value = posView.group;
-  if (!positions.length) {
-    $('#pos-filter').innerHTML = ''; scope.classList.add('hidden');
-    body.innerHTML = `<tr><td colspan="11" class="empty">No positions yet — add one above or type <b>ADD AAPL 10 195.50</b> in the command bar.</td></tr>`;
-    return;
-  }
-  renderPosFilter(positions, base);
-  const q = posView.q.trim().toUpperCase();
-  let rows = positions.filter((p) => (posView.filter === 'ALL' || assetClass(p.symbol) === posView.filter)
-    && (!q || p.symbol.toUpperCase().includes(q) || String(p.name || '').toUpperCase().includes(q)));
-  if (posView.group === 'account') rows = rows.flatMap(splitByAccount);
-  const filtered = posView.filter !== 'ALL' || q;
-  if (filtered) {
-    const s = sumRows(rows), all = positions.reduce((t, p) => t + p.marketValue, 0) || 1;
-    scope.innerHTML = `SHOWING ${new Set(rows.map((r) => r.symbol)).size} OF ${positions.length} · ${money(base, s.marketValue)} (${(s.marketValue / all * 100).toFixed(1)}% of invested) · P&amp;L <span class="${signClass(s.unrealized)}">${moneySigned(base, s.unrealized)} (${signStr(s.unrealizedPct)}%)</span>`;
-    scope.classList.remove('hidden');
-  } else scope.classList.add('hidden');
-  if (!rows.length) { body.innerHTML = `<tr><td colspan="11" class="empty">No holdings match this filter.</td></tr>`; return; }
-  if (posView.group === 'none') { body.innerHTML = sortRows(rows).map((p) => posRowHtml(p, base)).join(''); return; }
-  const groups = {};
-  rows.forEach((r) => { const k = groupKey(r); (groups[k] || (groups[k] = [])).push(r); });
-  body.innerHTML = Object.entries(groups)
-    .map(([k, rs]) => ({ k, rs, s: sumRows(rs) }))
-    .sort((a, b) => b.s.marketValue - a.s.marketValue)
-    .map(({ k, rs, s }) => {
-      const open = !posView.collapsed.includes(posView.group + ':' + k);
-      return `<tr class="grp-row" data-grp="${esc(k)}">
-        <td colspan="5"><span class="grp-caret">${open ? '▾' : '▸'}</span> ${esc(k.toUpperCase())} <span class="dim">· ${rs.length}</span></td>
-        <td class="r">${money(base, s.marketValue)}</td>
-        <td class="r ${signClass(s.unrealized)}">${moneySigned(base, s.unrealized)}</td>
-        <td class="r ${signClass(s.unrealizedPct)}">${signStr(s.unrealizedPct)}%</td>
-        <td class="r ${signClass(s.fxPnl)}">${moneySigned(base, s.fxPnl)}</td>
-        <td class="r">${fmt(s.weight, 1)}</td><td></td></tr>` +
-        (open ? sortRows(rs).map((p) => posRowHtml(p, base)).join('') : '');
-    }).join('');
-}
-$('#pos-filter').addEventListener('click', (e) => {
-  const b = e.target.closest('button[data-cls]'); if (!b) return;
-  posView.filter = b.dataset.cls; savePosView(); renderPositionsTable();
-});
-$('#pos-group').addEventListener('change', (e) => { posView.group = e.target.value; savePosView(); renderPositionsTable(); });
-$('#pos-search').value = posView.q;
-$('#pos-search').addEventListener('input', (e) => { posView.q = e.target.value; savePosView(); renderPositionsTable(); });
-$('#pos-head').addEventListener('click', (e) => {
-  const th = e.target.closest('th[data-sort]'); if (!th) return;
-  const k = th.dataset.sort;
-  if (posView.sortKey === k) posView.sortDir *= -1;
-  else { posView.sortKey = k; posView.sortDir = k === 'symbol' ? 1 : -1; }
-  savePosView(); renderPositionsTable();
-});
-
-// row clicks (event delegation)
-$('#positions-body').addEventListener('click', async (e) => {
-  const grp = e.target.closest('tr.grp-row');
-  if (grp) {
-    const key = posView.group + ':' + grp.dataset.grp, i = posView.collapsed.indexOf(key);
-    if (i >= 0) posView.collapsed.splice(i, 1); else posView.collapsed.push(key);
-    savePosView(); renderPositionsTable(); return;
-  }
-  const actBtn = e.target.closest('[data-act]');
-  if (actBtn) {
-    e.stopPropagation();
-    const sym = actBtn.dataset.sym;
-    if (actBtn.dataset.act === 'del') {
-      if (!confirm(`Remove ${sym} from your portfolio? (does not record a sale)`)) return;
-      await api('/api/portfolio/delete' + baseQS(), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ symbol: sym }) });
-      setStatus(`REMOVED ${sym}`, 'ok'); if (state.selected === sym) state.selected = null; await afterWrite('delete');
-    } else if (actBtn.dataset.act === 'sell') {
-      const held = actBtn.dataset.qty;
-      const qty = prompt(`Sell how many ${sym}? (you hold ${held})\nLeave price blank to sell at market.`, held);
-      if (qty == null) return;
-      const price = prompt(`Sell price for ${sym}? (blank = market price)`, '');
-      try {
-        const res = await api('/api/portfolio/sell' + baseQS(), { method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ symbol: sym, quantity: qty, price: price === '' ? null : price }) });
-        setStatus(`SOLD ${qty} ${sym} · realized ${signStr(res.lastRealized)}`, res.lastRealized >= 0 ? 'ok' : 'err');
-        await afterWrite('sell');
-      } catch (err) { setStatus('SELL failed: ' + err.message, 'err'); }
-    }
-    return;
-  }
-  const row = e.target.closest('tr[data-sym]');
-  if (row) selectSymbol(row.dataset.sym);
-});
+// ---- POSITIONS TABLE: React island (D1, web/src/features/positions) ----------
+// lastTableData feeds the detail view and the chart watch list until E1/E2.
+let lastTableData = { positions: [], base: 'SGD' };
 
 // ===========================================================================
 //  UNDO + CASH
@@ -1050,8 +872,7 @@ document.addEventListener('click', (e) => { if (!e.target.closest('.add-field'))
 //  SECURITY DETAIL + CHART
 // ===========================================================================
 async function selectSymbol(symbol) {
-  state.selected = symbol;
-  $$('#positions-body tr').forEach((tr) => tr.classList.toggle('selected', tr.dataset.sym === symbol));
+  state.selected = symbol; // the positions island highlights the row from the store
   loadNews(symbol);
   await loadDetail();
 }
@@ -1576,6 +1397,31 @@ let lastPositions = [];
 let heatMetric = 'day', allocMode = 'holding', perfRange = '1y', perfSig = '';
 let perfBench = (() => { try { return localStorage.getItem('finsight-bench') || '^GSPC'; } catch { return '^GSPC'; } })();
 const catCache = {};
+// Legacy copies for the allocation chart until C3 imports
+// web/src/features/positions/table.ts (D1 ported the originals there).
+const ASSET_CLASSES = ['Stocks', 'ETFs', 'Crypto', 'Funds & Other'];
+function assetClass(sym) {
+  const t = catCache[sym]?.type;
+  if (t === 'CRYPTOCURRENCY') return 'Crypto';
+  if (t === 'ETF') return 'ETFs';
+  if (t === 'EQUITY') return 'Stocks';
+  return 'Funds & Other';
+}
+function splitByAccount(p) {
+  const hs = p.holdings;
+  if (!hs || !hs.length) return [{ ...p, account: accountName() }];
+  if (hs.length === 1) return [{ ...p, account: hs[0].account }];
+  const costNative = p.avgCost * p.quantity || 1;
+  return hs.map((h) => {
+    const qf = h.quantity / (p.quantity || 1), cf = (h.avgCost * h.quantity) / costNative;
+    const marketValue = p.marketValue * qf, cost = p.cost * cf, unrealized = marketValue - cost;
+    return { ...p, account: h.account, quantity: h.quantity, avgCost: h.avgCost, marketValue, cost, unrealized,
+      unrealizedPct: cost ? unrealized / cost * 100 : 0, fxPnl: p.fxPnl * cf, weight: p.weight * qf, dayChange: p.dayChange * qf };
+  });
+}
+function accountName() {
+  return (accountsCache.find((a) => a.id === state.account) || {}).name || 'Account';
+}
 
 async function ensureCategories(symbols) {
   const missing = symbols.filter((s) => !catCache[s]);
@@ -1840,7 +1686,7 @@ $('#perf-bench').addEventListener('change', (e) => {
 function renderAnalytics(positions) {
   lastPositions = positions || [];
   renderHeatmap(positions); renderAllocation(positions);
-  ensureCategories(positions.map((p) => p.symbol)).then(() => { renderHeatmap(lastPositions); renderAllocation(lastPositions); renderPositionsTable(); loadWealth(); });
+  ensureCategories(positions.map((p) => p.symbol)).then(() => { renderHeatmap(lastPositions); renderAllocation(lastPositions); loadWealth(); });
   const sig = state.base + '|' + positions.map((p) => p.symbol + ':' + p.quantity).join(',');
   if (sig !== perfSig) { perfSig = sig; loadPerformance(); }
 }
