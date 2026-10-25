@@ -187,14 +187,14 @@ try { var d = document.documentElement;
       </div>
 
       <div class="panel">
-        <div class="panel-head"><span class="panel-title">DIVIDENDS</span><span id="div-ttm" class="dim small"></span></div>
-        <div id="dividends" class="dividends muted">Import a broker statement (IBKR) to see dividend income.</div>
+        <div class="panel-head"><span class="panel-title">DIVIDENDS</span><span id="div-ttm" class="dim small" data-island-slot="dividends:head"></span></div>
+        <div id="dividends" class="dividends muted" data-island="dividends"></div>
       </div>
 
       <div class="panel">
         <div class="panel-head"><span class="panel-title">RECENT ACTIVITY</span>
           <button id="ledger-btn" class="mini-btn" title="All trades — fix dates/prices, realized gains by year">LEDGER</button></div>
-        <div id="activity" class="activity"></div>
+        <div id="activity" class="activity" data-island="activity"></div>
       </div>
     </section>
 

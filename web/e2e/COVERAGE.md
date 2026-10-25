@@ -83,3 +83,5 @@ Not yet covered here, owned elsewhere: performance and visual comparisons (P0-5)
 | Watchlist (B1) | search/pick/add/remove/command, error/empty rows, chart adapter and unmount | `B1` | B1, E2 | pass |
 
 | Alerts (B2) | form/command/remove, chart overlay event, seed/dedup toast/beep/desktop mock, 30s poll and unmount | `B2`, `triggers.test` | B2, E2 | pass |
+
+| Income/activity (B3) | forward/received/WHT, ADD/UNDO transactions, error/empty, account race, single 120s poll and unmount | `B3` | B3 | pass (intended stale-account fix) |

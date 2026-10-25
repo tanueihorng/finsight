@@ -112,3 +112,9 @@ export function useSearch(text: string) {
   return useQuery<import('../../../shared/types.ts').SearchItem[]>({ queryKey: ['search', text], enabled: enabled && text.length > 0, staleTime: 0, placeholderData: (previous) => previous,
     queryFn: ({ signal }) => api<import('../../../shared/types.ts').SearchItem[]>('/api/search?q=' + encodeURIComponent(text), { signal }) });
 }
+
+export function useDividends() {
+  const { base, account, enabled } = useScope();
+  return useQuery({ queryKey: ['dividends', base, account], enabled, staleTime: 120_000, refetchInterval: 120_000,
+    queryFn: ({ signal }) => api<import('../../../shared/types.ts').DividendsReport>(`/api/dividends?base=${encodeURIComponent(base)}&account=${encodeURIComponent(account)}`, { signal }) });
+}

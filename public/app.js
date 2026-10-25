@@ -135,7 +135,7 @@ async function runCommand(raw) {
       const [, mkt, pct] = parts;
       if (!mkt || pct == null) return setStatus('Usage: WHT <US|SG|HK|UK|EU|JP|AU|CA|OTHER> <percent>   e.g. WHT US 15', 'err');
       await api('/api/settings/withholding', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ market: mkt, pct }) });
-      setStatus(`Dividend withholding for ${mkt.toUpperCase()} set to ${pct}%`, 'ok'); loadDividends(); afterWrite('withholding'); return;
+      setStatus(`Dividend withholding for ${mkt.toUpperCase()} set to ${pct}%`, 'ok'); afterWrite('withholding'); return;
     }
     if (cmd === 'MKT' || cmd === 'MARKETS') { window.FinSight.bus.invalidate('markets'); setStatus('Refreshing world markets…', 'ok'); return; }
     if (cmd === 'CLEAR') { setStatus(''); return; }
@@ -156,7 +156,7 @@ const baseQS = (extra = '') => `?base=${encodeURIComponent(state.base)}&account=
 // Dividends and FX risk move with holdings, cash and slow FX rates, not every
 // 15s quote tick: refetch them when the holdings/cash/account/base change, or
 // at most every 2 minutes otherwise.
-let sideSig = '', sideAt = 0;
+let sideSig = '', sideAt = 0, dividendSig = ''; // B3: separate holdings refresh from Query's 120s timer
 const SIDE_MAX_AGE = 120000;
 let portfolioRequest = 0;
 async function loadPortfolio() {
@@ -166,9 +166,12 @@ async function loadPortfolio() {
     if (request !== portfolioRequest || query !== baseQS()) return;
     renderPortfolio(data);
     const sig = state.account + '|' + state.base + '|' + (data.positions || []).map((p) => p.symbol + ':' + p.quantity).join(',') + '|' + JSON.stringify(data.cash || []);
+    if (sig !== dividendSig) {
+      const hadPrevious = !!dividendSig; dividendSig = sig;
+      if (hadPrevious) window.FinSight.bus.invalidate('dividends');
+    }
     if (sig !== sideSig || Date.now() - sideAt > SIDE_MAX_AGE) {
       sideSig = sig; sideAt = Date.now();
-      loadDividends(); // keep dividend panel in sync with the active account/base
       loadFxRisk();    // keep FX-risk panel + exposure card in sync too
     }
   } catch (e) { if (request === portfolioRequest && query === baseQS()) setFooter('Portfolio load failed: ' + e.message); }
@@ -195,14 +198,7 @@ function renderPortfolio(data) {
   // watch feed still read lastTableData until E1/E2.
   lastTableData = { positions, base };
   pushChartWatch();
-  // activity
-  $('#activity').innerHTML = (transactions || []).map((t) => {
-    const cls = t.type === 'BUY' ? 't-buy' : t.type === 'SELL' ? 't-sell' : 't-del';
-    const when = new Date(t.time).toLocaleString('en-US', { month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' });
-    let detail = t.type === 'DELETE' ? 'removed'
-      : `${fmt(t.quantity, t.quantity % 1 ? 4 : 0)} @ ${fmt(t.price)}` + (t.realized != null ? `  ·  P&L ${signStr(t.realized)}` : '');
-    return `<div class="line"><span class="ts">${when}</span><span class="${cls}">${t.type}</span><span class="sym amber">${esc(t.symbol)}</span><span class="muted">${detail}</span></div>`;
-  }).join('') || '<div class="muted small">No transactions yet.</div>';
+  // Activity is a portfolio-query consumer (B3).
 
   // charts + heatmap
   renderAnalytics(positions);
@@ -1013,39 +1009,8 @@ function sparkline(points, up) {
 // ===========================================================================
 //  DIVIDENDS (income received, from broker imports)
 // ===========================================================================
-async function loadDividends() {
-  const box = $('#dividends');
-  try {
-    const d = await api('/api/dividends' + baseQS());
-    const base = d.base || state.base;
-    const rc = d.received || { ttm: { gross: d.ttm, tax: 0, net: d.ttm }, total: { gross: d.total, tax: 0, net: d.total } };
-    const fw = d.forwardTotal || { gross: 0, tax: 0, net: 0 };
-    $('#div-ttm').textContent = fw.net ? 'FWD ' + money(base, fw.net, 0) + '/yr net' : (d.count ? 'TTM ' + money(base, rc.ttm.net) : '');
-    if (!d.count && !(d.forward || []).length) { box.innerHTML = '<span class="muted">No dividends yet — hold dividend payers, or import an IBKR statement to track income received.</span>'; return; }
-    const cell = (k, v, sub, cls) => `<div class="fxr-cell"><span class="k">${k}</span><span class="v ${cls || ''}">${v}</span><span class="s">${sub}</span></div>`;
-    const strip = [
-      fw.gross ? cell('FORWARD / YR', money(base, fw.net, 0), `net · ${money(base, fw.gross, 0)} gross`, 'up') : '',
-      fw.tax ? cell('WITHHOLDING / YR', money(base, fw.tax, 0), 'tax at source (est.)', 'down') : '',
-      d.count ? cell('RECEIVED · 12M', money(base, rc.ttm.net, 0), `net · ${money(base, rc.ttm.tax, 0)} withheld`) : '',
-      d.count ? cell('ALL-TIME', money(base, rc.total.net, 0), `net · ${d.count} payments`) : '',
-    ].join('');
-    const dd = (ms) => ms ? new Date(ms).toLocaleDateString('en-US', { month: 'short', day: '2-digit' }) : '—';
-    const fwdRows = (d.forward || []).map((f) => `<tr>
-      <td class="sym">${esc(f.symbol)}</td>
-      <td class="r">${fmt(f.perShare, 2)} <span class="dim">${esc(f.currency)}</span></td>
-      <td class="r">${f.yieldOnCost != null ? fmt(f.yieldOnCost, 2) + '%' : '—'}</td>
-      <td class="r">${f.currentYield != null ? fmt(f.currentYield, 2) + '%' : '—'}</td>
-      <td class="r up">${money(base, f.annualNet, 0)}</td>
-      <td class="r">${dd(f.nextEx)}${f.nextExEstimated ? '<span class="dim">~</span>' : ''}</td></tr>`).join('');
-    const recent = (d.recent || []).slice(0, 8).map((r) => `<div class="dr"><span>${esc(r.date)}</span><span class="ds">${esc(r.symbol)}</span>` +
-      `<span>${money(base, r.baseNet ?? r.baseAmount)}${r.baseTax ? ` <span class="dim">(−${money(base, r.baseTax)}${r.whtActual ? '' : ' est.'})</span>` : ''}</span></div>`).join('');
-    const w = d.withholding || {};
-    box.innerHTML = `<div class="div-strip">${strip}</div>` +
-      (fwdRows ? `<div class="fxr-sub">FORWARD INCOME · current holdings</div><table class="tbl div-tbl"><thead><tr><th>SYM</th><th class="r">/SHARE·YR</th><th class="r">YOC</th><th class="r">YIELD</th><th class="r">NET/YR</th><th class="r">NEXT EX</th></tr></thead><tbody>${fwdRows}</tbody></table>` : '') +
-      (recent ? `<div class="fxr-sub">RECEIVED · net of withholding</div><div class="div-recent">${recent}</div>` : '') +
-      `<div class="fxr-note">Withholding assumed: US ${w.US ?? 30}% · SG ${w.SG ?? 0}% · HK ${w.HK ?? 0}% · EU ${w.EU ?? 15}% (IBKR statements use the actual tax). Change with <b>WHT US 15</b>. ~ = estimated from payment history. YOC = yield on your cost.</div>`;
-  } catch (e) { box.innerHTML = `<span class="down">${esc(e.message)}</span>`; }
-}
+// Command/test adapter until F7; B3 owns the account-keyed query.
+function loadDividends() { return window.FinSight.bus.invalidate('dividends'); }
 
 // ===========================================================================
 //  WATCHLIST
