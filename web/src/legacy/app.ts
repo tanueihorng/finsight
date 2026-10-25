@@ -3,9 +3,14 @@
 // that function (docs/frontend-migration/COUPLING.md §A4).
 interface LegacyAppGlobals {
   selectSymbol?: (symbol: string) => void; // E1 turns this into a store write
+  setStatus?: (msg: string, kind?: 'ok' | 'err' | '') => void; // command-bar status line, shell (F7)
 }
 const legacy = () => window as unknown as LegacyAppGlobals;
 
 export function selectSymbol(symbol: string): void {
   legacy().selectSymbol?.(symbol);
+}
+
+export function setStatus(msg: string, kind: 'ok' | 'err' | '' = ''): void {
+  legacy().setStatus?.(msg, kind);
 }

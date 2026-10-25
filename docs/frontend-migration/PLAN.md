@@ -465,15 +465,16 @@ Two esbuild builds (`bootstrap.js` IIFE; `main.js` ESM with splitting), `manifes
 | F4 | 1 | done (merged 2026-10-25, add0f47) | mig/F4 | Codex | store/auth bridge, sequenced legacy loader, test-only subscribed island; 118 unit + 49 E2E |
 | F5 | 1 | done (merged 2026-10-25, db26138) | mig/F5 | Codex | 20-value legacy format comparisons and UI primitives; 119 unit + 49 E2E |
 | F6 | 1 | done (merged 2026-10-25, c43c7a9) | mig/F6 | Codex | 119 unit + 52 E2E; lazy clock, move/unmount lifecycle, failure isolation; stop before I1/pilots |
-| I1 | 1.5 | done (not merged) | mig/I1-coupling | Claude | `COUPLING.md` (baseline `31437a0`, refreshed after F6) + `scripts/coupling-inventory.mjs`; found 4 misplaced helpers and the C1↔C2, C3↔D1, E2↔B1/A3 couplings |
-| PILOT-1 (A1) | 1.5 | done (not merged) | mig/PILOT-1-markets | Claude | World Markets island; all 5 gate proofs pass (drag/reload, hide, 2 polls per 31 s, lock/unlock, unmount). Found and fixed a contract gap: an island mounting during a lock sent one request; the API client now refuses protected calls while locked. Cold transfer 793,872 B vs 529,973 B baseline (React + Query now load for a real panel); timings within noise |
-| PILOT-2 (C1) | 1.5 | done (not merged) | mig/PILOT-2-summary | Claude | Summary cards + card editor islands, `useFxRisk`; every legacy write goes through `bus.write(kind)` (map completed per COUPLING §A6); fan-out proofs pass. Peek stays legacy (must apply synchronously at load; moves with F8). Intended fix: card order reload bug. Known duplication until D1/C2: `/api/portfolio` and `/api/fx-risk` are each fetched by legacy and by Query |
-| A1 | A | done as PILOT-1 (not merged) | mig/PILOT-1-markets | Claude | |
+| I1 | 1.5 | done (merged 2026-10-25, 101b708) | mig/I1-coupling | Claude | `COUPLING.md` (baseline `31437a0`, refreshed after F6) + `scripts/coupling-inventory.mjs`; found 4 misplaced helpers and the C1↔C2, C3↔D1, E2↔B1/A3 couplings |
+| PILOT-1 (A1) | 1.5 | done (merged 2026-10-25, 4644f1b) | mig/PILOT-1-markets | Claude | World Markets island; all 5 gate proofs pass (drag/reload, hide, 2 polls per 31 s, lock/unlock, unmount). Found and fixed a contract gap: an island mounting during a lock sent one request; the API client now refuses protected calls while locked. Cold transfer 793,872 B vs 529,973 B baseline (React + Query now load for a real panel); timings within noise |
+| PILOT-2 (C1) | 1.5 | done (merged 2026-10-25, 853a550) | mig/PILOT-2-summary | Claude | Summary cards + card editor islands, `useFxRisk`; every legacy write goes through `bus.write(kind)` (map completed per COUPLING §A6); fan-out proofs pass. Peek stays legacy (must apply synchronously at load; moves with F8). Intended fix: card order reload bug. Known duplication until D1/C2: `/api/portfolio` and `/api/fx-risk` are each fetched by legacy and by Query |
+| A1 | A | done as PILOT-1 (merged) | mig/PILOT-1-markets | Claude | |
 | A2–A3 | A | todo | | | |
 | B1–B3 | B | todo | | | |
-| C1 | C | done as PILOT-2 (not merged) | mig/PILOT-2-summary | Claude | |
+| C1 | C | done as PILOT-2 (merged) | mig/PILOT-2-summary | Claude | |
 | C2–C3 | C | todo | | | |
-| D1–D4 | D | todo | | | D1 first |
+| D1 | D | done (not merged) | mig/D1-positions | Claude | Positions table island (toolbar, filter chips, search, sort, group, collapse, row S/✕, flash) + `useCategories`, `useAccounts`; `posView` keeps the `finsight-posview` key. Legacy keeps `lastTableData` fed from `renderPortfolio` for detail/chart (E1/E2) and its own `assetClass`/`splitByAccount` copies for allocation (C3). Intended fix: a failed row ✕ delete now shows an error |
+| D2–D4 | D | todo | | | after D1 |
 | E1–E2 | E | todo | | | |
 | F7–F10 | 3 | todo | | | after A–E merged |
 | G1–G3 | 3 | todo | | | after F10 |

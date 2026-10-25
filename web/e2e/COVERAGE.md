@@ -18,6 +18,11 @@ Card = the migration card(s) that must keep the row green (`docs/frontend-migrat
 | Fan-out (PILOT-2) | account/base switch re-keys the summary; a held old-account response never shows (React and legacy) | `PILOT-2` | F3, F4, F8 | pass |
 | Card editor (PILOT-2) | toggle, reorder, reset update the React summary and persist across reload | `PILOT-2` | C1 | pass (intended fix: a reordered NET WORTH no longer jumps back first after the first reload) |
 | Positions | row count, sort by MKT VAL, search, group by currency | `baseline/positions` | D1 | pass |
+| Positions (D1) | legacy cells, filter chips with %, sort marker, auto-selected first row, row click selects, selection elsewhere clears the highlight | `D1` › renders like legacy | D1, E1 | pass |
+| Positions (D1) | filter scope line, no-match row, search/filter/sort/group/collapse persist across reload, sector groups from categories | `D1` › filter shows the scope line… | D1 | pass |
+| Positions (D1) | All Accounts: "· 2 accts" label; group by account splits a symbol per account | `D1` › All Accounts… | D1 | pass |
+| Positions (D1) | a new price flashes the row and records `lastPrices`; an unchanged refetch clears it | `D1` › a new price flashes… | D1 | pass |
+| Positions (D1) | dragged to the right column it survives reload; a write made while locked shows after unlock | `D1` › dragged to the right column… | D1, F9, F10 | pass |
 | Trades | ADD via command bar, UNDO restores | `baseline/add-sell` | F7, D3 | pass |
 | Trades | SELL with a price (realized P/L), SELL at market | `baseline/trades` | F7, D1 | pass |
 | Trades | row S button prompts for quantity and price | `baseline/trades` | D1 | pass |

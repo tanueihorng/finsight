@@ -35,6 +35,10 @@ export function createStateBridge(store: UiStore): UiState {
 export function setLastPrice(store: UiStore, symbol: string, value: number) {
   store.setState((state) => ({ lastPrices: { ...state.lastPrices, [symbol]: value } }));
 }
+// One store update for a whole portfolio refresh (the positions table records every price).
+export function setLastPrices(store: UiStore, prices: Record<string, number>) {
+  store.setState((state) => ({ lastPrices: { ...state.lastPrices, ...prices } }));
+}
 export function createAuth(target: EventTarget) {
   let unlocked = false;
   const set = (next: boolean) => {

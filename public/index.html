@@ -102,34 +102,7 @@ try { var d = document.documentElement;
           <button type="submit" class="mini-btn solid">BUY</button>
         </form>
 
-        <div class="pos-toolbar">
-          <div class="ranges" id="pos-filter" title="Filter by asset class"></div>
-          <div class="pos-tools">
-            <input id="pos-search" placeholder="SEARCH" autocomplete="off" />
-            <label class="pos-group">GROUP
-              <select id="pos-group">
-                <option value="none">NONE</option><option value="class">ASSET CLASS</option>
-                <option value="account">ACCOUNT</option><option value="sector">SECTOR</option>
-                <option value="currency">CURRENCY</option>
-              </select>
-            </label>
-          </div>
-        </div>
-        <div id="pos-scope" class="pos-scope hidden"></div>
-        <div class="table-wrap">
-          <table class="tbl" id="positions">
-            <thead>
-              <tr id="pos-head">
-                <th data-sort="symbol">SYMBOL</th><th class="r" data-sort="quantity">QTY</th><th class="r" data-sort="avgCost">AVG</th><th class="r" data-sort="last">LAST</th>
-                <th class="r" data-sort="changePct">CHG%</th><th class="r" data-sort="marketValue">MKT VAL</th><th class="r" data-sort="unrealized">P&amp;L</th>
-                <th class="r" data-sort="unrealizedPct">P&amp;L%</th><th class="r" data-sort="fxPnl">FX P&amp;L</th><th class="r" data-sort="weight">WT%</th><th></th>
-              </tr>
-            </thead>
-            <tbody id="positions-body">
-              <tr><td colspan="11" class="empty">No positions yet — add one above or type <b>ADD AAPL 10 195.50</b> in the command bar.</td></tr>
-            </tbody>
-          </table>
-        </div>
+        <div id="positions-view" data-island="positions"></div>
       </div>
 
       <div class="panel">

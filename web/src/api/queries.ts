@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from './client.ts';
-import type { Alert, FxRisk, Markets, Portfolio, WatchItem } from '../../../shared/types.ts';
+import type { Accounts, Alert, Category, FxRisk, Markets, Portfolio, WatchItem } from '../../../shared/types.ts';
 import type {} from '../bootstrap.ts';
 
 // F4 supplies this source in bootstrap, before legacy startup. Until then hooks
@@ -54,4 +54,17 @@ export function useFxRisk() {
   const { base, account, enabled } = useScope();
   return useQuery({ queryKey: ['fx-risk', base, account], enabled, staleTime: 120_000, refetchInterval: 120_000,
     queryFn: ({ signal }) => api<FxRisk>(`/api/fx-risk?base=${encodeURIComponent(base)}&account=${encodeURIComponent(account)}`, { signal }) });
+}
+export function useAccounts() {
+  const { enabled } = useScope();
+  return useQuery({ queryKey: ['accounts'], enabled, staleTime: 60_000,
+    queryFn: ({ signal }) => api<Accounts>('/api/accounts', { signal }) });
+}
+// Categories change rarely (the server caches them for a day); the key follows
+// the held symbols, so a new holding fetches its category.
+export function useCategories(symbols: string[]) {
+  const { enabled } = useScope();
+  const key = [...new Set(symbols)].sort();
+  return useQuery({ queryKey: ['categories', key.join(',')], enabled: enabled && key.length > 0, staleTime: Infinity,
+    queryFn: ({ signal }) => api<Record<string, Category>>('/api/categories?symbols=' + encodeURIComponent(key.join(',')), { signal }) });
 }
