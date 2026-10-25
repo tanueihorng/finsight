@@ -404,8 +404,10 @@ body.locked .lock { display: flex; }
    overlay) also takes it out of the tab order and the accessibility tree. */
 body.locked #root > :not(#lock-screen) { display: none !important; }
 /* and anything the chart scripts move to <body> (expanded chart, chart grid,
-   journal, flyouts), which would otherwise sit above the lock (z-index 1000+) */
-body.locked > :not(#root) { display: none !important; }
+   journal, flyouts), which would otherwise sit above the lock (z-index 1000+).
+   #boot-fallback must stay exempt: it is the only UI that may show while the
+   bundle is broken, which is exactly when nothing else can render. */
+body.locked > :not(#root):not(#boot-fallback) { display: none !important; }
 .lock-box { width: 300px; max-width: 88vw; text-align: center; display: flex; flex-direction: column; gap: 12px; }
 .lock-logo { font-size: 20px; font-weight: 700; letter-spacing: 2px; color: var(--text); display: inline-flex; align-items: center; }
 .lock-title { color: var(--muted); font-size: 13px; letter-spacing: .5px; }
