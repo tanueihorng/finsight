@@ -10,6 +10,7 @@ import { Loading } from './ui/Loading.tsx';
 import { actions } from './features/cash/actions.ts';
 import App from './App.tsx';
 import { startShell } from './shell/boot.ts';
+import { guardedIslandLoader } from './shell/chunkGuard.ts';
 import './shell/compat.ts';
 
 export const queryClient = new QueryClient({ defaultOptions: { queries: queryDefaults } });
@@ -43,7 +44,7 @@ export function mountIslands(registry: IslandRegistry, container: Document | HTM
       const id = node.dataset.island, loader = id && Object.hasOwn(registry, id) ? registry[id] : undefined;
       if (!id || !loader || !belongs(node) || roots.has(node)) continue;
       let Island = components.get(id);
-      if (!Island) { Island = lazy(loader); components.set(id, Island); }
+      if (!Island) { Island = lazy(guardedIslandLoader(loader, registry)); components.set(id, Island); }
       const root = createRoot(node); roots.set(node, { id, root });
       root.render(<IslandBoundary><QueryClientProvider client={queryClient}><Suspense fallback={<Loading />}><Island /></Suspense></QueryClientProvider></IslandBoundary>);
     }
