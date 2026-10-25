@@ -64,13 +64,8 @@ try { var d = document.documentElement;
   </header>
 
   <!-- ===================== COMMAND BAR ===================== -->
-  <div class="cmdbar">
-    <span class="prompt">CMD&nbsp;&gt;</span>
-    <input id="cmd" autocomplete="off" spellcheck="false"
-      placeholder="ADD AAPL 10 195.50   |   SELL AAPL 5   |   CASH USD 5000   |   UNDO   |   LEDGER   |   HELP" />
-    <button id="cmd-go" class="go">GO</button>
-  </div>
-  <div id="cmd-status" class="cmd-status"></div>
+  <div class="cmdbar" data-island="command"></div>
+  <div data-island="status"></div>
 
   <!-- ===================== MAIN GRID ===================== -->
   <main class="grid">
@@ -217,7 +212,7 @@ try { var d = document.documentElement;
   </main>
 
   <footer class="statusbar">
-    <span id="footer-msg">READY.</span>
+    <span data-island="footer"></span>
     <span class="dim">FREE DATA · NO API KEYS · YAHOO FINANCE + WORLD BANK + FRED · DATA MAY BE DELAYED · NOT INVESTMENT ADVICE</span>
   </footer>
 

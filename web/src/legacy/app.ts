@@ -3,9 +3,7 @@
 // that function (docs/frontend-migration/COUPLING.md §A4).
 interface LegacyAppGlobals {
   selectSymbol?: (symbol: string) => void; // E1 turns this into a store write
-  setStatus?: (msg: string, kind?: 'ok' | 'err' | '') => void; // command-bar status line, shell (F7)
   blockIfAll?: () => boolean; // refuses trades in the All Accounts view (F8)
-  setFooter?: (msg: string) => void; // footer message line, shell (F7)
 }
 const legacy = () => window as unknown as LegacyAppGlobals;
 
@@ -13,8 +11,9 @@ export function selectSymbol(symbol: string): void {
   legacy().selectSymbol?.(symbol);
 }
 
+// The command status line and footer live in the store since F7.
 export function setStatus(msg: string, kind: 'ok' | 'err' | '' = ''): void {
-  legacy().setStatus?.(msg, kind);
+  window.FinSight.store.setState({ status: { msg, kind } });
 }
 
 // True (and shows the reason) when the All Accounts view is active.
@@ -23,7 +22,7 @@ export function blockIfAll(): boolean {
 }
 
 export function setFooter(msg: string): void {
-  legacy().setFooter?.(msg);
+  window.FinSight.store.setState({ footer: msg });
 }
 
 // B1 adapter; E2 redirects this to its ChartHost when the chart lane integrates.

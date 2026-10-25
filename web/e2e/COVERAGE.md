@@ -46,6 +46,12 @@ Card = the migration card(s) that must keep the row green (`docs/frontend-migrat
 | Detail (E) | removing the selected holding auto-selects the first; a sale reloads trade markers | `E` › removing the selected holding… | E1, E2, D1 | pass |
 | Chart (E) | expand and the 2-chart grid move the chart out and back into #detail-body; theme change repaints | `E` › expand and the 2-chart grid… | E2 | pass |
 | Detail (E) | 30 s refresh re-reads the quote, not daily history | `E` › the 30 s refresh… | E1 | pass |
+| Command bar (F7) | HELP/?, CLEAR, Enter and GO clear the input, blank ignored | `F7` › HELP and ?… | F7 | pass |
+| Command bar (F7) | usage error for every command that needs arguments | `F7` › usage errors… | F7 | pass |
+| Command bar (F7) | ADD with date, SELL at market, DEL, ERROR path, All Accounts blocks ADD/CASH | `F7` › ADD with a date… | F7, D1 | pass |
+| Command bar (F7) | Q, bare symbol, NEWS [sym], NEWS alone (market news, selection kept), MKT | `F7` › Q, bare symbols… | F7, A2, E1 | pass |
+| Command bar (F7) | WATCH/UNWATCH, ALERT below, WHT, TRADES, CASH, UNDO | `F7` › WATCH/UNWATCH… | F7, B1, B2, D3, D4 | pass |
+| Footer (F7) | ready line and FX coverage note | `F7` › the footer… | F7, C1 | pass |
 | Trades | ADD via command bar, UNDO restores | `baseline/add-sell` | F7, D3 | pass |
 | Trades | SELL with a price (realized P/L), SELL at market | `baseline/trades` | F7, D1 | pass |
 | Trades | row S button prompts for quantity and price | `baseline/trades` | D1 | pass |

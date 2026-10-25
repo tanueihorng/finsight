@@ -55,98 +55,10 @@ let accountsCache = [];
 // ===========================================================================
 //  COMMAND BAR
 // ===========================================================================
-function setStatus(msg, kind = '') { const el = $('#cmd-status'); el.textContent = msg; el.className = 'cmd-status ' + kind; }
-function setFooter(msg) { $('#footer-msg').textContent = msg; }
-
-async function runCommand(raw) {
-  const text = raw.trim();
-  if (!text) return;
-  const parts = text.split(/\s+/);
-  const cmd = parts[0].toUpperCase();
-  try {
-    if (cmd === 'HELP' || cmd === '?') {
-      setStatus('ADD <s> <qty> <px> [date] · SELL <s> <qty> [px] · DEL <s> · UNDO · LEDGER · CASH <ccy> <amt> · WHT <mkt> <%> · Q <s> · WATCH/UNWATCH <s> · ALERT <s> > <px> · NEWS [s] · MKT · CLEAR', 'ok');
-      return;
-    }
-    if (cmd === 'ADD' || cmd === 'BUY') {
-      const [, sym, qty, price, date] = parts; // date optional: ADD AAPL 10 195.50 2024-01-15
-      if (!sym || !qty || !price) return setStatus('Usage: ADD <symbol> <qty> <avg price> [YYYY-MM-DD]   e.g. ADD AAPL 10 195.50', 'err');
-      if (blockIfAll()) return;
-      await api('/api/portfolio/buy' + baseQS(), { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ symbol: sym, quantity: qty, price, date: date || null }) });
-      setStatus(`BOUGHT ${qty} ${sym.toUpperCase()} @ ${price}${date ? ' on ' + date : ''}`, 'ok');
-      await afterWrite('buy'); return;
-    }
-    if (cmd === 'SELL') {
-      const [, sym, qty, price] = parts;
-      if (!sym || !qty) return setStatus('Usage: SELL <symbol> <qty> [price]   (price optional → uses market)', 'err');
-      const res = await api('/api/portfolio/sell' + baseQS(), { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ symbol: sym, quantity: qty, price: price ?? null }) });
-      const r = res.lastRealized;
-      setStatus(`SOLD ${qty} ${sym.toUpperCase()}  ·  realized ${signStr(r)} `, r >= 0 ? 'ok' : 'err');
-      await afterWrite('sell'); return;
-    }
-    if (cmd === 'DEL' || cmd === 'DELETE' || cmd === 'REMOVE') {
-      const sym = parts[1];
-      if (!sym) return setStatus('Usage: DEL <symbol>', 'err');
-      await api('/api/portfolio/delete' + baseQS(), { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ symbol: sym }) });
-      setStatus(`REMOVED ${sym.toUpperCase()} from portfolio`, 'ok');
-      await afterWrite('delete'); return;
-    }
-    if (cmd === 'Q' || cmd === 'QUOTE') {
-      const sym = parts[1];
-      if (!sym) return setStatus('Usage: Q <symbol>', 'err');
-      selectSymbol(sym.toUpperCase()); setStatus(`Loading ${sym.toUpperCase()}…`, 'ok'); return;
-    }
-    if (cmd === 'WATCH') {
-      const sym = parts[1];
-      if (!sym) return setStatus('Usage: WATCH <symbol>', 'err');
-      await api('/api/watchlist/add', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ symbol: sym }) });
-      setStatus(`Watching ${sym.toUpperCase()}`, 'ok'); afterWrite('watchlist-add'); return;
-    }
-    if (cmd === 'UNWATCH') {
-      const sym = parts[1];
-      if (!sym) return setStatus('Usage: UNWATCH <symbol>', 'err');
-      await api('/api/watchlist/remove', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ symbol: sym }) });
-      setStatus(`Unwatched ${sym.toUpperCase()}`, 'ok'); afterWrite('watchlist-remove'); return;
-    }
-    if (cmd === 'ALERT') {
-      const sym = parts[1], op = parts[2], price = parts[3];
-      if (!sym || !op || !price) return setStatus('Usage: ALERT <symbol> > <price>   (use > or <)', 'err');
-      const o = (op.includes('<') || /below|under/i.test(op)) ? '<' : '>';
-      await api('/api/alerts/add', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ symbol: sym, op: o, price }) });
-      setStatus(`Alert set: ${sym.toUpperCase()} ${o} ${price}`, 'ok'); afterWrite('alerts-add'); requestNotify(); return;
-    }
-    if (cmd === 'NEWS') {
-      const sym = parts[1];
-      if (sym) { selectSymbol(sym.toUpperCase()); } else { loadNews(''); }
-      setStatus('Loading news…', 'ok'); return;
-    }
-    if (cmd === 'UNDO') { await doUndo(); return; }
-    if (cmd === 'LEDGER' || cmd === 'TRADES') { openLedger(); return; }
-    if (cmd === 'CASH') {
-      const [, ccy, amt] = parts;
-      if (!ccy || amt == null) return setStatus('Usage: CASH <currency> <amount>   e.g. CASH USD 5000   (0 clears it)', 'err');
-      if (blockIfAll()) return;
-      await setCashBalance(ccy, amt); return;
-    }
-    if (cmd === 'WHT') {
-      const [, mkt, pct] = parts;
-      if (!mkt || pct == null) return setStatus('Usage: WHT <US|SG|HK|UK|EU|JP|AU|CA|OTHER> <percent>   e.g. WHT US 15', 'err');
-      await api('/api/settings/withholding', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ market: mkt, pct }) });
-      setStatus(`Dividend withholding for ${mkt.toUpperCase()} set to ${pct}%`, 'ok'); afterWrite('withholding'); return;
-    }
-    if (cmd === 'MKT' || cmd === 'MARKETS') { window.FinSight.bus.invalidate('markets'); setStatus('Refreshing world markets…', 'ok'); return; }
-    if (cmd === 'CLEAR') { setStatus(''); return; }
-    // Bare symbol → quote it
-    selectSymbol(cmd); setStatus(`Loading ${cmd}…`, 'ok');
-  } catch (e) {
-    setStatus('ERROR: ' + e.message, 'err');
-  }
-}
-$('#cmd-go').addEventListener('click', () => { runCommand($('#cmd').value); $('#cmd').value = ''; });
-$('#cmd').addEventListener('keydown', (e) => { if (e.key === 'Enter') { runCommand($('#cmd').value); $('#cmd').value = ''; } });
+// The command bar is a React island (F7, web/src/features/command). These two
+// stay global for legacy callers and write the store the status/footer islands read.
+function setStatus(msg, kind = '') { state.status = { msg, kind }; }
+function setFooter(msg) { state.footer = msg; }
 
 // ===========================================================================
 //  PORTFOLIO
@@ -383,9 +295,8 @@ let lastTableData = { positions: [], base: 'SGD' };
 //  UNDO + CASH
 // ===========================================================================
 // Undo, CASH and the cash editor are TypeScript (D3, web/src/features/cash).
-// These names stay for the command bar and the ledger's ↶ until F7/D4.
+// doUndo and openCashEditor stay for the legacy buttons that open them until X1.
 function doUndo() { return window.FinSight.actions.undo(); }
-function setCashBalance(ccy, amt) { return window.FinSight.actions.setCashBalance(ccy, amt); }
 function openCashEditor() { state.cashEditorOpen = true; }
 $('#undo-btn').addEventListener('click', doUndo);
 $('#undo-btn').addEventListener('mouseenter', async () => {
@@ -480,20 +391,19 @@ window.FinSightChartHooks = {
 // ===========================================================================
 //  DIVIDENDS (income received, from broker imports)
 // ===========================================================================
-// Command/test adapter until F7; B3 owns the account-keyed query.
+// Test hook (B3 spec) until X1; B3 owns the account-keyed query.
 function loadDividends() { return window.FinSight.bus.invalidate('dividends'); }
 
 // ===========================================================================
 //  WATCHLIST
 // ===========================================================================
-// Command adapter until F7; the watchlist query owns loading and polling.
+// Test hook (session, PILOT-1, D1 specs) until X1; the watchlist query owns loading and polling.
 function loadWatchlist() { return window.FinSight.bus.invalidate('watchlist'); }
 
 // ===========================================================================
 //  PRICE ALERTS + NOTIFICATIONS
 // ===========================================================================
-// Alerts are a React island. Keep command permission/refresh adapters until F7.
-function loadAlerts() { return window.FinSight.bus.invalidate('alerts'); }
+// Alerts are a React island. requestNotify stays global for it (and the ALERT command) until X1.
 function requestNotify() {
   if ('Notification' in window && Notification.permission === 'default') { try { Notification.requestPermission(); } catch {} }
 }
@@ -501,10 +411,7 @@ function requestNotify() {
 // ===========================================================================
 //  NEWS
 // ===========================================================================
-// Command-bar adapter until F7; the island owns rendering and requests.
-function loadNews(symbol) {
-  return window.FinSight.bus.invalidate(symbol ? 'news-selected' : 'news-market');
-}
+// News is a React island (A2); the NEWS command invalidates its keys (F7).
 
 // ===========================================================================
 //  CSV IMPORT / EXPORT
