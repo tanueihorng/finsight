@@ -5,21 +5,21 @@
 
 ---
 
-## Completed implementation — 2026-10-27
+## Merged implementation — 2026-10-27
 
 Completed and verified on **2026-10-27 SGT** in `feature/open-features`.
-Implementation is committed in `22b0436`. User selected review, merge and push; integration verification is in progress. Deployment remains separate.
-Verification: **213 unit, 111 agent and 247 browser tests passed**; one existing live-fixture test skipped.
+Merged into main in `d9ee5c8` after local source review and full integration verification. Deployment/restart remains pending.
+Verification: **213 unit, 111 agent and 253 browser tests passed**; one existing live-fixture test skipped.
 Evidence in the investment workspace: `harness/runs/20261026T171956Z-IBKRTRADES-001-3d89b74e/REPORT.md`.
 Chat deletion spacing follow-up: `harness/runs/20261026T172308Z-CHATDELETE-001-06bb7ec1/SPACING-FIX.md`.
 
 | Spec | Completed feature | Execution task | Status |
 |---|---|---|---|
-| [FEAT-003](features/FEAT-003-kestrel-chat-deletion.md) | Chat deletion, `/delete`, `/clear` and bulk clear | `CHATDELETE-001` | Complete — verified |
-| [FEAT-005](features/FEAT-005-prompt-cache-optimization.md) | Prompt-cache optimization with synthetic measurement | `PROMPTCACHE-001` | Complete — verified |
-| [FEAT-006](features/FEAT-006-new-symbol-trade-sheet.md) | New-symbol purchases through the trade sheet | `TRADENEW-001` | Complete — verified |
-| [FEAT-007](features/FEAT-007-account-transfers.md) | Account transfers preserving lots, FX and undo | `TRADEXFER-001` | Complete — verified |
-| [FEAT-008](features/FEAT-008-ibkr-trade-import.md) | IBKR fill preview and duplicate detection | `IBKRTRADES-001` | Complete — verified |
+| [FEAT-003](features/FEAT-003-kestrel-chat-deletion.md) | Chat deletion, `/delete`, `/clear` and bulk clear | `CHATDELETE-001` | Merged — verified |
+| [FEAT-005](features/FEAT-005-prompt-cache-optimization.md) | Prompt-cache optimization with synthetic measurement | `PROMPTCACHE-001` | Merged — verified |
+| [FEAT-006](features/FEAT-006-new-symbol-trade-sheet.md) | New-symbol purchases through the trade sheet | `TRADENEW-001` | Merged — verified |
+| [FEAT-007](features/FEAT-007-account-transfers.md) | Account transfers preserving lots, FX and undo | `TRADEXFER-001` | Merged — verified |
+| [FEAT-008](features/FEAT-008-ibkr-trade-import.md) | IBKR fill preview and duplicate detection | `IBKRTRADES-001` | Merged — verified |
 
 The earlier panel redesign remains `KESTRELUI-001` / `SEARCHUI-001` in the workspace queue.
 Several UI pieces are already integrated; reconcile its remaining acceptance criteria before starting
@@ -72,3 +72,5 @@ Standalone clones use this backlog and explicit user requests without depending 
 
 
 Modal layering correction (MODALLAYER-001, 2026-10-27): verified in serving main checkout and committed on main at `5f2dda1` and reconciled into feature/open-features. Setup exit controls remain above Kestrel. Routine bug fix; no new feature scope.
+
+Integration evidence in the investment workspace: `harness/runs/20261026T180610Z-FEATURESHIP-001-b6b72115/REPORT.md`. The final source includes the deferred-autofocus repair and static cache shellv51.

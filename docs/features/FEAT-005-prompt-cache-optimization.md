@@ -1,7 +1,7 @@
 # FEAT-005: Prompt Cache Optimization & Template Deduplication
 
 - **ID:** FEAT-005
-- Status: Implemented and verified; committed in `22b0436`, integration selected 2026-10-27.
+- Status: Merged and verified in `d9ee5c8` (2026-10-27); deployment remains separate.
 - **Execution task:** `PROMPTCACHE-001`
 - **Priority:** Medium
 - **Category:** Performance & Cost

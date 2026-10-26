@@ -1,7 +1,7 @@
 # FEAT-006: Trade sheet: + ADD opens the sheet for a new symbol
 
 - Execution task: `TRADENEW-001`
-- Status: Implemented and verified; committed in `22b0436`, integration selected 2026-10-27.
+- Status: Merged and verified in `d9ee5c8` (2026-10-27); deployment remains separate.
 - Active checkout in the investment workspace: `finsight-wt/open-features` (`feature/open-features`).
 - This contract does not claim merge, deployment or confirmed execution.
 

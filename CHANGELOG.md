@@ -36,6 +36,13 @@ Setup and other application dialogs now stay above Kestrel and expanded charts w
 - + ADD and setup manual entry use the trade sheet with symbol search, quote autofill, dated lots, account choice and undo.
 - Stable system-prompt prefix and persisted nullable provider-cache counters. Synthetic DeepSeek cross-date reuse increased from0/825 to640/800 tokens; no guaranteed daily savings.
 - Shared setup/application dialogs remain above Kestrel and expanded charts, below confirmations.
-- Implementation commit `22b0436`; main modal fix `5f2dda1`. Candidate integration checks in progress. No service restart or portfolio mutation.
+- Implementation commit `22b0436`; main modal fix `5f2dda1`. Final integration verification passed:213 unit,111 agent + secret scan,253 browser;1 existing live-fixture skip. No service restart or portfolio mutation.
 
 - Integration review repair: delayed modal autofocus now preserves existing keyboard focus. Deterministic paused-clock regression reproduces the old failure; accessibility/modal/cache upgrade checks cover the repair. Integrated static bundle uses shellv51 because main already used50 for the earlier modal hotfix.
+
+
+### Merged feature delivery — 2026-10-27
+
+- Five selected features and both UI fixes merged into main at `d9ee5c8`; source review additionally repaired a delayed-autofocus race (`a9da04e`) with a paused-clock regression.
+- Final checks:213 unit tests,111 agent tests + secret scan,253 browser tests;1 existing live UI qualification fixture skipped. Build consistency60 files.44 focused modal/accessibility/SW checks also pass.
+- Shellv51 separates the merged bundle from the earlier modal-only cache. Services have not been restarted; no portfolio data, credentials or accepted policy changed.
