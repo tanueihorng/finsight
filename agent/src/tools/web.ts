@@ -9,6 +9,7 @@ import { guardedFetch } from './netguard.ts';
 import { AgentError } from '../types.ts';
 import type { SourceClass } from '../types.ts';
 import { getSecret } from '../secrets.ts';
+import type { Config } from '../config.ts';
 import { addCost, spendSince, startOfToday, cacheGet, cacheSet } from '../store/db.ts';
 import crypto from 'node:crypto';
 import { audit } from '../obs/audit.ts';
@@ -75,6 +76,21 @@ async function cikFor(ctx: ToolCtx, t: string): Promise<{ cik: string; title: st
   const row: any = Object.values(map).find((r: any) => String(r.ticker).toUpperCase() === t.toUpperCase());
   if (!row) throw new AgentError('NOT_FOUND', `${t} is not an SEC registrant ticker (EDGAR covers US-listed filers).`);
   return { cik: String(row.cik_str).padStart(10, '0'), title: row.title };
+}
+
+// Search providers the chat can pick per message, independent of the model.
+// 'auto' keeps config.searchProvider. Availability is key presence only.
+export const SEARCH_CHOICES = ['auto', 'deepseek', 'tavily', 'brave'] as const;
+export type SearchChoice = typeof SEARCH_CHOICES[number];
+const SEARCH_KEYS = { deepseek: ['DeepSeek', 'DEEPSEEK_API_KEY'], tavily: ['Tavily', 'TAVILY_API_KEY'], brave: ['Brave', 'BRAVE_API_KEY'] } as const;
+export function searchProviders(cfg: Config) {
+  return {
+    default: cfg.searchProvider,
+    providers: (Object.keys(SEARCH_KEYS) as (keyof typeof SEARCH_KEYS)[]).map((id) => {
+      const [label, key] = SEARCH_KEYS[id], available = !!getSecret(cfg.home, key);
+      return { id, label, available, reason: available ? undefined : `Add ${key}` };
+    }),
+  };
 }
 
 // Published rate, not a provider invoice. Failed/empty requests are not billable.

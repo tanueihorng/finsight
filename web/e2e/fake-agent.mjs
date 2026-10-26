@@ -19,7 +19,8 @@ const uploads = new Map();
 
 const json = (res, status, body) => { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(body)); };
 const readBody = (req) => new Promise((resolve) => { let b = ''; req.on('data', (c) => { b += c; }); req.on('end', () => { try { resolve(b ? JSON.parse(b) : {}); } catch { resolve({}); } }); });
-const publicThread = (t) => ({ id: t.id, title: t.title, version: t.version, defaultBrain: t.defaultBrain, updatedAt: t.updatedAt });
+const publicThread = (t) => ({ id: t.id, title: t.title, version: t.version, defaultBrain: t.defaultBrain, updatedAt: t.updatedAt,
+  preview: [...t.messages].reverse().find((x) => x.role === 'assistant')?.blocks[0]?.text.slice(0, 120) || '' });
 
 function emit(t, type, data) {
   const ev = { id: ++seq, type, data };
@@ -27,13 +28,13 @@ function emit(t, type, data) {
   for (const res of streams.get(t.id) || []) res.write(`id: ${ev.id}\nevent: ${type}\ndata: ${JSON.stringify(data)}\n\n`);
 }
 
-function runTurn(t, turnId, content, attachments) {
+function runTurn(t, turnId, content, attachments, search = 'tavily') {
   const words = `Echo: ${content}${attachments ? ` (${attachments} attachment${attachments > 1 ? 's' : ''})` : ''}`.split(' ');
   const slow = /\bslow\b/i.test(content);
   const chunks = slow ? Array.from({ length: 40 }, (_, i) => (i ? ' ' : '') + `w${i + 1}`) : words.map((w, i) => (i ? ' ' : '') + w);
   const started = Date.now();
   t.running = turnId;
-  emit(t, 'turn.started', { turnId, label: 'Fake model' });
+  emit(t, 'turn.started', { turnId, label: 'Fake model', search });
   if (/\bquickfail\b/i.test(content)) { t.running = null; emit(t, 'turn.failed', { turnId, code: 'MODEL_ERROR', message: 'model exploded' }); return; }
   if (/\bfail\b/i.test(content)) {
     // after the POST /messages reply (legacy agent-panel.js mis-handles a turn that ends before it)
@@ -65,6 +66,8 @@ const server = http.createServer(async (req, res) => {
 
   if (req.method === 'GET' && p === '/info') return json(res, 200, { name: 'Kestrel', version: 'fake' });
   if (req.method === 'GET' && p === '/brains') return json(res, 200, { brains: [{ id: 'fake', label: 'Fake model', costTier: '$', available: true }], default: 'fake' });
+  if (req.method === 'GET' && p === '/search-providers') return json(res, 200, { default: 'tavily', providers: [
+    { id: 'deepseek', label: 'DeepSeek', available: true }, { id: 'tavily', label: 'Tavily', available: true }, { id: 'brave', label: 'Brave', available: false, reason: 'Add BRAVE_API_KEY' }] });
   if (req.method === 'GET' && p === '/skills') return json(res, 200, { skills: [{ name: 'pre-trade-check', description: 'Check a trade against the policy' }] });
   if (req.method === 'GET' && p === '/cost') return json(res, 200, { period: u.searchParams.get('period') || 'day', totalUsd: 0.5, capUsdPerDay: 2 });
   if (req.method === 'GET' && p === '/threads') return json(res, 200, { threads: [...threads.values()].map(publicThread).reverse() });
@@ -101,7 +104,7 @@ const server = http.createServer(async (req, res) => {
     if (t.title === 'New chat') t.title = String(b.content || '').slice(0, 40);
     if (/\bquickfail\b/i.test(b.content || '')) { runTurn(t, turnId, b.content, 0); return void setTimeout(() => json(res, 200, { turnId, version: t.version }), 300); }
     json(res, 200, { turnId, version: t.version });
-    return runTurn(t, turnId, b.content || '', files.length);
+    return runTurn(t, turnId, b.content || '', files.length, b.search || 'tavily');
   }
   if (t && m[2] === '/stop' && req.method === 'POST') {
     const turnId = t.running;

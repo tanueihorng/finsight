@@ -124,3 +124,36 @@ test('provider-neutral history translates to OpenAI and Anthropic shapes (model 
   assert.equal(a[1].content[0].id, a[2].content[0].tool_use_id);
   assert.match(a[1].content[0].id, /^[A-Za-z0-9_-]+$/);
 });
+
+test('search provider is chosen per message, independent of the model; missing key is refused', async () => {
+  const { clearSecretCache } = await import('../src/secrets.ts');
+  const { searchProviders } = await import('../src/tools/web.ts');
+  const saved = process.env.DEEPSEEK_API_KEY;
+  try {
+    delete process.env.DEEPSEEK_API_KEY; clearSecretCache();
+    const { cfg, db, engine } = setup(() => [{ type: 'text', text: 'ok' }]);
+    assert.equal(searchProviders(cfg).providers.find((p) => p.id === 'deepseek')!.available, false);
+    const t = store.createThread(db);
+    assert.throws(() => engine.send({ threadId: t.id, content: 'a', search: 'deepseek' }), (e: any) => e.code === 'SEARCH_NOT_CONFIGURED');
+    const auto = engine.send({ threadId: t.id, content: 'b', search: 'auto' });
+    await waitTurn(db, auto.turnId);
+    process.env.DEEPSEEK_API_KEY = 'synthetic-deepseek-key'; clearSecretCache();
+    const picked = engine.send({ threadId: t.id, content: 'c', search: 'deepseek' });
+    await waitTurn(db, picked.turnId);
+    const started = store.eventsAfter(db, t.id, 0).filter((e) => e.type === 'turn.started').map((e) => (e.payload as any).search);
+    assert.deepEqual(started, [cfg.searchProvider, 'deepseek']);
+    assert.notEqual(cfg.searchProvider, 'deepseek', 'the shared config is not changed by a per-message pick');
+  } finally {
+    if (saved === undefined) delete process.env.DEEPSEEK_API_KEY; else process.env.DEEPSEEK_API_KEY = saved;
+    clearSecretCache();
+  }
+});
+
+test('chat list preview is the latest assistant text, plain', async () => {
+  const { db, engine } = setup(() => [{ type: 'text', text: '## Summary\n**NVDA** beat   the midpoint.' }]);
+  const t = store.createThread(db);
+  assert.equal(store.threadPreview(db, t.id), '');
+  const r = engine.send({ threadId: t.id, content: 'How did NVDA do?' });
+  await waitTurn(db, r.turnId);
+  assert.equal(store.threadPreview(db, t.id), 'Summary NVDA beat the midpoint.');
+});

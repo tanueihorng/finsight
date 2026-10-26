@@ -82,6 +82,15 @@ export function getThread(db: DB, id: string): Thread | null {
 export function listThreads(db: DB, includeArchived = false): Thread[] {
   return db.prepare(`SELECT * FROM threads ${includeArchived ? '' : 'WHERE archived = 0'} ORDER BY updated_at DESC LIMIT 200`).all().map(toThread);
 }
+// First line of the latest assistant text, for the chat list.
+export function threadPreview(db: DB, threadId: string): string {
+  const rows = db.prepare("SELECT content_json FROM messages WHERE thread_id = ? AND role = 'assistant' ORDER BY seq DESC LIMIT 5").all(threadId) as { content_json: string }[];
+  for (const r of rows) {
+    const text = (JSON.parse(r.content_json) as Block[]).find((b) => b.type === 'text' && b.text?.trim());
+    if (text && text.type === 'text') return text.text.replace(/[#*_`>|-]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120);
+  }
+  return '';
+}
 export function updateThread(db: DB, id: string, patch: { title?: string; archived?: boolean; defaultBrain?: string }): Thread {
   const t = getThread(db, id); if (!t) throw new AgentError('NOT_FOUND', 'Thread not found', 404);
   db.prepare('UPDATE threads SET title = ?, archived = ?, default_brain = ?, updated_at = ? WHERE id = ?')
