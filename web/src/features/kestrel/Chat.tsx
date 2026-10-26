@@ -1,11 +1,14 @@
-import { lazy, Suspense, memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { lazy, Suspense, memo, useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
 import { useStore } from 'zustand';
+import { useCalendar, useEvents, useIntraday, usePortfolio } from '../../api/queries.ts';
+import { Money } from '../../ui/Money.tsx';
 import { IslandBoundary } from '../../ui/IslandBoundary.tsx';
 import { agentApi } from './api.ts';
 import { addFiles, chat, chooseBrain, chooseSearch, closeOverlay, deleteThread, menuItems, newChat, openThread, pageContext, railShown, removeFile, setDraft, setNarrow, stop, submit, toggleThreads, type FileChip, type Item } from './chat.ts';
 import type { Thread } from './api.ts';
-import { Icon } from './icons.tsx';
-import { costLabel, ctxButton, LS, ls, prettyArgs } from './labels.ts';
+import { asks, brief, eventTime, greeting, pctText, portfolioLine, prevClose, symbolLine, usMarket, type Ask, type Brief, type Kind } from './briefing.ts';
+import { Icon, type IconName } from './icons.tsx';
+import { costLabel, ctxButton, LS, ls, prettyArgs, type PageContext } from './labels.ts';
 import { md } from './md.ts';
 import { citeHost, type Turn } from './turns.ts';
 
@@ -206,31 +209,112 @@ function Rail({ onNew }: { onNew: () => void }) {
 }
 
 // ---- start screen ----
-function Welcome({ list, onTry }: { list: string[]; onTry: (s: string) => void }) {
-  const s = useStore(chat);
-  const recent = s.narrow ? (s.threads || []).slice(0, 4) : [];
-  const prompts = s.brains.find((b) => b.id === s.brain)?.ui ? ['Show my holdings as a table', ...list.filter((x) => x !== 'Show my holdings as a table')] : list;
+const KIND_ICON: Record<Kind, IconName> = { portfolio: 'trend', event: 'calendar', macro: 'globe', strategy: 'target' };
+// A small area chart of today's line, coloured by the day's direction, with a
+// dashed baseline at the previous close.
+function Spark({ values, base, dir }: { values: number[]; base: number | null; dir: string }) {
+  const id = useId();
+  if (values.length < 2) return <div className="kx-spark empty" aria-hidden="true" />;
+  const lo = Math.min(...values, base ?? Infinity), hi = Math.max(...values, base ?? -Infinity), span = hi - lo || 1;
+  const x = (i: number) => (i / (values.length - 1)) * 100, y = (v: number) => 4 + (1 - (v - lo) / span) * 28;
+  const line = values.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(2)},${y(v).toFixed(2)}`).join('');
   return (
-    <>
-      <div className="agent-welcome">
-        <div className="hi">What are we looking at today?</div>
-        <div className="sub">Answers use your FinSight data, strategy library, records and the web, with sources and data times. {s.name} never trades.</div>
-      </div>
-      <div className="agent-try" aria-label="Suggestions">{prompts.map((x) => <button key={x} className="agent-chip" onClick={() => onTry(x)}>{x}</button>)}</div>
-      {recent.length > 0 && (
-        <div className="kx-recent">
-          <div className="kx-group">Recent chats</div>
-          {recent.map((t) => (
-            <button key={t.id} className="kx-recent-row" onClick={() => void openThread(t.id)}>
-              <span className="t">{t.title}</span>{t.preview && <span className="p">{t.preview}</span>}
-            </button>
-          ))}
-          <button className="kx-all" onClick={() => toggleThreads(true)}>All chats</button>
-        </div>
-      )}
-    </>
+    <svg className={'kx-spark' + dir} viewBox="0 0 100 36" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+      <defs><linearGradient id={id} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="currentColor" stopOpacity="0.28" /><stop offset="1" stopColor="currentColor" stopOpacity="0" /></linearGradient></defs>
+      {base != null && <line x1="0" x2="100" y1={y(base)} y2={y(base)} className="base" vectorEffect="non-scaling-stroke" />}
+      <path d={`${line}L100,36L0,36Z`} fill={`url(#${id})`} />
+      <path d={line} className="ln" vectorEffect="non-scaling-stroke" />
+    </svg>
   );
 }
+const WEEK = 7 * 864e5;
+const until = (t: number, now: number) => { const m = Math.round((t - now) / 6e4); return m <= 0 ? 'now' : m < 60 ? `in ${m}m` : m < 1440 ? `in ${Math.round(m / 60)}h` : `in ${Math.round(m / 1440)}d`; };
+function Briefing({ b, now, lines }: { b: Brief; now: number; lines: { portfolio: number[]; mover: number[]; moverBase: number | null } }) {
+  const sign = (n: number | null) => (n == null ? '' : n > 0 ? ' up' : n < 0 ? ' down' : '');
+  const pLast = lines.portfolio[lines.portfolio.length - 1];
+  const pBase = pLast != null && b.dayPct != null ? pLast / (1 + b.dayPct / 100) : lines.portfolio[0] ?? null;
+  return (
+    <div className="kx-brief" aria-label="Briefing">
+      <div className="kx-tile">
+        <span className="lbl">Portfolio today</span>
+        <span className={'big' + sign(b.dayPct)}>{b.dayPct == null ? '—' : pctText(b.dayPct)}</span>
+        <span className="sm">{b.dayPnl == null ? (b.holdings ? 'no quotes yet' : 'no holdings') : <Money value={b.dayPnl} currency={b.base} signed decimals={0} />}</span>
+        <Spark values={lines.portfolio} base={pBase} dir={sign(b.dayPct)} />
+      </div>
+      <div className="kx-tile">
+        <span className="lbl">Top mover</span>
+        <span className="big">{b.mover?.symbol || '—'}</span>
+        <span className={'sm' + sign(b.mover?.pct ?? null)}>{b.mover ? pctText(b.mover.pct) : 'nothing moving'}</span>
+        <Spark values={lines.mover} base={lines.moverBase} dir={sign(b.mover?.pct ?? null)} />
+      </div>
+      <div className="kx-tile ev">
+        <span className="lbl">Next event{b.next && <span className="kx-when">{until(b.next.t, now)}</span>}</span>
+        <span className="big ev">{b.next?.label || '—'}</span>
+        <span className="sm">{b.next ? eventTime(b.next.t, now, b.next.timed) : 'none this week'}</span>
+        {/* how close it is: the bar fills over the final week */}
+        <div className="kx-count" aria-hidden="true"><i style={{ width: `${b.next ? Math.round(Math.max(4, Math.min(100, (1 - (b.next.t - now) / WEEK) * 100))) : 0}%` }} /></div>
+      </div>
+    </div>
+  );
+}
+function Welcome({ onTry, onCommand }: { onTry: (s: string) => void; onCommand: () => void }) {
+  const s = useStore(chat);
+  const portfolio = usePortfolio(), events = useEvents(), calendar = useCalendar();
+  const positions = portfolio.data?.positions || [];
+  const bars = useIntraday(positions.map((p) => p.symbol)).data?.results;
+  const now = Date.now();
+  const b = brief(portfolio.data, events.data?.events, calendar.data, now);
+  const lines = { portfolio: portfolioLine(positions, bars), mover: b.mover ? symbolLine(bars, b.mover.symbol) : [], moverBase: b.mover ? prevClose(bars, b.mover.symbol) : null };
+  const market = usMarket(now);
+  const views = !!s.brains.find((x) => x.id === s.brain)?.ui;
+  // The questions are fixed when the start screen opens (like legacy), and once
+  // more when the briefing data first arrives, so a button never changes under the pointer.
+  const loaded = !portfolio.isPending && !events.isPending && !calendar.isPending;
+  const frozen = useRef<{ ctx: PageContext; loaded: boolean; views: boolean; cards: Ask[] } | null>(null);
+  const f = frozen.current;
+  if (!f || f.ctx !== s.welcomeCtx || f.views !== views || (loaded && !f.loaded)) frozen.current = { ctx: s.welcomeCtx, loaded, views, cards: asks(b, s.welcomeCtx, views) };
+  const cards = frozen.current!.cards;
+  const recent = railShown(s) ? [] : (s.threads || []).slice(0, s.narrow ? 4 : 5);
+  const listRef = useRef<HTMLDivElement>(null);
+  // Up/Down move between the jump rows; Enter opens the focused one (it is a button).
+  const onKeys = (e: KeyboardEvent) => {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    const rows = [...(listRef.current?.querySelectorAll<HTMLButtonElement>('.kx-jump-row') || [])];
+    const i = rows.indexOf(document.activeElement as HTMLButtonElement);
+    e.preventDefault();
+    rows[(i + (e.key === 'ArrowDown' ? 1 : rows.length - 1)) % rows.length]?.focus();
+  };
+  return (
+    <div className="kx-start">
+      <div className="kx-hello">
+        <span className="hi">{greeting(now)}</span>
+        <span className={'kx-market' + (market.open ? ' open' : '')} title="NYSE regular hours; exchange holidays are not checked">{market.label}</span>
+      </div>
+      <Briefing b={b} now={now} lines={lines} />
+      <div className="kx-sec">Ask about it</div>
+      <div className="agent-try" aria-label="Suggestions">
+        {cards.map((c) => (
+          <button key={c.kind} className={'agent-chip kx-' + c.kind} onClick={() => onTry(c.text)}>
+            <span className="kx-ic"><Icon name={KIND_ICON[c.kind]} size={14} /></span><span>{c.text}</span>
+          </button>
+        ))}
+      </div>
+      <div className="kx-sec"><span>Jump to</span>{recent.length > 0 && <button className="kx-all" onClick={() => toggleThreads(true)}>All chats</button>}</div>
+      <div className="kx-jump" ref={listRef} onKeyDown={onKeys}>
+        {recent.map((t) => (
+          <button key={t.id} className="kx-jump-row" title={t.preview || t.title} onClick={() => void openThread(t.id)}>
+            <Icon name="chat" size={14} /><span className="t">{t.title}</span><span className="when">{ago(t.updatedAt, now)}</span>
+          </button>
+        ))}
+        <button className="kx-jump-row cmd" onClick={onCommand}>
+          <Icon name="slash" size={14} /><span className="t">Commands and skills</span><span className="when">/cost · /skills · /strategies</span>
+        </button>
+      </div>
+      <div className="kx-foot">Answers cite sources and data times. {s.name} never trades.</div>
+    </div>
+  );
+}
+const ago = (ts: number, now: number) => { const m = Math.max(0, Math.round((now - ts) / 6e4)); return m < 1 ? 'now' : m < 60 ? `${m}m` : m < 1440 ? `${Math.round(m / 60)}h` : `${Math.round(m / 1440)}d`; };
 
 function Offline({ name, why, onRetry }: { name: string; why: [string, string]; onRetry: () => void }) {
   return (
@@ -283,7 +367,7 @@ export function Chat({ inputRef, onRetry }: { inputRef: RefObject<HTMLTextAreaEl
   const items = s.items.map((item) => <ItemView key={item.key} item={item} />);
   if (s.view === 'offline' && s.offline) body = <Offline name={s.name} why={s.offline.why} onRetry={onRetry} />;
   // Notices on a fresh chat (a rejected file, "wait for uploads") show under the welcome, like legacy.
-  else if (s.view === 'welcome') body = <><Welcome list={s.welcome} onTry={send} />{items}</>;
+  else if (s.view === 'welcome') body = <><Welcome onTry={send} onCommand={() => { setDraft('/'); setMenuOpen(true); inputRef.current?.focus(); }} />{items}</>;
   else body = items;
 
   return (
@@ -336,6 +420,12 @@ export function Chat({ inputRef, onRetry }: { inputRef: RefObject<HTMLTextAreaEl
               <button className="agent-icon-btn" title="Attach images or documents (or paste / drop)" aria-label="Attach files" onClick={() => fileRef.current?.click()}><Icon name="clip" /></button>
               <button className={'agent-ctx kx-pill' + (ctxOn ? ' on' : '')} title="Send what you are looking at (symbol, timeframe, strategy) with your message"
                 onClick={() => { const v = !ctxOn; setCtxOn(v); ls.set(LS.ctx, v ? '1' : '0'); }}>{ctxButton(ctxOn, pc)}</button>
+              <label className="kx-pill kx-select" title="Model for this chat">
+                <Icon name="spark" size={13} />
+                <select className="agent-model" aria-label="Model" value={s.brain} onChange={(e) => chooseBrain(e.target.value)}>
+                  {s.brains.map((b) => <option key={b.id} value={b.id} disabled={!b.available} title={b.available ? b.label : b.reason}>{`${b.label} ${b.costTier}${b.ui ? ' · views' : ''}${b.available ? '' : ' · n/a'}`}</option>)}
+                </select>
+              </label>
               {s.searchProviders.length > 0 && (
                 <label className="kx-pill kx-select" title="Web search provider, independent of the model">
                   <Icon name="globe" size={13} />
@@ -345,12 +435,6 @@ export function Chat({ inputRef, onRetry }: { inputRef: RefObject<HTMLTextAreaEl
                   </select>
                 </label>
               )}
-              <label className="kx-pill kx-select" title="Model for this chat">
-                <Icon name="spark" size={13} />
-                <select className="agent-model" aria-label="Model" value={s.brain} onChange={(e) => chooseBrain(e.target.value)}>
-                  {s.brains.map((b) => <option key={b.id} value={b.id} disabled={!b.available} title={b.available ? b.label : b.reason}>{`${b.label} ${b.costTier}${b.ui ? ' · views' : ''}${b.available ? '' : ' · n/a'}`}</option>)}
-                </select>
-              </label>
               <button className={'agent-send' + (s.running ? ' stop' : '')} title={s.running ? 'Stop (Esc)' : 'Send (Enter)'} aria-label={s.running ? 'Stop' : 'Send'}
                 disabled={!s.running && (s.sending || s.view === 'offline' || !brain)} onClick={() => (s.running ? void stop() : send(s.draft))}><Icon name={s.running ? 'stop' : 'up'} /></button>
             </div>

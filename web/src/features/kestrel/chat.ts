@@ -19,6 +19,7 @@ export interface ChatState {
   status: { verb: string; start: number; chars: number }; files: FileChip[]; draft: string; threadsOpen: boolean; threads: Thread[] | null;
   stick: number; // bump to scroll the log to the bottom
   welcome: string[]; // the welcome's suggestions, fixed when it is shown (like legacy)
+  welcomeCtx: PageContext; // the page context the start screen opened with
   // Search provider per message, independent of the model ('auto' = the agent's config default).
   searchProviders: SearchProvider[]; searchDefault: string; search: string;
   todayUsd: number | null;
@@ -28,7 +29,7 @@ export interface ChatState {
 const initial = (): ChatState => ({
   name: 'Kestrel', named: false, brains: [], skills: [], defaultBrain: null, brain: '', thread: null, version: 0, lastEventId: 0,
   view: 'idle', offline: null, items: [], turns: {}, running: null, sending: false,
-  status: { verb: '', start: 0, chars: 0 }, files: [], draft: '', threadsOpen: false, threads: null, stick: 0, welcome: [],
+  status: { verb: '', start: 0, chars: 0 }, files: [], draft: '', threadsOpen: false, threads: null, stick: 0, welcome: [], welcomeCtx: { view: 'terminal' },
   searchProviders: [], searchDefault: '', search: 'auto', todayUsd: null,
   narrow: false, railHidden: ls.get(LS.rail, '1') === '0',
 });
@@ -136,7 +137,7 @@ export function pageContext(): PageContext {
   } catch { /* app not ready */ }
   return c;
 }
-export function showWelcome() { set({ view: 'welcome', items: [], turns: {}, welcome: suggestions(pageContext()) }); }
+export function showWelcome() { const c = pageContext(); set({ view: 'welcome', items: [], turns: {}, welcome: suggestions(c), welcomeCtx: c }); }
 function clearLog() { set({ view: 'log', items: [], turns: {} }); }
 export function newChat() {
   closeStream(); set({ thread: null }); setRunning(null); ls.set(LS.thread, ''); showWelcome();
