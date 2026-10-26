@@ -227,6 +227,7 @@ function Spark({ values, base, dir }: { values: number[]; base: number | null; d
     </svg>
   );
 }
+// Thinking menu labels (the menu is headed Thinking; the pill shows the bulb).
 const effortLabel = (e: string) => (e === 'none' ? 'Off' : e === 'xhigh' ? 'Extra high' : e.charAt(0).toUpperCase() + e.slice(1));
 const WEEK = 7 * 864e5;
 const until = (t: number, now: number) => { const m = Math.round((t - now) / 6e4); return m <= 0 ? 'now' : m < 60 ? `in ${m}m` : m < 1440 ? `in ${Math.round(m / 60)}h` : `in ${Math.round(m / 1440)}d`; };
@@ -347,6 +348,8 @@ export function Chat({ inputRef, onRetry }: { inputRef: RefObject<HTMLTextAreaEl
     return () => ro.disconnect();
   }, []);
   const lastTop = useRef(0);
+  // A blur closes the slash menu shortly after (so a click on it still lands); refocusing cancels that.
+  const blurTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const scrollBottom = (force = false) => { const el = logRef.current; if (el && (force || stick)) { el.scrollTop = el.scrollHeight; setStick(true); } };
   useLayoutEffect(() => { scrollBottom(); }, [s.stick, s.items.length]); // eslint-disable-line react-hooks/exhaustive-deps
   useLayoutEffect(() => { scrollBottom(true); }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -405,7 +408,7 @@ export function Chat({ inputRef, onRetry }: { inputRef: RefObject<HTMLTextAreaEl
             <textarea ref={inputRef} className="agent-input" rows={1} maxLength={12000} aria-label="Message" aria-autocomplete="list" aria-controls={menu ? 'agent-command-menu' : undefined} aria-activedescendant={menu && all.length ? `agent-option-${sel}` : undefined}
               placeholder={s.named ? `Ask ${s.name} anything…  (/ for skills)` : 'Ask anything about your portfolio, a stock, a strategy…  (/ for skills)'}
               value={s.draft} onChange={(e) => { setDraft(e.target.value); setMenuOpen(true); }}
-              onBlur={() => setTimeout(() => setMenuOpen(false), 120)} onFocus={() => setMenuOpen(true)}
+              onBlur={() => { blurTimer.current = setTimeout(() => setMenuOpen(false), 120); }} onFocus={() => { clearTimeout(blurTimer.current); setMenuOpen(true); }}
               onPaste={(e) => { const files = [...(e.clipboardData?.files || [])]; if (files.length) { e.preventDefault(); void addFiles(files); } }}
               onKeyDown={(e) => {
                 // Esc closes the menu first; the shell's Esc (stop / close) must not also run.
@@ -417,15 +420,6 @@ export function Chat({ inputRef, onRetry }: { inputRef: RefObject<HTMLTextAreaEl
                 }
                 if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); if (!s.running) send(s.draft); }
               }} />
-            {brain?.thinking && <div className="kx-thinking" title="Higher effort can take longer and cost more. Applies to the next message.">
-              <label htmlFor="kestrel-effort">Thinking</label>
-              <input id="kestrel-effort" type="range" aria-label="Thinking effort" min="0" max={brain.thinking.levels.length - 1} step="1"
-                value={Math.max(0, brain.thinking.levels.indexOf(s.effort))} disabled={!!s.running || s.sending}
-                aria-valuetext={effortLabel(s.effort)} aria-describedby="kestrel-effort-note"
-                onChange={(e) => chooseEffort(brain.thinking!.levels[Number(e.target.value)]!)} />
-              <strong aria-hidden="true">{effortLabel(s.effort)}</strong>
-              <span id="kestrel-effort-note" className="sr-only">Higher effort can take longer and cost more.</span>
-            </div>}
             <div className="agent-tools-row">
               <button className="agent-icon-btn" title="Attach images or documents (or paste / drop)" aria-label="Attach files" onClick={() => fileRef.current?.click()}><Icon name="clip" /></button>
               <button className={'agent-ctx kx-pill' + (ctxOn ? ' on' : '')} title="Send what you are looking at (symbol, timeframe, strategy) with your message"
@@ -436,6 +430,14 @@ export function Chat({ inputRef, onRetry }: { inputRef: RefObject<HTMLTextAreaEl
                   {s.brains.map((b) => <option key={b.id} value={b.id} disabled={!b.available} title={b.available ? b.label : b.reason}>{`${b.label} ${b.costTier}${b.ui ? ' · views' : ''}${b.available ? '' : ' · n/a'}`}</option>)}
                 </select>
               </label>
+              {brain?.thinking && (
+                <label className={'kx-pill kx-select kx-think' + (s.effort && s.effort !== 'none' ? ' on' : '')} title="Thinking for the next message. More thinking can take longer and cost more.">
+                  <Icon name="bulb" size={13} />
+                  <select className="agent-effort" aria-label="Thinking effort" value={s.effort} disabled={!!s.running || s.sending} onChange={(e) => chooseEffort(e.target.value)}>
+                    <optgroup label="Thinking">{brain.thinking.levels.map((l) => <option key={l} value={l}>{effortLabel(l)}</option>)}</optgroup>
+                  </select>
+                </label>
+              )}
               {s.searchProviders.length > 0 && (
                 <label className="kx-pill kx-select" title="Web search provider, independent of the model">
                   <Icon name="globe" size={13} />

@@ -15,38 +15,40 @@ async function setup(page: Page, narrow = false) {
   await page.reload(); await page.click('#agent-toggle');
   await expect(page.locator('.agent-input:visible')).toBeVisible();
 }
-const slider = (p: Page) => p.getByRole('slider', { name: 'Thinking effort' });
+const effort = (p: Page) => p.getByRole('combobox', { name: 'Thinking effort', exact: true });
 const model = (p: Page) => p.getByRole('combobox', { name: 'Model', exact: true });
 
-test('effort slider uses model levels, remembers each model across reloads, submits selected effort and hides for unsupported models', async ({ page }) => {
+test('thinking menu lists the model levels, remembers each model across reloads, submits the choice and hides for unsupported models', async ({ page }) => {
   await setup(page);
-  await expect(slider(page)).toHaveAttribute('aria-valuetext', 'High');
-  await slider(page).focus(); await slider(page).press('Home'); await expect(slider(page)).toHaveAttribute('aria-valuetext', 'Off');
-  await slider(page).press('ArrowRight'); await expect(slider(page)).toHaveAttribute('aria-valuetext', 'Low');
-  await model(page).selectOption('gpt-6-luna'); await expect(slider(page)).toHaveAttribute('aria-valuetext', 'Off');
-  await slider(page).focus(); await slider(page).press('End'); await slider(page).press('ArrowLeft');
-  await expect(slider(page)).toHaveAttribute('aria-valuetext', 'Extra high');
+  await expect(effort(page)).toHaveValue('high');
+  await expect(effort(page).locator('option')).toHaveText(['Off', 'Low', 'High', 'Max']);
+  await expect(page.locator('.kx-think:visible')).toHaveClass(/\bon\b/);
+  await effort(page).selectOption('none'); await expect(page.locator('.kx-think:visible')).not.toHaveClass(/\bon\b/);
+  await effort(page).selectOption('low');
+  await model(page).selectOption('gpt-6-luna'); await expect(effort(page)).toHaveValue('none');
+  await expect(effort(page).locator('option')).toHaveText(['Off', 'Low', 'Medium', 'High', 'Extra high', 'Max']);
+  await effort(page).selectOption('xhigh');
   const sent = page.waitForRequest((r) => r.method() === 'POST' && /\/messages$/.test(new URL(r.url()).pathname));
   await page.locator('.agent-input:visible').fill('tools'); await page.locator('.agent-input:visible').press('Enter');
   const body = (await sent).postDataJSON(); expect(body.brain).toBe('gpt-6-luna'); expect(body.effort).toBe('xhigh');
-  await expect(slider(page)).toBeDisabled();
+  await expect(effort(page)).toBeDisabled();
   await expect(page.locator('.agent-turn:visible').last().locator('.agent-meta')).toBeVisible();
-  await expect(slider(page)).toBeEnabled();
-  await model(page).selectOption('deepseek-flash'); await expect(slider(page)).toHaveAttribute('aria-valuetext', 'Low');
-  await model(page).selectOption('gpt-6-sol'); await expect(slider(page)).toHaveAttribute('aria-valuetext', 'Off');
-  await model(page).selectOption('gpt-6-luna'); await expect(slider(page)).toHaveAttribute('aria-valuetext', 'Extra high');
-  await page.reload(); await expect(slider(page)).toBeVisible(); await expect(slider(page)).toHaveAttribute('aria-valuetext', 'Extra high');
-  await model(page).selectOption('fake'); await expect(slider(page)).toHaveCount(0);
+  await expect(effort(page)).toBeEnabled();
+  await model(page).selectOption('deepseek-flash'); await expect(effort(page)).toHaveValue('low');
+  await model(page).selectOption('gpt-6-sol'); await expect(effort(page)).toHaveValue('none');
+  await model(page).selectOption('gpt-6-luna'); await expect(effort(page)).toHaveValue('xhigh');
+  await page.reload(); await expect(effort(page)).toBeVisible(); await expect(effort(page)).toHaveValue('xhigh');
+  await model(page).selectOption('fake'); await expect(effort(page)).toHaveCount(0);
 });
 
-test('narrow panel slider is accessible, fits its container and sends DeepSeek off without remapping it', async ({ page }) => {
+test('narrow panel: the thinking menu fits the composer, passes axe and sends DeepSeek off without remapping it', async ({ page }) => {
   await setup(page, true);
-  await slider(page).focus(); await slider(page).press('Home');
+  await effort(page).selectOption('none');
   const sent = page.waitForRequest((r) => r.method() === 'POST' && /\/messages$/.test(new URL(r.url()).pathname));
   await page.locator('.agent-input:visible').fill('hello'); await page.locator('.agent-input:visible').press('Enter');
   expect((await sent).postDataJSON().effort).toBe('none');
-  await expect(slider(page)).toBeEnabled();
-  const fits = await slider(page).evaluate((el) => { const a = el.getBoundingClientRect(), b = el.parentElement!.getBoundingClientRect(); return a.left >= b.left && a.right <= b.right + 1; });
+  await expect(effort(page)).toBeEnabled();
+  const fits = await page.locator('.kx-think:visible').evaluate((el) => { const a = el.getBoundingClientRect(), b = el.closest('.agent-box')!.getBoundingClientRect(); return a.left >= b.left && a.right <= b.right + 1; });
   expect(fits).toBe(true);
-  const a11y = await new AxeBuilder({ page }).include('.kx-thinking').analyze(); expect(a11y.violations).toEqual([]);
+  const a11y = await new AxeBuilder({ page }).include('.agent-tools-row').analyze(); expect(a11y.violations).toEqual([]);
 });
