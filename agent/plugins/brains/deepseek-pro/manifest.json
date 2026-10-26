@@ -18,7 +18,8 @@
     "streaming": true,
     "nativeSearch": false,
     "contextTokens": 1000000,
-    "vision": false
+    "vision": false,
+    "ui": true
   },
   "costTier": "$$",
   "maxOutputTokens": 8000

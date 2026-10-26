@@ -94,7 +94,7 @@ async function route(d: ApiDeps, req: http.IncomingMessage, res: http.ServerResp
   if (p === '/v1/brains' && m === 'GET') {
     return send(res, 200, { default: d.cfg.defaultBrain, brains: [...d.brains.values()].map((b) => ({
       id: b.manifest.id, label: b.manifest.label, costTier: b.manifest.costTier, transport: b.manifest.transport,
-      tools: b.manifest.capabilities.tools, nativeSearch: b.manifest.capabilities.nativeSearch, available: b.available, reason: b.reason })) });
+      ui: !!d.cfg.uiViews && b.available && b.manifest.capabilities.tools && !!b.manifest.capabilities.ui && b.manifest.transport !== 'claude-code', tools: b.manifest.capabilities.tools, nativeSearch: b.manifest.capabilities.nativeSearch, available: b.available, reason: b.reason })) });
   }
   if (p === '/v1/search-providers' && m === 'GET') return send(res, 200, searchProviders(d.cfg));
   if (p === '/v1/info' && m === 'GET') return send(res, 200, { name: d.cfg.assistantName, version: '0.2.0' });
