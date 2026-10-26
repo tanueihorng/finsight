@@ -16,6 +16,7 @@ const FileConfig = z.object({
   finsightRepo: z.string().optional(),
   recordsDir: z.string().optional(),
   defaultBrain: z.string().optional(),
+  uiViews: z.boolean().optional(),
   assistantName: z.string().min(1).max(24).optional(),
   timezone: z.string().max(64).optional(),
   logRetentionDays: z.number().int().min(1).max(365).optional(),
@@ -34,7 +35,7 @@ const FileConfig = z.object({
 
 export type Limits = { turnSteps: number; turnSeconds: number; turnUsd: number; dayUsd: number; searchesPerTurn: number; fetchesPerTurn: number };
 export type Config = {
-  uiViews?: boolean; // default off; KESTREL_UI=1 and a qualified brain are both required
+  uiViews?: boolean; // default off; global env/config gate and qualified brain both required
   home: string; dbPath: string; port: number; finsightUrl: string; finsightDataDir: string; finsightRepo: string;
   recordsDir: string; pluginsDir: string; privateStrategiesDir: string; defaultBrain: string;
   searchProvider: 'tavily' | 'brave' | 'deepseek' | 'none'; fetchProvider: 'local' | 'deepseek'; edgarUserAgent: string; limits: Limits; scratchDir: string;
@@ -52,7 +53,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     file = parsed.data;
   }
   return {
-    uiViews: env.KESTREL_UI === '1',
+    uiViews: env.KESTREL_UI === undefined ? (file.uiViews ?? false) : env.KESTREL_UI === '1',
     home,
     dbPath: path.join(home, 'agent.db'),
     port: Number(env.AGENT_PORT) || file.port || 8100,

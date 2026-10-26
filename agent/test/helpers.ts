@@ -39,7 +39,7 @@ function bars(n: number, start = 100, drift = 0.002) {
 
 export type Fake = { url: string; dataDir: string; calls: { method: string; path: string; auth: string | undefined }[]; close: () => Promise<void>; down: boolean };
 
-export async function fakeFinsight(): Promise<Fake> {
+export async function fakeFinsight(options: { scopedAccounts?: boolean } = {}): Promise<Fake> {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-fs-'));
   fs.writeFileSync(path.join(dataDir, 'agent-link.json'), JSON.stringify({ token: TOKEN, proxySecret: PROXY_SECRET }), { mode: 0o600 });
   const calls: Fake['calls'] = [];
@@ -51,11 +51,21 @@ export async function fakeFinsight(): Promise<Fake> {
     if (req.headers.authorization !== `Bearer ${TOKEN}`) return j(401, { error: 'Locked' });
     if (req.method !== 'GET') return j(403, { error: 'no' });
     switch (u.pathname) {
-      case '/api/portfolio': return j(200, PORTFOLIO);
+      case '/api/portfolio': {
+        const account = u.searchParams.get('account');
+        if (!options.scopedAccounts || !account || account === 'ALL') return j(200, PORTFOLIO);
+        const positions = account === 'a1' ? PORTFOLIO.positions.slice(0, 2) : account === 'a2' ? PORTFOLIO.positions.slice(2) : [];
+        const cash = account === 'a1' ? PORTFOLIO.cash.filter((c) => c.ccy === 'USD') : account === 'a2' ? PORTFOLIO.cash.filter((c) => c.ccy === 'SGD') : [];
+        const totalValue = positions.reduce((n, p) => n + p.marketValue, 0), cashBase = cash.reduce((n, c) => n + c.base, 0);
+        return j(200, { ...PORTFOLIO, account, positions, cash, summary: { totalValue, cashBase, netWorth: totalValue + cashBase, totalCost: positions.reduce((n, p) => n + p.cost, 0), totalUnrealized: positions.reduce((n, p) => n + p.unrealized, 0), realizedPnl: account === 'a1' ? 100 : account === 'a2' ? 20 : 0 } });
+      }
       case '/api/accounts': return j(200, { accounts: [{ id: 'a1', name: 'IBKR', type: 'Brokerage', count: 2 }, { id: 'a2', name: 'DBS', type: 'Bank', count: 1 }], activeId: 'a1' });
       case '/api/categories': return j(200, { NVDA: { category: 'Technology' }, VOO: { category: 'ETF' }, 'D05.SI': { category: 'Financial Services' } });
       case '/api/events': return j(200, { events: [{ symbol: 'NVDA', type: 'Earnings', time: Date.now() + 5 * 864e5 }] });
-      case '/api/quote': return j(200, { quotes: [{ symbol: u.searchParams.get('symbols'), price: 10, currency: 'USD' }] });
+      case '/api/quote': return j(200, { quotes: (u.searchParams.get('symbols') || '').split(',').map((symbol) => {
+        const p = PORTFOLIO.positions.find((p) => p.symbol === symbol);
+        return { symbol, name: p?.name || symbol, price: p?.last ?? 10, currency: p?.currency || 'USD', change: 1, changePct: 1 };
+      }) });
       case '/api/history': return j(200, { symbol: u.searchParams.get('symbol'), meta: { currency: 'USD' }, points: bars(500) });
       case '/api/history/batch': {
         const results: Record<string, unknown> = {};

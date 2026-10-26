@@ -209,13 +209,14 @@ function Rail({ onNew }: { onNew: () => void }) {
 function Welcome({ list, onTry }: { list: string[]; onTry: (s: string) => void }) {
   const s = useStore(chat);
   const recent = s.narrow ? (s.threads || []).slice(0, 4) : [];
+  const prompts = s.brains.find((b) => b.id === s.brain)?.ui ? ['Show my holdings as a table', ...list.filter((x) => x !== 'Show my holdings as a table')] : list;
   return (
     <>
       <div className="agent-welcome">
         <div className="hi">What are we looking at today?</div>
         <div className="sub">Answers use your FinSight data, strategy library, records and the web, with sources and data times. {s.name} never trades.</div>
       </div>
-      <div className="agent-try" aria-label="Suggestions">{list.map((x) => <button key={x} className="agent-chip" onClick={() => onTry(x)}>{x}</button>)}</div>
+      <div className="agent-try" aria-label="Suggestions">{prompts.map((x) => <button key={x} className="agent-chip" onClick={() => onTry(x)}>{x}</button>)}</div>
       {recent.length > 0 && (
         <div className="kx-recent">
           <div className="kx-group">Recent chats</div>
@@ -347,7 +348,7 @@ export function Chat({ inputRef, onRetry }: { inputRef: RefObject<HTMLTextAreaEl
               <label className="kx-pill kx-select" title="Model for this chat">
                 <Icon name="spark" size={13} />
                 <select className="agent-model" aria-label="Model" value={s.brain} onChange={(e) => chooseBrain(e.target.value)}>
-                  {s.brains.map((b) => <option key={b.id} value={b.id} disabled={!b.available} title={b.available ? b.label : b.reason}>{`${b.label} ${b.costTier}${b.available ? '' : ' · n/a'}`}</option>)}
+                  {s.brains.map((b) => <option key={b.id} value={b.id} disabled={!b.available} title={b.available ? b.label : b.reason}>{`${b.label} ${b.costTier}${b.ui ? ' · views' : ''}${b.available ? '' : ' · n/a'}`}</option>)}
                 </select>
               </label>
               <button className={'agent-send' + (s.running ? ' stop' : '')} title={s.running ? 'Stop (Esc)' : 'Send (Enter)'} aria-label={s.running ? 'Stop' : 'Send'}

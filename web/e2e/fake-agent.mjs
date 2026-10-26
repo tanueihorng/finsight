@@ -63,6 +63,7 @@ function runTurn(t, turnId, content, attachments, search = 'tavily') {
     if (/\buidelay\b/i.test(content)) setTimeout(deliver, 1800); else deliver();
   }
   if (/\bmarkdown\b/i.test(content)) chunks.splice(0, chunks.length, '## Head\n**bold** <script>window.__xss = 1</script> <img src=x onerror="window.__xss = 2">\n\n| Sym | Chg |\n|---|---|\n| AAPL | +1.5% |');
+  if (/\bnestedmarkdown\b/i.test(content)) chunks.splice(0, chunks.length, '**"Hottest" splits into two answers right now: Friday\'s hottest *move* was cybersecurity.** The renderer should keep this sentence bold.\n\n`**literal** *code*`');
   let i = 0, text = '';
   const tick = () => {
     if (t.running !== turnId) return; // stopped
