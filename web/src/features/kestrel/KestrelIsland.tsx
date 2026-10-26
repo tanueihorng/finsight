@@ -19,7 +19,8 @@ const cssWidth = () => parseInt(getComputedStyle(document.documentElement).getPr
 
 export default function KestrelIsland() {
   const name = useStore(chat, (s) => s.name), named = useStore(chat, (s) => s.named), rail = useStore(chat, railShown);
-  const chatTitle = useStore(chat, (s) => (s.view === 'welcome' ? 'New chat' : s.thread?.title || ''));
+  // The list has the title the agent set from the first message; the open thread object keeps its creation title.
+  const chatTitle = useStore(chat, (s) => (s.view === 'welcome' ? 'New chat' : s.threads?.find((x) => x.id === s.thread?.id)?.title || s.thread?.title || ''));
   const [mode, setModeState] = useState<Mode>(() => (ls.get(LS.mode, 'side') === 'dock' ? 'dock' : 'side'));
   const [open, setOpen] = useState(false);
   const [collapsed, setCollapsedState] = useState(() => ls.get(LS.collapsed, '0') === '1');
