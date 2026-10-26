@@ -24,17 +24,20 @@ Now with <b>↗ Kestrel</b>, a built-in AI research agent that knows your portfo
 <a href="#-features">Features</a> ·
 <a href="#-fx-risk--macro">FX risk &amp; macro</a> ·
 <a href="#-themes--fonts">Themes</a> ·
-<a href="#%EF%B8%8F-architecture">Architecture</a> ·
-<a href="DOCS.md">Developer docs</a>
+<a href="docs/architecture/SYSTEM.md">System Architecture</a> ·
+<a href="docs/BACKLOG.md">Product Backlog</a> ·
+<a href="AGENTS.md">Agent Protocol</a>
 </p>
 
 </div>
 
 ---
 
+For code changes, start with [AGENTS.md](AGENTS.md) and the [documentation map](docs/README.md).
+
 ## ✨ Why FinSight
 
-A personal trading terminal that's **small, hackable, and 100% free** — inspired by the Bloomberg-terminal idea but rebuilt as a web app you run locally: a zero-dependency Node server and a pre-built React UI, so a clone plus `node server.ts` is all it takes. Your portfolio lives in a single `data/portfolio.json` on your machine and **never leaves it**. No sign-up, no paid feeds, no telemetry — just `node server.ts` and a browser tab.
+A personal trading terminal that's **small, hackable, and 100% free** — inspired by the Bloomberg-terminal idea but rebuilt as a web app you run locally: a zero-dependency Node server and a pre-built React UI, so a clone plus `node server.ts` is all it takes. Your portfolio is stored locally in the configured data directory. Kestrel can send selected portfolio context to the AI provider you configure. No sign-up, no paid feeds, no telemetry — just `node server.ts` and a browser tab.
 
 It's built for the investor who **funds in one currency and invests in another** (e.g. convert SGD → USD to buy US stocks): it separates how much of your return came from the **stock moving** vs the **currency moving**, and gives you a real **FX-risk cockpit**.
 
@@ -93,7 +96,22 @@ Then open **http://localhost:8000**. On a Mac you can also just double-click **`
 
 Want to look around first? `npm run demo` opens FinSight + Kestrel on a **made-up portfolio** (PIN `2468`) without touching any real data.
 
-A first-launch wizard sets your name + base currency and lets you **import a broker CSV**, add holdings manually, or start empty. Non-technical friend? Point them at **[START-HERE.md](START-HERE.md)**.
+A first-launch wizard sets your name + base currency and lets you **import a broker CSV**, add holdings manually, or start empty.
+
+<details>
+<summary><b>Setup & Troubleshooting Guide (Mac, Windows, Linux)</b></summary>
+
+### Quick Run by OS
+* **macOS:** Open the folder and double-click `start.command` (if prompted, right-click `start.command` → Open). Or run `node server.ts`.
+* **Windows:** Open `cmd` in the folder and run `node server.ts`.
+* **Linux:** Run `node server.ts` in your shell.
+
+### Common Questions & Fixes
+* **Node.js version:** Requires Node.js 24+ (verify with `node -v`). Download LTS from [nodejs.org](https://nodejs.org).
+* **Port in use:** Run with `PORT=9000 node server.ts` to use another port.
+* **Forgot your PIN?** Delete `data/auth.json` in the app directory to reset your PIN without losing portfolio holdings.
+* **Offline & Private:** All holdings are saved locally in `data/portfolio.json`. Upstream financial quotes are pulled directly and keyless.
+</details>
 
 <details>
 <summary><b>Import your holdings from a spreadsheet (CSV)</b></summary>

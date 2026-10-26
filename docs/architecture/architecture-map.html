@@ -1,0 +1,653 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>FinSight Architecture</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: a lane-based system map (left to right = request path) with a live
+   inspector beside it; flows animate packets across the map; API catalogue and
+   engineering practices below, each wired back to the map. Terminal violet,
+   taken from FinSight's own theme. */
+:root {
+  --bg: #f5f4f9; --panel: #ffffff; --panel-2: #efedf6; --line: #dcd8e8; --line-2: #c4bfd6;
+  --fg: #1a1730; --muted: #5d5878; --faint: #8b86a3;
+  --accent: #6a4ad1; --accent-ink: #ffffff; --glow: rgba(106,74,209,.22);
+  --c-client: #6a4ad1; --c-edge: #0a7fb5; --c-domain: #0e8a72; --c-storage: #b26a00; --c-external: #c2366b; --c-tool: #6b5bd6;
+  --tint-client: rgba(106,74,209,.07); --tint-edge: rgba(10,127,181,.07); --tint-domain: rgba(14,138,114,.07);
+  --tint-storage: rgba(178,106,0,.08); --tint-external: rgba(194,54,107,.07); --tint-tool: rgba(107,91,214,.07);
+  --get: #0e8a72; --post: #b26a00; --del: #c2366b; --patch: #0a7fb5; --sse: #6a4ad1;
+  --f-display: "IBM Plex Sans Condensed", "Arial Narrow", "Helvetica Neue", sans-serif;
+  --f-body: "IBM Plex Sans", -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #09090f; --panel: #10101a; --panel-2: #161624; --line: #23233a; --line-2: #34344f;
+  --fg: #e3e2ee; --muted: #a09fb8; --faint: #6f6e8a;
+  --accent: #a78bfa; --accent-ink: #120d24; --glow: rgba(167,139,250,.28);
+  --c-client: #a78bfa; --c-edge: #4cb8ec; --c-domain: #3fcfa6; --c-storage: #f0b44c; --c-external: #f27aa6; --c-tool: #9d8ff5;
+  --tint-client: rgba(167,139,250,.07); --tint-edge: rgba(76,184,236,.06); --tint-domain: rgba(63,207,166,.06);
+  --tint-storage: rgba(240,180,76,.06); --tint-external: rgba(242,122,166,.06); --tint-tool: rgba(157,143,245,.07);
+  --get: #3fcfa6; --post: #f0b44c; --del: #f27aa6; --patch: #4cb8ec; --sse: #a78bfa;
+  color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #09090f; --panel: #10101a; --panel-2: #161624; --line: #23233a; --line-2: #34344f;
+  --fg: #e3e2ee; --muted: #a09fb8; --faint: #6f6e8a;
+  --accent: #a78bfa; --accent-ink: #120d24; --glow: rgba(167,139,250,.28);
+  --c-client: #a78bfa; --c-edge: #4cb8ec; --c-domain: #3fcfa6; --c-storage: #f0b44c; --c-external: #f27aa6; --c-tool: #9d8ff5;
+  --tint-client: rgba(167,139,250,.07); --tint-edge: rgba(76,184,236,.06); --tint-domain: rgba(63,207,166,.06);
+  --tint-storage: rgba(240,180,76,.06); --tint-external: rgba(242,122,166,.06); --tint-tool: rgba(157,143,245,.07);
+  --get: #3fcfa6; --post: #f0b44c; --del: #f27aa6; --patch: #4cb8ec; --sse: #a78bfa;
+  color-scheme: dark; }
+
+* { box-sizing: border-box; }
+html, body { background: var(--bg); color: var(--fg); }
+body { font: 14px/1.55 var(--f-body); padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 48px; }
+.wrap { max-width: 1480px; margin: 0 auto; display: grid; gap: 22px; }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+header.top { display: grid; gap: 14px; padding-block: 28px 4px; }
+.eyebrow { font: 500 11px/1 var(--f-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--accent); }
+h1 { margin: 0; font: 700 clamp(30px, 4.4vw, 48px)/1.02 var(--f-display); letter-spacing: -.01em; text-wrap: balance; }
+.lede { margin: 0; max-width: 70ch; color: var(--muted); font-size: 15px; }
+.stats { display: flex; flex-wrap: wrap; gap: 8px 22px; font: 12px/1.3 var(--f-mono); color: var(--muted); }
+.stats b { color: var(--fg); font-weight: 500; font-variant-numeric: tabular-nums; }
+.crosslink { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--glow); }
+.crosslink:hover { border-color: var(--accent); }
+
+/* ---- flow console ---- */
+.console { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px 16px; align-items: center; }
+.flows { display: flex; flex-wrap: wrap; gap: 6px; }
+.flow-btn { border: 1px solid var(--line-2); background: var(--panel); border-radius: 999px; padding: 6px 12px; font-size: 12.5px; cursor: pointer; color: var(--muted); transition: border-color .15s, color .15s, background .15s; }
+.flow-btn:hover { color: var(--fg); border-color: var(--accent); }
+.flow-btn[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.transport { display: flex; gap: 6px; align-items: center; }
+.icon-btn { width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--panel); cursor: pointer; display: grid; place-items: center; }
+.icon-btn:hover { border-color: var(--accent); }
+.icon-btn svg { width: 14px; height: 14px; fill: currentColor; }
+.speed { font: 12px var(--f-mono); color: var(--muted); display: flex; gap: 6px; align-items: center; }
+.speed select { background: var(--panel); border: 1px solid var(--line-2); border-radius: 6px; padding: 4px 6px; font: inherit; color: var(--fg); }
+
+/* ---- stage ---- */
+.stage { display: block; }
+.mapbox { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; position: relative; display: flex; flex-direction: column; }
+.mapbox:fullscreen { border-radius: 0; border: 0; background: var(--bg); padding: max(10px, env(safe-area-inset-top, 0px)) max(10px, env(safe-area-inset-right, 0px)) 0 max(10px, env(safe-area-inset-left, 0px)); }
+.mapbox:fullscreen .mapscroll { height: auto; flex: 1; }
+.mapscroll { position: relative; height: clamp(440px, calc(100vh - 150px), 980px); overflow: hidden; touch-action: none; cursor: grab; user-select: none; }
+.mapscroll.panning { cursor: grabbing; }
+.zoombar { position: absolute; left: 12px; bottom: 12px; display: flex; gap: 4px; padding: 4px; background: var(--panel); border: 1px solid var(--line-2); border-radius: 10px; box-shadow: 0 6px 20px rgba(0,0,0,.18); }
+.zoombar button { min-width: 32px; height: 30px; padding: 0 8px; border: 0; border-radius: 7px; background: transparent; cursor: pointer; font: 600 13px var(--f-mono); color: var(--fg); }
+.zoombar button:hover { background: var(--panel-2); }
+.zoombar button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.zoombar { opacity: .6; transition: opacity .2s; }
+.zoombar:hover, .zoombar:focus-within { opacity: 1; }
+.zoombar .zitems { display: flex; gap: 4px; }
+.zoombar.collapsed { padding: 3px; }
+.zoombar.collapsed .zitems { display: none; }
+.zoombar .ztoggle svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; vertical-align: middle; }
+.zoombar .zsep { width: 1px; margin: 4px 4px; background: var(--line-2); }
+.stage.side { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; align-items: start; }
+.stage.side .insp { position: sticky; top: max(12px, env(safe-area-inset-top, 0px)); right: auto; width: auto; max-height: calc(100vh - 24px); box-shadow: none; border-color: var(--line); }
+.stage.side .insp-x { display: none; }
+@media (max-width: 1100px) { .stage.side { grid-template-columns: minmax(0, 1fr); } .stage.side .insp { position: static; max-height: none; } }
+.zoombar .zl { font: 11px/30px var(--f-mono); color: var(--muted); min-width: 44px; text-align: center; }
+.hint { position: absolute; right: 12px; bottom: 14px; font: 11px var(--f-mono); color: var(--faint); pointer-events: none; }
+svg#map { display: block; width: 100%; height: 100%; font-family: var(--f-body); }
+.narr { border-top: 1px solid var(--line); padding: 12px 16px; display: grid; gap: 8px; }
+.narr-now { display: flex; gap: 12px; align-items: baseline; min-height: 40px; }
+.narr-count { font: 500 12px var(--f-mono); color: var(--accent); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.narr-text { font-size: 14px; }
+.narr-text code, .insp code, .api code, .prac code { font: 12.5px var(--f-mono); background: var(--panel-2); border-radius: 4px; padding: 0 4px; }
+.steps { display: flex; gap: 4px; }
+.steps button { flex: 1; height: 5px; border: 0; border-radius: 3px; background: var(--line); cursor: pointer; padding: 0; transition: background .2s; }
+.steps button.done { background: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.steps button.on { background: var(--accent); }
+
+/* svg pieces */
+.lane-title { font: 600 12px var(--f-display); letter-spacing: .12em; text-transform: uppercase; }
+.lane-sub { font: 10.5px var(--f-mono); fill: var(--faint); }
+.edge { fill: none; stroke: var(--line-2); stroke-width: 1.3; transition: stroke .2s, opacity .2s; }
+.edge.opt { stroke-dasharray: 4 4; }
+.edge.flowing { stroke-dasharray: 3 7; animation: dash 1.6s linear infinite; }
+@keyframes dash { to { stroke-dashoffset: -20; } }
+.edge.hot { stroke: var(--accent); stroke-width: 2; opacity: 1; }
+.zone { fill-opacity: .45; stroke-opacity: .35; stroke-width: 1; stroke-dasharray: 2 6; stroke-linecap: round; }
+.dot { fill: var(--line); }
+.node { cursor: pointer; transition: opacity .25s; }
+.node .shape { fill: var(--panel); stroke-width: 1.4; transition: fill .2s, stroke-width .2s, filter .25s; }
+.node .shape.back { fill: var(--panel); stroke-opacity: .45; stroke-width: 1.1; }
+.node .shape.dashed { stroke-dasharray: 6 4; }
+.node .lid { fill: var(--panel-2); stroke-width: 1.4; }
+.node .ring { fill: none; stroke-width: 1.1; stroke-opacity: .55; }
+.node .ibg { fill-opacity: .13; }
+.node .ico { fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.node .tt { font: 8.5px var(--f-mono); fill: var(--faint); }
+.node .led { animation: blink 2.4s ease-in-out infinite; }
+@keyframes blink { 0%, 100% { opacity: .25; } 50% { opacity: 1; } }
+.node .pulse { fill: none; stroke-width: 7; stroke-opacity: .18; animation: pulse 2.8s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes pulse { 0%, 100% { stroke-opacity: .05; } 50% { stroke-opacity: .32; } }
+.node text.nm { font: 600 13px var(--f-body); fill: var(--fg); }
+.node text.pt { font: 10.5px var(--f-mono); fill: var(--faint); }
+.node:hover .shape:not(.back) { stroke-width: 2.3; }
+.node.sel .shape:not(.back) { stroke-width: 2.6; }
+.node.act .shape:not(.back) { fill: var(--panel-2); stroke-width: 2.6; filter: drop-shadow(0 0 8px var(--glow)); }
+.node:focus-visible { outline: none; }
+.node:focus-visible .shape:not(.back) { stroke-width: 3; }
+svg.dimming .node:not(.lit) { opacity: .42; }
+svg.dimming .edge:not(.hot) { opacity: .15; }
+.packet { pointer-events: none; }
+.pathtmp { fill: none; stroke: var(--accent); stroke-width: 2.2; stroke-linecap: round; opacity: .85; }
+.pathtmp.ret { stroke-dasharray: 5 5; }
+.edge-label { font: 10px var(--f-mono); fill: var(--muted); paint-order: stroke; stroke: var(--panel); stroke-width: 4px; pointer-events: none; }
+
+/* inspector */
+.insp { background: var(--panel); border: 1px solid var(--line-2); border-radius: 14px; padding: 18px; display: grid; gap: 14px; align-content: start; position: absolute; top: 12px; right: 12px; width: min(360px, calc(100% - 24px)); max-height: calc(100% - 24px); overflow: auto; box-shadow: 0 18px 48px rgba(0,0,0,.28); z-index: 2; }
+.insp[hidden] { display: none; }
+.insp-x { position: absolute; top: 10px; right: 10px; width: 28px; height: 28px; border-radius: 7px; border: 1px solid var(--line-2); background: var(--panel); cursor: pointer; color: var(--muted); }
+.insp-x:hover { color: var(--fg); border-color: var(--accent); }
+svg.flat .node { opacity: 1 !important; } svg.flat .edge { opacity: 1 !important; }
+.insp-kicker { display: flex; align-items: center; gap: 8px; font: 500 11px var(--f-mono); letter-spacing: .1em; text-transform: uppercase; }
+.swatch { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.insp h2 { margin: 0; font: 700 24px/1.1 var(--f-display); text-wrap: balance; }
+.insp .path { font: 12px var(--f-mono); color: var(--muted); word-break: break-all; }
+.insp p { margin: 0; color: var(--muted); }
+.insp h3 { margin: 0 0 6px; font: 600 11px var(--f-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--faint); }
+.insp ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { border: 1px solid var(--line-2); border-radius: 999px; padding: 2px 9px; font: 12px var(--f-body); background: transparent; cursor: pointer; color: var(--fg); }
+.chip:hover { border-color: var(--accent); }
+.tag { border-radius: 4px; padding: 1px 7px; font: 11.5px var(--f-mono); background: var(--panel-2); color: var(--muted); }
+
+/* legend */
+.legend { display: flex; flex-wrap: wrap; gap: 8px; }
+.leg { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 5px 10px; font-size: 12.5px; cursor: pointer; }
+.leg[aria-pressed="false"] { opacity: .45; }
+.leg:hover { border-color: var(--line-2); }
+
+/* sections */
+section.block { display: grid; gap: 14px; }
+.block-head { display: flex; flex-wrap: wrap; gap: 10px 20px; align-items: end; justify-content: space-between; }
+.block-head h2 { margin: 0; font: 700 26px/1.1 var(--f-display); }
+.block-head p { margin: 4px 0 0; color: var(--muted); max-width: 70ch; }
+.search { background: var(--panel); border: 1px solid var(--line-2); border-radius: 8px; padding: 8px 12px; width: min(320px, 100%); font: 13px var(--f-mono); color: var(--fg); }
+.search:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--glow); }
+.api { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 12px; }
+.api-group { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; display: grid; gap: 8px; align-content: start; }
+.api-group[hidden] { display: none; }
+.api-group header { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.api-group h3 { margin: 0; font: 600 15px var(--f-display); letter-spacing: .02em; }
+.api-group .who { font: 11px var(--f-mono); color: var(--faint); }
+.route { display: grid; grid-template-columns: 58px minmax(0, 1fr); gap: 2px 10px; padding: 6px 8px; border-radius: 8px; cursor: pointer; border: 1px solid transparent; text-align: left; background: transparent; width: 100%; }
+.route:hover, .route.on { background: var(--panel-2); border-color: var(--line); }
+.route[hidden] { display: none; }
+.m { font: 600 10.5px/20px var(--f-mono); letter-spacing: .04em; text-align: center; border-radius: 4px; height: 20px; }
+.m.GET { color: var(--get); background: color-mix(in srgb, var(--get) 13%, transparent); }
+.m.POST { color: var(--post); background: color-mix(in srgb, var(--post) 14%, transparent); }
+.m.DELETE { color: var(--del); background: color-mix(in srgb, var(--del) 13%, transparent); }
+.m.PATCH { color: var(--patch); background: color-mix(in srgb, var(--patch) 13%, transparent); }
+.m.SSE, .m.STDIO, .m.ANY, .m.TOOL, .m.CLI { color: var(--sse); background: color-mix(in srgb, var(--sse) 13%, transparent); }
+.route .p { font: 12.5px/20px var(--f-mono); word-break: break-all; }
+.route .d { grid-column: 2; font-size: 12.5px; color: var(--muted); }
+.prac { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+.prac-card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: grid; gap: 10px; align-content: start; }
+.prac-card h3 { margin: 0; display: flex; gap: 10px; align-items: center; font: 600 16px var(--f-display); letter-spacing: .02em; }
+.prac-card h3 .n { font: 500 11px var(--f-mono); color: var(--faint); }
+.prac-card ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.prac-card li button { all: unset; display: block; padding: 6px 8px; border-radius: 7px; cursor: pointer; font-size: 13px; line-height: 1.45; }
+.prac-card li button:hover, .prac-card li button:focus-visible { background: var(--panel-2); }
+.prac-card li button:focus-visible { outline: 2px solid var(--accent); }
+footer.foot { color: var(--faint); font: 12px var(--f-mono); border-top: 1px solid var(--line); padding-top: 14px; display: flex; flex-wrap: wrap; gap: 6px 18px; }
+
+@media (max-width: 640px) { .hint { display: none; } }
+@media (max-width: 640px) { .console { grid-template-columns: minmax(0, 1fr); } .api, .prac { grid-template-columns: minmax(0, 1fr); } }
+.tabs { display: inline-flex; gap: 4px; padding: 4px; border: 1px solid var(--line); background: var(--panel); border-radius: 12px; width: max-content; max-width: 100%; }
+.tab { display: inline-flex; align-items: center; gap: 8px; border: 0; background: transparent; border-radius: 9px; padding: 8px 14px; cursor: pointer; color: var(--muted); font: 600 14px var(--f-display); letter-spacing: .02em; }
+.tab svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.tab:hover { color: var(--fg); }
+.tab[aria-selected="true"] { background: var(--accent); color: var(--accent-ink); }
+.brandrow { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.brand { font: 600 13px var(--f-mono); color: var(--muted); letter-spacing: .06em; }
+.shapes { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--muted); }
+.shape-key { display: inline-flex; align-items: center; gap: 6px; }
+.key-shape { fill: var(--panel); stroke: var(--muted); stroke-width: 1.3; }
+.insp-head { display: flex; gap: 12px; align-items: flex-start; }
+.insp-ico { width: 34px; height: 34px; flex: none; padding: 6px; border-radius: 10px; background: color-mix(in srgb, currentColor 12%, transparent); fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+@media (prefers-reduced-motion: reduce) { .edge.flowing { animation: none; } * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brandrow"><span class="brand">FINSIGHT · ARCHITECTURE</span><nav class="tabs" id="tabs" role="tablist" aria-label="Choose a map"></nav></div>
+    <div class="eyebrow" id="eyebrow"></div>
+    <h1 id="h1"></h1>
+    <p class="lede" id="lede"></p>
+    <div class="stats" id="stats"></div>
+    <div class="legend" id="legend" aria-label="Show or hide layers"></div>
+    <div class="shapes" id="shapes" aria-label="Shape key"></div>
+  </header>
+
+  <div class="console">
+    <div class="flows" id="flows" role="group" aria-label="Choose a flow to animate"></div>
+    <div class="transport">
+      <button class="icon-btn" id="prev" aria-label="Previous step"><svg viewBox="0 0 16 16"><path d="M3 3h2v10H3zM14 3v10L6 8z"/></svg></button>
+      <button class="icon-btn" id="play" aria-label="Pause"><svg viewBox="0 0 16 16" id="playIcon"><path d="M4 3h3v10H4zM9 3h3v10H9z"/></svg></button>
+      <button class="icon-btn" id="next" aria-label="Next step"><svg viewBox="0 0 16 16"><path d="M11 3h2v10h-2zM2 3v10l8-5z"/></svg></button>
+      <label class="speed" for="speed">speed <select id="speed"><option value="0.6">0.6×</option><option value="1" selected>1×</option><option value="1.6">1.6×</option></select></label>
+    </div>
+  </div>
+
+  <div class="stage" id="stage">
+    <div class="mapbox">
+      <div class="mapscroll" id="viewport"><svg id="map" role="img" aria-label="Architecture diagram"></svg>
+        <aside class="insp" id="insp" aria-live="polite" hidden></aside>
+        <div class="zoombar" id="zbar" role="toolbar" aria-label="Map controls"><button id="zToggle" class="ztoggle" aria-expanded="true" aria-controls="zitems" title="Hide controls (H)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h12M2 8h12M2 12h12"/></svg></button><span class="zitems" id="zitems"><button id="zOut" aria-label="Zoom out">−</button><span class="zl" id="zLevel">100%</span><button id="zIn" aria-label="Zoom in">+</button><button id="zFit" title="Fit everything (0)">Fit</button><button id="zSpot" aria-pressed="true" title="Dim parts outside the current flow">Spotlight</button><button id="zFull" title="Full screen (F)">⛶</button><span class="zsep" aria-hidden="true"></span><span class="zl">details</span><button data-pane="side" title="Details docked beside the map (D cycles)">Side</button><button data-pane="float" title="Details float over the map when you click">Float</button><button data-pane="off" title="No details panel">Off</button></span></div>
+        <div class="hint">scroll to zoom · drag to pan · click a shape for details</div>
+      </div>
+      <div class="narr" aria-live="polite">
+        <div class="narr-now"><span class="narr-count" id="count"></span><span class="narr-text" id="ntext"></span></div>
+        <div class="steps" id="steps"></div>
+      </div>
+    </div>
+  </div>
+
+  <section class="block">
+    <div class="block-head">
+      <div><h2 id="apiTitle"></h2><p id="apiLede"></p></div>
+      <input class="search" id="q" type="search" placeholder="Filter routes, e.g. portfolio or POST" aria-label="Filter routes">
+    </div>
+    <div class="api" id="api"></div>
+  </section>
+
+  <section class="block">
+    <div class="block-head"><div><h2>Engineering practices</h2><p id="pracLede"></p></div></div>
+    <div class="prac" id="prac"></div>
+  </section>
+
+  <footer class="foot" id="foot"></footer>
+</div>
+
+<script>
+const MAPS = [{"eyebrow": "FinSight · system architecture", "title": "FinSight, end to end", "lede": "A personal market terminal that runs entirely on your Mac: a zero-dependency Node 24 server on `127.0.0.1`, React 19 islands and canvas charts in the browser, JSON files in your own data folder, public market data from outside, and a supervised research agent beside it.", "stats": [["57", "API routes"], ["22", "UI features"], ["20", "lib modules"], ["8", "data files"], ["6", "outside sources"], ["0", "runtime deps"]], "lanes": [{"id": "client", "label": "Browser", "sub": "React 19 islands · canvas", "tone": "client", "x": 10, "w": 266}, {"id": "edge", "label": "HTTP edge", "sub": "server.ts · 127.0.0.1", "tone": "edge", "x": 286, "w": 266}, {"id": "domain", "label": "Domain services", "sub": "lib/*.ts", "tone": "domain", "x": 562, "w": 266}, {"id": "store", "label": "Local storage", "sub": "DATA_DIR · 0600 JSON", "tone": "storage", "x": 838, "w": 266}, {"id": "ext", "label": "Outside world", "sub": "public data · agent · OS", "tone": "external", "x": 1114, "w": 276}], "nodes": [{"id": "browser", "lane": "client", "x": 22, "y": 72, "w": 242, "name": "Terminal shell", "path": "public/index.html · styles.css", "role": "The single page you open. Hosts the dashboard grid, top bar, command bar and every island mount point.", "short": "index.html · one page", "does": ["Loads the hashed bundle from `public/app/`", "Lock screen until the PIN session is valid", "Keyboard-first: command bar, ⌘/ for Kestrel"], "kind": "browser", "icon": "browser", "kindLabel": "interface"}, {"id": "islands", "lane": "client", "x": 22, "y": 152, "w": 242, "name": "React islands", "path": "web/src/features/* · main.tsx", "role": "22 feature folders, each mounted into the page through `<Host island>` portals and wrapped in an error boundary.", "short": "22 features · portals", "does": ["positions, summary, trade, ledger, activity, analytics", "fxrisk, dividends, cash, alerts, watchlist, markets, news, macro", "detail, addform, command, topbar, layout, lock, clock, kestrel", "Each island in `<IslandBoundary><QueryClientProvider>`"], "prac": ["A failing island is contained; the rest keeps working", "Lazy islands load on demand"], "kind": "stack", "icon": "atom", "kindLabel": "tool group"}, {"id": "query", "lane": "client", "x": 22, "y": 232, "w": 242, "name": "Data layer", "path": "web/src/api · TanStack Query · zustand", "role": "All reads go through TanStack Query; local UI state lives in small zustand stores.", "short": "TanStack Query · bus", "does": ["`api()` client with typed errors", "`bus.write(kind)` invalidates every query that depends on that kind of data", "One source of truth across islands and legacy charts"], "kind": "service", "icon": "layers", "kindLabel": "service"}, {"id": "ui", "lane": "client", "x": 22, "y": 312, "w": 242, "name": "Dialogs & toasts", "path": "web/src/ui/dialog.tsx · toast.tsx", "role": "In-app replacements for `confirm()`/`prompt()`, plus the undo toast.", "short": "confirm · prompt · undo", "does": ["`confirmDialog` / `promptDialog` with focus trap (`useModalFocus`)", "Undo toast: 10 s, paused on hover", "Undo first checks the server’s last undo label"], "prac": ["A newer change is never undone by mistake"], "kind": "service", "icon": "chat", "kindLabel": "service"}, {"id": "legacy", "lane": "client", "x": 22, "y": 392, "w": 242, "name": "Canvas charts", "path": "public/chart.js · chartgrid.js · indicators.js · strategies.js", "role": "Hand-drawn canvas charts with indicators, drawings, layouts and strategy markers. The same math runs in Node through `lib/legacymath.ts`.", "short": "canvas · indicators", "does": ["Candles, volume, EMA/RSI/MACD", "Multi-chart grid and saved layouts", "Drawings and trade markers", "Trading journal (`journal.js`)"], "kind": "service", "icon": "candles", "kindLabel": "service"}, {"id": "kpanel", "lane": "client", "x": 22, "y": 472, "w": 242, "name": "Kestrel panel", "path": "web/src/features/kestrel", "role": "Chat with the research agent. Talks only to FinSight’s proxy and streams answers over SSE.", "short": "⌘/ · SSE chat", "api": ["/api/agent/*", "GET /api/agent-status"], "kind": "browser", "icon": "robot", "kindLabel": "interface"}, {"id": "sw", "lane": "client", "x": 22, "y": 552, "w": 242, "name": "Service worker", "path": "public/sw.js · shell v44", "role": "Caches the app shell so the terminal opens offline or on a flaky connection.", "short": "shell cache · no API", "does": ["Pre-caches static, content-hashed files", "Never caches `/api/*` — data is always live", "Version bump forces a clean shell update"], "kind": "vault", "icon": "wifi", "kindLabel": "secret store"}, {"id": "guard", "lane": "edge", "x": 298, "y": 72, "w": 242, "name": "Request guard", "path": "server.ts", "role": "First thing every request meets.", "short": "Host · headers · origin", "does": ["Binds 127.0.0.1 only", "`Host` must be the loopback name (DNS-rebinding defence)", "`X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`", "Same-origin check on state-changing requests"], "kind": "gate", "icon": "shield", "kindLabel": "security checkpoint"}, {"id": "server", "lane": "edge", "x": 298, "y": 152, "w": 242, "name": "HTTP router", "path": "server.ts", "role": "Zero-dependency Node 24 TypeScript server. 57 exact routes plus the agent proxy prefix.", "short": "node:http · 57 routes", "does": ["Dispatches `/api/*` to `lib/` services", "JSON in, JSON out, typed errors", "Port 8000 by default (`PORT`)"], "api": ["57 routes"], "prac": ["No runtime npm dependencies"], "kind": "server", "icon": "server", "kindLabel": "HTTP server"}, {"id": "auth", "lane": "edge", "x": 298, "y": 232, "w": 242, "name": "PIN & sessions", "path": "lib/auth.ts", "role": "A local PIN protects the terminal.", "short": "scrypt · sid cookie", "does": ["scrypt hash in `auth.json`, async KDF", "In-memory sessions, 480-minute idle lock (`LOCK_IDLE_MIN`)", "Per-IP login throttle", "Cookie `sid; HttpOnly; SameSite=Strict; Path=/`"], "api": ["GET /api/auth/status", "POST setup · login · logout · change"], "kind": "vault", "icon": "key", "kindLabel": "secret store"}, {"id": "static", "lane": "edge", "x": 298, "y": 312, "w": 242, "name": "Static files", "path": "public/ · public/app/", "role": "Serves the shell, legacy scripts and the esbuild output.", "short": "hashed chunks", "does": ["Content-hashed chunks from `scripts/build-web.mjs`", "`check:web` gate: built files must match `web/src`"], "kind": "stack", "icon": "files", "kindLabel": "tool group"}, {"id": "proxy", "lane": "edge", "x": 298, "y": 472, "w": 242, "name": "Agent proxy", "path": "lib/agentlink.ts", "role": "Forwards `/api/agent/*` to Kestrel behind your PIN session, and lets Kestrel read a fixed list of GET routes with its token.", "short": "/api/agent/* · token", "does": ["Adds `X-Agent-Secret`; SSE piped straight through", "Same-origin required for writes", "Token works only on 20 exact GET paths (`TOKEN_READ_PATHS`)"], "kind": "gate", "icon": "route", "kindLabel": "security checkpoint"}, {"id": "supervisor", "lane": "edge", "x": 304, "y": 552, "w": 230, "name": "Agent supervisor", "path": "lib/agentproc.ts", "role": "Starts Kestrel with FinSight, restarts it with backoff, stops it on shutdown.", "short": "spawn · backoff", "api": ["GET /api/agent-status"], "kind": "terminal", "icon": "activity", "kindLabel": "terminal / process"}, {"id": "portfolio", "lane": "domain", "x": 574, "y": 72, "w": 242, "name": "Portfolio engine", "path": "lib/portfolio.ts", "role": "Positions, accounts and the core money maths.", "short": "lots · FX split · alerts", "does": ["buy, sell (with trade date), delete; accounts; cash", "Stock P&L vs FX P&L per lot", "FX risk, watchlist, price alerts", "Dated sells use the FX rate on that date; dates before the first lot are rejected"], "api": ["/api/portfolio", "/api/portfolio/buy|sell|delete", "/api/fx-risk"], "kind": "service", "icon": "pie", "kindLabel": "service"}, {"id": "ledger", "lane": "domain", "x": 574, "y": 140, "w": 242, "name": "Ledger & realized", "path": "lib/ledger.ts", "role": "Every trade as an editable record, and realized gains.", "short": "edits · realized P&L", "api": ["/api/ledger", "/api/ledger/edit|delete", "/api/realized"], "kind": "service", "icon": "list", "kindLabel": "service"}, {"id": "performance", "lane": "domain", "x": 574, "y": 208, "w": 242, "name": "Performance", "path": "lib/performance.ts · returns.ts", "role": "Replays BUY/SELL/DELETE day by day to build the value curve; return maths kept pure.", "short": "daily replay · returns", "api": ["/api/portfolio/performance"], "prac": ["Pure functions, unit-tested"], "kind": "service", "icon": "trend", "kindLabel": "service"}, {"id": "market", "lane": "domain", "x": 574, "y": 276, "w": 242, "name": "Market data", "path": "lib/market.ts", "role": "Quotes, history, FX, search, market overview, news and categories from Yahoo.", "short": "quotes · history · FX", "api": ["/api/quote", "/api/history[/batch]", "/api/search", "/api/markets", "/api/news", "/api/categories"], "kind": "service", "icon": "candles", "kindLabel": "service"}, {"id": "cache", "lane": "domain", "x": 574, "y": 344, "w": 242, "name": "Cache", "path": "lib/cache.ts", "role": "`cached(key, ttl, fn, {stale, persist})` in front of every outside call.", "short": "TTL · stale · persist", "does": ["Markets 30 s, calendar 1 h", "Stale window: served instantly, refreshed in the background", "Optional persistence to `cache.json`"], "kind": "stream", "icon": "bolt", "kindLabel": "event stream"}, {"id": "macro", "lane": "domain", "x": 574, "y": 412, "w": 242, "name": "Macro", "path": "lib/macro.ts", "role": "Economic series and the event calendar.", "short": "FRED · World Bank · calendar", "api": ["/api/fred", "/api/worldbank", "/api/calendar"], "kind": "service", "icon": "globe", "kindLabel": "service"}, {"id": "dividends", "lane": "domain", "x": 574, "y": 480, "w": 242, "name": "Dividends & events", "path": "lib/dividends.ts", "role": "Dividend history, withholding tax and upcoming earnings/ex-dates.", "short": "withholding · events", "api": ["/api/dividends", "/api/events", "/api/settings/withholding"], "kind": "service", "icon": "coin", "kindLabel": "service"}, {"id": "charts", "lane": "domain", "x": 574, "y": 548, "w": 242, "name": "Charts", "path": "lib/charts.ts", "role": "Saved drawings, layouts and the current chart.", "short": "drawings · layouts", "api": ["/api/charts/*", "/api/chart-trades"], "kind": "service", "icon": "chart", "kindLabel": "service"}, {"id": "journal", "lane": "domain", "x": 574, "y": 616, "w": 242, "name": "Journal", "path": "lib/journal.ts", "role": "Trading journal entries with images and CSV export.", "short": "entries · images · CSV", "api": ["/api/journal", "/api/journal/csv", "/api/journal/image"], "kind": "service", "icon": "book", "kindLabel": "service"}, {"id": "csv", "lane": "domain", "x": 574, "y": 684, "w": 242, "name": "CSV import", "path": "lib/csv.ts", "role": "Brings in history from other brokers.", "short": "IBKR · moomoo · Tiger", "does": ["Plain CSV", "IBKR statements", "moomoo and Tiger exports"], "api": ["POST /api/portfolio/import"], "kind": "service", "icon": "upload", "kindLabel": "service"}, {"id": "legacymath", "lane": "domain", "x": 574, "y": 752, "w": 242, "name": "Shared math", "path": "lib/legacymath.ts · alertmath.ts", "role": "Loads the browser’s indicator scripts in Node with types, so alerts and charts compute the same numbers.", "short": "one maths, two runtimes", "kind": "service", "icon": "sigma", "kindLabel": "service"}, {"id": "store", "lane": "store", "x": 850, "y": 72, "w": 242, "name": "Store", "path": "lib/store.ts", "role": "The only code that writes your data.", "short": "lock · atomic · undo", "does": ["Load and migrate on read", "Single write lock", "`withUndo` snapshots to `undo.json`", "Atomic save: temp file (0600) then rename", "Corrupt files moved aside as `.corrupt.<ts>.json`"], "api": ["GET/POST /api/undo"], "prac": ["A crash mid-write never leaves a half file"], "kind": "vault", "icon": "save", "kindLabel": "secret store"}, {"id": "portfoliojson", "lane": "store", "x": 864, "y": 152, "w": 214, "name": "portfolio.json", "path": "DATA_DIR/portfolio.json", "role": "Accounts, lots, cash, trade history, watchlist, alerts, settings.", "short": "your records", "kind": "file", "icon": "filetext", "kindLabel": "file on disk"}, {"id": "undojson", "lane": "store", "x": 864, "y": 232, "w": 214, "name": "undo.json", "path": "DATA_DIR/undo.json", "role": "Labelled snapshots for multi-step undo.", "short": "labelled snapshots", "kind": "file", "icon": "undo", "kindLabel": "file on disk"}, {"id": "authjson", "lane": "store", "x": 864, "y": 312, "w": 214, "name": "auth.json", "path": "DATA_DIR/auth.json", "role": "The scrypt PIN hash and salt. Never the PIN.", "short": "PIN hash", "kind": "file", "icon": "lock", "kindLabel": "file on disk"}, {"id": "cachejson", "lane": "store", "x": 864, "y": 392, "w": 214, "name": "cache.json", "path": "DATA_DIR/cache.json", "role": "Persisted cache entries so a restart starts warm.", "short": "warm cache", "kind": "file", "icon": "bolt", "kindLabel": "file on disk"}, {"id": "chartsjson", "lane": "store", "x": 864, "y": 472, "w": 214, "name": "charts.json", "path": "DATA_DIR/charts.json", "role": "Drawings and layouts.", "short": "drawings · layouts", "kind": "file", "icon": "chart", "kindLabel": "file on disk"}, {"id": "journaljson", "lane": "store", "x": 864, "y": 552, "w": 214, "name": "journal.json", "path": "DATA_DIR/journal.json · journal-img/", "role": "Journal entries and their images.", "short": "entries · images", "kind": "file", "icon": "book", "kindLabel": "file on disk"}, {"id": "linkjson", "lane": "store", "x": 864, "y": 632, "w": 214, "name": "agent-link.json", "path": "DATA_DIR/agent-link.json", "role": "The agent’s read token and the proxy secret, shared only between the two local processes.", "short": "token · proxySecret", "kind": "file", "icon": "key", "kindLabel": "file on disk"}, {"id": "agenthome", "lane": "store", "x": 850, "y": 712, "w": 242, "name": "Agent home", "path": "DATA_DIR/agent/", "role": "Kestrel’s own SQLite database, uploads, skills and logs.", "short": "agent.db · logs", "kind": "db", "icon": "db", "kindLabel": "database"}, {"id": "osascript", "lane": "ext", "x": 1148, "y": 140, "w": 208, "name": "macOS notifications", "path": "osascript via execFile", "role": "Price alerts pop a native notification.", "short": "alert pop-ups", "prac": ["`execFile`, never a shell string"], "kind": "pill", "icon": "bell", "kindLabel": "OS hook"}, {"id": "yahoo", "lane": "ext", "x": 1126, "y": 276, "w": 252, "name": "Yahoo Finance", "path": "query2.finance.yahoo.com · fc.yahoo.com", "role": "Quotes, history, FX, search and news. No key needed.", "short": "quotes · FX · news", "kind": "cloud", "icon": "candles", "kindLabel": "external service"}, {"id": "fred", "lane": "ext", "x": 1126, "y": 380, "w": 252, "name": "FRED & Federal Reserve", "path": "fred.stlouisfed.org · federalreserve.gov", "role": "US macro series.", "short": "rates · inflation", "kind": "cloud", "icon": "trend", "kindLabel": "external service"}, {"id": "worldbank", "lane": "ext", "x": 1126, "y": 452, "w": 252, "name": "World Bank", "path": "api.worldbank.org", "role": "Country indicators.", "short": "country data", "kind": "cloud", "icon": "globe", "kindLabel": "external service"}, {"id": "ffcal", "lane": "ext", "x": 1126, "y": 524, "w": 252, "name": "Economic calendar", "path": "nfs.faireconomy.media", "role": "Weekly Forex Factory calendar feed.", "short": "weekly events", "kind": "cloud", "icon": "calendar", "kindLabel": "external service"}, {"id": "kestrel", "lane": "ext", "x": 1126, "y": 632, "w": 252, "name": "Kestrel agent", "path": "127.0.0.1:8100 · agent/", "role": "The research agent, a separate supervised process. It reads FinSight through the token and never writes.", "short": ":8100 · read-only", "does": ["39 read-only tools, 6 brains, 5 skills", "SQLite in WAL mode", "Detailed map in the companion diagram"], "href": "#kestrel", "hrefLabel": "Open the Kestrel agent map", "kind": "agent", "icon": "robot", "kindLabel": "AI agent"}], "edges": [["browser", "islands", "", false], ["islands", "query", "", false], ["islands", "ui", "", false], ["browser", "legacy", "", false], ["browser", "kpanel", "", false], ["browser", "sw", "", true], ["query", "guard", "fetch", false], ["legacy", "guard", "", false], ["kpanel", "guard", "", false], ["sw", "static", "", false], ["browser", "guard", "", false], ["guard", "server", "", false], ["server", "auth", "", false], ["server", "static", "", false], ["server", "proxy", "", false], ["server", "supervisor", "", false], ["server", "portfolio", "", false], ["server", "ledger", "", false], ["server", "performance", "", false], ["server", "market", "", false], ["server", "macro", "", false], ["server", "dividends", "", false], ["server", "charts", "", false], ["server", "journal", "", false], ["server", "csv", "", false], ["portfolio", "market", "", false], ["portfolio", "store", "", false], ["ledger", "store", "", false], ["performance", "market", "", false], ["market", "cache", "", false], ["macro", "cache", "", false], ["dividends", "market", "", false], ["charts", "chartsjson", "", false], ["journal", "journaljson", "", false], ["csv", "portfolio", "", false], ["portfolio", "legacymath", "", true], ["auth", "authjson", "", false], ["store", "portfoliojson", "", false], ["store", "undojson", "", false], ["cache", "cachejson", "", true], ["cache", "yahoo", "", false], ["cache", "fred", "", false], ["cache", "worldbank", "", false], ["cache", "ffcal", "", false], ["portfolio", "osascript", "", true], ["proxy", "linkjson", "", false], ["proxy", "kestrel", "X-Agent-Secret", false], ["supervisor", "kestrel", "spawn", false], ["supervisor", "linkjson", "", false], ["kestrel", "agenthome", "", false], ["kestrel", "server", "Bearer · GET", false]], "flows": [{"name": "Load portfolio", "desc": "Positions with the stock vs currency split", "steps": [["islands", "query", "The positions island asks for `/api/portfolio?base=SGD` through TanStack Query.", false, ""], ["query", "guard", "The request reaches 127.0.0.1; the Host header and security headers are checked.", false, "GET"], ["guard", "server", "The router picks the portfolio route.", false, ""], ["server", "auth", "The `sid` cookie must match a live in-memory session.", false, ""], ["server", "portfolio", "The portfolio engine takes over.", false, ""], ["portfolio", "store", "Records are loaded (and migrated if the format is old).", false, ""], ["store", "portfoliojson", "Read from `portfolio.json` in your data folder.", false, ""], ["portfolio", "market", "Live quotes and FX rates are requested.", false, ""], ["market", "cache", "The cache answers if the entry is fresh.", false, ""], ["cache", "yahoo", "On a miss Yahoo Finance is called; inside the stale window the old value is served while it refreshes.", false, ""], ["yahoo", "market", "Prices and FX rates return.", true, ""], ["portfolio", "server", "Each lot’s P&L is split into stock return and currency return.", true, ""], ["server", "query", "JSON goes back to the browser.", true, ""], ["query", "islands", "Every island using portfolio data updates from one cached result.", true, ""]]}, {"name": "Record a trade", "desc": "Trade sheet → atomic save → undo toast", "steps": [["islands", "guard", "In the trade sheet you sell 10 shares dated last Tuesday.", false, "POST"], ["guard", "server", "Writes must be same-origin.", false, ""], ["server", "auth", "Session check.", false, ""], ["server", "portfolio", "`sell()` uses the FX rate on the trade date and rejects dates before the first lot.", false, ""], ["portfolio", "store", "The store takes its single write lock.", false, ""], ["store", "undojson", "`withUndo` saves a labelled snapshot first.", false, ""], ["store", "portfoliojson", "Written to a 0600 temp file, then renamed into place: never half-written.", false, ""], ["server", "islands", "The new state returns.", true, ""], ["islands", "query", "`bus.write('portfolio')` refreshes every dependent view.", false, ""], ["islands", "ui", "An undo toast appears for 10 s; Undo first checks the server still has that label.", false, ""]]}, {"name": "PIN sign-in", "desc": "Lock screen to session cookie", "steps": [["browser", "guard", "You enter your PIN on the lock screen.", false, "POST"], ["guard", "server", "Host and origin checks pass.", false, ""], ["server", "auth", "`/api/auth/login`, with a per-IP throttle against guessing.", false, ""], ["auth", "authjson", "The PIN is checked with scrypt against the stored hash.", false, ""], ["auth", "server", "A session is created in memory; it locks after 480 minutes idle.", true, ""], ["server", "browser", "`sid` cookie: HttpOnly, SameSite=Strict.", true, "Set-Cookie"]]}, {"name": "Chart history", "desc": "Candles and indicators on canvas", "steps": [["legacy", "guard", "A chart asks for `/api/history` for its symbol and range.", false, "GET"], ["guard", "server", "Checked and routed.", false, ""], ["server", "market", "The market service builds the request.", false, ""], ["market", "cache", "Fresh history is reused.", false, ""], ["cache", "cachejson", "Persisted entries mean a restart starts warm.", false, ""], ["cache", "yahoo", "Otherwise Yahoo supplies OHLCV bars.", false, ""], ["yahoo", "market", "Bars return.", true, ""], ["server", "legacy", "The canvas draws candles; indicators use the same maths the server uses.", true, ""], ["legacy", "guard", "Your trades are overlaid from `/api/chart-trades`.", false, ""], ["server", "charts", "Drawings and layouts load from `charts.json`.", false, ""]]}, {"name": "Macro data", "desc": "FRED, World Bank and the calendar", "steps": [["islands", "guard", "The macro island asks for `/api/fred`, `/api/worldbank` and `/api/calendar`.", false, ""], ["guard", "server", "Routed.", false, ""], ["server", "macro", "The macro service fans out.", false, ""], ["macro", "cache", "Each series has its own TTL; the calendar is kept for an hour.", false, ""], ["cache", "fred", "US rates and inflation.", false, ""], ["cache", "worldbank", "Country indicators.", false, ""], ["cache", "ffcal", "This week’s economic events.", false, ""], ["macro", "server", "Merged and returned.", true, ""]]}, {"name": "Kestrel chat", "desc": "Browser → proxy → agent → read-only token → back", "steps": [["kpanel", "guard", "You ask Kestrel a question. The browser only talks to FinSight.", false, "POST"], ["guard", "server", "Same-origin and Host checks.", false, ""], ["server", "auth", "Your PIN session is required for every agent call.", false, ""], ["server", "proxy", "`/api/agent/*` goes to the proxy.", false, ""], ["proxy", "linkjson", "It reads the proxy secret.", false, ""], ["proxy", "kestrel", "Forwarded to 127.0.0.1:8100 with `X-Agent-Secret`.", false, "X-Agent-Secret"], ["kestrel", "server", "Kestrel reads `/api/portfolio` with its Bearer token: 20 GET paths, nothing else.", false, "GET"], ["server", "kestrel", "Real numbers return. Write routes reject the token.", true, ""], ["kestrel", "proxy", "The answer streams back as SSE.", true, "SSE"], ["proxy", "kpanel", "Piped straight to the panel, with tool badges and cost.", true, ""]]}, {"name": "Agent startup", "desc": "Supervisor and shared link file", "steps": [["server", "supervisor", "When FinSight starts, so does the supervisor.", false, ""], ["supervisor", "linkjson", "It writes the read token and proxy secret to `agent-link.json`.", false, ""], ["supervisor", "kestrel", "It spawns the agent and restarts it with backoff if it exits.", false, "spawn"], ["kestrel", "agenthome", "The agent opens its SQLite database and logs in the agent home.", false, ""], ["kpanel", "guard", "The panel polls `/api/agent-status`.", false, ""], ["server", "kpanel", "Online: the Kestrel button turns live.", true, ""]]}, {"name": "Offline shell", "desc": "Service worker caches the app, never the data", "steps": [["browser", "sw", "The page registers the service worker.", false, ""], ["sw", "static", "It pre-caches the shell and hashed chunks (shell v44).", false, ""], ["static", "sw", "Cached.", true, ""], ["browser", "sw", "Next time, the shell opens instantly, even offline.", false, ""], ["sw", "browser", "`/api/*` is never cached, so numbers are always live or clearly unavailable.", true, ""]]}], "size": [1400, 830], "apiTitle": "FinSight API", "apiLede": "Every route served by `server.ts`. Click one to see which parts of the system it touches.", "pracLede": "Hover or tap an item to light up the parts that enforce it.", "apis": [{"group": "Health & auth", "who": "lib/auth.ts", "nodes": ["guard", "server", "auth", "authjson"], "routes": [["GET", "/api/health", "Liveness"], ["GET", "/api/auth/status", "Set up? Signed in?"], ["POST", "/api/auth/setup", "Create the PIN"], ["POST", "/api/auth/login", "Sign in (throttled)"], ["POST", "/api/auth/logout", "End the session"], ["POST", "/api/auth/change", "Change the PIN"]]}, {"group": "Portfolio", "who": "lib/portfolio.ts · store.ts", "nodes": ["guard", "server", "portfolio", "store", "portfoliojson"], "routes": [["GET", "/api/portfolio", "Positions, cash, stock vs FX P&L"], ["POST", "/api/portfolio/buy", "Add a lot"], ["POST", "/api/portfolio/sell", "Sell, optionally dated"], ["POST", "/api/portfolio/delete", "Remove a position"], ["POST", "/api/portfolio/import", "CSV / IBKR / moomoo / Tiger"], ["POST", "/api/portfolio/reset", "Clear all records"], ["POST", "/api/cash", "Deposit or withdraw cash"], ["GET", "/api/fx-risk", "Currency exposure"]]}, {"group": "Accounts", "who": "lib/portfolio.ts", "nodes": ["guard", "server", "portfolio", "store"], "routes": [["GET", "/api/accounts", "List accounts"], ["POST", "/api/accounts/add", "Add"], ["POST", "/api/accounts/remove", "Remove"], ["POST", "/api/accounts/rename", "Rename"]]}, {"group": "Ledger, performance & undo", "who": "lib/ledger.ts · performance.ts", "nodes": ["guard", "server", "ledger", "performance", "store", "undojson"], "routes": [["GET", "/api/ledger", "Every trade"], ["POST", "/api/ledger/edit", "Correct a buy"], ["POST", "/api/ledger/delete", "Delete a record"], ["GET", "/api/realized", "Realized gains"], ["GET", "/api/portfolio/performance", "Value curve from a daily replay"], ["GET", "/api/undo", "Last undoable change and its label"], ["POST", "/api/undo", "Undo it"]]}, {"group": "Market data", "who": "lib/market.ts · cache.ts", "nodes": ["guard", "server", "market", "cache", "yahoo"], "routes": [["GET", "/api/quote", "Live quote"], ["GET", "/api/history", "OHLCV bars"], ["GET", "/api/history/batch", "Many symbols at once"], ["GET", "/api/search", "Symbol search"], ["GET", "/api/markets", "Market overview (30 s cache)"], ["GET", "/api/news", "Headlines"], ["GET", "/api/categories", "Sector / category data"]]}, {"group": "Income & events", "who": "lib/dividends.ts", "nodes": ["guard", "server", "dividends", "market"], "routes": [["GET", "/api/dividends", "Dividends after withholding"], ["GET", "/api/events", "Upcoming earnings and ex-dates"], ["POST", "/api/settings/withholding", "Set withholding rates"]]}, {"group": "Watchlist & alerts", "who": "lib/portfolio.ts · alertmath.ts", "nodes": ["guard", "server", "portfolio", "legacymath", "osascript"], "routes": [["GET", "/api/watchlist", "Watchlist"], ["POST", "/api/watchlist/add", "Add"], ["POST", "/api/watchlist/remove", "Remove"], ["GET", "/api/alerts", "Price and indicator alerts"], ["POST", "/api/alerts/add", "Add"], ["POST", "/api/alerts/update", "Update"], ["POST", "/api/alerts/remove", "Remove"]]}, {"group": "Charts", "who": "lib/charts.ts", "nodes": ["guard", "server", "charts", "chartsjson"], "routes": [["GET", "/api/chart-trades", "Your trades as chart markers"], ["POST", "/api/charts/current", "Remember the open chart"], ["GET", "/api/charts/drawings", "Load drawings"], ["POST", "/api/charts/drawings", "Save drawings"], ["GET", "/api/charts/layouts", "Saved layouts"], ["POST", "/api/charts/layouts/save", "Save a layout"], ["POST", "/api/charts/layouts/delete", "Delete a layout"]]}, {"group": "Journal", "who": "lib/journal.ts", "nodes": ["guard", "server", "journal", "journaljson"], "routes": [["GET", "/api/journal", "Entries"], ["GET", "/api/journal/csv", "Export CSV"], ["POST", "/api/journal/create", "New entry"], ["POST", "/api/journal/update", "Edit"], ["POST", "/api/journal/delete", "Delete"], ["GET", "/api/journal/image", "Read an image"], ["POST", "/api/journal/image", "Attach an image"]]}, {"group": "Macro", "who": "lib/macro.ts", "nodes": ["guard", "server", "macro", "cache", "fred", "worldbank", "ffcal"], "routes": [["GET", "/api/fred", "FRED series"], ["GET", "/api/worldbank", "World Bank indicators"], ["GET", "/api/calendar", "Economic calendar (1 h cache)"]]}, {"group": "Kestrel bridge", "who": "lib/agentlink.ts · agentproc.ts", "nodes": ["guard", "server", "proxy", "kestrel"], "routes": [["GET", "/api/agent-status", "Is the agent running?"], ["ANY", "/api/agent/*", "Proxied to :8100/v1/* with the secret; SSE passes through"]]}], "practices": [{"title": "Security", "items": [["Loopback only: listens on 127.0.0.1", ["guard", "server"]], ["DNS-rebinding defence: `Host` must be the loopback name", ["guard"]], ["`X-Frame-Options: DENY` and `nosniff` on every response", ["guard"]], ["scrypt PIN hash, async KDF, per-IP throttle", ["auth", "authjson"]], ["`HttpOnly; SameSite=Strict` session cookie, idle lock", ["auth", "browser"]], ["Same-origin required for every write", ["guard", "proxy"]], ["Agent token limited to 20 exact GET paths", ["proxy", "kestrel", "server"]], ["Notifications via `execFile`, never a shell string", ["portfolio", "osascript"]], ["Pre-commit hook blocks personal data and keys", ["store"]]]}, {"title": "Data integrity", "items": [["Single write lock in the store", ["store", "portfolio"]], ["Atomic save: 0600 temp file, then rename", ["store", "portfoliojson"]], ["Labelled undo snapshots before each write", ["store", "undojson"]], ["Undo checks the label so a newer change is never undone", ["ui", "store"]], ["Corrupt files quarantined, not overwritten", ["store"]], ["Schema migration on load", ["store", "portfoliojson"]], ["Dated sells use the FX rate on the trade date", ["portfolio", "market"]]]}, {"title": "Reliability & speed", "items": [["TTL cache with stale-while-revalidate and warm restarts", ["cache", "cachejson"]], ["Error boundary per island; lazy islands", ["islands"]], ["One query cache; `bus.write()` invalidation", ["query", "islands"]], ["Service worker caches the shell, never the API", ["sw", "static"]], ["Supervisor restarts the agent with backoff", ["supervisor", "kestrel"]]]}, {"title": "Frontend quality", "items": [["React 19 islands mounted through portals", ["islands", "browser"]], ["In-app dialogs with focus trap instead of `confirm()`", ["ui"]], ["axe accessibility checks in E2E", ["islands", "ui"]], ["Same indicator maths in browser and Node", ["legacy", "legacymath"]]]}, {"title": "Testing & delivery", "items": [["46 unit test files (node:test)", ["portfolio", "performance", "ledger"]], ["58 Playwright specs, including visual baselines and SW release", ["islands", "sw"]], ["Deterministic fake market for E2E (`FINSIGHT_FAKE_MARKET=1`)", ["market"]], ["esbuild, content-hashed chunks; `check:web` gate", ["static"]], ["Zero runtime npm dependencies in the server", ["server"]]]}], "foot": ["Source: `server.ts`, `lib/`, `web/src`, `public/`", "Read from `main` (ffe0115) on 26 Oct 2026", "Keys: ← → step · space play/pause"], "id": "finsight", "tab": "FinSight system", "tabIcon": "server"}, {"eyebrow": "Kestrel · AI agent architecture", "title": "Kestrel agent, end to end", "lede": "The research agent inside FinSight: a separate Node process on `127.0.0.1:8100` that reads your portfolio through a 20-path token, reasons with a pluggable brain, calls 39 tools, and streams cited answers back. It never trades.", "stats": [["39", "tools"], ["6", "brains"], ["5", "skills"], ["11", "SSE events"], ["10", "SQLite tables"], ["$0.05", "per turn cap"]], "lanes": [{"id": "host", "label": "Host · FinSight", "sub": ":8001 browser-facing", "tone": "client", "x": 10, "w": 266}, {"id": "gw", "label": "Gateway", "sub": "api/server.ts · mcp · cli", "tone": "edge", "x": 286, "w": 266}, {"id": "core", "label": "Agent core", "sub": "chat/ · brains/ · skills", "tone": "domain", "x": 562, "w": 266}, {"id": "tools", "label": "Tools · 39", "sub": "tools/registry.ts", "tone": "tool", "x": 838, "w": 266}, {"id": "ext", "label": "Providers & stores", "sub": "models · web · disk", "tone": "storage", "x": 1114, "w": 276}], "nodes": [{"id": "panel", "lane": "host", "x": 22, "y": 72, "w": 242, "name": "Kestrel panel", "path": "web/src/features/kestrel", "role": "The chat panel inside FinSight (⌘/). Sends messages, renders streamed answers, tool badges, citations, cost and proposal cards.", "short": "React island · ⌘/", "does": ["Opens an `EventSource` on the thread’s events, resuming with `Last-Event-ID`", "Shows a live tool timeline and per-turn cost", "Accept / Reject buttons for proposals", "Renders verified views when `ui.render` arrives"], "api": ["POST /api/agent/v1/threads/:id/messages", "SSE /api/agent/v1/threads/:id/events"], "kind": "browser", "icon": "chat", "kindLabel": "interface"}, {"id": "fsproxy", "lane": "host", "x": 22, "y": 144, "w": 242, "name": "FinSight agent proxy", "path": "lib/agentlink.ts · proxy()", "role": "The only door from the browser to the agent. Requires the PIN session, a same-origin check on writes, then adds the shared secret.", "short": "/api/agent/* → :8100", "does": ["Maps `/api/agent/*` → `127.0.0.1:8100/v1/*`", "Injects `X-Agent-Secret` from `agent-link.json`", "Pipes SSE responses through unbuffered"], "prac": ["The browser never learns the secret or the agent port"], "kind": "gate", "icon": "route", "kindLabel": "security checkpoint"}, {"id": "fsapi", "lane": "host", "x": 22, "y": 216, "w": 242, "name": "FinSight read API", "path": "server.ts · TOKEN_READ_PATHS", "role": "What the agent may read. A Bearer token unlocks exactly 20 GET paths; every write route rejects it.", "short": "20 GET paths · Bearer", "does": ["`/api/portfolio`, `/api/ledger`, `/api/history/batch`, `/api/fx-risk`, `/api/journal` …", "Exact-path match — no prefixes, no writes"], "api": ["GET only · Bearer token"], "prac": ["Least privilege: the agent cannot trade, edit or delete"], "kind": "server", "icon": "server", "kindLabel": "HTTP server"}, {"id": "supervisor", "lane": "host", "x": 28, "y": 288, "w": 230, "name": "Agent supervisor", "path": "lib/agentproc.ts", "role": "FinSight starts Kestrel as a child process, restarts it with backoff if it dies, and stops it on shutdown.", "short": "spawn · backoff · stop", "does": ["Writes `agent-link.json` (token + proxySecret)", "Probes `/v1/health`", "Reported to the UI via `GET /api/agent-status`"], "kind": "terminal", "icon": "activity", "kindLabel": "terminal / process"}, {"id": "mcpclient", "lane": "host", "x": 28, "y": 504, "w": 230, "name": "MCP client", "path": "Claude Code, Codex, any MCP host", "role": "An external assistant can use the same tools over stdio, without the chat engine or a browser.", "short": "external assistant", "api": ["stdio JSON-RPC"], "kind": "terminal", "icon": "terminal", "kindLabel": "terminal / process"}, {"id": "sse", "lane": "gw", "x": 298, "y": 72, "w": 242, "name": "Event bus · SSE", "path": "agent/src/chat/bus.ts", "role": "Every turn event is written to SQLite first, then pushed to subscribers. Reconnecting clients replay from `Last-Event-ID`.", "short": "persist → push · replay", "does": ["Events: `turn.started`, `message.delta`, `tool.started`, `tool.finished`, `citation`, `budget.warning`, `turn.retry`, `turn.stopped`, `turn.failed`, `turn.finished`, `ui.render`", "Coalesces text deltas about every 40 ms"], "prac": ["Persist-then-push: a dropped connection loses nothing"], "kind": "stream", "icon": "waves", "kindLabel": "event stream"}, {"id": "http", "lane": "gw", "x": 298, "y": 144, "w": 242, "name": "HTTP API", "path": "agent/src/api/server.ts", "role": "Plain Node HTTP server on 127.0.0.1:8100. Bodies are parsed with Zod; message posts return 202 and run in the background.", "short": ":8100 · Zod · 202", "does": ["Threads, messages, stop, events", "Brains, skills, plugins, strategies, info", "Logs, traces, cost, proposals, uploads"], "api": ["/v1/* · JSON", "202 Accepted for turns"], "prac": ["Zod schemas on every body", "Typed error envelope `{error:{code,message}}`"], "kind": "server", "icon": "server", "kindLabel": "HTTP server"}, {"id": "gate", "lane": "gw", "x": 298, "y": 216, "w": 242, "name": "Request gate", "path": "api/server.ts · safeEqual", "role": "Three checks before any route runs: loopback Host, no browser Origin, matching secret.", "short": "Host · Origin · secret", "does": ["Host must be `127.0.0.1`, `localhost` or `[::1]` on the agent port", "Any `Origin` header → 403 (no direct browser access)", "`X-Agent-Secret` compared in constant time with `safeEqual`", "`/v1/health` without a secret returns only `{ok}`"], "prac": ["DNS-rebinding and CSRF closed by construction"], "kind": "gate", "icon": "shield", "kindLabel": "security checkpoint"}, {"id": "cli", "lane": "gw", "x": 304, "y": 288, "w": 230, "name": "CLI", "path": "agent/src/cli.ts", "role": "Entry point for every mode.", "short": "start · doctor · mcp", "does": ["`start` — run the API", "`doctor` — check config, keys, FinSight link", "`mcp` — stdio MCP server", "`logs`, `skills`"], "kind": "terminal", "icon": "terminal", "kindLabel": "terminal / process"}, {"id": "mcp", "lane": "gw", "x": 298, "y": 504, "w": 242, "name": "MCP server", "path": "agent/src/mcp/server.ts", "role": "Serves the tool registry as an MCP server named “finsight” over stdio.", "short": "stdio · “finsight”", "does": ["`tools/list` exposes the registry except `render_ui`", "`tools/call` runs the same Zod-validated tool code"], "api": ["stdio · @modelcontextprotocol/sdk"], "kind": "service", "icon": "plug", "kindLabel": "service"}, {"id": "limits", "lane": "core", "x": 574, "y": 72, "w": 242, "name": "Budgets & cost", "path": "config.ts · cost_ledger", "role": "Hard limits per turn and per day. When one is hit the model is asked for a graceful final answer instead of being cut off.", "short": "12 steps · $0.05 · $2/day", "does": ["12 steps · 120 s · $0.05 per turn", "$2 per day", "10 searches · 15 fetches per turn", "`budget.warning` before the limit"], "prac": ["Every step costed into `cost_ledger`"], "kind": "service", "icon": "gauge", "kindLabel": "service"}, {"id": "engine", "lane": "core", "x": 574, "y": 144, "w": 242, "name": "Turn engine", "path": "agent/src/chat/engine.ts", "role": "Runs a research turn: brain call → tool calls → brain call … until an answer, a stop, or a limit.", "short": "chat/engine.ts · loop", "does": ["One running turn per thread (lock + optimistic version)", "Every step traced to `trace_steps`", "Retries transient model errors (`turn.retry`)", "Append-only message history", "Replays DeepSeek reasoning across tool steps"], "prac": ["Deterministic facts first, model reasoning second"], "kind": "agent", "icon": "robot", "kindLabel": "AI agent"}, {"id": "context", "lane": "core", "x": 588, "y": 216, "w": 214, "name": "Context pack", "path": "agent/src/chat/context.ts", "role": "A small ground-truth snapshot added to each turn so the model starts from real numbers.", "short": "net worth · top 15 · events", "does": ["Net worth and cash", "Top 15 positions", "Currency split", "Events in the next 14 days", "Page context from the panel"], "kind": "file", "icon": "filetext", "kindLabel": "file on disk"}, {"id": "brains", "lane": "core", "x": 582, "y": 288, "w": 226, "name": "Brain registry", "path": "agent/src/brains/ · plugins/brains/", "role": "Pluggable model layer. Each brain is a manifest; four transports cover every provider.", "short": "4 transports · 6 brains", "does": ["`openai-compatible` — DeepSeek Flash (default), DeepSeek V4 Pro, GPT-6 Luna, GPT-6 Sol", "`anthropic` — Claude Haiku 5.5", "`claude-code` — local `claude` CLI (Sonnet)", "`mock` — tests"], "api": ["GET /v1/brains"], "kind": "brain", "icon": "sparkle", "kindLabel": "model layer"}, {"id": "skills", "lane": "core", "x": 574, "y": 360, "w": 242, "name": "Skills", "path": "agent/src/skills.ts · agent/skills/", "role": "Markdown playbooks the model can load on demand. Bundled ones ship in the repo; installed ones live in the agent home.", "short": "5 bundled SKILL.md", "does": ["earnings-review", "position-review", "pre-trade-check", "strategy-scan", "why-did-it-move"], "api": ["GET /v1/skills", "use_skill · read_skill_file"], "kind": "stack", "icon": "book", "kindLabel": "tool group"}, {"id": "proposals", "lane": "core", "x": 574, "y": 432, "w": 242, "name": "Proposals", "path": "proposals table", "role": "The agent can suggest a change to policy, profile or decision records, but only the user’s Accept/Reject is recorded.", "short": "suggest · user decides", "does": ["Created by `propose_record_update`", "Accept/Reject records the decision; nothing is executed"], "api": ["GET /v1/proposals", "POST /v1/proposals/:id/accept|reject"], "prac": ["Human stays the decision-maker"], "kind": "service", "icon": "check", "kindLabel": "service"}, {"id": "uiviews", "lane": "core", "x": 574, "y": 504, "w": 242, "name": "Verified views", "path": "tools/ui.ts · ui/schema.ts · ui_views", "role": "Stat grids and tables whose numbers the server copies out of earlier tool results. The model names fields by path; it never types the values.", "short": "render_ui · qualified brains", "does": ["Needs both `KESTREL_UI=1` and a qualified brain (`capabilities.ui`: DeepSeek Flash/Pro, GPT-6 Luna/Sol)", "Kinds: `stat_grid` (≤8 fields) and `table` (≤8 columns, ≤50 rows)", "Saved in `ui_views` keyed by turn + call, sent as `ui.render`, reloaded with the thread", "`complete: true` ends the turn without another model call", "Not exposed over MCP"], "prac": ["Every figure traceable to a tool result"], "kind": "service", "icon": "layout", "kindLabel": "service"}, {"id": "uploads", "lane": "core", "x": 588, "y": 576, "w": 214, "name": "Uploads", "path": "agent/src/uploads.ts", "role": "Files attached in the panel, checked and extracted before any model sees them.", "short": "magic bytes · PDF/DOCX", "does": ["Type checked by magic bytes, not the file name", "Text extracted from PDF (unpdf) and DOCX (mammoth)", "Images go only to vision-capable brains", "Stored with mode 0600"], "api": ["POST /v1/uploads"], "kind": "file", "icon": "clip", "kindLabel": "file on disk"}, {"id": "registry", "lane": "tools", "x": 850, "y": 144, "w": 242, "name": "Tool registry", "path": "agent/src/tools/registry.ts", "role": "One list of 39 tools, each with a Zod input schema, shared by the chat engine and the MCP server.", "short": "39 tools · Zod", "does": ["Validates arguments before running", "Records timing and citations per call", "Also: `get_context_pack`, `render_ui`, `use_skill`, `read_skill_file`, `propose_record_update`"], "kind": "stack", "icon": "wrench", "kindLabel": "tool group"}, {"id": "facts", "lane": "tools", "x": 850, "y": 216, "w": 242, "name": "Portfolio facts · 18", "path": "agent/src/tools/facts.ts · finsight.ts", "role": "Read-only views of FinSight data, fetched live with the token.", "short": "18 read-only tools", "does": ["get_portfolio, query_positions, get_exposures, get_cash, get_accounts", "get_quote, get_history, get_events, get_dividends, get_realized", "get_performance, get_fx_risk, get_ledger, get_watchlist, get_alerts", "get_news, get_macro_series, get_journal"], "prac": ["Client re-reads `agent-link.json` on every call (token rotation safe)", "20 s timeout"], "kind": "stack", "icon": "pie", "kindLabel": "tool group"}, {"id": "records", "lane": "tools", "x": 850, "y": 288, "w": 242, "name": "Records · 4", "path": "agent/src/tools/records.ts", "role": "Reads the user’s own investment records so answers respect accepted policy.", "short": "policy · profile · decisions", "does": ["get_policy, get_profile, get_decisions", "search_memory (SQLite FTS over past messages)"], "kind": "stack", "icon": "book", "kindLabel": "tool group"}, {"id": "attach", "lane": "tools", "x": 850, "y": 360, "w": 242, "name": "Attachments · 3", "path": "agent/src/tools/attachments.ts", "role": "Lets the model read uploaded files in pieces instead of stuffing them into the prompt.", "short": "list · read · search", "does": ["list_attachments, read_attachment, search_attachments", "Capacity-aware: full document text when it fits"], "kind": "stack", "icon": "clip", "kindLabel": "tool group"}, {"id": "strat", "lane": "tools", "x": 850, "y": 432, "w": 242, "name": "Strategies · 5", "path": "agent/src/tools/strategies.ts", "role": "Runs the user’s chart strategies on price history.", "short": "run · scan · size", "does": ["list_strategies, get_strategy, run_strategy, scan_strategies, size_position", "History via `/api/history/batch`"], "api": ["GET /v1/strategies"], "kind": "stack", "icon": "chart", "kindLabel": "tool group"}, {"id": "sandbox", "lane": "tools", "x": 850, "y": 504, "w": 242, "name": "Strategy sandbox", "path": "sandbox/host.ts · strategy-worker.cjs", "role": "Strategy code runs in a forked child under Node’s permission model.", "short": "fork · --permission", "does": ["Read-only on its own script and the two strategy roots", "No network, no file writes, no child processes, no workers", "SIGKILL after 10 s; 256 MB memory cap"], "prac": ["Untrusted code isolated from secrets and the network"], "kind": "sandbox", "icon": "box", "kindLabel": "sandbox"}, {"id": "web", "lane": "tools", "x": 850, "y": 576, "w": 242, "name": "Web & SEC · 4", "path": "agent/src/tools/web.ts", "role": "Outside research with every source cited.", "short": "search · fetch · EDGAR", "does": ["web_search — Tavily (default), Brave, DeepSeek or none", "fetch_url — HTML to article text (readability + linkedom)", "edgar_filings, edgar_financials — fixed SEC hosts, cached, declared User-Agent"], "kind": "stack", "icon": "globe", "kindLabel": "tool group"}, {"id": "netguard", "lane": "tools", "x": 850, "y": 648, "w": 242, "name": "SSRF guard", "path": "agent/src/tools/netguard.ts", "role": "`fetch_url` goes through this guard so a model cannot reach your LAN or cloud metadata.", "short": "IP check in DNS lookup", "does": ["Checks the resolved IP inside the DNS lookup (no TOCTOU)", "Blocks private, loopback, link-local and reserved ranges", "Re-checks every redirect hop"], "kind": "gate", "icon": "shield", "kindLabel": "security checkpoint"}, {"id": "db", "lane": "ext", "x": 1126, "y": 72, "w": 252, "name": "agent.db", "path": "agent/src/store/db.ts · better-sqlite3", "role": "SQLite in WAL mode inside the agent home.", "short": "SQLite · WAL · 10 tables", "does": ["threads, messages, turns, events", "trace_steps, cost_ledger, cache", "proposals, fts_messages, ui_views"], "prac": ["WAL: readers never block the writer"], "kind": "db", "icon": "db", "kindLabel": "database"}, {"id": "secrets", "lane": "ext", "x": 1126, "y": 144, "w": 252, "name": "Secrets", "path": "agent/src/secrets.ts", "role": "API keys never live in the repo.", "short": "Keychain → env → 0600", "does": ["macOS Keychain, service `finsight-agent`", "then environment variables", "then a 0600 env file", "Values redacted from every log"], "kind": "vault", "icon": "lock", "kindLabel": "secret store"}, {"id": "llm", "lane": "ext", "x": 1126, "y": 216, "w": 252, "name": "OpenAI-compatible APIs", "path": "api.deepseek.com · api.openai.com", "role": "DeepSeek Flash / V4 Pro and GPT-6 Luna / Sol.", "short": "DeepSeek · OpenAI", "api": ["DEEPSEEK_API_KEY", "OPENAI_API_KEY"], "kind": "cloud", "icon": "sparkle", "kindLabel": "external service"}, {"id": "anthropic", "lane": "ext", "x": 1126, "y": 288, "w": 252, "name": "Anthropic API", "path": "@anthropic-ai/sdk · claude-haiku-5-5", "role": "Claude Haiku 5.5 through the Messages API.", "short": "Claude Haiku 5.5", "api": ["ANTHROPIC_API_KEY"], "kind": "cloud", "icon": "sparkle", "kindLabel": "external service"}, {"id": "claudecli", "lane": "ext", "x": 1132, "y": 360, "w": 240, "name": "Claude Code CLI", "path": "brains/claudecode.ts", "role": "Uses the locally signed-in `claude` CLI as a brain (Sonnet), no API key in Kestrel.", "short": "local subprocess", "kind": "terminal", "icon": "terminal", "kindLabel": "terminal / process"}, {"id": "recordsdir", "lane": "ext", "x": 1140, "y": 432, "w": 224, "name": "Investment records", "path": "<FinSight data>/records", "role": "Policy, profile and decision log the records tools read.", "short": "policy · profile · log", "kind": "file", "icon": "folder", "kindLabel": "file on disk"}, {"id": "search", "lane": "ext", "x": 1126, "y": 504, "w": 252, "name": "Search providers", "path": "Tavily · Brave · DeepSeek", "role": "Pluggable web search; Tavily by default.", "short": "Tavily (default)", "api": ["GET /v1/search-providers", "TAVILY_API_KEY · BRAVE_API_KEY"], "kind": "cloud", "icon": "search", "kindLabel": "external service"}, {"id": "edgar", "lane": "ext", "x": 1126, "y": 576, "w": 252, "name": "SEC EDGAR", "path": "www.sec.gov · data.sec.gov", "role": "Filings index and XBRL company facts, cached for hours, cited as primary sources.", "short": "filings · XBRL facts", "kind": "cloud", "icon": "landmark", "kindLabel": "external service"}, {"id": "website", "lane": "ext", "x": 1126, "y": 648, "w": 252, "name": "Public web pages", "path": "any https URL", "role": "Pages the model chose to read, only after the SSRF guard approves the address.", "short": "guarded fetch", "kind": "cloud", "icon": "globe", "kindLabel": "external service"}, {"id": "logs", "lane": "ext", "x": 1140, "y": 720, "w": 224, "name": "Audit logs", "path": "agent/src/obs/audit.ts · <home>/logs", "role": "One JSONL file per day: requests, turns, tool calls, costs, with ids to trace a turn end to end.", "short": "JSONL · redacted · 14 d", "does": ["Redacted (no keys, no secrets)", "14-day retention"], "api": ["GET /v1/logs", "GET /v1/turns/:id/trace", "GET /v1/cost?period=day|month"], "kind": "file", "icon": "scroll", "kindLabel": "file on disk"}], "edges": [["panel", "fsproxy", "POST", false], ["fsproxy", "gate", "X-Agent-Secret", false], ["gate", "http", "", false], ["http", "engine", "202", false], ["engine", "sse", "", false], ["sse", "fsproxy", "SSE", false], ["http", "db", "", false], ["engine", "context", "", false], ["context", "fsapi", "Bearer", false], ["engine", "brains", "", false], ["brains", "llm", "", false], ["brains", "anthropic", "", false], ["brains", "claudecli", "", false], ["brains", "secrets", "", true], ["engine", "limits", "", false], ["limits", "db", "", false], ["engine", "registry", "", false], ["registry", "facts", "", false], ["facts", "fsapi", "Bearer", false], ["registry", "records", "", false], ["records", "recordsdir", "", false], ["registry", "attach", "", false], ["attach", "uploads", "", false], ["http", "uploads", "", false], ["registry", "strat", "", false], ["strat", "sandbox", "", false], ["strat", "fsapi", "", true], ["registry", "web", "", false], ["web", "netguard", "", false], ["netguard", "website", "", false], ["web", "search", "", false], ["web", "edgar", "", false], ["registry", "skills", "", false], ["registry", "proposals", "", false], ["proposals", "db", "", false], ["registry", "uiviews", "", false], ["uiviews", "sse", "ui.render", true], ["mcpclient", "mcp", "stdio", false], ["mcp", "registry", "", false], ["supervisor", "cli", "spawn", false], ["cli", "http", "", false], ["cli", "secrets", "", true], ["http", "logs", "", true], ["fsproxy", "panel", "", false]], "flows": [{"name": "Research turn", "desc": "A question from the panel to a streamed, cited answer", "steps": [["panel", "fsproxy", "You ask a question in the panel. The browser only ever talks to FinSight, never to port 8100.", false, "POST"], ["fsproxy", "gate", "FinSight checks your PIN session and same-origin, then forwards it with `X-Agent-Secret`.", false, "X-Agent-Secret"], ["gate", "http", "Loopback Host only, any `Origin` header refused, secret compared with `safeEqual`.", false, ""], ["http", "db", "Zod parses the body; the message is appended and the thread version bumped. The API answers 202 straight away.", false, ""], ["http", "engine", "The engine takes the thread lock: one running turn per thread.", false, ""], ["engine", "context", "It builds the context pack: net worth, cash, top 15 positions, currency split, next 14 days of events.", false, ""], ["context", "fsapi", "Those numbers come live from FinSight with the read-only Bearer token.", false, "GET"], ["engine", "brains", "Prompt, history and tool schemas go to the chosen brain.", false, ""], ["brains", "llm", "The default brain is DeepSeek Flash over the OpenAI-compatible transport.", false, ""], ["brains", "engine", "The model asks for a tool, for example `query_positions`.", true, "tool call"], ["engine", "registry", "The registry validates the arguments with Zod and runs the tool; the step is traced and costed.", false, ""], ["registry", "facts", "A portfolio-facts tool handles it.", false, ""], ["facts", "fsapi", "`GET /api/portfolio`, one of the 20 allowlisted paths.", false, "GET"], ["fsapi", "facts", "FinSight returns real holdings. No write route accepts this token.", true, ""], ["engine", "limits", "Before the next step: 12 steps, 120 s, $0.05 a turn and $2 a day are checked.", false, ""], ["engine", "sse", "Answer text, tool and citation events are saved to SQLite, then pushed.", false, ""], ["sse", "fsproxy", "SSE flows back through FinSight; a reconnect replays from `Last-Event-ID`.", true, "SSE"], ["fsproxy", "panel", "`turn.finished` arrives with the cost; the panel shows the answer and its sources.", true, ""]]}, {"name": "Web research", "desc": "Search, a guarded page fetch and SEC data", "steps": [["engine", "registry", "The model calls `web_search` (at most 10 searches a turn).", false, ""], ["registry", "web", "The web tools take over.", false, ""], ["web", "search", "Tavily by default; Brave or DeepSeek search are options.", false, ""], ["search", "web", "Results come back as sources.", true, ""], ["web", "netguard", "`fetch_url` on a result (at most 15 fetches a turn) goes through the SSRF guard.", false, ""], ["netguard", "website", "The address is checked inside the DNS lookup and again on every redirect; private ranges are blocked.", false, ""], ["website", "web", "readability + linkedom reduce the page to its article text.", true, ""], ["web", "edgar", "`edgar_filings` / `edgar_financials` call the fixed SEC hosts with a declared User-Agent, cached for hours.", false, ""], ["edgar", "web", "Filings and XBRL facts come back with primary-source citations.", true, ""], ["engine", "sse", "Each source is streamed as a `citation` event.", false, ""]]}, {"name": "Skill playbook", "desc": "/pre-trade-check and other SKILL.md playbooks", "steps": [["panel", "fsproxy", "You type `/pre-trade-check` with a symbol and size.", false, ""], ["fsproxy", "gate", "Same authenticated path as any message.", false, ""], ["gate", "http", "Gate checks pass.", false, ""], ["http", "engine", "A turn starts.", false, ""], ["engine", "registry", "The model calls `use_skill`.", false, ""], ["registry", "skills", "The playbook loads from `agent/skills/pre-trade-check/SKILL.md` (or an installed skill).", false, ""], ["skills", "registry", "Its steps tell the model which facts to gather and which rules to check.", true, ""], ["registry", "facts", "It pulls cash, positions and events.", false, ""], ["facts", "fsapi", "Live numbers from FinSight.", false, ""], ["registry", "records", "…and your accepted policy and profile.", false, ""], ["records", "recordsdir", "From the records folder.", false, ""], ["engine", "sse", "A checklist answer streams back. It informs your decision; it does not place a trade.", false, ""]]}, {"name": "Strategy scan", "desc": "User strategy code in a locked-down child process", "steps": [["engine", "registry", "The model calls `scan_strategies` across your watchlist.", false, ""], ["registry", "strat", "Strategy tools resolve the strategy files.", false, ""], ["strat", "fsapi", "Price history comes from `/api/history/batch`.", false, ""], ["strat", "sandbox", "The code runs in a forked child under Node’s permission model.", false, ""], ["sandbox", "strat", "Read-only on its script and strategy roots; no network, writes, child processes or workers.", true, "signals"], ["strat", "registry", "Signals, and position sizes from `size_position`.", true, ""], ["engine", "sse", "Results stream back with the data date.", false, ""]]}, {"name": "Proposal", "desc": "The agent suggests; only your decision is recorded", "steps": [["engine", "registry", "The model wants a records change and calls `propose_record_update`.", false, ""], ["registry", "proposals", "A proposal is created; no record changes.", false, ""], ["proposals", "db", "Saved as a pending row in `proposals`.", false, ""], ["engine", "sse", "The answer includes the proposal.", false, ""], ["sse", "fsproxy", "Streamed to FinSight.", true, ""], ["fsproxy", "panel", "The panel shows a card with Accept and Reject.", true, ""], ["panel", "fsproxy", "You click Accept or Reject.", false, ""], ["fsproxy", "gate", "Through the same authenticated proxy.", false, ""], ["gate", "http", "`POST /v1/proposals/:id/accept`.", false, ""], ["http", "proposals", "Only your decision is recorded. Nothing is executed.", false, ""]]}, {"name": "Verified view", "desc": "render_ui cards built from tool results", "steps": [["engine", "brains", "With `KESTREL_UI=1` and a qualified brain, `render_ui` is offered alongside the other tools.", false, ""], ["brains", "engine", "After fetching facts, the model asks for a `stat_grid` or `table`, naming fields by path into a tool result.", true, "render_ui"], ["engine", "registry", "The request is checked against the UI schema (Zod).", false, ""], ["registry", "uiviews", "The server copies the values out of the cited tool result, so no number is typed by the model.", false, ""], ["uiviews", "db", "The view is saved in `ui_views`, keyed by turn and call.", false, ""], ["uiviews", "sse", "A `ui.render` event is pushed; `complete: true` ends the turn there.", false, ""], ["sse", "fsproxy", "Through FinSight.", true, ""], ["fsproxy", "panel", "The panel draws the card, and redraws it when the thread is reopened.", true, ""]]}, {"name": "MCP over stdio", "desc": "The same tools for Claude Code, Codex or any MCP host", "steps": [["mcpclient", "mcp", "An assistant starts `kestrel mcp` and talks JSON-RPC over stdio.", false, "stdio"], ["mcp", "registry", "`tools/list` returns the registry minus `render_ui`; `tools/call` runs the same code.", false, ""], ["registry", "facts", "For example `get_portfolio`.", false, ""], ["facts", "fsapi", "Same token, same 20-path allowlist.", false, ""], ["fsapi", "facts", "Read-only data.", true, ""], ["mcp", "mcpclient", "The result is written to stdout.", true, ""]]}, {"name": "Startup & keys", "desc": "Supervisor, secrets and brain discovery", "steps": [["supervisor", "cli", "FinSight writes `agent-link.json` and spawns the agent.", false, "spawn"], ["cli", "secrets", "Keys come from the Keychain, then env, then a 0600 env file.", false, ""], ["cli", "http", "The API binds to 127.0.0.1:8100.", false, ""], ["http", "brains", "Brains load from `plugins/brains/<id>/manifest.json`; ones without a key show as unavailable.", false, ""], ["supervisor", "gate", "FinSight probes `/v1/health`, which answers only `{ok}` without the secret.", false, ""], ["gate", "supervisor", "Healthy. If the process dies, the supervisor restarts it with backoff.", true, ""]]}], "size": [1400, 800], "apiTitle": "Agent API", "apiLede": "Everything under `/v1/*` sits behind the gate and is reached by the browser only as `/api/agent/v1/*`. Click a route to see which parts it touches.", "pracLede": "Hover or tap an item to light up the parts that enforce it.", "apis": [{"group": "Health & discovery", "who": "api/server.ts", "nodes": ["fsproxy", "gate", "http", "brains"], "routes": [["GET", "/v1/health", "Without the secret: only `{ok}`"], ["GET", "/v1/info", "Assistant name and version"], ["GET", "/v1/brains", "Brains, key status and whether views are on"], ["GET", "/v1/search-providers", "Tavily · Brave · DeepSeek · none"], ["GET", "/v1/skills", "Bundled and installed skills"], ["GET", "/v1/plugins", "Brain plugin manifests"]]}, {"group": "Threads & turns", "who": "chat/engine.ts · bus.ts", "nodes": ["fsproxy", "gate", "http", "engine", "sse", "db"], "routes": [["GET", "/v1/threads", "List threads"], ["POST", "/v1/threads", "Create a thread"], ["GET", "/v1/threads/:id", "Messages, citations and saved views"], ["PATCH", "/v1/threads/:id", "Rename or archive"], ["DELETE", "/v1/threads/:id", "Delete; needs `?confirm=true`, refused mid-turn"], ["POST", "/v1/threads/:id/messages", "Start a turn → 202 Accepted"], ["POST", "/v1/threads/:id/stop", "Stop the running turn"], ["SSE", "/v1/threads/:id/events", "Event stream, `Last-Event-ID` replay"]]}, {"group": "Uploads", "who": "uploads.ts", "nodes": ["fsproxy", "gate", "http", "uploads"], "routes": [["POST", "/v1/uploads", "Attach PDF, DOCX, text or image"]]}, {"group": "Observability", "who": "obs/audit.ts", "nodes": ["fsproxy", "gate", "http", "logs", "db"], "routes": [["GET", "/v1/logs", "Recent redacted audit lines"], ["GET", "/v1/turns/:id/trace", "Every step of a turn"], ["GET", "/v1/cost?period=day|month", "Spend from `cost_ledger`"]]}, {"group": "Strategies", "who": "tools/strategies.ts", "nodes": ["fsproxy", "gate", "http", "strat"], "routes": [["GET", "/v1/strategies", "Strategies available to the tools"]]}, {"group": "Proposals", "who": "proposals table", "nodes": ["fsproxy", "gate", "http", "proposals", "db"], "routes": [["GET", "/v1/proposals", "Pending and decided proposals"], ["POST", "/v1/proposals/:id/accept", "Record acceptance only"], ["POST", "/v1/proposals/:id/reject", "Record rejection"]]}, {"group": "Tools the model can call", "who": "tools/registry.ts · 39", "nodes": ["engine", "registry", "facts", "records", "attach", "strat", "web"], "routes": [["TOOL", "get_portfolio · query_positions · get_exposures …", "18 portfolio-fact tools over the read API"], ["TOOL", "get_policy · get_profile · get_decisions · search_memory", "Your records and past chats"], ["TOOL", "list_ · read_ · search_attachments", "Uploaded files"], ["TOOL", "list_ · get_ · run_strategy · scan_strategies · size_position", "Sandboxed strategies"], ["TOOL", "web_search · fetch_url · edgar_filings · edgar_financials", "Outside research, cited"], ["TOOL", "get_context_pack · use_skill · read_skill_file", "Context and playbooks"], ["TOOL", "propose_record_update · render_ui", "Suggestions and verified views"]]}, {"group": "MCP & CLI", "who": "mcp/server.ts · cli.ts", "nodes": ["mcpclient", "mcp", "registry"], "routes": [["STDIO", "tools/list", "Registry minus render_ui"], ["STDIO", "tools/call", "Run one tool"], ["CLI", "kestrel start | doctor | mcp | logs | skills", "Run, diagnose, serve MCP, read logs, manage skills"]]}], "practices": [{"title": "Security", "items": [["Loopback only: binds 127.0.0.1, rejects any non-loopback `Host`", ["gate", "http"]], ["No direct browser access: any `Origin` header → 403", ["gate"]], ["Shared secret compared in constant time (`safeEqual`)", ["fsproxy", "gate"]], ["Least privilege: token limited to 20 exact GET paths", ["facts", "fsapi"]], ["SSRF guard checks the IP inside DNS lookup and on each redirect", ["netguard", "website"]], ["Strategy code sandboxed with Node’s permission model", ["strat", "sandbox"]], ["Keys in the Keychain, never in the repo; redacted from logs", ["secrets", "logs"]], ["Uploads typed by magic bytes, stored 0600", ["uploads"]]]}, {"title": "Reliability", "items": [["One running turn per thread, with an optimistic version", ["engine", "db"]], ["Persist every event before pushing it", ["sse", "db"]], ["SSE replay from `Last-Event-ID` after a reconnect", ["sse", "fsproxy", "panel"]], ["Transient model errors retried (`turn.retry`)", ["engine", "brains"]], ["At a limit, ask for a graceful final answer", ["engine", "limits"]], ["Supervisor restarts the agent with backoff", ["supervisor", "cli"]], ["SQLite WAL so reads never block the writer", ["db"]]]}, {"title": "Cost control", "items": [["12 steps · 120 s · $0.05 per turn", ["limits", "engine"]], ["$2 per day across all threads", ["limits", "db"]], ["10 searches and 15 fetches per turn", ["limits", "web"]], ["Every step costed into `cost_ledger`", ["limits", "db"]]]}, {"title": "Grounding & audit", "items": [["Context pack of real numbers on every turn", ["context", "fsapi"]], ["Every claim from the web carries a citation", ["web", "sse"]], ["Every step traced; `/v1/turns/:id/trace`", ["engine", "db", "logs"]], ["Daily JSONL audit, 14-day retention", ["logs"]], ["Append-only history", ["db"]]]}, {"title": "Human in control", "items": [["Read-only: no tool can trade, move money or write FinSight data", ["registry", "fsapi"]], ["Proposals record your decision; nothing is executed", ["proposals", "panel"]], ["Verified views need `KESTREL_UI=1` and a qualified brain", ["uiviews", "brains"]], ["Records read from your policy, profile and decision log", ["records", "recordsdir"]]]}, {"title": "Testing", "items": [["Agent unit tests (node:test, 10 files) with a `mock` brain", ["brains", "engine"]], ["Playwright specs drive the panel against a fake agent", ["panel", "fsproxy"]], ["Pre-commit secret scan over agent code", ["secrets"]], ["`kestrel doctor` checks keys, config and the FinSight link", ["cli", "secrets"]]]}], "foot": ["Source: `agent/src`, `agent/plugins/brains`, `agent/skills`, `lib/agentlink.ts`, `lib/agentproc.ts`", "Read from `main` (ffe0115) on 26 Oct 2026", "Keys: ← → step · space play/pause"], "id": "kestrel", "tab": "Kestrel agent", "tabIcon": "robot"}];
+const ICONS = {"browser": "M3 5h18v14H3z M3 9h18 M6 7h.01 M8.5 7h.01", "layers": "M12 3 3 8l9 5 9-5z M3 12.5l9 5 9-5 M3 17l9 5 9-5", "chat": "M4 5h16v11H9l-5 4z M8 9.5h8 M8 12.5h5", "wifi": "M2 9a15 15 0 0 1 20 0 M5 12.5a10 10 0 0 1 14 0 M8.5 16a5 5 0 0 1 7 0 M12 19.5h.01", "shield": "M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z M8.5 12l2.5 2.5 4.5-5", "server": "M4 4h16v6H4z M4 14h16v6H4z M8 7h.01 M8 17h.01 M12 7h4 M12 17h4", "key": "M4 15a4 4 0 1 0 8 0a4 4 0 1 0 -8 0 M11 12l9-9 M17 6l3 3 M14.5 8.5l2 2", "files": "M8 3h8l4 4v11H8z M16 3v4h4 M4 7v14h12", "route": "M4 19a2 2 0 1 0 4 0a2 2 0 1 0 -4 0 M16 5a2 2 0 1 0 4 0a2 2 0 1 0 -4 0 M8 19h7.5a3.5 3.5 0 0 0 0-7h-7a3.5 3.5 0 0 1 0-7H16", "activity": "M3 12h4l3-8 4 16 3-8h4", "pie": "M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0 M12 3v9h9", "list": "M9 6h12 M9 12h12 M9 18h12 M4 6h.01 M4 12h.01 M4 18h.01", "trend": "M3 17l6-6 4 4 8-8 M15 7h6v6", "candles": "M6 3v18 M4 7h4v8H4z M12 3v18 M10 5h4v11h-4z M18 5v15 M16 9h4v6h-4z", "bolt": "M13 2 4 14h7l-1 8 9-12h-7z", "globe": "M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0 M3 12h18 M12 3c3.5 3.5 3.5 14.5 0 18 M12 3c-3.5 3.5-3.5 14.5 0 18", "coin": "M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0 M15 9.5c-.5-1-1.6-1.5-3-1.5-1.7 0-3 .8-3 2s1.3 1.6 3 2 3 .8 3 2-1.3 2-3 2c-1.4 0-2.5-.5-3-1.5 M12 6v2 M12 16v2", "chart": "M3 3v18h18 M7 15l4-4 3 3 5-6", "book": "M3 5h6a3 3 0 0 1 3 3v13a2 2 0 0 0-2-2H3z M21 5h-6a3 3 0 0 0-3 3v13a2 2 0 0 1 2-2h7z", "upload": "M12 15V3 M7 8l5-5 5 5 M4 15v6h16v-6", "sigma": "M18 5H6l6 7-6 7h12", "save": "M5 3h11l3 3v15H5z M8 3v5h7V3 M8 21v-7h8v7", "file": "M6 3h9l4 4v14H6z M15 3v4h4", "filetext": "M6 3h9l4 4v14H6z M15 3v4h4 M9 12h6 M9 16h6", "undo": "M9 14 4 9l5-5 M4 9h11a5 5 0 0 1 0 10h-3", "lock": "M5 11h14v10H5z M8 11V7a4 4 0 0 1 8 0v4 M12 15v2", "folder": "M3 6h6l2 2h10v11H3z", "db": "M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3 M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6 M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3", "cloud": "M7 19h10a4 4 0 0 0 .6-8A6 6 0 0 0 6 10a4.5 4.5 0 0 0 1 9z", "robot": "M5 9h14v10H5z M12 5v4 M12 4h.01 M9 13.5h.01 M15 13.5h.01 M9.5 16.5h5 M2 13v3 M22 13v3", "bell": "M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z M10 21h4", "terminal": "M4 5h16v14H4z M7.5 10l3 2-3 2 M12.5 15h4", "plug": "M9 2v5 M15 2v5 M6 7h12v4a6 6 0 0 1-12 0z M12 17v5", "waves": "M3 8c3-3 6 3 9 0s6 3 9 0 M3 13c3-3 6 3 9 0s6 3 9 0 M3 18c3-3 6 3 9 0s6 3 9 0", "check": "M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0 M8 12l3 3 5-6", "layout": "M3 4h18v16H3z M3 10h18 M10 10v10", "clip": "M20 11l-8 8a5 5 0 0 1-7-7l8-8a3.5 3.5 0 0 1 5 5l-8 8a2 2 0 0 1-3-3l7-7", "wrench": "M15 4a5 5 0 0 0-4.6 7L3.5 17.9a1.8 1.8 0 0 0 2.6 2.6L13 13.6A5 5 0 0 0 20 9l-3 1-3-3 1-3z", "box": "M12 3l9 5v8l-9 5-9-5V8z M3 8l9 5 9-5 M12 13v8", "search": "M4 11a7 7 0 1 0 14 0a7 7 0 1 0 -14 0 M16 16l5 5", "sparkle": "M12 3l2 6 6 2-6 2-2 6-2-6-6-2 6-2z M19 3v4 M17 5h4", "gear": "M9 12a3 3 0 1 0 6 0a3 3 0 1 0 -6 0 M12 2v3 M12 19v3 M2 12h3 M19 12h3 M4.9 4.9 7 7 M17 17l2.1 2.1 M4.9 19.1 7 17 M17 7l2.1-2.1", "landmark": "M3 21h18 M5 21V10 M9.5 21V10 M14.5 21V10 M19 21V10 M2 10l10-6 10 6z", "calendar": "M4 5h16v16H4z M4 10h16 M8 3v4 M16 3v4", "scroll": "M6 3h9l4 4v14H6z M15 3v4h4 M9 11h6 M9 14h6 M9 17h4", "gauge": "M4 18a8 8 0 1 1 16 0 M12 18l4-6 M4 18h16", "atom": "M10.5 12a1.5 1.5 0 1 0 3.0 0a1.5 1.5 0 1 0 -3.0 0 M12 4c4.5 0 8 3.6 8 8s-3.5 8-8 8-8-3.6-8-8 3.5-8 8-8z M4.5 8c2-3.5 9-1.5 13 2.5S21.5 17.5 19.5 20 M19.5 8c-2-3.5-9-1.5-13 2.5S2.5 17.5 4.5 20"};
+const NS = 'http://www.w3.org/2000/svg';
+const $ = (id) => document.getElementById(id);
+const el = (tag, attrs = {}, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
+const h = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const fmt = (s) => esc(s).replace(/`([^`]+)`/g, '<code>$1</code>');
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const svg = $('map');
+
+// Shape heights by kind; every shape fills its node box so edges attach cleanly.
+const KIND_H = { browser: 60, terminal: 58, db: 62, cloud: 58 };
+const DY = { browser: 6, terminal: 5, db: 3, cloud: 4 };
+let D, lane, nodes, nodeEls, edgeEls, packet, core, trail, tag;
+let flowIx = 0, stepIx = 0, playing = !reduce, timer = 0, raf = 0, speed = 1, selected = null;
+const hidden = new Set();
+let paneMode = (() => { try { return localStorage.getItem('archPane') || 'side'; } catch { return 'side'; } })();
+let spotlight = true, vb = { x: 0, y: 0, w: 1, h: 1 }, full = { w: 1, h: 1 };
+const color = (n) => `var(--c-${lane[n.lane].tone})`;
+
+const rr = (x, y, w, hh, r) => `M${x + r},${y}H${x + w - r}A${r},${r} 0 0 1 ${x + w},${y + r}V${y + hh - r}A${r},${r} 0 0 1 ${x + w - r},${y + hh}H${x + r}A${r},${r} 0 0 1 ${x},${y + hh - r}V${y + r}A${r},${r} 0 0 1 ${x + r},${y}Z`;
+function shapePath(k, x, y, w, hh) {
+  if (k === 'db') { const e = 7; return `M${x},${y + e}A${w / 2},${e} 0 0 1 ${x + w},${y + e}V${y + hh - e}A${w / 2},${e} 0 0 1 ${x},${y + hh - e}Z`; }
+  if (k === 'file') { const f = 13; return `M${x + 8},${y}H${x + w - f}L${x + w},${y + f}V${y + hh - 8}Q${x + w},${y + hh} ${x + w - 8},${y + hh}H${x + 8}Q${x},${y + hh} ${x},${y + hh - 8}V${y + 8}Q${x},${y} ${x + 8},${y}Z`; }
+  if (k === 'cloud') {
+    const r = (hh - 8) / 2, top = y + 8, span = w - 2 * r, n = Math.max(2, Math.round(span / 44)), s = span / n;
+    let d = `M${x + r},${y + hh}A${r},${r} 0 0 1 ${x + r},${top}`;
+    for (let i = 1; i <= n; i++) d += `A${s / 2},8 0 0 1 ${x + r + s * i},${top}`;
+    return d + `A${r},${r} 0 0 1 ${x + w - r},${y + hh}Z`;
+  }
+  if (k === 'agent') { const c = 13; return `M${x + c},${y}H${x + w - c}L${x + w},${y + c}V${y + hh - c}L${x + w - c},${y + hh}H${x + c}L${x},${y + hh - c}V${y + c}Z`; }
+  if (k === 'gate') { const p = 13; return `M${x + p},${y}H${x + w - p}L${x + w},${y + hh / 2}L${x + w - p},${y + hh}H${x + p}L${x},${y + hh / 2}Z`; }
+  if (k === 'stream') { const e = 10; return `M${x + e},${y}H${x + w - e}A${e},${hh / 2} 0 0 1 ${x + w - e},${y + hh}H${x + e}A${e},${hh / 2} 0 0 1 ${x + e},${y}Z`; }
+  if (k === 'brain' || k === 'pill') return rr(x, y, w, hh, hh / 2);
+  if (k === 'terminal') return rr(x, y, w, hh, 6);
+  return rr(x, y, w, hh, 10);
+}
+function drawNode(n, g) {
+  const { x, y, w } = n, hh = n.h, k = n.kind, col = color(n), dy = DY[k] || 0;
+  if (k === 'stack') for (const o of [7, 3.5]) el('path', { d: rr(x + o, y - o, w, hh, 10), class: 'shape back', stroke: col }, g);
+  if (k === 'agent') el('path', { d: shapePath(k, x, y, w, hh), class: 'pulse', stroke: col }, g);
+  el('path', { d: shapePath(k, x, y, w, hh), class: 'shape' + (k === 'sandbox' ? ' dashed' : ''), stroke: col }, g);
+  if (k === 'db') { el('ellipse', { cx: x + w / 2, cy: y + 7, rx: w / 2, ry: 7, class: 'lid', stroke: col }, g); el('path', { d: `M${x},${y + hh - 19}A${w / 2},7 0 0 0 ${x + w},${y + hh - 19}`, class: 'ring', stroke: col }, g); }
+  if (k === 'file') el('path', { d: `M${x + w - 13},${y}V${y + 13}H${x + w}`, class: 'ring', stroke: col }, g);
+  if (k === 'browser' || k === 'terminal') {
+    el('path', { d: `M${x},${y + 13}H${x + w}`, class: 'ring', stroke: col }, g);
+    if (k === 'browser') [0, 1, 2].forEach((i) => el('circle', { cx: x + 10 + i * 7, cy: y + 6.5, r: 2, fill: col, opacity: .7 }, g));
+    else el('text', { x: x + 9, y: y + 10, class: 'tt' }, g).textContent = '~ zsh';
+  }
+  if (k === 'stream') el('ellipse', { cx: x + w - 10, cy: y + hh / 2, rx: 10, ry: hh / 2, class: 'lid', stroke: col }, g);
+  if (k === 'vault') el('path', { d: rr(x + 4, y + 4, w - 8, hh - 8, 7), class: 'ring', stroke: col }, g);
+  if (k === 'server') [-7, 0, 7].forEach((o, i) => el('circle', { cx: x + w - 14, cy: y + hh / 2 + o, r: 2.2, fill: col, class: 'led', style: `animation-delay:${i * .5}s` }, g));
+  const ix = x + (k === 'gate' ? 32 : k === 'cloud' ? 30 : 26), cy = y + hh / 2 + dy;
+  el('circle', { cx: ix, cy, r: 15, class: 'ibg', fill: col }, g);
+  const ig = el('g', { transform: `translate(${ix - 9},${cy - 9}) scale(.75)`, class: 'ico', stroke: col }, g);
+  el('path', { d: ICONS[n.icon] || ICONS.gear }, ig);
+  const tx = ix + 25;
+  el('text', { x: tx, y: cy - 3, class: 'nm' }, g).textContent = n.name + (n.href ? ' ↗' : '');
+  el('text', { x: tx, y: cy + 13, class: 'pt' }, g).textContent = n.short || n.path;
+}
+
+function side(a, b) {
+  const ac = { x: a.x + a.w / 2, y: a.y + a.h / 2 }, bc = { x: b.x + b.w / 2, y: b.y + b.h / 2 };
+  if (b.x >= a.x + a.w - 4) return [{ x: a.x + a.w, y: ac.y }, { x: b.x, y: bc.y }, 'h'];
+  if (b.x + b.w <= a.x + 4) return [{ x: a.x, y: ac.y }, { x: b.x + b.w, y: bc.y }, 'h'];
+  return [null, null, 'v'];
+}
+function curve(aId, bId) {
+  const a = nodes[aId], b = nodes[bId];
+  const [p, q, dir] = side(a, b);
+  if (dir === 'h') { const dx = Math.max(30, Math.abs(q.x - p.x) * 0.45) * Math.sign(q.x - p.x || 1); return `M${p.x},${p.y} C${p.x + dx},${p.y} ${q.x - dx},${q.y} ${q.x},${q.y}`; }
+  // same column: bow out to the right so the line clears the shapes between
+  const px = a.x + a.w, qx = b.x + b.w, py = a.y + a.h / 2, qy = b.y + b.h / 2, bow = Math.min(70, 26 + Math.abs(qy - py) * 0.12);
+  return `M${px},${py} C${px + bow},${py} ${qx + bow},${qy} ${qx},${qy}`;
+}
+
+function light(ids, hotEdges = []) {
+  svg.classList.toggle('dimming', ids.length > 0 && spotlight);
+  for (const [id, g] of Object.entries(nodeEls)) g.classList.toggle('lit', ids.includes(id));
+  for (const p of edgeEls) p.classList.toggle('hot', hotEdges.includes(p));
+}
+const between = (ids) => edgeEls.filter((p) => ids.includes(p.dataset.from) && ids.includes(p.dataset.to));
+function neighbours(id) {
+  const es = edgeEls.filter((p) => p.dataset.from === id || p.dataset.to === id);
+  return { es, ids: [id, ...es.map((p) => (p.dataset.from === id ? p.dataset.to : p.dataset.from))] };
+}
+function select(id, fromUser) {
+  const n = nodes[id]; if (!n) return;
+  selected = id;
+  for (const g of Object.values(nodeEls)) g.classList.toggle('sel', g.dataset.id === id);
+  if (fromUser) { stop(); const nb = neighbours(id); light(nb.ids, nb.es); }
+  const L = lane[n.lane];
+  const links = neighbours(id).es.map((p) => {
+    const other = p.dataset.from === id ? p.dataset.to : p.dataset.from;
+    return `<button class="chip" data-go="${other}">${p.dataset.from === id ? '→' : '←'} ${esc(nodes[other].name)}</button>`;
+  }).join('');
+  if (fromUser && paneMode === 'float') $('insp').hidden = false;
+  $('insp').innerHTML = `
+    <button class="insp-x" id="inspX" aria-label="Close details">✕</button>
+    <div class="insp-kicker" style="color:var(--c-${L.tone})"><span class="swatch" style="background:var(--c-${L.tone})"></span>${esc(L.label)} · ${esc(n.kindLabel)}</div>
+    <div class="insp-head"><svg viewBox="0 0 24 24" class="insp-ico" style="color:var(--c-${L.tone})"><path d="${ICONS[n.icon] || ICONS.gear}"/></svg><div><h2>${esc(n.name)}</h2><div class="path">${esc(n.path)}</div></div></div>
+    <p>${fmt(n.role)}</p>
+    ${n.does ? `<div><h3>What it does</h3><ul>${n.does.map((x) => `<li>${fmt(x)}</li>`).join('')}</ul></div>` : ''}
+    ${n.api ? `<div><h3>Interfaces</h3><div class="chips">${n.api.map((x) => `<span class="tag">${esc(x)}</span>`).join('')}</div></div>` : ''}
+    ${n.prac ? `<div><h3>Practices</h3><ul>${n.prac.map((x) => `<li>${fmt(x)}</li>`).join('')}</ul></div>` : ''}
+    ${links ? `<div><h3>Connected to</h3><div class="chips">${links}</div></div>` : ''}
+    ${n.href ? `<a class="crosslink" href="${esc(n.href)}">${esc(n.hrefLabel || 'Open the detailed map')} →</a>` : ''}
+    ${fromUser ? '<button class="chip" id="clearSel">Show everything</button>' : ''}`;
+  $('inspX').addEventListener('click', () => { if (paneMode === 'float') $('insp').hidden = true; });
+  $('insp').querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', () => select(b.dataset.go, true)));
+  $('clearSel')?.addEventListener('click', () => { light([]); for (const g of Object.values(nodeEls)) g.classList.remove('sel'); playing = !reduce; setPlayIcon(); start(flowIx, 0); });
+}
+
+function setPlayIcon() {
+  $('play').setAttribute('aria-label', playing ? 'Pause' : 'Play');
+  $('playIcon').innerHTML = playing ? '<path d="M4 3h3v10H4zM9 3h3v10H9z"/>' : '<path d="M4 2v12l10-6z"/>';
+}
+function stop() {
+  playing = false; setPlayIcon(); clearTimeout(timer); cancelAnimationFrame(raf);
+  if (packet) { packet.setAttribute('opacity', 0); trail.removeAttribute('d'); tag.textContent = ''; }
+  for (const g of Object.values(nodeEls || {})) g.classList.remove('act');
+}
+function start(i, s) {
+  flowIx = i;
+  [...$('flows').children].forEach((b, k) => b.setAttribute('aria-pressed', String(k === i)));
+  $('steps').innerHTML = '';
+  D.flows[i].steps.forEach((_, k) => { const b = h('button'); b.setAttribute('aria-label', `Step ${k + 1}`); b.addEventListener('click', () => { stop(); show(k, true); }); $('steps').appendChild(b); });
+  show(s);
+}
+function show(k, still) {
+  const f = D.flows[flowIx]; stepIx = (k + f.steps.length) % f.steps.length;
+  const st = f.steps[stepIx];
+  [...$('steps').children].forEach((b, j) => { b.classList.toggle('on', j === stepIx); b.classList.toggle('done', j < stepIx); });
+  $('count').textContent = `${String(stepIx + 1).padStart(2, '0')} / ${String(f.steps.length).padStart(2, '0')}`;
+  $('ntext').innerHTML = `<b>${esc(nodes[st[0]].name)} ${st[3] ? '⟵' : '→'} ${esc(nodes[st[1]].name)}</b> · ${fmt(st[2])}`;
+  const involved = [...new Set(f.steps.flatMap((x) => [x[0], x[1]]))];
+  light(involved, edgeEls.filter((p) => f.steps.some((x) => (x[0] === p.dataset.from && x[1] === p.dataset.to) || (x[1] === p.dataset.from && x[0] === p.dataset.to))));
+  for (const g of Object.values(nodeEls)) g.classList.toggle('act', g.dataset.id === st[0] || g.dataset.id === st[1]);
+  select(st[1], false);
+  const d = curve(st[0], st[1]);
+  trail.setAttribute('d', d); trail.classList.toggle('ret', !!st[3]);
+  const len = trail.getTotalLength(), mid = trail.getPointAtLength(len / 2);
+  tag.textContent = st[4] || ''; tag.setAttribute('x', mid.x + 8); tag.setAttribute('y', mid.y - 10);
+  cancelAnimationFrame(raf); clearTimeout(timer);
+  core.setAttribute('fill', st[3] ? 'var(--panel)' : 'var(--accent)'); core.setAttribute('stroke', st[3] ? 'var(--accent)' : 'var(--panel)');
+  if (still || reduce) {
+    const pt = trail.getPointAtLength(len); packet.setAttribute('transform', `translate(${pt.x},${pt.y})`); packet.setAttribute('opacity', 1);
+    trail.style.strokeDasharray = st[3] ? '5 5' : 'none'; trail.style.strokeDashoffset = 0;
+    if (playing && !still) timer = setTimeout(() => show(stepIx + 1), 2600 / speed);
+    return;
+  }
+  const dur = 1100 / speed, t0 = performance.now();
+  trail.style.strokeDasharray = st[3] ? '5 5' : `${len} ${len}`;
+  const tick = (now) => {
+    const t = Math.min(1, (now - t0) / dur), e = t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+    const pt = trail.getPointAtLength(len * e);
+    packet.setAttribute('transform', `translate(${pt.x},${pt.y})`); packet.setAttribute('opacity', 1);
+    if (!st[3]) trail.style.strokeDashoffset = String(len * (1 - e));
+    if (t < 1) raf = requestAnimationFrame(tick);
+    else if (playing) timer = setTimeout(() => show(stepIx + 1), 1500 / speed);
+  };
+  raf = requestAnimationFrame(tick);
+}
+
+function mount(id) {
+  clearTimeout(timer); cancelAnimationFrame(raf);
+  D = MAPS.find((m) => m.id === id) || MAPS[0];
+  [...$('tabs').children].forEach((b) => { const on = b.dataset.map === D.id; b.setAttribute('aria-selected', String(on)); b.tabIndex = on ? 0 : -1; });
+  lane = Object.fromEntries(D.lanes.map((l) => [l.id, l]));
+  nodes = Object.fromEntries(D.nodes.map((n) => [n.id, { ...n, h: n.h || KIND_H[n.kind] || 54 }]));
+  $('eyebrow').textContent = D.eyebrow; $('h1').textContent = D.title; $('lede').innerHTML = fmt(D.lede);
+  $('stats').innerHTML = D.stats.map(([v, l]) => `<span><b>${esc(v)}</b> ${esc(l)}</span>`).join('');
+  $('apiTitle').textContent = D.apiTitle; $('apiLede').innerHTML = fmt(D.apiLede); $('pracLede').innerHTML = fmt(D.pracLede);
+  $('foot').innerHTML = D.foot.map((f) => `<span>${fmt(f)}</span>`).join('');
+
+  // map
+  svg.innerHTML = '';
+  full = { w: D.size[0], h: D.size[1] }; fit();
+  $('insp').hidden = paneMode !== 'side';
+  el('title', {}, svg).textContent = D.title + ' diagram';
+  const defs = el('defs', {}, svg), pat = el('pattern', { id: 'dots', width: 22, height: 22, patternUnits: 'userSpaceOnUse' }, defs);
+  el('circle', { cx: 1, cy: 1, r: 1, class: 'dot' }, pat);
+  el('rect', { width: D.size[0], height: D.size[1], fill: 'url(#dots)' }, svg);
+  const gLanes = el('g', {}, svg), gEdges = el('g', {}, svg), gNodes = el('g', {}, svg), gFx = el('g', {}, svg);
+  for (const l of D.lanes) {
+    const g = el('g', {}, gLanes);
+    el('rect', { x: l.x + 2, y: 12, width: l.w - 4, height: D.size[1] - 24, rx: 16, class: 'zone', fill: `var(--tint-${l.tone})`, stroke: `var(--c-${l.tone})` }, g);
+    el('text', { x: l.x + 16, y: 36, class: 'lane-title', fill: `var(--c-${l.tone})` }, g).textContent = l.label;
+    el('text', { x: l.x + 16, y: 52, class: 'lane-sub' }, g).textContent = l.sub;
+  }
+  edgeEls = D.edges.map(([from, to, label, opt]) => {
+    const p = el('path', { d: curve(from, to), class: 'edge' + (opt ? ' opt' : ' flowing') }, gEdges);
+    p.dataset.from = from; p.dataset.to = to; return p;
+  });
+  nodeEls = {};
+  for (const n of Object.values(nodes)) {
+    const g = el('g', { class: `node k-${n.kind}`, tabindex: 0, role: 'button', 'aria-label': `${n.name}, ${n.kindLabel}, ${lane[n.lane].label}` }, gNodes);
+    g.dataset.id = n.id; g.dataset.lane = n.lane;
+    drawNode(n, g);
+    g.addEventListener('click', () => select(n.id, true));
+    g.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(n.id, true); } });
+    nodeEls[n.id] = g;
+  }
+  packet = el('g', { class: 'packet', opacity: 0 }, gFx);
+  el('circle', { r: 12, fill: 'var(--accent)', 'fill-opacity': .18 }, packet);
+  core = el('circle', { r: 5.5, fill: 'var(--accent)', stroke: 'var(--panel)', 'stroke-width': 2 }, packet);
+  trail = el('path', { class: 'pathtmp' }, gFx);
+  tag = el('text', { class: 'edge-label' }, gFx);
+
+  // shape key + layer toggles
+  hidden.clear();
+  $('legend').innerHTML = '';
+  for (const l of D.lanes) {
+    const b = h('button', 'leg', `<span class="swatch" style="background:var(--c-${l.tone})"></span>${esc(l.label)}`);
+    b.setAttribute('aria-pressed', 'true');
+    b.addEventListener('click', () => {
+      const on = b.getAttribute('aria-pressed') === 'true'; b.setAttribute('aria-pressed', String(!on));
+      on ? hidden.add(l.id) : hidden.delete(l.id);
+      for (const g of Object.values(nodeEls)) g.style.opacity = hidden.has(g.dataset.lane) ? .1 : '';
+      for (const p of edgeEls) p.style.opacity = hidden.has(nodes[p.dataset.from].lane) || hidden.has(nodes[p.dataset.to].lane) ? .05 : '';
+    });
+    $('legend').appendChild(b);
+  }
+  const kinds = [...new Map(D.nodes.map((n) => [n.kind, n])).values()];
+  $('shapes').innerHTML = kinds.map((n) => {
+    const w = 46, hh = 26, p = shapePath(n.kind, 2, n.kind === 'cloud' ? 2 : 4, w, n.kind === 'cloud' ? 26 : 22);
+    return `<span class="shape-key"><svg viewBox="0 0 50 ${hh + 4}" width="50" height="${hh + 4}"><path d="${p}" class="key-shape"/></svg>${esc(n.kindLabel)}</span>`;
+  }).join('');
+
+  // flows
+  $('flows').innerHTML = '';
+  D.flows.forEach((f, i) => {
+    const b = h('button', 'flow-btn', esc(f.name)); b.title = f.desc || '';
+    b.addEventListener('click', () => { playing = true; setPlayIcon(); start(i, 0); });
+    $('flows').appendChild(b);
+  });
+
+  // API catalogue
+  const apiBox = $('api'); apiBox.innerHTML = ''; $('q').value = '';
+  for (const g of D.apis) {
+    const card = h('div', 'api-group');
+    card.innerHTML = `<header><h3>${esc(g.group)}</h3><span class="who">${esc(g.who || '')}</span></header>`;
+    for (const [m, p, d] of g.routes) {
+      const r = h('button', 'route', `<span class="m ${m}">${m}</span><span class="p">${esc(p)}</span><span class="d">${fmt(d)}</span>`);
+      r.dataset.search = (m + ' ' + p + ' ' + d + ' ' + g.group).toLowerCase();
+      r.addEventListener('click', () => {
+        stop(); apiBox.querySelectorAll('.route.on').forEach((x) => x.classList.remove('on')); r.classList.add('on');
+        light(g.nodes, between(g.nodes)); select(g.nodes[g.nodes.length - 1], false);
+        $('ntext').innerHTML = `<b><span class="m ${m}" style="display:inline-block;padding:0 6px">${m}</span> ${esc(p)}</b> · touches ${g.nodes.map((i) => esc(nodes[i].name)).join(' → ')}`;
+        $('count').textContent = 'ROUTE';
+        document.querySelector('.mapbox').scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'nearest' });
+      });
+      card.appendChild(r);
+    }
+    apiBox.appendChild(card);
+  }
+
+  // practices
+  $('prac').innerHTML = '';
+  D.practices.forEach((c) => {
+    const card = h('div', 'prac-card', `<h3>${esc(c.title)} <span class="n">${c.items.length}</span></h3>`);
+    const ul = h('ul');
+    for (const [text, ids] of c.items) {
+      const li = h('li'), b = h('button', null, fmt(text));
+      const on = () => { stop(); light(ids, between(ids)); select(ids[0], false); };
+      b.addEventListener('mouseenter', on); b.addEventListener('focus', on);
+      b.addEventListener('click', () => { on(); document.querySelector('.mapbox').scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'nearest' }); });
+      li.appendChild(b); ul.appendChild(li);
+    }
+    card.appendChild(ul); $('prac').appendChild(card);
+  });
+
+  selected = null; playing = !reduce; setPlayIcon(); start(0, 0);
+}
+
+// one-time wiring
+for (const m of MAPS) {
+  const b = h('button', 'tab', `<svg viewBox="0 0 24 24"><path d="${ICONS[m.tabIcon]}"/></svg><span>${esc(m.tab)}</span>`);
+  b.setAttribute('role', 'tab'); b.dataset.map = m.id;
+  b.addEventListener('click', () => { if (location.hash !== '#' + m.id) location.hash = m.id; else mount(m.id); });
+  $('tabs').appendChild(b);
+}
+$('tabs').addEventListener('keydown', (e) => {
+  if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+  e.stopPropagation();
+  const i = MAPS.findIndex((m) => m.id === D.id), j = (i + (e.key === 'ArrowRight' ? 1 : -1) + MAPS.length) % MAPS.length;
+  location.hash = MAPS[j].id; $('tabs').children[j].focus();
+});
+addEventListener('hashchange', () => { mount(location.hash.slice(1)); window.scrollTo({ top: 0, behavior: reduce ? 'auto' : 'smooth' }); });
+$('play').addEventListener('click', () => { playing = !playing; setPlayIcon(); if (playing) show(stepIx + 1); else clearTimeout(timer); });
+$('next').addEventListener('click', () => { stop(); show(stepIx + 1, true); });
+$('prev').addEventListener('click', () => { stop(); show(stepIx - 1, true); });
+$('speed').addEventListener('change', (e) => { speed = Number(e.target.value) || 1; });
+$('q').addEventListener('input', (e) => {
+  const q = e.target.value.trim().toLowerCase();
+  for (const card of $('api').children) {
+    let any = false;
+    for (const r of card.querySelectorAll('.route')) { const ok = !q || r.dataset.search.includes(q); r.hidden = !ok; any ||= ok; }
+    card.hidden = !any;
+  }
+});
+document.addEventListener('keydown', (e) => {
+  if (e.target.closest('input, select, textarea, [role=tab]')) return;
+  if (e.key === 'ArrowRight') { stop(); show(stepIx + 1, true); }
+  else if (e.key === 'ArrowLeft') { stop(); show(stepIx - 1, true); }
+  else if (e.key === ' ' && e.target === document.body) { e.preventDefault(); $('play').click(); }
+});
+
+// ---- zoom & pan: the whole map always fits; zoom in where you point ----
+function setVB(n) {
+  const minW = full.w / 5, maxW = full.w * 1.25;
+  const w = Math.min(maxW, Math.max(minW, n.w)), hh = w * (full.h / full.w);
+  vb = { x: n.x + (n.w - w) / 2 * (n.keep ? 0 : 1), y: n.y + (n.h - hh) / 2 * (n.keep ? 0 : 1), w, h: hh };
+  if (n.keep) { vb.x = n.x; vb.y = n.y; }
+  svg.setAttribute('viewBox', `${vb.x} ${vb.y} ${vb.w} ${vb.h}`);
+  $('zLevel').textContent = Math.round(full.w / vb.w * 100) + '%';
+}
+function fit() { setVB({ x: 0, y: 0, w: full.w, h: full.h, keep: true }); }
+function svgPoint(cx, cy) { const p = svg.createSVGPoint(); p.x = cx; p.y = cy; return p.matrixTransform(svg.getScreenCTM().inverse()); }
+function zoomAt(factor, cx, cy) {
+  const r = svg.getBoundingClientRect();
+  const p = svgPoint(cx ?? r.left + r.width / 2, cy ?? r.top + r.height / 2);
+  const w = Math.min(full.w * 1.25, Math.max(full.w / 5, vb.w / factor)), k = w / vb.w;
+  setVB({ x: p.x - (p.x - vb.x) * k, y: p.y - (p.y - vb.y) * k, w, h: vb.h * k, keep: true });
+}
+const vp = $('viewport');
+vp.addEventListener('wheel', (e) => { if (e.target.closest('.insp')) return; e.preventDefault(); zoomAt(Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0018)), e.clientX, e.clientY); }, { passive: false });
+let drag = null;
+vp.addEventListener('pointerdown', (e) => { if (e.target.closest('.insp, .zoombar') || e.button !== 0) return; drag = { x: e.clientX, y: e.clientY, vb: { ...vb }, moved: false }; });
+addEventListener('pointermove', (e) => {
+  if (!drag) return;
+  const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+  if (!drag.moved && Math.hypot(dx, dy) < 4) return;
+  drag.moved = true; vp.classList.add('panning');
+  const u = 1 / svg.getScreenCTM().a;
+  setVB({ x: drag.vb.x - dx * u, y: drag.vb.y - dy * u, w: drag.vb.w, h: drag.vb.h, keep: true });
+});
+addEventListener('pointerup', () => { if (drag?.moved) { const stopClick = (ev) => { ev.stopPropagation(); ev.preventDefault(); }; addEventListener('click', stopClick, { capture: true, once: true }); setTimeout(() => removeEventListener('click', stopClick, { capture: true }), 0); } drag = null; vp.classList.remove('panning'); });
+$('zIn').addEventListener('click', () => zoomAt(1.3));
+$('zOut').addEventListener('click', () => zoomAt(1 / 1.3));
+$('zFit').addEventListener('click', fit);
+$('zSpot').addEventListener('click', () => { spotlight = !spotlight; $('zSpot').setAttribute('aria-pressed', String(spotlight)); if (!spotlight) svg.classList.remove('dimming'); else if (svg.querySelector('.node.lit')) svg.classList.add('dimming'); });
+$('zFull').addEventListener('click', () => { const box = document.querySelector('.mapbox'); document.fullscreenElement ? document.exitFullscreen() : box.requestFullscreen?.(); });
+document.addEventListener('keydown', (e) => {
+  if (e.target.closest('input, select, textarea')) return;
+  if (e.key === '+' || e.key === '=') zoomAt(1.3); else if (e.key === '-') zoomAt(1 / 1.3);
+  else if (e.key === '0') fit(); else if (e.key === 'f' || e.key === 'F') $('zFull').click();
+  else if (e.key === 'Escape' && paneMode === 'float') $('insp').hidden = true;
+  else if (e.key === 'h' || e.key === 'H') $('zToggle').click();
+  else if (e.key === 'd' || e.key === 'D') setPane({ side: 'float', float: 'off', off: 'side' }[paneMode]);
+});
+// details panel: docked beside the map, floating over it, or off
+function setPane(m) {
+  paneMode = m; try { localStorage.setItem('archPane', m); } catch {}
+  const insp = $('insp');
+  $('stage').classList.toggle('side', m === 'side');
+  if (m === 'side') $('stage').appendChild(insp); else vp.insertBefore(insp, vp.querySelector('.zoombar'));
+  insp.hidden = m !== 'side';
+  if (m === 'side' && selected) select(selected, false);
+  document.querySelectorAll('[data-pane]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.pane === m)));
+}
+document.querySelectorAll('[data-pane]').forEach((b) => b.addEventListener('click', () => setPane(b.dataset.pane)));
+// controls collapse to a single button so they never hide the map
+function setBar(open) {
+  $('zbar').classList.toggle('collapsed', !open);
+  $('zToggle').setAttribute('aria-expanded', String(open));
+  $('zToggle').title = open ? 'Hide controls (H)' : 'Show map controls (H)';
+  try { localStorage.setItem('archBar', open ? '1' : '0'); } catch {}
+}
+$('zToggle').addEventListener('click', () => setBar($('zbar').classList.contains('collapsed')));
+setBar((() => { try { return localStorage.getItem('archBar') !== '0'; } catch { return true; } })());
+setPane(paneMode);
+mount(location.hash.slice(1));
+</script>
+</body>
+</html>

@@ -8,16 +8,24 @@
 
 To maintain architectural integrity and prevent task fragmentation across runs:
 
-1. **Single Source of Truth:**
-   * Always check **[`docs/BACKLOG.md`](docs/BACKLOG.md)** before picking up or starting work.
-   * Work must trace to an active specification in **`docs/features/FEAT-XXX.md`**.
+1. **Requirements and execution:**
+   * Read [docs/README.md](docs/README.md), then [docs/BACKLOG.md](docs/BACKLOG.md) and the selected requirement.
+   * The product backlog owns feature requirements and spec IDs. In the investment workspace,
+     `harness/queue.json` owns scheduling, blockers and verified completion, while `harness/STATE.md`
+     identifies the active checkout. User instructions override queue order; record the reason.
+   * Link feature specs to execution task IDs. Existing engineering tasks may use their task contract;
+     do not invent a feature spec for routine fixes or documentation work.
+   * Keep ideas explicitly deferred until selected. If records disagree, inspect the current request,
+     checkout and evidence before updating either; a roadmap label never grants authority.
+
 2. **When the User Brainstorms New Features:**
    * Do not dump unformatted notes into logs or changelogs.
    * Write an explicit feature specification to `docs/features/FEAT-XXX-<slug>.md`.
-   * Register the new entry in `docs/BACKLOG.md` under **Ideas & Icebox** or **Prioritized Backlog**.
+   * Register the new entry in `docs/BACKLOG.md` under the deferred/ideas section until explicitly selected.
 3. **When Completing Features:**
    * Update the status in `docs/BACKLOG.md`.
-   * Record the release under `CHANGELOG.md` with relevant commit/evidence hashes.
+   * Update the workspace task and handoff when present. Record integrated changes under `CHANGELOG.md`
+     with actual commit/evidence hashes; distinguish implemented, verified, merged and deployed.
 
 ---
 
