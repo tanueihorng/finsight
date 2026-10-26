@@ -1,5 +1,6 @@
-import { memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { lazy, Suspense, memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { useStore } from 'zustand';
+import { IslandBoundary } from '../../ui/IslandBoundary.tsx';
 import { agentApi } from './api.ts';
 import { addFiles, chat, chooseBrain, chooseSearch, closeOverlay, deleteThread, menuItems, newChat, openThread, pageContext, railShown, removeFile, setDraft, setNarrow, stop, submit, toggleThreads, type FileChip, type Item } from './chat.ts';
 import type { Thread } from './api.ts';
@@ -7,6 +8,8 @@ import { Icon } from './icons.tsx';
 import { costLabel, ctxButton, LS, ls, prettyArgs } from './labels.ts';
 import { md } from './md.ts';
 import { citeHost, type Turn } from './turns.ts';
+
+const UiView = lazy(() => import('./ui/UiView.tsx'));
 
 // The Kestrel conversation (G1: log, turns, tool rows, status, markdown;
 // G2: composer, slash menu, attachments, model picker, page context).
@@ -89,6 +92,18 @@ function ToolGroup({ tools }: { tools: ToolPart[] }) {
   );
 }
 
+async function copyAnswer(t: Turn): Promise<boolean> {
+  // Ordinary answers keep their existing cheap path, even with the feature off.
+  let text = t.allText;
+  if (t.parts.some((p) => p.kind === 'ui')) {
+    const { answerText } = await import('./ui/UiView.tsx');
+    text = answerText(t, window.FinSight.store.getState().peek);
+  }
+  if (window.FinSight.auth.unlocked === false || !navigator.clipboard) return false;
+  await navigator.clipboard.writeText(text);
+  return true;
+}
+
 function TurnView({ t }: { t: Turn }) {
   const [copied, setCopied] = useState(false), [trace, setTrace] = useState(false);
   const blocks: ReactNode[] = [];
@@ -99,6 +114,7 @@ function TurnView({ t }: { t: Turn }) {
       while (i < t.parts.length && t.parts[i]!.kind === 'tool') tools.push(t.parts[i++] as ToolPart);
       i--; blocks.push(<ToolGroup key={'g' + tools[0]!.key} tools={tools} />);
     } else if (p.kind === 'text') blocks.push(<TextPart key={i} text={p.text} />);
+    else if (p.kind === 'ui') blocks.push(<Suspense key={p.key} fallback={<div className="agent-notice">Loading snapshot…</div>}><IslandBoundary><UiView view={p.view} /></IslandBoundary></Suspense>);
     else blocks.push(<div key={i} className={'agent-notice ' + p.cls}>{p.text}</div>);
   }
   const search = t.search ? chat.getState().searchProviders.find((x) => x.id === t.search)?.label || t.search : '';
@@ -119,7 +135,7 @@ function TurnView({ t }: { t: Turn }) {
           {search && <span title="Web search provider for this answer">{`${search} search`}</span>}
           {t.meta.costUsd != null && <span title="API cost of this answer">{costLabel(t.meta.costUsd)}</span>}
           {!!t.meta.ms && <span>{(t.meta.ms / 1000).toFixed(1)}s</span>}
-          {t.allText && <button title="Copy answer" onClick={() => { void navigator.clipboard?.writeText(t.allText); setCopied(true); setTimeout(() => setCopied(false), 1200); }}>{copied ? 'copied' : 'copy'}</button>}
+          {(t.allText || t.parts.some((p) => p.kind === 'ui')) && <button title="Copy answer" onClick={() => { void copyAnswer(t).then((ok) => { if (ok) { setCopied(true); setTimeout(() => setCopied(false), 1200); } }).catch(() => setCopied(false)); }}>{copied ? 'copied' : 'copy'}</button>}
           {/^turn_/.test(t.id) && <button title="Show every model, tool and data call for this answer" onClick={() => setTrace((v) => !v)}>trace</button>}
         </>}
       </div>

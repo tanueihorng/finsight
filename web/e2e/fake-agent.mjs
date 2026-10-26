@@ -10,6 +10,7 @@
 // "fail" ends the turn with an error; "quickfail" fails it before the
 // POST /messages reply arrives (the race the G card fixes).
 import http from 'node:http';
+import { uiFixture } from './ui-fixture.mjs';
 
 const PORT = Number(process.env.FAKE_AGENT_PORT || 8097);
 let seq = 0, ids = 0;
@@ -20,7 +21,7 @@ const uploads = new Map();
 const json = (res, status, body) => { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(body)); };
 const readBody = (req) => new Promise((resolve) => { let b = ''; req.on('data', (c) => { b += c; }); req.on('end', () => { try { resolve(b ? JSON.parse(b) : {}); } catch { resolve({}); } }); });
 const publicThread = (t) => ({ id: t.id, title: t.title, version: t.version, defaultBrain: t.defaultBrain, updatedAt: t.updatedAt,
-  preview: [...t.messages].reverse().find((x) => x.role === 'assistant')?.blocks[0]?.text.slice(0, 120) || '' });
+  preview: [...t.messages].reverse().find((x) => x.role === 'assistant')?.blocks[0]?.text?.slice(0, 120) || '' });
 
 function emit(t, type, data) {
   const ev = { id: ++seq, type, data };
@@ -45,6 +46,21 @@ function runTurn(t, turnId, content, attachments, search = 'tavily') {
     emit(t, 'tool.started', { turnId, callId: 'c1', name: 'mcp__finsight__get_portfolio', argsSummary: '{"account":"main"}' });
     emit(t, 'tool.finished', { turnId, callId: 'c1', name: 'mcp__finsight__get_portfolio', ok: true, resultSummary: '9 positions', ms: 1200 });
     emit(t, 'citation', { turnId, url: 'https://www.example.com/report', title: 'Report', class: 'primary', retrievedAt: '2026-10-25T00:00:00Z' });
+  }
+  if (/\buiview\b|\buibad\b|\buiunknown\b|\buidelay\b/i.test(content)) {
+    const view = uiFixture(t.id, turnId), bad = /\buibad\b/i.test(content);
+    t.messages.push({ id: `m${++ids}`, role: 'assistant', turnId, blocks: [{ type: 'tool_call', id: view.callId, name: 'render_ui', args: { version: 1, value: 999999 } }] });
+    t.messages.push({ id: `m${++ids}`, role: 'tool', turnId, blocks: [{ type: 'tool_result', callId: view.callId, name: 'render_ui', ok: !bad, content: bad ? 'UI_REJECTED' : 'accepted' }] });
+    emit(t, 'tool.started', { turnId, callId: view.callId, name: 'render_ui', argsSummary: '{}' });
+    emit(t, 'tool.finished', { turnId, callId: view.callId, name: 'render_ui', ok: !bad, resultSummary: bad ? 'UI_REJECTED: use prose' : 'accepted' });
+    const deliver = () => {
+      if (bad) return;
+      if (/\buiunknown\b/i.test(content)) view.spec.version = 99;
+      (t.uiViews ||= []).push(view);
+      emit(t, 'ui.render', { turnId, callId: view.callId, view });
+      emit(t, 'ui.render', { turnId, callId: view.callId, view }); // reconnect/replay duplicate
+    };
+    if (/\buidelay\b/i.test(content)) setTimeout(deliver, 1800); else deliver();
   }
   if (/\bmarkdown\b/i.test(content)) chunks.splice(0, chunks.length, '## Head\n**bold** <script>window.__xss = 1</script> <img src=x onerror="window.__xss = 2">\n\n| Sym | Chg |\n|---|---|\n| AAPL | +1.5% |');
   let i = 0, text = '';
@@ -92,7 +108,7 @@ const server = http.createServer(async (req, res) => {
   }
   if (m && !t) return json(res, 404, { error: { code: 'NOT_FOUND', message: 'No such chat' } });
   if (t && !m[2] && req.method === 'GET') {
-    return json(res, 200, { thread: publicThread(t), messages: t.messages, citations: [], lastEventId: seq, runningTurn: t.running });
+    return json(res, 200, { thread: publicThread(t), messages: t.messages, uiViews: t.uiViews || [], citations: [], lastEventId: seq, runningTurn: t.running });
   }
   if (t && !m[2] && req.method === 'DELETE') { threads.delete(t.id); return json(res, 200, { ok: true }); }
   if (t && m[2] === '/messages' && req.method === 'POST') {

@@ -1,7 +1,8 @@
 import { createStore } from 'zustand/vanilla';
 import { agentApi, AgentError, type Brain, type Citation, type Message, type SearchProvider, type Skill, type Thread } from './api.ts';
 import { COMMANDS, ctxLabel, friendly, LS, ls, offlineWhy, randomVerb, suggestions, TOOL_VERBS, prettyTool, type PageContext } from './labels.ts';
-import { addCite, addNotice, addText, addTool, endSegment, finish, newTurn, toolDone, type Turn } from './turns.ts';
+import type { UiView } from '../../../../shared/ui.ts';
+import { addUi, addCite, addNotice, addText, addTool, endSegment, finish, newTurn, toolDone, type Turn } from './turns.ts';
 
 // Kestrel chat state and actions (G1/G2). Lives outside React so the chat
 // keeps its stream, turns and draft while the view moves between the side
@@ -86,7 +87,9 @@ function openStream() {
   if (!thread) return;
   closeStream();
   es = new EventSource(`/api/agent/threads/${thread.id}/events?after=${get().lastEventId}`);
+  const stream = es; // queued callbacks from a closed/replaced stream are stale
   const on = <T,>(type: string, fn: (d: T) => void) => es!.addEventListener(type, (e) => {
+    if (es !== stream || get().thread?.id !== thread.id || window.FinSight?.auth?.unlocked === false) return;
     const ev = e as MessageEvent<string>;
     set({ lastEventId: Math.max(get().lastEventId, Number(ev.lastEventId) || 0) });
     let d = {} as T; try { d = JSON.parse(ev.data) as T; } catch { /* ignore */ }
@@ -101,6 +104,7 @@ function openStream() {
     scrollDown();
   });
   on<D>('tool.finished', (d) => updateTurn(d.turnId, (t) => toolDone(t, d.callId as string | undefined, String(d.name), !!d.ok, d.resultSummary as string | undefined, d.ms as number | undefined)));
+  on<D>('ui.render', (d) => { if (typeof d.callId === 'string') updateTurn(d.turnId, (t) => addUi(t, d.callId as string, d.view)); });
   on<D & Citation>('citation', (d) => updateTurn(d.turnId, (t) => addCite(t, d)));
   on<D>('budget.warning', (d) => updateTurn(d.turnId, (t) => addNotice(t, String(d.note || 'Limit reached.'), 'warn')));
   on<D>('turn.retry', (d) => { updateTurn(d.turnId, (t) => addNotice(t, `model busy (${d.code}), retrying…`, 'warn')); set({ status: { ...get().status, verb: 'Waiting for the model' } }); });
@@ -136,7 +140,7 @@ function clearLog() { set({ view: 'log', items: [], turns: {} }); }
 export function newChat() {
   closeStream(); set({ thread: null }); setRunning(null); ls.set(LS.thread, ''); showWelcome();
 }
-function renderHistory(messages: Message[], citations: Citation[]) {
+function renderHistory(messages: Message[], citations: Citation[], uiViews: UiView[] = []) {
   const byTurn = new Map<string, Message[]>();
   for (const m of messages) { const k = m.turnId || m.id; if (!byTurn.has(k)) byTurn.set(k, []); byTurn.get(k)!.push(m); }
   for (const [k, msgs] of byTurn) {
@@ -158,17 +162,19 @@ function renderHistory(messages: Message[], citations: Citation[]) {
         else if (b.type === 'notice' && m.role === 'assistant') updateTurn(k, (t) => addNotice(t, String(b.text), b.kind === 'error' || b.kind === 'refusal' ? 'error' : 'warn'));
       }
     }
+    for (const v of uiViews.filter((v) => v.turnId === k)) updateTurn(k, (t) => addUi(t, v.callId, v));
     for (const c of citations.filter((x) => x.turnId === k)) updateTurn(k, (t) => addCite(t, c));
     const label = get().brains.find((b) => b.id === brain)?.label || brain;
     updateTurn(k, (t) => finish(t, { label }));
   }
 }
 export async function openThread(id: string) {
-  const d = await agentApi<{ thread: Thread; messages: Message[]; citations?: Citation[]; lastEventId?: number; runningTurn?: string | null }>(`/threads/${id}`);
+  const d = await agentApi<{ thread: Thread; messages: Message[]; uiViews?: UiView[]; citations?: Citation[]; lastEventId?: number; runningTurn?: string | null }>(`/threads/${id}`);
+  if (window.FinSight?.auth?.unlocked === false) return;
   closeStream();
   set({ thread: d.thread, version: d.thread.version, lastEventId: d.lastEventId || 0 });
   ls.set(LS.thread, id); pickBrain(); clearLog();
-  renderHistory(d.messages, d.citations || []);
+  renderHistory(d.messages, d.citations || [], d.uiViews || []);
   setRunning(d.runningTurn || null);
   openStream(); scrollDown();
 }

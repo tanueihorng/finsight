@@ -249,3 +249,22 @@ body.agent-resizing-v { user-select: none; cursor: row-resize; }
 }
 /* The composer box carries the focus ring for its text area. */
 .agent-panel .agent-input:focus-visible, .agent-dock .agent-input:focus-visible { outline: none; }
+
+/* Verified historical snapshots. No dynamic CSS or model-supplied markup. */
+.kx-ui { margin:12px 0; padding:12px; border:1px solid var(--line,#444); border-radius:10px; font:13px/1.5 system-ui,sans-serif; min-width:0; }
+.kx-ui section + section { margin-top:16px; padding-top:12px; border-top:1px solid var(--line,#444); }
+.kx-ui-source { font-size:11px; color:var(--muted,#aaa); margin:3px 0 8px; overflow-wrap:anywhere; }
+.kx-ui-stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(150px,100%),1fr)); gap:10px; margin:10px 0; }
+.kx-ui-stats > div { background:var(--panel2,#222); padding:10px; border-radius:6px; }
+.kx-ui-stats dt { font-size:11px; }
+.kx-ui-stats dd { margin:4px 0 0; font-size:16px; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
+.kx-ui-scroll { overflow-x:auto; max-width:100%; }
+.kx-ui-scroll:focus-visible { outline:2px solid var(--accent,#dfb36a); outline-offset:2px; }
+.kx-ui table { border-collapse:collapse; width:100%; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.kx-ui caption { text-align:left; font-size:11px; padding:4px; }
+.kx-ui th,.kx-ui td { padding:6px; text-align:left; border-bottom:1px solid var(--line,#444); }
+.kx-ui td.num { text-align:right; }
+.kx-ui th button { color:inherit; font:inherit; background:none; border:0; cursor:pointer; padding:3px; }
+.kx-ui-fallback { margin-top:10px; font-size:11px; }
+.kx-ui-fallback pre,pre.kx-ui-fallback { white-space:pre-wrap; overflow-wrap:anywhere; }
+.kx-ui-hidden { padding:12px; border:1px solid var(--line,#444); border-radius:8px; }

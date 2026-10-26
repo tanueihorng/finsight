@@ -6,6 +6,7 @@ import { prettyTool, took } from './labels.ts';
 export type Part =
   | { kind: 'text'; text: string; open: boolean }
   | { kind: 'tool'; key: string; name: string; args: string; state: 'running' | 'ok' | 'err'; res: string; detail: string }
+  | { kind: 'ui'; key: string; view: unknown }
   | { kind: 'notice'; text: string; cls: string };
 export interface Meta { label?: string; costUsd?: number | null; ms?: number | null }
 export interface Turn { id: string; label: string; search?: string; parts: Part[]; cites: Citation[]; meta: Meta | null; allText: string }
@@ -41,3 +42,10 @@ export function addCite(t: Turn, c: Citation): Turn {
 export const addNotice = (t: Turn, text: string, cls: string): Turn => ({ ...t, parts: [...closeText(t.parts), { kind: 'notice', text, cls }] });
 export const finish = (t: Turn, meta: Meta): Turn => ({ ...endSegment(t), meta });
 export function citeHost(url: string): string { try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return url; } }
+
+// Only accepted API snapshots enter here; never interpret raw tool arguments.
+export function addUi(t: Turn, callId: string, view: unknown): Turn {
+  const i = t.parts.findIndex((p) => (p.kind === 'tool' || p.kind === 'ui') && p.key === callId);
+  const part: Part = { kind: 'ui', key: callId, view };
+  return { ...t, parts: i < 0 ? [...closeText(t.parts), part] : t.parts.map((p, j) => j === i ? part : p) };
+}

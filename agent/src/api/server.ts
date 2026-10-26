@@ -125,7 +125,7 @@ async function route(d: ApiDeps, req: http.IncomingMessage, res: http.ServerResp
         blocks: x.blocks.filter((b) => !(b.type === 'notice' && b.kind === 'context_pack')).map((b) => (b.type === 'tool_result' ? { ...b, content: b.content.slice(0, 400) } : b)) }));
       const lastEvent = (d.db.prepare('SELECT MAX(id) v FROM events WHERE thread_id = ?').get(id) as { v: number | null }).v ?? 0;
       const citations = store.eventsAfter(d.db, id, 0, 5000).filter((e) => e.type === 'citation').map((e) => e.payload);
-      return send(res, 200, { thread: t, messages, citations, runningTurn: d.engine.isRunning(id), lastEventId: lastEvent });
+      return send(res, 200, { thread: t, messages, citations, uiViews: store.listUiViews(d.db, id), runningTurn: d.engine.isRunning(id), lastEventId: lastEvent });
     }
     if (m === 'PATCH') return send(res, 200, { thread: store.updateThread(d.db, id, PatchThread.parse(await readJson(req))) });
     if (m === 'DELETE') {

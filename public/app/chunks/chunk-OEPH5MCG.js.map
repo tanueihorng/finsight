@@ -1,7 +1,0 @@
-{
-  "version": 3,
-  "sources": ["../../../web/src/features/kestrel/dock.ts"],
-  "sourcesContent": ["import { createStore } from 'zustand/vanilla';\n// The docked Kestrel panel's state (G3): App renders the dock panel from it.\nexport const kestrelDock = createStore<{ visible: boolean; collapsed: boolean }>()(() => ({ visible: false, collapsed: false }));\n"],
-  "mappings": "wCAEO,IAAMA,EAAcC,EAAsD,EAAE,KAAO,CAAE,QAAS,GAAO,UAAW,EAAM,EAAE",
-  "names": ["kestrelDock", "createStore"]
-}

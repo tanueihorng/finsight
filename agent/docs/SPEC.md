@@ -621,3 +621,20 @@ Document previews allocate half of the available history budget across unique up
 ### Review corrections — 2026-10-26
 
 Provider-only empty messages are removed after foreign metadata is stripped, while same-brain reasoning-only messages remain available for replay. Extraction metadata records attempted failures as version 2/failed, including a failed legacy repair, so model steps do not repeatedly run parsers. A new upload explicitly retries extraction. Global attachment search uses nextCursor {id, offset}; scalar offsets require an explicit document id. Cursor IDs are validated against the current chat, and offsets reset to 0 when moving to another document.
+
+## Intelligent UI Phase 1 amendment — 2026-10-26
+
+Owner requested implementation of the reviewed plan. Adds the presentation-only
+`render_ui` API chat tool and stat/table elements under UI-4. UI-8 now includes
+strict shared-schema validation, server-bound source figures and escaped strings.
+C3/FR-4.10 remain unchanged: no new portfolio arithmetic, financial actions or
+record edits. Accepted canonical snapshots persist separately from raw model
+requests and reload only through authenticated thread responses. Snapshot data
+times and limitations remain visible; UNPEEK hides new snapshots and redacts copy.
+
+Availability requires both `KESTREL_UI=1` and per-brain `capabilities.ui`; all bundled
+brains remain off. MCP/CLI, charts, calculators, actions and progressive rendering
+are deferred. Deterministic mock round-trip/regression coverage is implemented;
+FR-10.5 live qualification and the proposed §12.3 paid UI eval suite remain pending,
+so this amendment does not assert production rollout acceptance. See
+`INTELLIGENT-UI.md` for the implemented contract, limits and rollout criteria.

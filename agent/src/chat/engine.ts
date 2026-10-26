@@ -24,6 +24,7 @@ import { attachmentBlock, ensureDocumentText, getUpload, imageBase64 } from '../
 
 export type SendInput = { threadId: string; content: string; brain?: string; search?: SearchChoice; pageContext?: PageContext; idempotencyKey?: string; expectedVersion?: number; attachmentIds?: string[] };
 
+import { UI_GUIDANCE } from '../ui/schema.ts';
 import { bytePrefix, inputBudget, selectContext } from './context.ts';
 const PACK_TTL_MS = 15 * 60_000;
 
@@ -215,7 +216,8 @@ export class ChatEngine {
   private async runApi(threadId: string, turnId: string, brain: ApiBrain, ctx: ToolCtx, ctrl: AbortController, onText: (d: string) => void,
     usageTotal: Usage, t0: number, resetStream: () => void): Promise<{ costUsd: number; step: number }> {
     const { turnSteps, turnSeconds, turnUsd } = this.cfg.limits;
-    const tools = this.tools.schemas();
+    ctx.ui = { enabled: !!ctx.cfg.uiViews && !!brain.manifest.capabilities.ui && brain.manifest.capabilities.tools, attempts: 0, completed: new Map() };
+    const tools = this.tools.schemas().filter((t) => t.name !== 'render_ui' || ctx.ui!.enabled);
     let costUsd = 0, step = 0, final = false, warnedContext = false;
     while (true) {
       const overLimit = step >= turnSteps || costUsd >= turnUsd || Date.now() - t0 > turnSeconds * 1000 * 0.8;
@@ -226,7 +228,7 @@ export class ChatEngine {
       }
       resetStream();
       const t = Date.now();
-      const system = this.system();
+      const system = this.system() + (ctx.ui.enabled ? '\n\n' + UI_GUIDANCE : '');
       const context = await this.history(threadId, brain, system, final ? [] : tools);
       const messages = context.messages;
       if (!warnedContext && (context.omitted || context.partialDocuments)) {
@@ -257,12 +259,22 @@ export class ChatEngine {
       const results: Block[] = await mapLimit(calls, 4, async (call) => {
         this.bus.emit(threadId, 'tool.started', { turnId, callId: call.id, name: call.name, argsSummary: summarizeArgs(call.args) });
         const ts = Date.now();
-        const r = await this.tools.execute(call.name, call.args, ctx);
+        const r = await this.tools.execute(call.name, call.args, { ...ctx, callId: call.id });
         const ms = Date.now() - ts;
         store.addTraceStep(this.db, turnId, step * 100 + calls.indexOf(call), { kind: 'tool', name: call.name, args: redactValue(call.args), resultSummary: r.content.slice(0, 500), ok: r.ok, ms });
         this.bus.emit(threadId, 'tool.finished', { turnId, callId: call.id, name: call.name, ok: r.ok, resultSummary: summarizeResult(r.content), ms });
+        if (r.ok && call.name === 'render_ui') {
+          const view = store.getUiView(this.db, turnId, call.id);
+          if (view) this.bus.emit(threadId, 'ui.render', { turnId, callId: call.id, view });
+        }
         return { type: 'tool_result', callId: call.id, name: call.name, ok: r.ok, content: r.content } as Block;
       });
+      for (const result of results) if (ctx.ui.enabled && result.type === 'tool_result' && result.ok && result.name !== 'render_ui') {
+        try {
+          const args = calls.find((c) => c.id === result.callId)?.args as Record<string, unknown> | undefined;
+          if (!ctx.ui.completed.has(result.callId)) ctx.ui.completed.set(result.callId, { name: result.name, data: JSON.parse(result.content), completedAt: new Date().toISOString(), account: typeof args?.account === 'string' && args.account.length > 0 ? args.account.slice(0, 64) : 'ALL' });
+        } catch { /* truncated/non-JSON results are not usable facts */ }
+      }
       store.appendMessage(this.db, threadId, 'tool', results, { turnId });
     }
     return { costUsd, step };

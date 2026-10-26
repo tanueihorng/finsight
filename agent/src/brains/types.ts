@@ -14,7 +14,7 @@ export const BrainManifest = z.object({
   baseUrl: z.url().optional(),
   keyRef: z.string().regex(/^[A-Z0-9_]{2,60}$/).optional(),
   pricing: z.object({ inputPerM: z.number().min(0), outputPerM: z.number().min(0), cacheReadPerM: z.number().min(0).optional(), perSearch: z.number().min(0).optional(), longContext: z.object({ aboveTokens: z.number().int().positive(), inputMultiplier: z.number().positive(), outputMultiplier: z.number().positive() }).optional(), version: z.string() }),
-  capabilities: z.object({ tools: z.boolean(), streaming: z.boolean(), nativeSearch: z.boolean().default(false), vision: z.boolean().default(false), contextTokens: z.number().int().positive() }),
+  capabilities: z.object({ ui: z.boolean().optional(), tools: z.boolean(), streaming: z.boolean(), nativeSearch: z.boolean().default(false), vision: z.boolean().default(false), contextTokens: z.number().int().positive() }),
   costTier: z.enum(['$', '$$', '$$$']),
   maxOutputTokens: z.number().int().positive().default(8000),
   options: z.record(z.string(), z.unknown()).default({}),

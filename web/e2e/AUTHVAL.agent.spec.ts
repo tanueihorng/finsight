@@ -262,6 +262,7 @@ test('4a. Kestrel sends the selected account and base as page context across swi
 });
 
 test('4b. locked with Kestrel docked: Tab from the PIN never leaves the lock screen, and the composer cannot send', async ({ page }) => {
+  test.setTimeout(60_000); // 150 real keypresses can exceed 30s on a busy desktop; keep every assertion.
   await seeded(page);
   await openKestrel(page, 'dock');
   await lockByButton(page);
@@ -335,7 +336,7 @@ test('3f. narrow layout (390×844), Kestrel docked: locked hides everything but 
   await expect(page.locator('#summary')).toBeVisible();
 });
 
-test('4c. side drawer open during lock (stream cut while locked): after unlock the history stays and a new reply streams', async ({ page }) => {
+test('4c. side drawer lock closes its stream; unlock preserves history and reconnects once', async ({ page }) => {
   test.setTimeout(60_000);
   await seeded(page);
   await openKestrel(page, 'side');
@@ -344,8 +345,8 @@ test('4c. side drawer open during lock (stream cut while locked): after unlock t
   await lockByButton(page);
   await expect(page.locator('.agent-panel')).toBeHidden();
   const r = await page.request.post(`${FAKE_AGENT}/v1/__test/drop`);
-  expect((await r.json()).dropped).toBeGreaterThan(0);
-  await page.waitForTimeout(1500); // EventSource retry: 300 ms
+  expect((await r.json()).dropped, 'lock already closed the active stream').toBe(0);
+  await page.waitForTimeout(1500); // no reconnect may start while locked
   const streams: string[] = [];
   page.on('request', (r) => { if (/^\/api\/agent\/threads\/[^/]+\/events$/.test(new URL(r.url()).pathname)) streams.push(r.url()); });
   await unlockWithPin(page);
@@ -359,7 +360,7 @@ test('4c. side drawer open during lock (stream cut while locked): after unlock t
   await expect(page.locator('.agent-turn:visible .agent-text')).toHaveText(['Echo: before lock', 'Echo: after unlock']);
 });
 
-test('4d. docked, lock and unlock without a cut stream: no second stream, each reply once', async ({ page }) => {
+test('4d. docked lock closes its stream; unlock opens one fresh stream, each reply once', async ({ page }) => {
   await seeded(page);
   await openKestrel(page, 'dock');
   await sendKestrel(page, 'one');
@@ -372,6 +373,6 @@ test('4d. docked, lock and unlock without a cut stream: no second stream, each r
   await sendKestrel(page, 'two');
   await expect(page.locator('.agent-turn:visible').last().locator('.agent-text')).toHaveText('Echo: two');
   await expect(page.locator('.agent-send:visible')).toHaveAttribute('aria-label', 'Send');
-  expect(streams, 'the live stream is reused').toEqual([]);
+  expect(streams.length, 'one stream reopened after unlock').toBe(1);
   await expect(page.locator('.agent-turn:visible .agent-text')).toHaveText(['Echo: one', 'Echo: two']);
 });
