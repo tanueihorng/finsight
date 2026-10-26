@@ -1,7 +1,7 @@
 # FEAT-003: Kestrel Chat Session Deletion & Management
 
 - **ID:** FEAT-003
-- **Status:** Selected; isolated implementation owned by existing feature session
+- **Status:** Verified by existing feature session; uncommitted/unmerged, integration pending
 - **Execution task:** `CHATDELETE-001`
 - **Priority:** High
 - **Category:** UX / Agent Panel

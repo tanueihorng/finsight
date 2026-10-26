@@ -1,7 +1,7 @@
 # FEAT-005: Prompt Cache Optimization & Template Deduplication
 
 - **ID:** FEAT-005
-- **Status:** Selected; isolated implementation owned by existing feature session
+- **Status:** Verified by existing feature session; uncommitted/unmerged, integration pending
 - **Execution task:** `PROMPTCACHE-001`
 - **Priority:** Medium
 - **Category:** Performance & Cost

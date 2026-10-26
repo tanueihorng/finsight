@@ -8,16 +8,17 @@
 ## Selected work
 
 Implementation is owned by the existing feature session in `feature/open-features`.
-These requirements are selected; verification and integration must be read from that session's evidence.
-Workspace queue entries remain ready until their acceptance criteria are verified. Do not start duplicate work.
+The feature session has now supplied verification reports and marked its five execution tasks done.
+Implementation remains uncommitted and unmerged in that checkout; no deployment is claimed.
+Read the owner’s reports before integration. This documentation cleanup did not rerun those feature tests.
 
 | Spec | Requirement | Execution task | State |
 |---|---|---|---|
-| [FEAT-003](features/FEAT-003-kestrel-chat-deletion.md) | Chat deletion controls | `CHATDELETE-001` | Selected; isolated implementation |
-| [FEAT-005](features/FEAT-005-prompt-cache-optimization.md) | Stable prompt prefix and attachment deduplication | `PROMPTCACHE-001` | Selected; isolated implementation |
-| [FEAT-006](features/FEAT-006-new-symbol-trade-sheet.md) | + ADD through the trade sheet | `TRADENEW-001` | Selected; isolated implementation |
-| [FEAT-007](features/FEAT-007-account-transfers.md) | Account transfers | `TRADEXFER-001` | Selected; isolated implementation |
-| [FEAT-008](features/FEAT-008-ibkr-trade-import.md) | IBKR CSV trade import | `IBKRTRADES-001` | Selected; isolated implementation |
+| [FEAT-003](features/FEAT-003-kestrel-chat-deletion.md) | Chat deletion controls | `CHATDELETE-001` | Verified by feature session; integration pending |
+| [FEAT-005](features/FEAT-005-prompt-cache-optimization.md) | Stable prompt prefix and attachment deduplication | `PROMPTCACHE-001` | Verified by feature session; integration pending |
+| [FEAT-006](features/FEAT-006-new-symbol-trade-sheet.md) | + ADD through the trade sheet | `TRADENEW-001` | Verified by feature session; integration pending |
+| [FEAT-007](features/FEAT-007-account-transfers.md) | Account transfers | `TRADEXFER-001` | Verified by feature session; integration pending |
+| [FEAT-008](features/FEAT-008-ibkr-trade-import.md) | IBKR CSV trade import | `IBKRTRADES-001` | Verified by feature session; integration pending |
 
 The earlier panel redesign remains `KESTRELUI-001` / `SEARCHUI-001` in the workspace queue.
 Several UI pieces are already integrated; reconcile its remaining acceptance criteria before starting

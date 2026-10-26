@@ -16,5 +16,5 @@ The earlier draft with unverified release numbers is preserved in `docs/archive/
 - Responses UI qualification update at `2d92e3d` (provider/effort qualifications have their own evidence).
 - Briefing start screen at `0b6dc84`.
 
-The five selected chat/import/transfer/trade-sheet/cache features are being verified in an isolated
-checkout. Their product specs are requirements, not a claim that these features have shipped.
+The five selected chat/import/transfer/trade-sheet/cache features have verification reports in an isolated
+checkout and await commit/integration. Their product specs are requirements, not a claim that these features have shipped.
