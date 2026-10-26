@@ -13,7 +13,7 @@ export const BrainManifest = z.object({
   model: z.string().max(80),
   baseUrl: z.url().optional(),
   keyRef: z.string().regex(/^[A-Z0-9_]{2,60}$/).optional(),
-  pricing: z.object({ inputPerM: z.number().min(0), outputPerM: z.number().min(0), cacheReadPerM: z.number().min(0).optional(), perSearch: z.number().min(0).optional(), version: z.string() }),
+  pricing: z.object({ inputPerM: z.number().min(0), outputPerM: z.number().min(0), cacheReadPerM: z.number().min(0).optional(), perSearch: z.number().min(0).optional(), longContext: z.object({ aboveTokens: z.number().int().positive(), inputMultiplier: z.number().positive(), outputMultiplier: z.number().positive() }).optional(), version: z.string() }),
   capabilities: z.object({ tools: z.boolean(), streaming: z.boolean(), nativeSearch: z.boolean().default(false), vision: z.boolean().default(false), contextTokens: z.number().int().positive() }),
   costTier: z.enum(['$', '$$', '$$$']),
   maxOutputTokens: z.number().int().positive().default(8000),
@@ -53,7 +53,9 @@ export function costOf(m: BrainManifest, u: Usage, searches = 0): number {
   // inputTokens is the TOTAL prompt size; cached reads/writes are subsets of it.
   const read = u.cacheReadTokens ?? 0, write = u.cacheWriteTokens ?? 0;
   const freshIn = Math.max(0, (u.inputTokens ?? 0) - read - write);
-  return (freshIn * p.inputPerM + read * (p.cacheReadPerM ?? p.inputPerM) + write * p.inputPerM * 1.25 + (u.outputTokens ?? 0) * p.outputPerM) / 1e6
+  const tier = p.longContext && (u.inputTokens ?? 0) > p.longContext.aboveTokens ? p.longContext : undefined;
+  const inputMultiplier = tier?.inputMultiplier ?? 1, outputMultiplier = tier?.outputMultiplier ?? 1;
+  return ((freshIn * p.inputPerM + read * (p.cacheReadPerM ?? p.inputPerM) + write * p.inputPerM * 1.25) * inputMultiplier + (u.outputTokens ?? 0) * p.outputPerM * outputMultiplier) / 1e6
     + searches * (p.perSearch ?? 0);
 }
 

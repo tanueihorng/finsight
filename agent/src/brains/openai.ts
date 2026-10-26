@@ -5,7 +5,8 @@ import { safeId } from './types.ts';
 import type { Block, Msg } from '../types.ts';
 import { AgentError } from '../types.ts';
 
-export function toOpenAiMessages(system: string, messages: Msg[]): any[] {
+type Identity = { brain: string; model: string; origin: string };
+export function toOpenAiMessages(system: string, messages: Msg[], identity?: Identity): any[] {
   const out: any[] = [{ role: 'system', content: system }];
   for (const m of messages) {
     if (m.role === 'user') {
@@ -17,7 +18,12 @@ export function toOpenAiMessages(system: string, messages: Msg[]): any[] {
     } else if (m.role === 'assistant') {
       const text = m.blocks.filter((b) => b.type === 'text').map((b: any) => b.text).join('');
       const calls = m.blocks.filter((b) => b.type === 'tool_call').map((b: any) => ({ id: safeId(b.id), type: 'function', function: { name: b.name, arguments: JSON.stringify(b.args ?? {}) } }));
-      out.push({ role: 'assistant', content: text || (calls.length ? null : ''), ...(calls.length ? { tool_calls: calls } : {}) });
+      const extra = m.providerExtra;
+      const data = extra?.data as { type?: string; model?: string; origin?: string; reasoning_content?: unknown } | undefined;
+      const same = identity?.origin === 'https://api.deepseek.com' && extra?.brain === identity.brain
+        && data?.type === 'deepseek-reasoning' && data.model === identity.model && data.origin === identity.origin;
+      out.push({ role: 'assistant', content: text || (calls.length ? null : ''), ...(calls.length ? { tool_calls: calls } : {}),
+        ...(identity?.origin === 'https://api.deepseek.com' ? { reasoning_content: same && typeof data?.reasoning_content === 'string' ? data.reasoning_content : '' } : {}) });
     } else {
       for (const b of m.blocks) if (b.type === 'tool_result') out.push({ role: 'tool', tool_call_id: safeId(b.callId), content: b.content });
     }
@@ -40,7 +46,7 @@ export function openAiBrain(manifest: BrainManifest, apiKey: string, fetchImpl: 
       const body = {
         model: manifest.model, stream: true, stream_options: { include_usage: true },
         ...(openai ? { max_completion_tokens: manifest.maxOutputTokens } : { max_tokens: manifest.maxOutputTokens }),
-        messages: toOpenAiMessages(req.system, req.messages),
+        messages: toOpenAiMessages(req.system, req.messages, { brain: manifest.id, model: manifest.model, origin: url.origin }),
         ...(req.tools.length ? { tools: toTools(req.tools), tool_choice: 'auto' } : {}),
         ...options,
       };
@@ -56,36 +62,44 @@ export function openAiBrain(manifest: BrainManifest, apiKey: string, fetchImpl: 
         const code = res.status === 429 ? 'PROVIDER_RATE_LIMIT' : res.status >= 500 ? 'PROVIDER_ERROR' : 'PROVIDER_INVALID';
         throw new AgentError(code, `${manifest.label} returned ${res.status}: ${text.slice(0, 300)}`, res.status === 429 ? 429 : 502);
       }
-      let text = '', finish: string | null = null;
+      let text = '', reasoning = '', finish: string | null = null;
       const calls = new Map<number, { id: string; name: string; args: string }>();
       let usage: any = null;
       const decoder = new TextDecoder(); let buf = '';
+      const onLine = (line: string) => {
+        if (!line.startsWith('data:')) return;
+        const data = line.slice(5).trim();
+        if (data === '[DONE]') return;
+        let j: any; try { j = JSON.parse(data); } catch { return; }
+        if (j.usage) usage = j.usage;
+        const ch = j.choices?.[0]; if (!ch) return;
+        const d = ch.delta || {};
+        if (url.hostname === 'api.deepseek.com' && typeof d.reasoning_content === 'string') reasoning += d.reasoning_content;
+        if (typeof d.content === 'string' && d.content) { text += d.content; req.onText(d.content); }
+        for (const tc of d.tool_calls || []) {
+          const cur = calls.get(tc.index) ?? { id: '', name: '', args: '' };
+          if (tc.id) cur.id = tc.id;
+          if (tc.function?.name) cur.name += tc.function.name;
+          if (tc.function?.arguments) cur.args += tc.function.arguments;
+          calls.set(tc.index, cur);
+        }
+        if (ch.finish_reason) finish = ch.finish_reason;
+      };
       for await (const chunk of res.body as any as AsyncIterable<Uint8Array>) {
         buf += decoder.decode(chunk, { stream: true });
         let nl: number;
         while ((nl = buf.indexOf('\n')) !== -1) {
           const line = buf.slice(0, nl).trim(); buf = buf.slice(nl + 1);
-          if (!line.startsWith('data:')) continue;
-          const data = line.slice(5).trim();
-          if (data === '[DONE]') continue;
-          let j: any; try { j = JSON.parse(data); } catch { continue; }
-          if (j.usage) usage = j.usage;
-          const ch = j.choices?.[0]; if (!ch) continue;
-          const d = ch.delta || {};
-          if (typeof d.content === 'string' && d.content) { text += d.content; req.onText(d.content); }
-          for (const tc of d.tool_calls || []) {
-            const cur = calls.get(tc.index) ?? { id: '', name: '', args: '' };
-            if (tc.id) cur.id = tc.id;
-            if (tc.function?.name) cur.name += tc.function.name;
-            if (tc.function?.arguments) cur.args += tc.function.arguments;
-            calls.set(tc.index, cur);
-          }
-          if (ch.finish_reason) finish = ch.finish_reason;
+          onLine(line);
         }
       }
+      buf += decoder.decode();
+      if (buf.trim()) onLine(buf.trim());
+      if (finish === null) throw new AgentError('PROVIDER_ERROR', `${manifest.label} stream ended without a completion marker.`, 502);
       const blocks: Block[] = [];
       if (text) blocks.push({ type: 'text', text });
-      for (const [i, c] of [...calls.entries()].sort((a, b) => a[0] - b[0])) {
+      const incomplete = finish === 'length' || finish === 'content_filter';
+      for (const [i, c] of [...(incomplete ? new Map() : calls).entries()].sort((a, b) => a[0] - b[0])) {
         let args: unknown = {};
         try { args = c.args ? JSON.parse(c.args) : {}; } catch { args = { __invalid_json: c.args.slice(0, 2000) }; }
         blocks.push({ type: 'tool_call', id: c.id || `call_${i}_${Date.now()}`, name: c.name, args });
@@ -93,7 +107,8 @@ export function openAiBrain(manifest: BrainManifest, apiKey: string, fetchImpl: 
       return {
         blocks,
         usage: { inputTokens: usage?.prompt_tokens ?? null, outputTokens: usage?.completion_tokens ?? null, cacheReadTokens: usage?.prompt_cache_hit_tokens ?? usage?.prompt_tokens_details?.cached_tokens ?? null },
-        stopReason: calls.size ? 'tool_use' : finish === 'length' ? 'max_tokens' : finish === 'content_filter' ? 'refusal' : 'end',
+        stopReason: finish === 'length' ? 'max_tokens' : finish === 'content_filter' ? 'refusal' : calls.size ? 'tool_use' : 'end',
+        providerExtra: url.hostname === 'api.deepseek.com' && !incomplete ? { brain: manifest.id, data: { type: 'deepseek-reasoning', model: manifest.model, origin: url.origin, reasoning_content: reasoning } } : undefined,
       };
     },
   };

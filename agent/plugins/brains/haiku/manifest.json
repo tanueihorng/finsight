@@ -10,7 +10,12 @@
     "inputPerM": 0.1,
     "outputPerM": 0.5,
     "cacheReadPerM": 0.01,
-    "version": "anthropic-2026-10-06 (<=100K prompt)"
+    "version": "anthropic-2026-10-06 (<=100K prompt); long-context tier verified 2026-10-26",
+    "longContext": {
+      "aboveTokens": 100000,
+      "inputMultiplier": 5,
+      "outputMultiplier": 5
+    }
   },
   "capabilities": {
     "tools": true,
