@@ -1,5 +1,5 @@
 import { createStore } from 'zustand/vanilla';
-import { agentApi, AgentError, type Brain, type Citation, type Message, type Skill, type Thread } from './api.ts';
+import { agentApi, AgentError, type Brain, type Citation, type Message, type SearchProvider, type Skill, type Thread } from './api.ts';
 import { COMMANDS, ctxLabel, friendly, LS, ls, offlineWhy, randomVerb, suggestions, TOOL_VERBS, prettyTool, type PageContext } from './labels.ts';
 import { addCite, addNotice, addText, addTool, endSegment, finish, newTurn, toolDone, type Turn } from './turns.ts';
 
@@ -17,11 +17,18 @@ export interface ChatState {
   status: { verb: string; start: number; chars: number }; files: FileChip[]; draft: string; threadsOpen: boolean; threads: Thread[] | null;
   stick: number; // bump to scroll the log to the bottom
   welcome: string[]; // the welcome's suggestions, fixed when it is shown (like legacy)
+  // Search provider per message, independent of the model ('auto' = the agent's config default).
+  searchProviders: SearchProvider[]; searchDefault: string; search: string;
+  todayUsd: number | null;
+  // The chat list: a rail beside the chat when the panel is wide (hideable), an overlay when narrow.
+  narrow: boolean; railHidden: boolean;
 }
 const initial = (): ChatState => ({
   name: 'Kestrel', named: false, brains: [], skills: [], defaultBrain: null, brain: '', thread: null, version: 0, lastEventId: 0,
   view: 'idle', offline: null, items: [], turns: {}, running: null, sending: false,
   status: { verb: '', start: 0, chars: 0 }, files: [], draft: '', threadsOpen: false, threads: null, stick: 0, welcome: [],
+  searchProviders: [], searchDefault: '', search: 'auto', todayUsd: null,
+  narrow: false, railHidden: ls.get(LS.rail, '1') === '0',
 });
 export const chat = createStore<ChatState>()(initial);
 const get = () => chat.getState(), set = (p: Partial<ChatState>) => chat.setState(p);
@@ -60,6 +67,16 @@ export function pickBrain() {
   set({ brain: ok ? ok.id : '' });
 }
 export function chooseBrain(id: string) { set({ brain: id }); ls.set(LS.brain, id); }
+export function chooseSearch(id: string) { set({ search: id }); ls.set(LS.search, id); }
+function pickSearch() {
+  const want = ls.get(LS.search, 'auto');
+  set({ search: want === 'auto' || get().searchProviders.some((p) => p.id === want && p.available) ? want : 'auto' });
+}
+export async function refreshCost() {
+  try { set({ todayUsd: (await agentApi<{ totalUsd: number }>('/cost?period=day')).totalUsd }); } catch { /* optional */ }
+}
+// After a reply the chat list (titles, previews, order) and today's spend change.
+const afterTurn = () => { void listThreads().catch(() => {}); void refreshCost(); };
 
 // ---- stream ----
 let es: EventSource | null = null;
@@ -76,7 +93,7 @@ function openStream() {
     fn(d);
   });
   type D = { turnId: string; [k: string]: unknown };
-  on<D>('turn.started', (d) => { setRunning(d.turnId); updateTurn(d.turnId, (t) => ({ ...t, label: String(d.label || '') })); if (d.skill) updateTurn(d.turnId, (t) => addNotice(t, `using skill ${d.skill}`, '')); });
+  on<D>('turn.started', (d) => { setRunning(d.turnId); updateTurn(d.turnId, (t) => ({ ...t, label: String(d.label || ''), search: d.search ? String(d.search) : undefined })); if (d.skill) updateTurn(d.turnId, (t) => addNotice(t, `using skill ${d.skill}`, '')); });
   on<D>('message.delta', (d) => { const text = String(d.text || ''); updateTurn(d.turnId, (t) => addText(t, text)); set({ status: { ...get().status, chars: get().status.chars + text.length }, stick: get().stick + 1 }); });
   on<D>('tool.started', (d) => {
     updateTurn(d.turnId, (t) => addTool(t, d.callId as string | undefined, String(d.name), d.argsSummary as string | undefined));
@@ -87,9 +104,9 @@ function openStream() {
   on<D & Citation>('citation', (d) => updateTurn(d.turnId, (t) => addCite(t, d)));
   on<D>('budget.warning', (d) => updateTurn(d.turnId, (t) => addNotice(t, String(d.note || 'Limit reached.'), 'warn')));
   on<D>('turn.retry', (d) => { updateTurn(d.turnId, (t) => addNotice(t, `model busy (${d.code}), retrying…`, 'warn')); set({ status: { ...get().status, verb: 'Waiting for the model' } }); });
-  on<D>('turn.finished', (d) => { updateTurn(d.turnId, (t) => finish(t, { label: t.label, costUsd: d.costUsd as number | undefined, ms: d.ms as number | undefined })); done(d.turnId); });
-  on<D>('turn.stopped', (d) => { updateTurn(d.turnId, (t) => finish(addNotice(t, 'Interrupted by you.', 'warn'), { label: t.label })); done(d.turnId); });
-  on<D>('turn.failed', (d) => { updateTurn(d.turnId, (t) => finish(addNotice(t, friendly(d.code as string, d.message as string), 'error'), { label: t.label })); done(d.turnId); });
+  on<D>('turn.finished', (d) => { updateTurn(d.turnId, (t) => finish(t, { label: t.label, costUsd: d.costUsd as number | undefined, ms: d.ms as number | undefined })); done(d.turnId); afterTurn(); });
+  on<D>('turn.stopped', (d) => { updateTurn(d.turnId, (t) => finish(addNotice(t, 'Interrupted by you.', 'warn'), { label: t.label })); done(d.turnId); afterTurn(); });
+  on<D>('turn.failed', (d) => { updateTurn(d.turnId, (t) => finish(addNotice(t, friendly(d.code as string, d.message as string), 'error'), { label: t.label })); done(d.turnId); afterTurn(); });
   es.onerror = () => { /* EventSource reconnects by itself with Last-Event-ID */ };
 }
 // After an unlock (intended fix, AUTHVAL F4): a reconnect the session gate
@@ -160,13 +177,14 @@ export async function openThread(id: string) {
 let retry: ReturnType<typeof setTimeout> | undefined;
 export async function boot(): Promise<'ok' | 'locked'> {
   try {
-    const [info, b, sk] = await Promise.all([agentApi<{ name?: string }>('/info').catch(() => ({} as { name?: string })), agentApi<{ brains: Brain[]; default: string }>('/brains'),
-      agentApi<{ skills: Skill[] }>('/skills').catch(() => ({ skills: [] }))]);
-    set({ name: info.name || get().name, named: get().named || !!info.name, brains: b.brains, defaultBrain: b.default, skills: sk.skills || [], offline: null });
-    pickBrain();
-    const saved = ls.get(LS.thread, '');
-    if (saved) { try { await openThread(saved); return 'ok'; } catch { /* gone */ } }
-    showWelcome();
+    const [info, b, sk, sp] = await Promise.all([agentApi<{ name?: string }>('/info').catch(() => ({} as { name?: string })), agentApi<{ brains: Brain[]; default: string }>('/brains'),
+      agentApi<{ skills: Skill[] }>('/skills').catch(() => ({ skills: [] })),
+      agentApi<{ default: string; providers: SearchProvider[] }>('/search-providers').catch(() => ({ default: '', providers: [] }))]);
+    set({ name: info.name || get().name, named: get().named || !!info.name, brains: b.brains, defaultBrain: b.default, skills: sk.skills || [], offline: null,
+      searchProviders: sp.providers, searchDefault: sp.default });
+    pickBrain(); pickSearch();
+    // Kestrel opens on a new chat with the chat list beside it; past chats open from the list.
+    showWelcome(); afterTurn();
   } catch (e) {
     const err = e as AgentError;
     if (err.status === 401) return 'locked'; // FinSight still locked: boot again after unlock
@@ -190,11 +208,16 @@ export async function listThreads() {
   const { threads } = await agentApi<{ threads: Thread[] }>('/threads');
   set({ threads });
 }
+export const railShown = (s: ChatState) => (s.narrow ? s.threadsOpen : !s.railHidden);
 export function toggleThreads(force?: boolean) {
-  const show = force ?? !get().threadsOpen;
-  set({ threadsOpen: show });
+  const show = force ?? !railShown(get());
+  if (get().narrow) set({ threadsOpen: show });
+  else { set({ railHidden: !show }); ls.set(LS.rail, show ? '1' : '0'); }
   if (show) listThreads().catch(() => {});
 }
+// Picking a chat closes the overlay; the wide rail stays.
+export const closeOverlay = () => { if (get().threadsOpen) set({ threadsOpen: false }); };
+export const setNarrow = (narrow: boolean) => { if (narrow !== get().narrow) set({ narrow, threadsOpen: false }); };
 export async function deleteThread(t: Thread) {
   if (!confirm(`Delete "${t.title}" permanently?`)) return;
   await agentApi(`/threads/${t.id}?confirm=true`, { method: 'DELETE' });
@@ -257,13 +280,13 @@ export async function submit(text: string, pc: PageContext | undefined, restore:
     if (!get().thread) {
       const { thread } = await agentApi<{ thread: Thread }>('/threads', { method: 'POST', body: { brain: get().brain || undefined } });
       set({ thread, version: thread.version, lastEventId: 0 }); ls.set(LS.thread, thread.id);
-      clearLog(); openStream();
+      clearLog(); openStream(); void listThreads().catch(() => {});
     } else if (get().view === 'welcome') clearLog();
     push({ kind: 'user', text: text || '(attached files)', ctx: pc ? ctxLabel(pc) : '', files: files.map((f) => ({ name: f.name, kind: f.kind, thumb: f.thumb })) });
     restore(''); set({ files: [] });
     const k = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random()).replace(/-/g, '');
     const r = await agentApi<{ turnId: string; version: number }>(`/threads/${get().thread!.id}/messages`, { method: 'POST', body: {
-      content: text || 'Please analyse the attached file(s).', brain: get().brain || undefined, pageContext: pc, idempotencyKey: k,
+      content: text || 'Please analyse the attached file(s).', brain: get().brain || undefined, search: get().search !== 'auto' ? get().search : undefined, pageContext: pc, idempotencyKey: k,
       expectedVersion: get().version, attachmentIds: files.length ? files.map((f) => f.id) : undefined } });
     set({ version: r.version });
     // intended fix (G): a turn that already ended (fast failure) is not marked running again.

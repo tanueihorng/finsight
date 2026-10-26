@@ -1,5 +1,5 @@
 // Kestrel wording and small formatters (G1/G2), ported from public/agent-panel.js.
-export const LS = { open: 'finsight-agent-open', width: 'finsight-agent-w', thread: 'finsight-agent-thread', brain: 'finsight-agent-brain', ctx: 'finsight-agent-ctx', mode: 'finsight-agent-mode', dockH: 'finsight-agent-dock-h', collapsed: 'finsight-agent-collapsed' } as const;
+export const LS = { open: 'finsight-agent-open', width: 'finsight-agent-w', thread: 'finsight-agent-thread', brain: 'finsight-agent-brain', ctx: 'finsight-agent-ctx', mode: 'finsight-agent-mode', dockH: 'finsight-agent-dock-h', collapsed: 'finsight-agent-collapsed', search: 'finsight-agent-search', rail: 'finsight-agent-rail' } as const;
 export const ls = {
   get(k: string, d: string) { try { const v = localStorage.getItem(k); return v == null ? d : v; } catch { return d; } },
   set(k: string, v: string | number) { try { localStorage.setItem(k, String(v)); } catch { /* private mode */ } },

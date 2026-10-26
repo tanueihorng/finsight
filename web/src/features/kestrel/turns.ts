@@ -8,7 +8,7 @@ export type Part =
   | { kind: 'tool'; key: string; name: string; args: string; state: 'running' | 'ok' | 'err'; res: string; detail: string }
   | { kind: 'notice'; text: string; cls: string };
 export interface Meta { label?: string; costUsd?: number | null; ms?: number | null }
-export interface Turn { id: string; label: string; parts: Part[]; cites: Citation[]; meta: Meta | null; allText: string }
+export interface Turn { id: string; label: string; search?: string; parts: Part[]; cites: Citation[]; meta: Meta | null; allText: string }
 export const newTurn = (id: string): Turn => ({ id, label: '', parts: [], cites: [], meta: null, allText: '' });
 
 const closeText = (parts: Part[]) => parts.map((p) => (p.kind === 'text' && p.open ? { ...p, open: false } : p));

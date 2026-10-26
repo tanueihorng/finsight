@@ -1,7 +1,9 @@
 import { memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { useStore } from 'zustand';
 import { agentApi } from './api.ts';
-import { addFiles, chat, chooseBrain, deleteThread, menuItems, newChat, openThread, pageContext, removeFile, setDraft, stop, submit, toggleThreads, type FileChip, type Item } from './chat.ts';
+import { addFiles, chat, chooseBrain, chooseSearch, closeOverlay, deleteThread, menuItems, newChat, openThread, pageContext, railShown, removeFile, setDraft, setNarrow, stop, submit, toggleThreads, type FileChip, type Item } from './chat.ts';
+import type { Thread } from './api.ts';
+import { Icon } from './icons.tsx';
 import { costLabel, ctxButton, LS, ls, prettyArgs } from './labels.ts';
 import { md } from './md.ts';
 import { citeHost, type Turn } from './turns.ts';
@@ -9,6 +11,9 @@ import { citeHost, type Turn } from './turns.ts';
 // The Kestrel conversation (G1: log, turns, tool rows, status, markdown;
 // G2: composer, slash menu, attachments, model picker, page context).
 // Rendered into the side drawer or the dock by KestrelIsland (G3).
+// KESTRELUI-001 layout: the chat list as a rail beside the conversation (an
+// overlay when the panel is narrow), a start screen for new chats, and a
+// composer with context, search-provider and model pickers.
 export function Candles() {
   return (
     <span className="candles" aria-hidden="true">
@@ -60,27 +65,58 @@ const TextPart = memo(function TextPart({ text }: { text: string }) {
   return <div className="agent-text" dangerouslySetInnerHTML={{ __html: md(text) }} />;
 });
 
+type ToolPart = Extract<Turn['parts'][number], { kind: 'tool' }>;
+function ToolRow({ p }: { p: ToolPart }) {
+  return (
+    <details className={'agent-tool ' + p.state}>
+      <summary><span className="st" aria-hidden="true">{p.state === 'running' ? <i className="kx-spin" /> : <Icon name={p.state === 'ok' ? 'check' : 'x'} size={13} />}</span>
+        <span className="nm">{p.name}</span><span className="args">{prettyArgs(p.args)}</span></summary>
+      <div className="res">{p.res}</div><div className="detail">{p.detail}</div>
+    </details>
+  );
+}
+// Consecutive tool calls fold into one "Used 3 tools" step list; it stays open while a tool runs.
+function ToolGroup({ tools }: { tools: ToolPart[] }) {
+  const running = tools.some((p) => p.state === 'running'), failed = tools.filter((p) => p.state === 'err').length;
+  const [open, setOpen] = useState<boolean | null>(null);
+  const label = running ? `Working · ${tools.length} step${tools.length === 1 ? '' : 's'}` : `Used ${tools.length} tool${tools.length === 1 ? '' : 's'}${failed ? ` · ${failed} failed` : ''}`;
+  return (
+    <details className={'agent-steps' + (running ? ' running' : '') + (failed ? ' err' : '')} open={open ?? running}
+      onToggle={(e) => { const v = (e.currentTarget as HTMLDetailsElement).open; if (v !== running || open !== null) setOpen(v); }}>
+      <summary><span className="lbl">{label}</span><Icon name="chevron" size={14} /></summary>
+      <div className="agent-steps-list">{tools.map((p) => <ToolRow key={p.key} p={p} />)}</div>
+    </details>
+  );
+}
+
 function TurnView({ t }: { t: Turn }) {
   const [copied, setCopied] = useState(false), [trace, setTrace] = useState(false);
+  const blocks: ReactNode[] = [];
+  for (let i = 0; i < t.parts.length; i++) {
+    const p = t.parts[i]!;
+    if (p.kind === 'tool') {
+      const tools: ToolPart[] = [];
+      while (i < t.parts.length && t.parts[i]!.kind === 'tool') tools.push(t.parts[i++] as ToolPart);
+      i--; blocks.push(<ToolGroup key={'g' + tools[0]!.key} tools={tools} />);
+    } else if (p.kind === 'text') blocks.push(<TextPart key={i} text={p.text} />);
+    else blocks.push(<div key={i} className={'agent-notice ' + p.cls}>{p.text}</div>);
+  }
+  const search = t.search ? chat.getState().searchProviders.find((x) => x.id === t.search)?.label || t.search : '';
   return (
     <div className="agent-turn">
-      {t.parts.map((p, i) => p.kind === 'text' ? <TextPart key={i} text={p.text} />
-        : p.kind === 'notice' ? <div key={i} className={'agent-notice ' + p.cls}>{p.text}</div>
-        : <details key={i} className={'agent-tool ' + p.state}>
-            <summary><span className="nm">{p.name}</span><span className="args">{prettyArgs(p.args)}</span></summary>
-            <div className="res">{p.res}</div><div className="detail">{p.detail}</div>
-          </details>)}
+      {blocks}
       <div className="agent-cites">
         {t.cites.map((c) => (
           <a key={c.url} className={`agent-cite ${c.class || 'unverified'}`} href={c.url} target="_blank" rel="noopener noreferrer"
             title={`${c.title || c.url}\nretrieved ${String(c.retrievedAt || '').slice(0, 10)} · ${c.class || 'unverified'}`}>
-            <b>{(c.class || 'web')[0]!.toUpperCase()}</b> {citeHost(c.url)}
+            {citeHost(c.url)}
           </a>
         ))}
       </div>
       <div className="agent-meta">
         {t.meta && <>
           {t.meta.label && <span>{t.meta.label}</span>}
+          {search && <span title="Web search provider for this answer">{`${search} search`}</span>}
           {t.meta.costUsd != null && <span title="API cost of this answer">{costLabel(t.meta.costUsd)}</span>}
           {!!t.meta.ms && <span>{(t.meta.ms / 1000).toFixed(1)}s</span>}
           {t.allText && <button title="Copy answer" onClick={() => { void navigator.clipboard?.writeText(t.allText); setCopied(true); setTimeout(() => setCopied(false), 1200); }}>{copied ? 'copied' : 'copy'}</button>}
@@ -107,19 +143,74 @@ const ItemView = memo(function ItemView({ item }: { item: Item }) {
   );
 });
 
-function Welcome({ name, list, onTry }: { name: string; list: string[]; onTry: (s: string) => void }) {
+// ---- chat list ----
+const DAY = 864e5;
+function dayGroup(ts: number, now = Date.now()): string {
+  const start = new Date(now); start.setHours(0, 0, 0, 0);
+  const d = start.getTime() - ts;
+  return d <= 0 ? 'Today' : d <= DAY ? 'Yesterday' : d <= 7 * DAY ? 'Previous 7 days' : d <= 30 * DAY ? 'Previous 30 days' : 'Older';
+}
+const when = (ts: number) => (dayGroup(ts) === 'Today' ? new Date(ts).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }));
+function ThreadRow({ t, active }: { t: Thread; active: boolean }) {
+  const open = () => { void openThread(t.id); closeOverlay(); };
+  return (
+    <div className={'agent-thread-row' + (active ? ' active' : '')} role="listitem" onClick={open}>
+      <button className="agent-thread-open" aria-current={active ? 'page' : undefined} onClick={(e) => { e.stopPropagation(); open(); }}>
+        <span className="t">{t.title}</span>
+        {t.preview && <span className="p">{t.preview}</span>}
+      </button>
+      <span className="d">{when(t.updatedAt)}</span>
+      <button className="agent-icon-btn x" title="Delete chat" aria-label={`Delete ${t.title}`} onClick={(e) => { e.stopPropagation(); void deleteThread(t); }}><Icon name="trash" size={14} /></button>
+    </div>
+  );
+}
+function Rail({ onNew }: { onNew: () => void }) {
+  const s = useStore(chat);
+  const [q, setQ] = useState('');
+  const list = (s.threads || []).filter((t) => !q || `${t.title} ${t.preview || ''}`.toLowerCase().includes(q.toLowerCase()));
+  const groups: [string, Thread[]][] = [];
+  for (const t of list) { const g = dayGroup(t.updatedAt); const last = groups[groups.length - 1]; if (last?.[0] === g) last[1].push(t); else groups.push([g, [t]]); }
+  return (
+    <nav className="kx-rail" aria-label="Chats">
+      <button className="kx-new" onClick={onNew}><Icon name="plus" size={15} />New chat</button>
+      <label className="kx-find"><Icon name="search" size={14} /><input type="search" placeholder="Search chats" aria-label="Search chats" value={q} onChange={(e) => setQ(e.target.value)} /></label>
+      <div className="agent-threads" id="agent-threads" role="list" aria-label="Chats">
+        {s.threads?.length === 0 && <div className="kx-empty" role="listitem">Your chats show up here.</div>}
+        {s.threads && s.threads.length > 0 && !list.length && <div className="kx-empty" role="listitem">No chats match.</div>}
+        {groups.map(([g, ts]) => (
+          <div key={g} role="presentation">
+            <div className="kx-group" role="presentation">{g}</div>
+            {ts.map((t) => <ThreadRow key={t.id} t={t} active={s.thread?.id === t.id} />)}
+          </div>
+        ))}
+      </div>
+      {s.todayUsd != null && <div className="kx-spend" title="API spend today (models and paid search)"><span>Today</span><span>{costLabel(s.todayUsd)}</span></div>}
+    </nav>
+  );
+}
+
+// ---- start screen ----
+function Welcome({ list, onTry }: { list: string[]; onTry: (s: string) => void }) {
+  const s = useStore(chat);
+  const recent = s.narrow ? (s.threads || []).slice(0, 4) : [];
   return (
     <>
       <div className="agent-welcome">
-        <div className="hi"><span className="star">↗ </span>{`Welcome to ${name}`}</div>
-        <div>Your research agent inside FinSight. Answers use your live data, strategy library, records and the web, with sources and data times. It never trades.</div>
-        <ul>
-          <li><code>/</code> shows skills and commands (<code>/pre-trade-check</code>, <code>/earnings-review</code> …)</li>
-          <li>paste or drop images, PDFs, DOCX or CSV to analyse them</li>
-          <li>switch model at the bottom right; <code>esc</code> stops a reply</li>
-        </ul>
+        <div className="hi">What are we looking at today?</div>
+        <div className="sub">Answers use your FinSight data, strategy library, records and the web, with sources and data times. {s.name} never trades.</div>
       </div>
-      <div className="agent-try"><div className="lbl">Try</div>{list.map((s) => <button key={s} className="agent-chip" onClick={() => onTry(s)}>{s}</button>)}</div>
+      <div className="agent-try" aria-label="Suggestions">{list.map((x) => <button key={x} className="agent-chip" onClick={() => onTry(x)}>{x}</button>)}</div>
+      {recent.length > 0 && (
+        <div className="kx-recent">
+          <div className="kx-group">Recent chats</div>
+          {recent.map((t) => (
+            <button key={t.id} className="kx-recent-row" onClick={() => void openThread(t.id)}>
+              <span className="t">{t.title}</span>{t.preview && <span className="p">{t.preview}</span>}
+            </button>
+          ))}
+          <button className="kx-all" onClick={() => toggleThreads(true)}>All chats</button>
+        </div>
+      )}
     </>
   );
 }
@@ -134,15 +225,25 @@ function Offline({ name, why, onRetry }: { name: string; why: [string, string]; 
   );
 }
 
+// The rail sits beside the chat from this panel width; below it the list is an overlay.
+const RAIL_MIN = 680;
+
 export function Chat({ inputRef, onRetry }: { inputRef: RefObject<HTMLTextAreaElement | null>; onRetry: () => void }) {
   const s = useStore(chat);
-  const logRef = useRef<HTMLDivElement>(null), fileRef = useRef<HTMLInputElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null), logRef = useRef<HTMLDivElement>(null), fileRef = useRef<HTMLInputElement>(null);
   const [stick, setStick] = useState(true), [menuSel, setMenuSel] = useState(0), [menuOpen, setMenuOpen] = useState(true), [drag, setDrag] = useState(false);
   const [ctxOn, setCtxOn] = useState(() => ls.get(LS.ctx, '1') === '1');
   const [, tick] = useState(0);
   // The context label follows the selection; the chart strategy is polled like legacy (2 s).
   useEffect(() => { const t = setInterval(() => { if (!document.hidden) tick((n) => n + 1); }, 2000); return () => clearInterval(t); }, []);
   useEffect(() => window.FinSight.store.subscribe(() => tick((n) => n + 1)), []);
+  useLayoutEffect(() => {
+    const el = rootRef.current; if (!el) return;
+    const measure = () => { if (el.clientWidth) setNarrow(el.clientWidth < RAIL_MIN); };
+    measure();
+    const ro = new ResizeObserver(measure); ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   const lastTop = useRef(0);
   const scrollBottom = (force = false) => { const el = logRef.current; if (el && (force || stick)) { el.scrollTop = el.scrollHeight; setStick(true); } };
   useLayoutEffect(() => { scrollBottom(); }, [s.stick, s.items.length]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -156,61 +257,49 @@ export function Chat({ inputRef, onRetry }: { inputRef: RefObject<HTMLTextAreaEl
   const sel = Math.min(menuSel, Math.max(0, all.length - 1));
   const send = (text: string) => void submit(text.trim(), ctxOn ? pageContext() : undefined, (t) => setDraft(t));
   const pick = (i: number) => { const it = all[i]; if (!it) return; setDraft(it.k + ' '); setMenuSel(0); setMenuOpen(false); inputRef.current?.focus(); };
+  const onNew = () => { newChat(); closeOverlay(); inputRef.current?.focus(); };
   const pc = pageContext();
+  const rail = railShown(s);
+  const searchDefault = s.searchProviders.find((p) => p.id === s.searchDefault)?.label || s.searchDefault;
 
   let body: ReactNode;
   const items = s.items.map((item) => <ItemView key={item.key} item={item} />);
   if (s.view === 'offline' && s.offline) body = <Offline name={s.name} why={s.offline.why} onRetry={onRetry} />;
   // Notices on a fresh chat (a rejected file, "wait for uploads") show under the welcome, like legacy.
-  else if (s.view === 'welcome') body = <><Welcome name={s.name} list={s.welcome} onTry={send} />{items}</>;
+  else if (s.view === 'welcome') body = <><Welcome list={s.welcome} onTry={send} />{items}</>;
   else body = items;
 
   return (
-    <div className="agent-chat">
-      <div className="agent-threads" id="agent-threads" hidden={!s.threadsOpen} role="list" aria-label="Chats">
-        {s.threads?.length === 0 && <div className="agent-thread-row" role="listitem"><span className="t">No chats yet</span></div>}
-        {s.threads?.map((t) => {
-          const active = s.thread?.id === t.id;
-          const open = () => { void openThread(t.id); toggleThreads(false); };
-          return (
-            <div key={t.id} className={'agent-thread-row' + (active ? ' active' : '')} role="listitem"
-              onClick={open}>
-              <button className="agent-thread-open" aria-current={active ? 'page' : undefined} onClick={(e) => { e.stopPropagation(); open(); }}>
-                <span className="t">{t.title}</span><span className="d">{new Date(t.updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
-              </button>
-              <button className="agent-icon-btn x" title="Delete chat" aria-label={`Delete ${t.title}`} onClick={(e) => { e.stopPropagation(); void deleteThread(t); }}>✕</button>
-            </div>
-          );
-        })}
-      </div>
-      <div className="agent-log" role="log" aria-live="polite" aria-relevant="additions" ref={logRef} onScroll={() => {
-        const el = logRef.current!; const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
-        if (atBottom) setStick(true); else if (el.scrollTop < lastTop.current - 2) setStick(false);
-        lastTop.current = el.scrollTop;
-      }}>
-        {body}
-        {s.running && <Status />}
-        {!stick && <button className="agent-jump" onClick={() => scrollBottom(true)}>↓ latest</button>}
-      </div>
-      <div className="agent-compose">
-        <div id="agent-command-menu" className="agent-menu" hidden={!menu} role="listbox" aria-label="Commands and skills">
-          {menu && <>
-            {menu.skills.length > 0 && <div className="grp">SKILLS</div>}
-            {menu.skills.map((it, i) => <MenuRow key={it.k} id={`agent-option-${i}`} k={it.k} v={it.v} on={i === sel} onPick={() => pick(i)} />)}
-            {menu.cmds.length > 0 && <div className="grp">COMMANDS</div>}
-            {menu.cmds.map((it, i) => <MenuRow key={it.k} id={`agent-option-${i + menu.skills.length}`} k={it.k} v={it.v} on={i + menu.skills.length === sel} onPick={() => pick(i + menu.skills.length)} />)}
-          </>}
+    <div ref={rootRef} className={'agent-chat' + (s.narrow ? ' narrow' : '') + (rail ? ' rail-on' : '') + (s.view === 'welcome' ? ' fresh' : '')}>
+      {rail && <Rail onNew={onNew} />}
+      {rail && s.narrow && <div className="kx-scrim" onClick={() => toggleThreads(false)} aria-hidden="true" />}
+      <section className="kx-main">
+        <div className="agent-log" role="log" aria-live="polite" aria-relevant="additions" ref={logRef} onScroll={() => {
+          const el = logRef.current!; const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+          if (atBottom) setStick(true); else if (el.scrollTop < lastTop.current - 2) setStick(false);
+          lastTop.current = el.scrollTop;
+        }}>
+          {body}
+          {s.running && <Status />}
+          {!stick && <button className="agent-jump" onClick={() => scrollBottom(true)}>↓ latest</button>}
         </div>
-        <div className={'agent-box' + (drag ? ' drag' : '')} onDragOver={(e) => { e.preventDefault(); setDrag(true); }} onDragLeave={() => setDrag(false)}
-          onDrop={(e) => { e.preventDefault(); setDrag(false); if (e.dataTransfer?.files.length) void addFiles(e.dataTransfer.files); }}>
-          <div className="agent-attach-row">
-            {s.files.map((f: FileChip, i) => {
-              const label = f.state === 'uploading' ? ' uploading…' : f.state === 'error' ? ` ✕ ${f.error}` : f.state === 'notext' ? ' (no text found)' : '';
-              return <span key={i}>{fileChip({ ...f, name: f.name + label }, <button title="Remove" aria-label={`Remove ${f.name}`} onClick={() => removeFile(i)}>×</button>)}</span>;
-            })}
+        <div className="agent-compose">
+          <div id="agent-command-menu" className="agent-menu" hidden={!menu} role="listbox" aria-label="Commands and skills">
+            {menu && <>
+              {menu.skills.length > 0 && <div className="grp">SKILLS</div>}
+              {menu.skills.map((it, i) => <MenuRow key={it.k} id={`agent-option-${i}`} k={it.k} v={it.v} on={i === sel} onPick={() => pick(i)} />)}
+              {menu.cmds.length > 0 && <div className="grp">COMMANDS</div>}
+              {menu.cmds.map((it, i) => <MenuRow key={it.k} id={`agent-option-${i + menu.skills.length}`} k={it.k} v={it.v} on={i + menu.skills.length === sel} onPick={() => pick(i + menu.skills.length)} />)}
+            </>}
           </div>
-          <div className="agent-row">
-            <span className="agent-prompt-glyph">&gt;</span>
+          <div className={'agent-box' + (drag ? ' drag' : '')} onDragOver={(e) => { e.preventDefault(); setDrag(true); }} onDragLeave={() => setDrag(false)}
+            onDrop={(e) => { e.preventDefault(); setDrag(false); if (e.dataTransfer?.files.length) void addFiles(e.dataTransfer.files); }}>
+            <div className="agent-attach-row">
+              {s.files.map((f: FileChip, i) => {
+                const label = f.state === 'uploading' ? ' uploading…' : f.state === 'error' ? ` ✕ ${f.error}` : f.state === 'notext' ? ' (no text found)' : '';
+                return <span key={i}>{fileChip({ ...f, name: f.name + label }, <button title="Remove" aria-label={`Remove ${f.name}`} onClick={() => removeFile(i)}>×</button>)}</span>;
+              })}
+            </div>
             <textarea ref={inputRef} className="agent-input" rows={1} maxLength={12000} aria-label="Message" aria-autocomplete="list" aria-controls={menu ? 'agent-command-menu' : undefined} aria-activedescendant={menu && all.length ? `agent-option-${sel}` : undefined}
               placeholder={s.named ? `Ask ${s.name} anything…  (/ for skills)` : 'Ask anything about your portfolio, a stock, a strategy…  (/ for skills)'}
               value={s.draft} onChange={(e) => { setDraft(e.target.value); setMenuOpen(true); }}
@@ -226,25 +315,34 @@ export function Chat({ inputRef, onRetry }: { inputRef: RefObject<HTMLTextAreaEl
                 }
                 if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); if (!s.running) send(s.draft); }
               }} />
-            <button className="agent-icon-btn" title="Attach images or documents (or paste / drop)" aria-label="Attach files" onClick={() => fileRef.current?.click()}>⊕</button>
-            <button className={'agent-send' + (s.running ? ' stop' : '')} title={s.running ? 'Stop (Esc)' : 'Send (Enter)'} aria-label={s.running ? 'Stop' : 'Send'}
-              disabled={!s.running && (s.sending || s.view === 'offline' || !brain)} onClick={() => (s.running ? void stop() : send(s.draft))}>{s.running ? '■' : '⏎'}</button>
+            <div className="agent-tools-row">
+              <button className="agent-icon-btn" title="Attach images or documents (or paste / drop)" aria-label="Attach files" onClick={() => fileRef.current?.click()}><Icon name="clip" /></button>
+              <button className={'agent-ctx kx-pill' + (ctxOn ? ' on' : '')} title="Send what you are looking at (symbol, timeframe, strategy) with your message"
+                onClick={() => { const v = !ctxOn; setCtxOn(v); ls.set(LS.ctx, v ? '1' : '0'); }}>{ctxButton(ctxOn, pc)}</button>
+              {s.searchProviders.length > 0 && (
+                <label className="kx-pill kx-select" title="Web search provider, independent of the model">
+                  <Icon name="globe" size={13} />
+                  <select className="agent-search" aria-label="Web search" value={s.search} onChange={(e) => chooseSearch(e.target.value)}>
+                    <option value="auto">{`Auto${searchDefault ? ` (${searchDefault})` : ''}`}</option>
+                    {s.searchProviders.map((p) => <option key={p.id} value={p.id} disabled={!p.available} title={p.reason}>{`${p.label}${p.available ? '' : ' · no key'}`}</option>)}
+                  </select>
+                </label>
+              )}
+              <label className="kx-pill kx-select" title="Model for this chat">
+                <Icon name="spark" size={13} />
+                <select className="agent-model" aria-label="Model" value={s.brain} onChange={(e) => chooseBrain(e.target.value)}>
+                  {s.brains.map((b) => <option key={b.id} value={b.id} disabled={!b.available} title={b.available ? b.label : b.reason}>{`${b.label} ${b.costTier}${b.available ? '' : ' · n/a'}`}</option>)}
+                </select>
+              </label>
+              <button className={'agent-send' + (s.running ? ' stop' : '')} title={s.running ? 'Stop (Esc)' : 'Send (Enter)'} aria-label={s.running ? 'Stop' : 'Send'}
+                disabled={!s.running && (s.sending || s.view === 'offline' || !brain)} onClick={() => (s.running ? void stop() : send(s.draft))}><Icon name={s.running ? 'stop' : 'up'} /></button>
+            </div>
           </div>
+          <input ref={fileRef} type="file" multiple hidden accept="image/png,image/jpeg,image/gif,image/webp,application/pdf,.docx,.txt,.md,.csv,.json"
+            onChange={(e) => { if (e.target.files) void addFiles(e.target.files); e.target.value = ''; }} />
+          {s.brains.length > 0 && !brain && <div className="agent-hints">No model available: add an API key (see agent README).</div>}
         </div>
-        <input ref={fileRef} type="file" multiple hidden accept="image/png,image/jpeg,image/gif,image/webp,application/pdf,.docx,.txt,.md,.csv,.json"
-          onChange={(e) => { if (e.target.files) void addFiles(e.target.files); e.target.value = ''; }} />
-        <div className="agent-hints">
-          <span>{s.brains.length && !brain ? 'No model available: add an API key (see agent README).' : '⏎ send · / skills · ⊕ files'}</span>
-          <span className="r">
-            <button className={'agent-ctx' + (ctxOn ? ' on' : '')} title="Send what you are looking at (symbol, timeframe, strategy) with your message"
-              onClick={() => { const v = !ctxOn; setCtxOn(v); ls.set(LS.ctx, v ? '1' : '0'); }}>{ctxButton(ctxOn, pc)}</button>
-            <span>·</span>
-            <select className="agent-model" aria-label="Model" title="Model for this chat" value={s.brain} onChange={(e) => chooseBrain(e.target.value)}>
-              {s.brains.map((b) => <option key={b.id} value={b.id} disabled={!b.available} title={b.available ? b.label : b.reason}>{`${b.label} ${b.costTier}${b.available ? '' : ' · n/a'}`}</option>)}
-            </select>
-          </span>
-        </div>
-      </div>
+      </section>
     </div>
   );
 }
