@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { addCite, addNotice, addText, addTool, citeHost, endSegment, finish, newTurn, toolDone } from './turns.ts';
+import { addUi, addCite, addNotice, addText, addTool, citeHost, endSegment, finish, newTurn, toolDone } from './turns.ts';
 
 test('text streams into one segment until a tool or notice closes it', () => {
   let t = addText(addText(newTurn('a'), 'Hel'), 'lo');
@@ -33,4 +33,16 @@ test('citations are http(s) only and unique; finish closes the text and sets met
   const f = finish(addText(t, 'x'), { label: 'Fake', costUsd: 0.01, ms: 1500 });
   assert.deepEqual(f.meta, { label: 'Fake', costUsd: 0.01, ms: 1500 });
   assert.equal((f.parts[0] as { open: boolean }).open, false);
+});
+
+test('accepted views replace their tool row and replay without duplicates; raw args never create UI', () => {
+  let t = addTool(newTurn('turn_1'), 'view1', 'render_ui', '{"value":999999}');
+  assert.equal(t.parts[0]?.kind, 'tool');
+  t = addText(t, 'After.');
+  t = addUi(t, 'view1', { id: 'accepted' });
+  t = addUi(t, 'view1', { id: 'accepted' });
+  assert.deepEqual(t.parts.map((p) => p.kind), ['ui', 'text']);
+  assert.equal(t.allText, 'After.');
+  t = toolDone(t, 'view1', 'render_ui', true, 'done', 1);
+  assert.equal(t.parts.filter((p) => p.kind === 'ui').length, 1);
 });

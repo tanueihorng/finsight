@@ -13,6 +13,7 @@ export async function runMcp(cfg: Config, db: DB, tools: ToolRegistry, finsight:
   // One budget per MCP session (a CLI turn): same per-turn limits as the chat engine.
   const budget = { searches: cfg.limits.searchesPerTurn, fetches: cfg.limits.fetchesPerTurn };
   for (const t of tools.list()) {
+    if (t.name === 'render_ui') continue; // no thread/turn UI bridge on MCP in Phase 1
     const shape = (t.input as any).shape ?? {};
     server.registerTool(t.name, { description: t.description, inputSchema: shape }, async (args: unknown) => {
       const ctx: ToolCtx = { cfg, db, finsight, signal: AbortSignal.timeout(t.timeoutMs ?? 60_000), budget, citations: [], via: `mcp:${client}` };

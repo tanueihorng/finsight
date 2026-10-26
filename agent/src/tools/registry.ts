@@ -7,13 +7,14 @@ import type { DB } from '../store/db.ts';
 import type { CitationBlock } from '../types.ts';
 import { AgentError } from '../types.ts';
 import type { FinsightClient } from './finsight.ts';
+import type { UiState } from './ui.ts';
 import { audit } from '../obs/audit.ts';
 
 export type Budget = { searches: number; fetches: number };
 
 export type ToolCtx = {
   cfg: Config; db: DB; finsight: FinsightClient; signal: AbortSignal;
-  turnId?: string; threadId?: string;
+  turnId?: string; threadId?: string; callId?: string; ui?: UiState;
   budget: Budget;               // remaining per-turn allowances, decremented by web tools
   citations: CitationBlock[];   // web tools append; the engine emits them to the panel
   via?: string;                 // 'chat' | 'mcp:<client>' (for the interaction log)
@@ -53,6 +54,11 @@ export class ToolRegistry {
   async execute(name: string, rawArgs: unknown, ctx: ToolCtx): Promise<{ ok: boolean; content: string }> {
     const t = this.tools.get(name);
     if (!t) return { ok: false, content: JSON.stringify({ error: { code: 'UNKNOWN_TOOL', message: `No tool named ${name}` } }) };
+    if (name === 'render_ui') {
+      // Count invalid attempts too, before schema parsing. No unbounded repair loop.
+      if (!ctx.ui?.enabled || !ctx.cfg.uiViews || ++ctx.ui.attempts > 3) return { ok: false, content: JSON.stringify({ error: { code: 'UI_REJECTED', message: 'Views unavailable or three-attempt limit reached; answer in prose.' } }) };
+      if (Buffer.byteLength(JSON.stringify(rawArgs ?? {})) > 24 * 1024) return { ok: false, content: JSON.stringify({ error: { code: 'UI_REJECTED', message: 'Spec exceeds 24 KiB' } }) };
+    }
     const parsed = t.input.safeParse(rawArgs ?? {});
     if (!parsed.success) {
       audit('tool.invalid', { tool: name, turnId: ctx.turnId, args: rawArgs, error: z.prettifyError(parsed.error) });

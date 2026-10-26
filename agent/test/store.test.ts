@@ -4,13 +4,14 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import './helpers.ts';
+import Database from 'better-sqlite3';
 import * as store from '../src/store/db.ts';
 
 test('migrations apply once; db file is private (0600)', () => {
   const f = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'db-')), 'a.db');
   const db = store.openDb(f); db.close();
   const db2 = store.openDb(f);
-  assert.equal((db2.prepare('SELECT COUNT(*) n FROM schema_migrations').get() as any).n, 1);
+  assert.equal((db2.prepare('SELECT COUNT(*) n FROM schema_migrations').get() as any).n, 2);
   assert.equal(fs.statSync(f).mode & 0o777, 0o600);
 });
 
@@ -61,4 +62,19 @@ test('cache honours TTL', async () => {
   assert.deepEqual(store.cacheGet(db, 'k'), { a: 1 });
   await new Promise((r) => setTimeout(r, 30));
   assert.equal(store.cacheGet(db, 'k'), null);
+});
+
+test('migration backup includes committed WAL data and preserves v1 rollback before adding views', () => {
+  const f = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'db-upgrade-')), 'a.db');
+  const old = store.openDb(f);
+  old.exec('DROP TABLE ui_views; DELETE FROM schema_migrations WHERE version = 2');
+  const t = store.createThread(old, 'Committed WAL row');
+  assert.ok(fs.statSync(f + '-wal').size > 0);
+  const upgraded = store.openDb(f);
+  assert.equal(store.getThread(upgraded, t.id)?.title, 'Committed WAL row');
+  assert.deepEqual(store.listUiViews(upgraded, t.id), []);
+  const backup = new Database(f + '.bak-v1', { readonly: true });
+  assert.equal((backup.prepare('SELECT title FROM threads WHERE id = ?').get(t.id) as {title: string}).title, 'Committed WAL row');
+  assert.equal((backup.prepare('SELECT MAX(version) v FROM schema_migrations').get() as {v: number}).v, 1);
+  backup.close(); upgraded.close(); old.close();
 });

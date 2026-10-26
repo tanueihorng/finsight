@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import type { Block, Msg, Role, Usage } from '../types.ts';
+import type { UiView } from '../ui/schema.ts';
 import { AgentError } from '../types.ts';
 
 export type DB = Database.Database;
@@ -39,6 +40,11 @@ const MIGRATIONS: string[] = [
      id TEXT PRIMARY KEY, kind TEXT NOT NULL, target TEXT, body TEXT NOT NULL, source_turn TEXT,
      status TEXT NOT NULL DEFAULT 'pending', created_at INTEGER NOT NULL, decided_at INTEGER);
    CREATE VIRTUAL TABLE fts_messages USING fts5(text, thread_id UNINDEXED, message_id UNINDEXED);`,
+  `CREATE TABLE ui_views (
+    id TEXT PRIMARY KEY, thread_id TEXT NOT NULL REFERENCES threads(id),
+    turn_id TEXT NOT NULL, call_id TEXT NOT NULL, view_json TEXT NOT NULL,
+    UNIQUE(turn_id, call_id));
+   CREATE INDEX ui_views_thread ON ui_views(thread_id);`,
 ];
 
 export function openDb(file: string): DB {
@@ -52,6 +58,8 @@ export function openDb(file: string): DB {
   db.exec('CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, applied_at INTEGER NOT NULL)');
   const current = (db.prepare('SELECT MAX(version) v FROM schema_migrations').get() as { v: number | null }).v ?? 0;
   if (current < MIGRATIONS.length && file !== ':memory:' && fs.existsSync(file) && current > 0) {
+    const checkpoint = db.pragma('wal_checkpoint(TRUNCATE)') as { busy: number }[];
+    if (checkpoint[0]?.busy) { db.close(); throw new Error('Database busy; stop other agent processes before migration'); }
     fs.copyFileSync(file, `${file}.bak-v${current}`); // backup before migrating an existing DB
   }
   for (let v = current + 1; v <= MIGRATIONS.length; v++) {
@@ -99,7 +107,7 @@ export function updateThread(db: DB, id: string, patch: { title?: string; archiv
 }
 export function deleteThread(db: DB, id: string): void {
   db.transaction(() => {
-    for (const sql of ['DELETE FROM fts_messages WHERE thread_id = ?', 'DELETE FROM events WHERE thread_id = ?', 'DELETE FROM messages WHERE thread_id = ?', 'DELETE FROM turns WHERE thread_id = ?', 'DELETE FROM threads WHERE id = ?']) db.prepare(sql).run(id);
+    for (const sql of ['DELETE FROM ui_views WHERE thread_id = ?', 'DELETE FROM fts_messages WHERE thread_id = ?', 'DELETE FROM events WHERE thread_id = ?', 'DELETE FROM messages WHERE thread_id = ?', 'DELETE FROM turns WHERE thread_id = ?', 'DELETE FROM threads WHERE id = ?']) db.prepare(sql).run(id);
   })();
 }
 /** Optimistic concurrency: bump the version only if the caller saw the latest one. */
@@ -230,4 +238,16 @@ export function listProposals(db: DB, status = 'pending'): unknown[] {
 }
 export function decideProposal(db: DB, id: string, status: 'accepted' | 'rejected'): boolean {
   return db.prepare("UPDATE proposals SET status = ?, decided_at = ? WHERE id = ? AND status = 'pending'").run(status, Date.now(), id).changes === 1;
+}
+
+// Accepted canonical snapshots only. Raw model arguments never feed the renderer.
+export function saveUiView(db: DB, view: UiView): void {
+  db.prepare('INSERT INTO ui_views(id,thread_id,turn_id,call_id,view_json) VALUES (?,?,?,?,?)').run(view.id, view.threadId, view.turnId, view.callId, JSON.stringify(view));
+}
+export function getUiView(db: DB, turnId: string, callId: string): UiView | null {
+  const r = db.prepare('SELECT view_json FROM ui_views WHERE turn_id = ? AND call_id = ?').get(turnId, callId) as { view_json: string } | undefined;
+  return r ? JSON.parse(r.view_json) : null;
+}
+export function listUiViews(db: DB, threadId: string): UiView[] {
+  return (db.prepare('SELECT view_json FROM ui_views WHERE thread_id = ? ORDER BY rowid').all(threadId) as { view_json: string }[]).map((r) => JSON.parse(r.view_json));
 }

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useStore } from 'zustand';
-import { boot, chat, closeOverlay, newChat, railShown, resumeStream, stop, toggleThreads } from './chat.ts';
+import { boot, chat, closeOverlay, closeStream, newChat, railShown, resumeStream, stop, toggleThreads } from './chat.ts';
 import { Icon } from './icons.tsx';
 import { Chat } from './Chat.tsx';
 import { kestrelDock } from './dock.ts';
@@ -74,9 +74,10 @@ export default function KestrelIsland() {
     if (ls.get(LS.open, '0') === '1') toggle(true, true);
     const onUnlock = () => { resumeStream(); if (ls.get(LS.open, '0') === '1') maybeBoot(); };
     const onResize = () => { if (cssWidth() > Math.max(320, Math.round(window.innerWidth * 0.6))) setWidth(window.innerWidth * 0.6, false); };
+    window.addEventListener('finsight:locked', closeStream);
     window.addEventListener('finsight:unlocked', onUnlock);
     window.addEventListener('resize', onResize);
-    return () => { window.removeEventListener('finsight:unlocked', onUnlock); window.removeEventListener('resize', onResize); };
+    return () => { window.removeEventListener('finsight:locked', closeStream); window.removeEventListener('finsight:unlocked', onUnlock); window.removeEventListener('resize', onResize); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   // Where the chat shows: body.agent-open for the drawer, the dock's hidden/collapsed state for the dock.
   useEffect(() => { document.body.classList.toggle('agent-open', mode === 'side' && open); }, [mode, open]);

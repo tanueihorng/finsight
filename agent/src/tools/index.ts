@@ -2,6 +2,7 @@
 import { z } from 'zod';
 import { ToolRegistry } from './registry.ts';
 import type { ToolCtx, ToolDef } from './registry.ts';
+import { uiTool } from './ui.ts';
 import { attachmentTools } from './attachments.ts';
 import { factsTools, fetchPortfolio, summarise } from './facts.ts';
 import { recordsTools } from './records.ts';
@@ -62,5 +63,5 @@ const proposeNote: ToolDef = {
 };
 
 export function buildRegistry(skills: () => Map<string, Skill> = () => new Map()): ToolRegistry {
-  return new ToolRegistry().add(contextPackTool, ...factsTools, ...attachmentTools, ...recordsTools, ...strategyTools, ...webTools, proposeNote, ...skillTools(skills));
+  return new ToolRegistry().add(uiTool, contextPackTool, ...factsTools, ...attachmentTools, ...recordsTools, ...strategyTools, ...webTools, proposeNote, ...skillTools(skills));
 }

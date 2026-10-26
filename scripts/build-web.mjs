@@ -41,6 +41,8 @@ const islands = {
   splitting: true,
   chunkNames: 'chunks/[name]-[hash]',
   jsx: 'automatic',
+  // Build identically with or without separately installed agent dependencies.
+  alias: { zod: path.join(root, 'node_modules/zod/index.js') },
   // *.module.css -> class names scoped as fs-<File>-<hash>_<class> (see css-modules.mjs)
   plugins: [cssModules(root)],
 };
