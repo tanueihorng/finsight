@@ -11,14 +11,19 @@
     "inputPerM": 0.1,
     "outputPerM": 0.5,
     "cacheReadPerM": 0.01,
-    "version": "openai-standard-2026-10-25 (<=272K prompt); https://developers.openai.com/api/docs/models/gpt-6-luna"
+    "version": "openai-standard-2026-10-25 (<=272K prompt); https://developers.openai.com/api/docs/models/gpt-6-luna; long-context tier verified 2026-10-26",
+    "longContext": {
+      "aboveTokens": 272000,
+      "inputMultiplier": 2,
+      "outputMultiplier": 1.5
+    }
   },
   "capabilities": {
     "tools": true,
     "streaming": true,
     "nativeSearch": false,
     "vision": true,
-    "contextTokens": 272000
+    "contextTokens": 1050000
   },
   "costTier": "$",
   "maxOutputTokens": 4000,

@@ -10,9 +10,8 @@ import type { AttachmentBlock } from './types.ts';
 import { audit } from './obs/audit.ts';
 
 export const MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
-const MAX_TEXT_CHARS = 200_000;
 
-type Meta = { id: string; name: string; mime: string; kind: 'image' | 'document'; size: number; chars?: number; pages?: number; createdAt: number };
+type Meta = { id: string; name: string; mime: string; kind: 'image' | 'document'; size: number; chars?: number; pages?: number; createdAt: number; extractionVersion?: number; extractionStatus?: 'complete' | 'failed'; extractionWarning?: string };
 
 function sniff(buf: Buffer, name: string): { mime: string; kind: 'image' | 'document' } {
   const hex = buf.subarray(0, 12).toString('hex');
@@ -59,15 +58,18 @@ export async function saveUpload(home: string, name: string, dataBase64: string)
   fs.writeFileSync(file, buf, { mode: 0o600 });
   const meta: Meta = { id, name: safeName(name), mime, kind, size: buf.length, createdAt: Date.now() };
   if (kind === 'document') {
+    meta.extractionVersion = 2; meta.extractionStatus = 'failed';
     try {
       const { text, pages } = await extractText(buf, mime);
       const clean = text.replace(/\u0000/g, '').replace(/[ \t]+\n/g, '\n').replace(/\n{4,}/g, '\n\n\n').trim();
-      fs.writeFileSync(path.join(dir, 'extracted.txt'), clean.slice(0, MAX_TEXT_CHARS), { mode: 0o600 });
-      meta.chars = Math.min(clean.length, MAX_TEXT_CHARS); meta.pages = pages;
+      fs.writeFileSync(path.join(dir, 'extracted.txt'), clean, { mode: 0o600 });
+      meta.chars = clean.length; meta.pages = pages; meta.extractionVersion = 2;
       if (!clean) throw new Error('no text layer (scanned document?)');
+      meta.extractionStatus = 'complete';
     } catch (e) {
       audit('upload.extract_failed', { id, mime, error: String((e as Error).message) });
       meta.chars = 0;
+      meta.extractionWarning = 'Document text extraction failed. Re-upload the document to retry (scanned files may need OCR).';
     }
   }
   fs.writeFileSync(path.join(dir, 'meta.json'), JSON.stringify(meta), { mode: 0o600 });
@@ -88,7 +90,7 @@ export function attachmentBlock(m: Meta): AttachmentBlock {
   return { type: 'attachment', id: m.id, name: m.name, mime: m.mime, kind: m.kind, chars: m.chars };
 }
 
-export function documentText(home: string, id: string, maxChars = 60_000): string | null {
+export function documentText(home: string, id: string, maxChars = Infinity): string | null {
   const u = getUpload(home, id); if (!u) return null;
   try { const t = fs.readFileSync(path.join(u.dir, 'extracted.txt'), 'utf8'); return t.length > maxChars ? t.slice(0, maxChars) + `\n…[document truncated: ${t.length} chars total]` : t; }
   catch { return null; }
@@ -97,4 +99,28 @@ export function documentText(home: string, id: string, maxChars = 60_000): strin
 export function imageBase64(home: string, id: string): { mime: string; data: string; name: string } | null {
   const u = getUpload(home, id); if (!u || u.kind !== 'image') return null;
   return { mime: u.mime, data: fs.readFileSync(u.file).toString('base64'), name: u.name };
+}
+
+/** Repair older capped extracts from the preserved original upload, locally. */
+export async function ensureDocumentText(home: string, id: string): Promise<{ text: string | null; complete: boolean; warning?: string }> {
+  const u = getUpload(home, id);
+  if (!u || u.kind !== 'document') return { text: null, complete: false };
+  if (u.extractionVersion === 2) {
+    const text = documentText(home, id);
+    const complete = u.extractionStatus !== 'failed' && !!text;
+    return { text, complete, warning: complete ? undefined : (u.extractionWarning || 'No document text is available. Re-upload the document to retry.') };
+  }
+  try {
+    const { text, pages } = await extractText(fs.readFileSync(u.file), u.mime);
+    const clean = text.replace(/\u0000/g, '').replace(/[ \t]+\n/g, '\n').replace(/\n{4,}/g, '\n\n\n').trim();
+    const { file: _file, dir: _dir, ...meta } = u;
+    fs.writeFileSync(path.join(u.dir, 'extracted.txt'), clean, { mode: 0o600 });
+    fs.writeFileSync(path.join(u.dir, 'meta.json'), JSON.stringify({ ...meta, chars: clean.length, pages, extractionVersion: 2, extractionStatus: clean ? 'complete' : 'failed', extractionWarning: clean ? undefined : 'No document text is available. Re-upload the document to retry.' }), { mode: 0o600 });
+    return { text: clean, complete: !!clean, warning: clean ? undefined : 'No document text is available. Re-upload the document to retry.' };
+  } catch {
+    const warning = 'Legacy extraction may be incomplete; the original could not be re-extracted. Re-upload the document.';
+    const { file: _file, dir: _dir, ...meta } = u;
+    fs.writeFileSync(path.join(u.dir, 'meta.json'), JSON.stringify({ ...meta, extractionVersion: 2, extractionStatus: 'failed', extractionWarning: warning }), { mode: 0o600 });
+    return { text: documentText(home, id), complete: false, warning };
+  }
 }
