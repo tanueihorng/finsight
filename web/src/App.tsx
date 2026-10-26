@@ -314,6 +314,9 @@ export default function App() {
       <Host island="cash-editor" id="cash-modal-host" />
       <Host island="ledger" id="ledger-modal-host" />
       <div id="toasts" className="toasts"></div>
+      <Host island="trade" />
+      <Host island="toast" />
+      <Host island="dialog" />
       <Host island="kestrel" />
       {Object.entries(PANELS).map(([pid, render]) => <PanelRender key={pid} render={render} />)}
       <PortfolioEffects />

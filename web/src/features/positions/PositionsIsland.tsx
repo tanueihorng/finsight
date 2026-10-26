@@ -6,7 +6,10 @@ import { useAccounts, useCategories, usePortfolio } from '../../api/queries.ts';
 import { selectSymbol, setStatus } from '../../legacy/app.ts';
 import { setLastPrices } from '../../state/store.ts';
 import { fmt, money, moneySigned, signClass, signStr } from '../../ui/format.ts';
-import type { Position, Portfolio } from '../../../../shared/types.ts';
+import type { Position } from '../../../../shared/types.ts';
+import { confirmDialog } from '../../ui/dialog.tsx';
+import { showToast } from '../../ui/toast.tsx';
+import { openTrade, type Mode } from '../trade/trade.ts';
 import { posView, setPosView } from './posView.ts';
 import { tableModel, toggleCollapsed, toggleSort, priceFlashes, type Group, type Row, type SortKey, type Sums } from './table.ts';
 
@@ -28,7 +31,8 @@ const scopeQS = () => {
 };
 
 async function removeHolding(sym: string) {
-  if (!confirm(`Remove ${sym} from your portfolio? (does not record a sale)`)) return;
+  const ok = await confirmDialog({ title: `Remove ${sym}?`, body: 'This stops tracking the holding. It does not record a sale. UNDO brings it back.', ok: 'Remove', danger: true });
+  if (!ok) return;
   try {
     await api('/api/portfolio/delete' + scopeQS(), json({ symbol: sym }));
   } catch (err) {
@@ -36,19 +40,13 @@ async function removeHolding(sym: string) {
     setStatus('DELETE failed: ' + (err as Error).message, 'err'); return;
   }
   setStatus(`REMOVED ${sym}`, 'ok');
+  showToast(`Removed ${sym}`, { undoLabel: `Remove ${sym}` });
   if (store().getState().selected === sym) store().setState({ selected: null });
   await window.FinSight.bus.write('delete');
 }
-async function sellHolding(sym: string, held: number) {
-  const qty = prompt(`Sell how many ${sym}? (you hold ${held})\nLeave price blank to sell at market.`, String(held));
-  if (qty == null) return;
-  const price = prompt(`Sell price for ${sym}? (blank = market price)`, '');
-  try {
-    const res = await api<Portfolio>('/api/portfolio/sell' + scopeQS(), json({ symbol: sym, quantity: qty, price: price === '' ? null : price }));
-    setStatus(`SOLD ${qty} ${sym} · realized ${signStr(res.lastRealized)}`, (res.lastRealized ?? 0) >= 0 ? 'ok' : 'err');
-    await window.FinSight.bus.write('sell');
-  } catch (err) { setStatus('SELL failed: ' + (err as Error).message, 'err'); }
-}
+// In the combined view a split row belongs to one account; trade that one.
+const rowAccount = (p: Row) => p.holdings?.find((h) => h.account === p.account)?.accountId ?? p.holdings?.[0]?.accountId;
+const trade = (p: Row, mode: Mode) => { selectSymbol(p.symbol); openTrade(p.symbol, mode, rowAccount(p)); };
 
 function SumCells({ base, s }: { base: string; s: Sums }) {
   return (
@@ -67,7 +65,13 @@ function PositionRow({ p, base, group, selected, flash, flashKey }: { p: Row; ba
   const act = (fn: () => void) => (e: MouseEvent) => { e.stopPropagation(); fn(); };
   return (
     // A flashing row remounts (new key), so the CSS animation runs again on every new price.
-    <tr key={flash ? flashKey : 0} className={['clickable', selected && 'selected', flash].filter(Boolean).join(' ')} data-sym={p.symbol} tabIndex={0} onKeyDown={keyboardClick}
+    <tr key={flash ? flashKey : 0} className={['clickable', selected && 'selected', flash].filter(Boolean).join(' ')} data-sym={p.symbol} tabIndex={0}
+      onKeyDown={(e) => {
+        // B / S on a focused row open the trade sheet; Enter/Space select it.
+        const k = e.key.toLowerCase();
+        if (e.target === e.currentTarget && !e.metaKey && !e.ctrlKey && !e.altKey && (k === 'b' || k === 's')) { e.preventDefault(); trade(p, k === 'b' ? 'buy' : 'sell'); return; }
+        keyboardClick(e);
+      }}
       onClick={() => selectSymbol(p.symbol)}>
       <td><span className="sym">{p.symbol}</span><div className="name">{String(p.name || '').slice(0, 20)} · <span className="ccy">{p.currency}</span>{accts}</div></td>
       <td className="r">{fmt(p.quantity, p.quantity % 1 ? 4 : 0)}</td>
@@ -80,8 +84,9 @@ function PositionRow({ p, base, group, selected, flash, flashKey }: { p: Row; ba
       <td className={`r ${signClass(p.fxPnl)}`}>{p.currency === base ? <span className="dim">—</span> : moneySigned(base, p.fxPnl)}</td>
       <td className="r">{fmt(p.weight, 1)}</td>
       <td><div className="row-actions">
-        <button aria-label={`Sell ${p.symbol}`} className="x-btn sell" data-act="sell" data-sym={p.symbol} data-qty={p.quantity} onClick={act(() => void sellHolding(p.symbol, p.quantity))}>S</button>
-        <button aria-label={`Remove ${p.symbol}`} className="x-btn del" data-act="del" data-sym={p.symbol} onClick={act(() => void removeHolding(p.symbol))}>✕</button>
+        <button aria-label={`Buy more ${p.symbol}`} title="Buy (B)" className="x-btn buy" data-act="buy" data-sym={p.symbol} onClick={act(() => trade(p, 'buy'))}>Buy</button>
+        <button aria-label={`Sell ${p.symbol}`} title="Sell (S)" className="x-btn sell" data-act="sell" data-sym={p.symbol} data-qty={p.quantity} onClick={act(() => trade(p, 'sell'))}>Sell</button>
+        <button aria-label={`Remove ${p.symbol}`} title="Remove from tracking" className="x-btn del" data-act="del" data-sym={p.symbol} onClick={act(() => void removeHolding(p.symbol))}>✕</button>
       </div></td>
     </tr>
   );

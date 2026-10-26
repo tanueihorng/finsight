@@ -277,7 +277,7 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
       return sendJson(res, 200, await portfolioWithQuotes(base, acct));
     }
     if (p === '/api/portfolio/sell' && req.method === 'POST') {
-      const b = await readBody(req); const r = await sell(b.symbol, b.quantity, b.price, acct, base);
+      const b = await readBody(req); const r = await sell(b.symbol, b.quantity, b.price, acct, base, b.date ? Date.parse(b.date) : null);
       const pf = { ...await portfolioWithQuotes(base, acct), lastRealized: r.realized };
       return sendJson(res, 200, pf);
     }

@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { seeded, cmd } from '../helpers';
+import { seeded, cmd, answerDialog } from '../helpers';
 
 test.beforeEach(async ({ page }) => { await seeded(page); });
 
@@ -20,8 +20,8 @@ test('ledger lists every buy; edit and delete a buy', async ({ page }) => {
   await expect(avgCell(page, 'AAPL')).toHaveText('200.00');
 
   await page.fill('#ledger-filter', 'GOOGL');
-  page.once('dialog', (d) => { expect(d.message()).toContain('Delete this buy of 30 GOOGL?'); d.accept(); });
   await body.locator('tr [data-act="delete"]').click();
+  await answerDialog(page, { title: 'Delete this buy of 30 GOOGL?' });
   await expect(page.locator('#ledger-status')).toHaveText('Deleted GOOGL buy. UNDO restores it.');
   await expect(page.locator('#positions-body tr[data-sym="GOOGL"]')).toHaveCount(0);
   await page.click('#ledger-close');

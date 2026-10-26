@@ -1,3 +1,4 @@
+import { confirmDialog } from '../../ui/dialog.tsx';
 import { useModalFocus } from '../../ui/modalFocus.ts';
 import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import { useStore } from 'zustand';
@@ -98,7 +99,7 @@ export default function LedgerIsland() {
         await post('/api/ledger/edit', body);
         setStatus({ m: `Updated ${r.symbol} buy. UNDO reverts it.`, k: 'ok' });
       } else {
-        if (!confirm(`Delete this buy of ${r.quantity} ${r.symbol}? Its lot is removed from the position. (UNDO can restore it.)`)) return;
+        if (!await confirmDialog({ title: `Delete this buy of ${r.quantity} ${r.symbol}?`, body: 'Its lot is removed from the position. UNDO can restore it.', ok: 'Delete buy', danger: true })) return;
         await post('/api/ledger/delete', { id: r.id });
         setStatus({ m: `Deleted ${r.symbol} buy. UNDO restores it.`, k: 'ok' });
       }

@@ -223,7 +223,13 @@ body {
 .row-actions { display: flex; gap: 4px; justify-content: flex-end; }
 .x-btn { background: transparent; border: 1px solid var(--border-2); color: var(--muted);
   border-radius: 2px; padding: 1px 6px; cursor: pointer; font-family: inherit; font-size: 10px; }
-.x-btn.sell:hover { color: var(--amber); border-color: var(--amber); }
+.x-btn.buy, .x-btn.sell { padding: 1px 8px; border-radius: 5px; color: var(--text); } /* a11y: muted fails 4.5:1 on the selected row */
+.x-btn.buy:hover  { color: var(--amber); border-color: var(--amber); }
+.x-btn.sell:hover { color: var(--down); border-color: var(--down); }
+/* Row actions appear on hover, keyboard focus and the selected row; always on touch screens. */
+#positions-body .row-actions { opacity: 0; } /* no fade: axe would sample a half-faded button */
+#positions-body tr:hover .row-actions, #positions-body tr:focus-within .row-actions, #positions-body tr.selected .row-actions { opacity: 1; }
+@media (hover: none) { #positions-body .row-actions { opacity: 1; } }
 .x-btn.del:hover  { color: var(--down); border-color: var(--down); }
 
 /* ---------------- add form ---------------- */

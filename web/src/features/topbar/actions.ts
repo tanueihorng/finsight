@@ -1,5 +1,6 @@
 import { api } from '../../api/client.ts';
 import { setStatus } from '../../legacy/app.ts';
+import { promptDialog } from '../../ui/dialog.tsx';
 import type { Accounts } from '../../../../shared/types.ts';
 
 // Account and base switches (F8). The store re-keys every query; the legacy
@@ -19,7 +20,7 @@ export async function switchBase(base: string) {
 }
 // "＋ New account…" in the selector: create, select, then refresh.
 export async function newAccountPrompt() {
-  const name = (prompt('New account name (e.g. Crypto, SGX, IBKR):') || '').trim();
+  const name = ((await promptDialog({ title: 'New account', body: 'Each account is a separate portfolio.', placeholder: 'Crypto, SGX, IBKR…', ok: 'Create' })) || '').trim();
   if (!name) return;
   try {
     const d = await post<Accounts>('/api/accounts/add', { name });

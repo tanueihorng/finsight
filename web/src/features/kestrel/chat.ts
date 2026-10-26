@@ -1,4 +1,5 @@
 import { createStore } from 'zustand/vanilla';
+import { confirmDialog } from '../../ui/dialog.tsx';
 import { agentApi, AgentError, type Brain, type Citation, type Message, type SearchProvider, type Skill, type Thread } from './api.ts';
 import { COMMANDS, ctxLabel, friendly, LS, ls, offlineWhy, randomVerb, suggestions, TOOL_VERBS, prettyTool, type PageContext } from './labels.ts';
 import { addCite, addNotice, addText, addTool, endSegment, finish, newTurn, toolDone, type Turn } from './turns.ts';
@@ -219,7 +220,7 @@ export function toggleThreads(force?: boolean) {
 export const closeOverlay = () => { if (get().threadsOpen) set({ threadsOpen: false }); };
 export const setNarrow = (narrow: boolean) => { if (narrow !== get().narrow) set({ narrow, threadsOpen: false }); };
 export async function deleteThread(t: Thread) {
-  if (!confirm(`Delete "${t.title}" permanently?`)) return;
+  if (!await confirmDialog({ title: `Delete "${t.title}"?`, body: 'This chat is deleted permanently.', ok: 'Delete', danger: true })) return;
   await agentApi(`/threads/${t.id}?confirm=true`, { method: 'DELETE' });
   if (get().thread?.id === t.id) newChat();
   void listThreads();

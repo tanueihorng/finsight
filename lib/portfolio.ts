@@ -64,12 +64,16 @@ export async function buyUnlocked(symbolIn: unknown, quantityIn: unknown, priceI
 export const buy = (symbol: unknown, quantity: unknown, price: unknown, dateMs?: number | null, accountId?: string, base?: string) => withLock(() =>
   withUndo(`Buy ${quantity} ${String(symbol).toUpperCase()}`, () => buyUnlocked(symbol, quantity, price, dateMs, accountId, base)));
 
-export function sell(symbolIn: unknown, quantityIn: unknown, priceIn: unknown, accountId?: string, base?: string) {
+export function sell(symbolIn: unknown, quantityIn: unknown, priceIn: unknown, accountId?: string, base?: string, dateMs?: number | null) {
   // Fetch everything remote BEFORE taking the write lock: holding the global
   // portfolio lock across Yahoo/FX round-trips stalled every other mutation.
   const symbol = String(symbolIn).toUpperCase();
   let price: unknown = priceIn;
   const usdBaseCcy = (base || '').toUpperCase();
+  // Sale date: a past date records that day's FX (like a dated buy); none, or a
+  // future one, is now. Checked against the lots again under the lock.
+  const now = Date.now();
+  const t = (dateMs && Number.isFinite(dateMs) && dateMs < now) ? dateMs : now;
   // Peek at the local position only to learn its currency so the FX round-trips
   // can run outside the lock. Everything is re-validated under the lock.
   let peekCurrency: string | null = null;
@@ -84,9 +88,9 @@ export function sell(symbolIn: unknown, quantityIn: unknown, priceIn: unknown, a
   const currencyPeek = peekCurrency;
   const fxPromise: Promise<{ fxUsdSell?: number; usdBaseSell?: number }> = !currencyPeek ? Promise.resolve({}) : (async () => {
     const out: { fxUsdSell?: number; usdBaseSell?: number } = {};
-    try { out.fxUsdSell = await getFxRate(currencyPeek, 'USD'); } catch {}
+    try { out.fxUsdSell = t === now ? await getFxRate(currencyPeek, 'USD') : await fxRateAt(currencyPeek, 'USD', t); } catch {}
     if (usdBaseCcy && usdBaseCcy !== 'USD') {
-      try { out.usdBaseSell = await getFxRate('USD', usdBaseCcy); } catch {}
+      try { out.usdBaseSell = t === now ? await getFxRate('USD', usdBaseCcy) : await fxRateAt('USD', usdBaseCcy, t); } catch {}
     }
     return out;
   })();
@@ -99,6 +103,9 @@ export function sell(symbolIn: unknown, quantityIn: unknown, priceIn: unknown, a
     if (!pos) throw new Error(`No position in ${symbol}`);
     if (!(quantity > 0)) throw new Error('Quantity must be > 0');
     if (quantity > pos.quantity + 1e-9) throw new Error(`You only hold ${pos.quantity} ${symbol}`);
+    // A sale can't predate the first purchase: there were no shares to sell yet.
+    const first = Math.min(...(pos.lots || []).map((l) => l.t ?? Infinity));
+    if (t !== now && Number.isFinite(first) && t < first - 864e5) throw new Error(`You first bought ${symbol} on ${new Date(first).toISOString().slice(0, 10)}; the sale date can't be earlier`);
     // If price not supplied, use the market price fetched before locking.
     if (needPrice) {
       price = await pricePromise;
@@ -120,7 +127,7 @@ export function sell(symbolIn: unknown, quantityIn: unknown, priceIn: unknown, a
     const { fxUsdSell = null, usdBaseSell = null } = await fxPromise;
     pos.lots.forEach((l) => { l.q *= factor; });
     recalcPosition(pos);
-    const tx: StoredTransaction = { id: newTxId(), type: 'SELL', symbol, quantity, price: sellPrice, realized, currency, fxUsdSell, lotsSold, time: Date.now() };
+    const tx: StoredTransaction = { id: newTxId(), type: 'SELL', symbol, quantity, price: sellPrice, realized, currency, fxUsdSell, lotsSold, time: t };
     if (usdBaseSell != null) { tx.usdBaseSell = usdBaseSell; tx.usdBaseSellCcy = usdBaseCcy; }
     acc.transactions.push(tx);
     if (pos.quantity <= 1e-9) acc.positions = acc.positions.filter((x) => x !== pos);

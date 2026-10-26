@@ -29,6 +29,9 @@ import * as AlertsIsland from './features/alerts/AlertsIsland.tsx';
 import * as DividendsIsland from './features/dividends/DividendsIsland.tsx';
 import * as ActivityIsland from './features/activity/ActivityIsland.tsx';
 import * as FxRiskIsland from './features/fxrisk/FxRiskIsland.tsx';
+import * as TradeSheetIsland from './features/trade/TradeSheetIsland.tsx';
+import * as DialogIsland from './ui/dialog.tsx';
+import * as ToastIsland from './ui/toast.tsx';
 type IslandModule = { default: ComponentType };
 export type IslandRegistry = Record<string, () => Promise<IslandModule>>;
 
@@ -96,4 +99,7 @@ export const islands: IslandRegistry = preloadable({
   dividends: () => Promise.resolve(DividendsIsland),
   activity: () => Promise.resolve(ActivityIsland),
   fxrisk: () => Promise.resolve(FxRiskIsland),
+  trade: () => Promise.resolve(TradeSheetIsland),
+  dialog: () => Promise.resolve(DialogIsland),
+  toast: () => Promise.resolve(ToastIsland),
 });
