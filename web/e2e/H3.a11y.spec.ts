@@ -35,8 +35,8 @@ test.describe('narrow', () => {
 });
 test('axe: modals', async ({ page }) => {
   await seeded(page);
-  await page.click('#add-toggle'); await expect(page.locator('#add-form')).toBeVisible(); await scan(page, 'add');
-  await page.click('#add-toggle');
+  await page.click('#add-toggle'); await expect(page.locator('#trade-sheet')).toHaveAttribute('aria-hidden', 'false'); await scan(page, 'add');
+  await page.locator('#trade-sheet [aria-label="Close"]').click();
   await page.click('#cash-btn'); await expect(page.locator('#cash-modal')).toBeVisible();
   await page.locator('#cash-editor .cash-add').first().click();
   await expect(page.locator('#cash-modal .cash-amt').first()).toBeVisible(); await scan(page, 'cash');
@@ -89,13 +89,13 @@ test('keyboard: accounts dialog returns focus to the account selector', async ({
 
 test('keyboard: inline Add disclosure and symbol suggestions', async ({ page }) => {
   await seeded(page); await page.locator('#add-toggle').focus(); await page.keyboard.press('Enter');
-  await expect(page.locator('#add-symbol')).toBeFocused();
-  await page.locator('#add-symbol').fill('AA');
-  await expect(page.locator('#add-suggest [role="option"]').first()).toBeVisible();
+  await expect(page.locator('#trade-symbol')).toBeFocused();
+  await page.locator('#trade-symbol').fill('AA');
+  await expect(page.locator('#trade-suggest [role="option"]').first()).toBeVisible();
   await page.keyboard.press('ArrowDown');
-  await expect(page.locator('#add-symbol')).toHaveAttribute('aria-activedescendant', 'add-option-0');
-  await page.keyboard.press('Enter'); await expect(page.locator('#add-qty')).toBeFocused();
-  await page.keyboard.press('Escape'); await expect(page.locator('#add-form')).toBeHidden(); await expect(page.locator('#add-toggle')).toBeFocused();
+  await expect(page.locator('#trade-symbol')).toHaveAttribute('aria-activedescendant', 'trade-option-0');
+  await page.keyboard.press('Enter'); await expect(page.locator('#trade-qty')).toBeFocused();
+  await page.keyboard.press('Escape'); await expect(page.locator('#trade-sheet')).toHaveAttribute('aria-hidden', 'true'); await expect(page.locator('#add-toggle')).toBeFocused();
 });
 
 test('keyboard: all visible dashboard controls are in the Tab cycle', async ({ page }) => {
@@ -174,4 +174,17 @@ test('keyboard: rings survive cash and chart input outline resets', async ({ pag
   await page.keyboard.press('Escape');
   await page.locator('#detail-panel .pc-sym').focus(); await page.keyboard.press('Shift+Tab'); await page.keyboard.press('Tab');
   expect(await page.locator('#detail-panel .pc-sym').evaluate((el) => getComputedStyle(el).outlineStyle)).toBe('solid');
+});
+
+test('delayed modal autofocus does not steal focus after keyboard navigation', async ({ page }) => {
+  await seeded(page);
+  const now = Date.now();
+  await page.clock.install({ time: now });
+  await page.clock.pauseAt(now + 1000);
+  await page.click('#profile-btn');
+  await expect(page.locator('#setup-name')).toBeFocused();
+  await page.locator('#setup-skip').focus(); await page.keyboard.press('Shift+Tab');
+  await expect(page.locator('#setup-save')).toBeFocused();
+  await page.clock.runFor(1); // release the pending initial-focus timer after navigation
+  await expect(page.locator('#setup-save')).toBeFocused();
 });

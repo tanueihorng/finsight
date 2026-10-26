@@ -4,10 +4,11 @@ import type { Position } from '../../../../shared/types.ts';
 // Trade sheet state and math. The math mirrors lib/portfolio.ts: a buy adds a
 // lot (blended average), a sell trims every lot proportionally, so realized
 // P&L is against the account's average cost.
-export type Mode = 'buy' | 'sell';
-export type Sheet = { symbol: string; mode: Mode; accountId?: string } | null;
+export type Mode = 'buy' | 'sell' | 'transfer';
+export type Sheet = { symbol: string; mode: Mode; accountId?: string; newSymbol?: boolean } | null;
 export const tradeSheet = createStore<{ sheet: Sheet }>()(() => ({ sheet: null }));
 export const openTrade = (symbol: string, mode: Mode, accountId?: string) => tradeSheet.setState({ sheet: { symbol, mode, accountId } });
+export const openNewTrade = () => tradeSheet.setState({ sheet: { symbol: '', mode: 'buy', newSymbol: true } });
 export const closeTrade = () => tradeSheet.setState({ sheet: null });
 
 export type Book = { accountId: string; account: string; quantity: number; avgCost: number };
@@ -36,12 +37,12 @@ export function sellQty(held: number, frac: number): number {
 }
 
 export function tradeError(mode: Mode, q: number, px: number, held: number, date: string, today: string): string | null {
-  if (!(q > 0)) return 'Enter a share count above 0.';
-  if (!(px >= 0) || Number.isNaN(px)) return 'Enter a price of 0 or more.';
-  if (mode === 'sell' && q > held + 1e-9) return `You only hold ${+held.toFixed(6)} in this account.`;
+  if (!Number.isFinite(q) || !(q > 0)) return 'Enter a share count above 0.';
+  if (!Number.isFinite(px) || !(px >= 0)) return 'Enter a price of 0 or more.';
+  if (mode !== 'buy' && q > held + 1e-9) return `You only hold ${+held.toFixed(6)} in this account.`;
   if (date && date > today) return "The trade date can't be in the future.";
   return null;
 }
 // The label lib/portfolio.ts gives the undo entry, so the toast can check it.
-export const undoLabel = (mode: Mode, q: number, symbol: string) => `${mode === 'buy' ? 'Buy' : 'Sell'} ${q} ${symbol}`;
+export const undoLabel = (mode: Mode, q: number, symbol: string) => `${mode === 'buy' ? 'Buy' : mode === 'transfer' ? 'Transfer' : 'Sell'} ${q} ${symbol}`;
 export const localDate = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;

@@ -1,3 +1,4 @@
+import { DATE_SUFFIX } from '../chat/prompt.ts';
 // Anthropic Messages API adapter (Haiku and other Claude models) via the
 // official SDK. The stable prefix (system + tools) is cached; assistant
 // content (including thinking blocks) is kept verbatim in providerExtra and
@@ -7,6 +8,13 @@ import type { ApiBrain, BrainManifest, StepRequest, StepResult } from './types.t
 import { safeId } from './types.ts';
 import type { Block, Msg } from '../types.ts';
 import { AgentError } from '../types.ts';
+
+export function anthropicSystem(system: string): Anthropic.TextBlockParam[] {
+  const at = system.lastIndexOf(DATE_SUFFIX);
+  if (at < 0) return [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }];
+  return [{ type: 'text', text: system.slice(0, at), cache_control: { type: 'ephemeral' } },
+    { type: 'text', text: system.slice(at) }];
+}
 
 export function toAnthropicMessages(brainId: string, messages: Msg[]): Anthropic.MessageParam[] {
   const out: Anthropic.MessageParam[] = [];
@@ -46,7 +54,7 @@ export function anthropicBrain(manifest: BrainManifest, apiKey: string): ApiBrai
       const stream = client.messages.stream({
         model: manifest.model,
         max_tokens: manifest.maxOutputTokens,
-        system: [{ type: 'text', text: req.system, cache_control: { type: 'ephemeral' } }],
+        system: anthropicSystem(req.system),
         tools,
         messages: toAnthropicMessages(manifest.id, req.messages),
         ...(manifest.options as object),

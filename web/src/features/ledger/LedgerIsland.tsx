@@ -23,14 +23,14 @@ function TradeRow({ r, base, showAcct, editing, onAct }: { r: LedgerRow; base: s
   const cls = typeClass(r.type);
   if (editing) {
     return (
-      <tr data-id={r.id}><td><input type="date" aria-label="Trade date" className="le-date" defaultValue={r.time ? isoDate(r.time) : ''} /></td><td className={cls}>{r.type}</td><td className="sym">{r.symbol}</td>
+      <tr data-id={r.id}><td><input type="date" aria-label="Trade date" className="le-date" defaultValue={r.time ? isoDate(r.time) : ''} /></td><td className={cls}>{r.type}{r.type === 'TRANSFER' && <div className="dim small">{r.transferSide === 'in' ? 'From' : 'To'} {r.otherAccount}</div>}</td><td className="sym">{r.symbol}</td>
         <td className="r"><input type="number" step="any" aria-label="Trade quantity" className="le-qty" defaultValue={r.quantity ?? ''} /></td><td className="r"><input type="number" step="any" aria-label="Trade price" className="le-px" defaultValue={r.price ?? ''} /></td>
         <td></td><td></td><td><div className="lg-act"><button className="mini-btn solid" data-act="save" onClick={(e) => onAct('save', r, e)}>SAVE</button><button className="mini-btn" data-act="cancel" onClick={(e) => onAct('cancel', r, e)}>✕</button></div></td></tr>
     );
   }
   return (
     <tr data-id={r.id}>
-      <td>{r.time ? shortDate(r.time) : ''}{showAcct && <div className="dim small">{r.account}</div>}</td><td className={cls}>{r.type}</td><td className="sym">{r.symbol}</td>
+      <td>{r.time ? shortDate(r.time) : ''}{showAcct && <div className="dim small">{r.account}</div>}</td><td className={cls}>{r.type}{r.type === 'TRANSFER' && <div className="dim small">{r.transferSide === 'in' ? 'From' : 'To'} {r.otherAccount}</div>}</td><td className="sym">{r.symbol}</td>
       <td className="r">{r.quantity != null ? qtyText(r.quantity) : ''}</td>
       <td className="r">{r.price != null && <>{fmt(r.price)} <span className="dim">{r.currency || ''}</span></>}</td>
       <td className="r">{r.valueBase != null ? money(base, r.valueBase, 0) : ''}</td>

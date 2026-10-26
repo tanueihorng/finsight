@@ -26,7 +26,7 @@ interface DayBar { day: string; c: number; h: number; l: number }
 type Lookup = (day: string) => number;
 type PriceLookup = Lookup & { series: DayBar[] };
 /** A replayed holding change; dq is resolved during replay for DELETE. */
-interface PerfEvent { t: number; key: string; sym: string; dq: number | null; price?: number; kind: 'BUY' | 'SELL' | 'DELETE' | 'OPEN' }
+interface PerfEvent { t: number; key: string; sym: string; dq: number | null; price?: number; kind: 'BUY' | 'SELL' | 'DELETE' | 'OPEN' | 'TRANSFER' }
 interface PerfDividend { t: number; sym: string; amount: number; currency: string }
 
 const RANGE_DAYS: Record<string, number | null> = { '1mo': 31, '3mo': 92, '6mo': 183, ytd: null, '1y': 366, '2y': 731, '5y': 1827, max: null };
@@ -110,6 +110,10 @@ export function collectEvents(p: StoredPortfolio, accountId: string | null | und
       } else if (t.type === 'SELL' && t.quantity! > 0) {
         events.push({ t: t.time!, key, sym, dq: -t.quantity!, price: t.price, kind: 'SELL' });
         held[key] = (held[key] || 0) - t.quantity!;
+      } else if (t.type === 'TRANSFER' && t.quantity! > 0 && (t.transferSide === 'in' || t.transferSide === 'out')) {
+        const dq = t.quantity! * (t.transferSide === 'in' ? 1 : -1);
+        events.push({ t: t.time!, key, sym, dq, kind: 'TRANSFER' });
+        held[key] = (held[key] || 0) + dq;
       } else if (t.type === 'DELETE') {
         events.push({ t: t.time!, key, sym, dq: null, kind: 'DELETE' }); // qty resolved during replay
         held[key] = 0;
@@ -231,6 +235,13 @@ export async function portfolioPerformance(rangeIn: string, baseIn: string | nul
     // dq is set for every kind but DELETE.
     qty[e.key] = cur + e.dq!;
     if (e.kind === 'OPEN') return 0;
+    if (e.kind === 'TRANSFER') {
+      // A paired move inside All Accounts has no external flow. An individual
+      // account receives/withdraws the holding at market value on transfer day.
+      if (accountId === 'ALL') return 0;
+      if (e.dq! > 0) newValue += e.dq! * price(day) * fx;
+      return e.dq! * price(day) * fx;
+    }
     if (e.dq! > 0) newValue += e.dq! * price(day) * fx;
     return e.dq! * e.price! * fx; // BUY > 0, SELL < 0
   };

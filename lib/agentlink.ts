@@ -97,7 +97,7 @@ export function proxy(req: IncomingMessage, res: ServerResponse, pathname: strin
   });
   res.on('close', () => upstream.destroy()); // response done or browser went away: release the upstream (stops SSE)
   let size = 0;
-  const limit = pathname === '/api/agent/uploads' ? MAX_UPLOAD_BODY : MAX_BODY;
+  const limit = pathname === '/api/agent/uploads' ? MAX_UPLOAD_BODY : pathname === '/api/agent/threads/delete-all' ? 4 * 1024 * 1024 : MAX_BODY;
   req.on('data', (c: Buffer) => { size += c.length; if (size > limit) { upstream.destroy(); if (!res.headersSent) { res.writeHead(413); res.end(); } } else upstream.write(c); });
   req.on('end', () => upstream.end());
 }

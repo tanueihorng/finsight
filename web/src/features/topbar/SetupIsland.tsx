@@ -1,3 +1,4 @@
+import { openNewTrade } from '../trade/trade.ts';
 import { useModalFocus } from '../../ui/modalFocus.ts';
 import { useEffect, useRef, useState } from 'react';
 import { useStore } from 'zustand';
@@ -35,7 +36,7 @@ export default function SetupIsland() {
   const choose = (action: string) => {
     const p = commit(); close();
     if (action === 'import') store().setState({ importOpen: true });
-    else if (action === 'manual') store().setState({ addFormOpen: true });
+    else if (action === 'manual') openNewTrade();
     setStatus(p.name ? `Welcome, ${p.name}.` : 'Terminal ready.', 'ok');
   };
   const operator = name.trim().split(/\s+/)[0] || '';

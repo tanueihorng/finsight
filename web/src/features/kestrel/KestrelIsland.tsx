@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useStore } from 'zustand';
-import { boot, chat, closeOverlay, closeStream, newChat, railShown, resumeStream, stop, toggleThreads } from './chat.ts';
+import { boot, chat, deleteThread, closeOverlay, closeStream, newChat, railShown, resumeStream, stop, toggleThreads } from './chat.ts';
 import { Icon } from './icons.tsx';
 import { Chat } from './Chat.tsx';
 import { kestrelDock } from './dock.ts';
@@ -20,6 +20,7 @@ const cssWidth = () => parseInt(getComputedStyle(document.documentElement).getPr
 export default function KestrelIsland() {
   const name = useStore(chat, (s) => s.name), named = useStore(chat, (s) => s.named), rail = useStore(chat, railShown);
   // The list has the title the agent set from the first message; the open thread object keeps its creation title.
+  const activeThread = useStore(chat, (s) => s.thread);
   const chatTitle = useStore(chat, (s) => (s.view === 'welcome' ? 'New chat' : s.threads?.find((x) => x.id === s.thread?.id)?.title || s.thread?.title || ''));
   const [mode, setModeState] = useState<Mode>(() => (ls.get(LS.mode, 'side') === 'dock' ? 'dock' : 'side'));
   const [open, setOpen] = useState(false);
@@ -122,6 +123,7 @@ export default function KestrelIsland() {
   const dockTitle = mode === 'dock' ? 'Pop out to the side panel' : 'Dock into the terminal';
   const tools = (
     <span className="agent-head-tools">
+      {activeThread && <button className="agent-icon-btn" title="Delete this chat" aria-label="Delete current chat" onClick={() => void deleteThread({ ...activeThread, title: chatTitle || activeThread.title })}><Icon name="trash" /></button>}
       <button className="agent-icon-btn" title="Chats" aria-label="Show chats" aria-expanded={rail} aria-controls="agent-threads" onClick={() => toggleThreads()}><Icon name="sidebar" /></button>
       <button className="agent-icon-btn" title="New chat (/new)" aria-label="New chat" onClick={() => { newChat(); closeOverlay(); inputRef.current?.focus(); }}><Icon name="plus" /></button>
       <button className="agent-icon-btn" title="Panel width: small · medium · large · wide" aria-label="Change panel width" hidden={mode !== 'side'}

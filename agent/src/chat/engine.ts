@@ -13,7 +13,7 @@ import { Effort, costOf } from '../brains/types.ts';
 import type { Block, CitationBlock, Msg, PageContext, Usage } from '../types.ts';
 import { AgentError } from '../types.ts';
 import type { EventBus } from './bus.ts';
-import { systemPrompt, FINAL_ANSWER_NUDGE } from './prompt.ts';
+import { systemPrompt, DATE_SUFFIX, FINAL_ANSWER_NUDGE } from './prompt.ts';
 import { buildContextPack } from '../tools/index.ts';
 import { searchProviders, type SearchChoice } from '../tools/web.ts';
 import { log, redactValue } from '../log.ts';
@@ -230,7 +230,8 @@ export class ChatEngine {
       }
       resetStream();
       const t = Date.now();
-      const system = this.system() + (ctx.ui.enabled ? '\n\n' + UI_GUIDANCE : '');
+      const [stable, dynamic] = this.system().split(DATE_SUFFIX);
+      const system = stable + (ctx.ui.enabled ? '\n\n' + UI_GUIDANCE : '') + DATE_SUFFIX + dynamic;
       const context = await this.history(threadId, brain, system, final ? [] : tools);
       const messages = context.messages;
       if (!warnedContext && (context.omitted || context.partialDocuments)) {

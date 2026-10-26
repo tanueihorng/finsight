@@ -14,6 +14,7 @@ export interface StoredPosition { symbol: string; name?: string; currency?: stri
 /** BUY / SELL / DELETE; legacy files may hold other types or omit fields. */
 export interface StoredTransaction {
   id: string; type: string; symbol: string; quantity?: number; price?: number; currency?: string; fxUsd?: number | null; time?: number;
+  transferred?: boolean; transferId?: string; transferSide?: 'in' | 'out'; otherAccountId?: string;
   realized?: number; fxUsdSell?: number | null; lotsSold?: SoldLot[]; usdBaseSell?: number; usdBaseSellCcy?: string;
 }
 export type StoredDividend = IbkrDividend;

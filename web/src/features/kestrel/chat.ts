@@ -239,9 +239,21 @@ export const closeOverlay = () => { if (get().threadsOpen) set({ threadsOpen: fa
 export const setNarrow = (narrow: boolean) => { if (narrow !== get().narrow) set({ narrow, threadsOpen: false }); };
 export async function deleteThread(t: Thread) {
   if (!await confirmDialog({ title: `Delete "${t.title}"?`, body: 'This chat is deleted permanently.', ok: 'Delete', danger: true })) return;
-  await agentApi(`/threads/${t.id}?confirm=true`, { method: 'DELETE' });
-  if (get().thread?.id === t.id) newChat();
-  void listThreads();
+  try {
+    await agentApi(`/threads/${t.id}?confirm=true`, { method: 'DELETE' });
+    if (get().thread?.id === t.id) newChat();
+    await listThreads();
+  } catch (e) { notice((e as Error).message, 'error'); }
+}
+export async function clearAllChats() {
+  if (!await confirmDialog({ title: 'Clear all chats?', body: 'This includes archived chats. Review the count before permanently deleting.', ok: 'Continue', danger: true })) return;
+  try {
+    const { ids } = await agentApi<{ ids: string[] }>('/threads/delete-all/preview');
+    if (!ids.length) return;
+    if (!await confirmDialog({ title: `Permanently delete ${ids.length} chats?`, body: 'This cannot be undone.', ok: 'Delete all chats', danger: true })) return;
+    await agentApi('/threads/delete-all', { method: 'POST', body: { confirm: true, ids } });
+    newChat(); await listThreads();
+  } catch (e) { notice((e as Error).message, 'error'); }
 }
 
 // ---- attachments ----
@@ -270,7 +282,8 @@ async function slash(cmd: string) {
   const [c, ...rest] = cmd.slice(1).trim().split(/\s+/); const arg = rest.join(' ');
   const sys = (t: string) => { if (get().view === 'welcome') clearLog(); notice(t); };
   const s = get();
-  if (c === 'new') return newChat();
+  if (c === 'new' || c === 'clear') return newChat();
+  if (c === 'delete') { if (s.thread) return deleteThread(s.threads?.find((t) => t.id === s.thread?.id) || s.thread); return sys('No active chat to delete.'); }
   if (c === 'model') {
     const b = s.brains.find((x) => x.id === arg || x.label.toLowerCase().includes(arg.toLowerCase()));
     if (!arg || !b) return sys(`Models: ${s.brains.map((x) => `${x.id}${x.available ? '' : ' (n/a)'}`).join(', ')}`);
@@ -285,7 +298,7 @@ async function slash(cmd: string) {
     const bad = lines.filter((l) => l.ok === false || /error|failed/.test(String(l.kind)) || l.status === 'failed' || (Number(l.status) >= 500)).slice(-12);
     return sys(bad.length ? bad.map((l) => `${String(l.ts).slice(5, 19)} ${l.kind} ${l.tool || l.path || l.brain || ''} ${l.code || ''} ${l.error || l.message || ''}`.trim()).join('\n') : 'No recent errors in the interaction log.');
   }
-  return sys(`${s.name} answers from your FinSight data, strategy library, records and the web. Commands: /new · /model <id> · /cost [month] · /strategies · /skills · /logs. Skills: type / to browse. Attach files with ⊕, paste or drop.`);
+  return sys(`${s.name} answers from your FinSight data, strategy library, records and the web. Commands: /new · /clear · /delete · /model <id> · /cost [month] · /strategies · /skills · /logs. Skills: type / to browse. Attach files with ⊕, paste or drop.`);
 }
 export async function submit(text: string, pc: PageContext | undefined, restore: (t: string) => void) {
   const s = get();

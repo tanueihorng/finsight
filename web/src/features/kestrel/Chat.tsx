@@ -4,7 +4,7 @@ import { useCalendar, useEvents, useIntraday, usePortfolio } from '../../api/que
 import { Money } from '../../ui/Money.tsx';
 import { IslandBoundary } from '../../ui/IslandBoundary.tsx';
 import { agentApi } from './api.ts';
-import { addFiles, chat, chooseBrain, chooseEffort, chooseSearch, closeOverlay, deleteThread, menuItems, newChat, openThread, pageContext, railShown, removeFile, setDraft, setNarrow, stop, submit, toggleThreads, type FileChip, type Item } from './chat.ts';
+import { addFiles, chat, chooseBrain, chooseEffort, chooseSearch, clearAllChats, closeOverlay, deleteThread, menuItems, newChat, openThread, pageContext, railShown, removeFile, setDraft, setNarrow, stop, submit, toggleThreads, type FileChip, type Item } from './chat.ts';
 import type { Thread } from './api.ts';
 import { asks, brief, eventTime, greeting, pctText, portfolioLine, prevClose, symbolLine, usMarket, type Ask, type Brief, type Kind } from './briefing.ts';
 import { Icon, type IconName } from './icons.tsx';
@@ -203,6 +203,7 @@ function Rail({ onNew }: { onNew: () => void }) {
           </div>
         ))}
       </div>
+      <button className="kx-all kx-clear-all" onClick={() => void clearAllChats()}>Clear all chats</button>
       {s.todayUsd != null && <div className="kx-spend" title="API spend today (models and paid search)"><span>Today</span><span>{costLabel(s.todayUsd)}</span></div>}
     </nav>
   );
@@ -304,9 +305,9 @@ function Welcome({ onTry, onCommand }: { onTry: (s: string) => void; onCommand: 
       <div className="kx-sec"><span>Jump to</span>{recent.length > 0 && <button className="kx-all" onClick={() => toggleThreads(true)}>All chats</button>}</div>
       <div className="kx-jump" ref={listRef} onKeyDown={onKeys}>
         {recent.map((t) => (
-          <button key={t.id} className="kx-jump-row" title={t.preview || t.title} onClick={() => void openThread(t.id)}>
+          <div key={t.id} className="kx-jump-entry"><button className="kx-jump-row" title={t.preview || t.title} onClick={() => void openThread(t.id)}>
             <Icon name="chat" size={14} /><span className="t">{t.title}</span><span className="when">{ago(t.updatedAt, now)}</span>
-          </button>
+          </button><button className="agent-icon-btn kx-jump-delete" aria-label={`Delete recent chat ${t.title}`} onClick={() => void deleteThread(t)}><Icon name="trash" size={14} /></button></div>
         ))}
         <button className="kx-jump-row cmd" onClick={onCommand}>
           <Icon name="slash" size={14} /><span className="t">Commands and skills</span><span className="when">/cost · /skills · /strategies</span>
@@ -360,6 +361,7 @@ export function Chat({ inputRef, onRetry }: { inputRef: RefObject<HTMLTextAreaEl
   const menu = menuOpen ? menuItems(s.draft) : null;
   const all = menu ? [...menu.skills, ...menu.cmds] : [];
   const sel = Math.min(menuSel, Math.max(0, all.length - 1));
+  useLayoutEffect(() => { if (menu) document.getElementById(`agent-option-${sel}`)?.scrollIntoView({ block: 'nearest' }); }, [sel, !!menu]);
   const send = (text: string) => void submit(text.trim(), ctxOn ? pageContext() : undefined, (t) => setDraft(t));
   const pick = (i: number) => { const it = all[i]; if (!it) return; setDraft(it.k + ' '); setMenuSel(0); setMenuOpen(false); inputRef.current?.focus(); };
   const onNew = () => { newChat(); closeOverlay(); inputRef.current?.focus(); };
@@ -389,7 +391,12 @@ export function Chat({ inputRef, onRetry }: { inputRef: RefObject<HTMLTextAreaEl
           {!stick && <button className="agent-jump" onClick={() => scrollBottom(true)}>↓ latest</button>}
         </div>
         <div className="agent-compose">
-          <div id="agent-command-menu" className="agent-menu" hidden={!menu} role="listbox" aria-label="Commands and skills">
+          <div id="agent-command-menu" className="agent-menu" hidden={!menu} role="listbox" tabIndex={0} aria-label="Commands and skills" aria-activedescendant={menu && all.length ? `agent-option-${sel}` : undefined}
+            onKeyDown={(e) => {
+              if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); setMenuSel((sel + (e.key === 'ArrowDown' ? 1 : -1) + all.length) % Math.max(1, all.length)); }
+              if (e.key === 'Enter') { e.preventDefault(); pick(sel); }
+              if (e.key === 'Escape') { e.stopPropagation(); setMenuOpen(false); inputRef.current?.focus(); }
+            }}>
             {menu && <>
               {menu.skills.length > 0 && <div className="grp">SKILLS</div>}
               {menu.skills.map((it, i) => <MenuRow key={it.k} id={`agent-option-${i}`} k={it.k} v={it.v} on={i === sel} onPick={() => pick(i)} />)}

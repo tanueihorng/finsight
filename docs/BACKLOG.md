@@ -8,7 +8,7 @@
 ## Completed implementation — 2026-10-27
 
 Completed and verified on **2026-10-27 SGT** in `feature/open-features`.
-Implementation is complete; commit, merge and deployment remain pending.
+Implementation is committed in `22b0436`. User selected review, merge and push; integration verification is in progress. Deployment remains separate.
 Verification: **213 unit, 111 agent and 247 browser tests passed**; one existing live-fixture test skipped.
 Evidence in the investment workspace: `harness/runs/20261026T171956Z-IBKRTRADES-001-3d89b74e/REPORT.md`.
 Chat deletion spacing follow-up: `harness/runs/20261026T172308Z-CHATDELETE-001-06bb7ec1/SPACING-FIX.md`.
@@ -71,4 +71,4 @@ in [CHANGELOG.md](../CHANGELOG.md), distinguishing verification, merge and deplo
 Standalone clones use this backlog and explicit user requests without depending on workspace files.
 
 
-Modal layering correction (MODALLAYER-001, 2026-10-27): verified in serving main checkout and mirrored to feature/open-features; selected for commit/merge/push. Setup exit controls remain above Kestrel. Routine bug fix; no new feature scope.
+Modal layering correction (MODALLAYER-001, 2026-10-27): verified in serving main checkout and committed on main at `5f2dda1` and reconciled into feature/open-features. Setup exit controls remain above Kestrel. Routine bug fix; no new feature scope.
