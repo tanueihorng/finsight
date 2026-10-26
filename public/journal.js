@@ -22,7 +22,7 @@
     return j;
   }
 
-  // Same definitions as lib/journal.js metrics(): R measured on the initial stop.
+  // Same definitions as lib/journal.ts metrics(): R measured on the initial stop.
   function metrics(e) {
     const m = { riskPerUnit: null, stopPct: null, plannedRR: null, riskAmount: null, exitedQty: 0, remaining: null, netPnl: null, netR: null };
     const sgn = e.side === 'short' ? -1 : 1;

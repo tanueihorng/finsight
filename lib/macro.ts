@@ -1,0 +1,115 @@
+// Macro data: World Bank, FRED and the economic calendar (all free, no key).
+import { UA } from './config.ts';
+import { fetchJson } from './market.ts';
+import { cached } from './cache.ts';
+import type { WorldBankResponse, FredResponse, FomcMeeting } from '../shared/types.ts';
+
+// World Bank v2 rows (the fields read here).
+interface WbRow { date: string; value: number | null; indicator?: { value?: string }; country?: { value?: string } }
+// Forex Factory weekly feed items.
+interface FfEvent { title: string; country: string; date: string; impact?: string; forecast?: string; previous?: string }
+export interface CalendarEvent { title: string; country: string; time: string; impact: string; forecast: string; previous: string }
+
+// World Bank macro data (free, no key) ---------------------------------------
+export function worldBank(country: string, indicator: string): Promise<WorldBankResponse> {
+  return cached(`wb:${country}:${indicator}`, 6 * 60 * 60000, () => fetchWorldBank(country, indicator),
+    { stale: 30 * 24 * 60 * 60000, persist: true });
+}
+async function fetchWorldBank(country: string, indicator: string): Promise<WorldBankResponse> {
+  const url = `https://api.worldbank.org/v2/country/${encodeURIComponent(country)}/indicator/${encodeURIComponent(
+    indicator
+  )}?format=json&per_page=60`;
+  const data = await fetchJson<unknown>(url);
+  const rows: WbRow[] = (Array.isArray(data) ? data[1] : []) || [];
+  const series = rows
+    .filter((r) => r.value != null)
+    .map((r) => ({ year: r.date, value: r.value as number }))
+    .sort((a, b) => Number(a.year) - Number(b.year));
+  const label = rows[0]?.indicator?.value || indicator;
+  const countryName = rows[0]?.country?.value || country;
+  return { country, countryName, indicator, label, series };
+}
+
+// FRED (US Federal Reserve) macro data — free, NO API KEY via the graph CSV export.
+export function getFred(series: string, transform: string, start: string): Promise<FredResponse> {
+  series = (series || 'DGS10').toUpperCase();
+  transform = transform || 'lin';
+  start = start || '2015-01-01';
+  return cached(`fred:${series}:${transform}:${start}`, 60 * 60000, () => fetchFred(series, transform, start),
+    { stale: 7 * 24 * 60 * 60000, persist: true });
+}
+async function fetchFred(series: string, transform: string, start: string): Promise<FredResponse> {
+  const url = `https://fred.stlouisfed.org/graph/fredgraph.csv?id=${encodeURIComponent(series)}` +
+    `&transformation=${encodeURIComponent(transform)}&cosd=${encodeURIComponent(start)}`;
+  const res = await fetch(url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(12000) });
+  if (!res.ok) throw new Error(`FRED HTTP ${res.status}`);
+  const text = await res.text();
+  const lines = text.trim().split(/\r?\n/);
+  const points: FredResponse['points'] = [];
+  for (let i = 1; i < lines.length; i++) {
+    const [date, val] = lines[i]!.split(',');
+    const v = parseFloat(val!);
+    if (date && Number.isFinite(v)) points.push({ date, value: v });
+  }
+  return { series, transform, points };
+}
+
+// Economic calendar (free, no key) -------------------------------------------
+// Curated FOMC schedule — the Fed publishes the whole year ahead and the dates
+// are fixed, so the next rate decision + dot-plot (SEP) are always known even
+// without a feed. SEP = Summary of Economic Projections ("dot plot"). Refresh
+// this list once a year (federalreserve.gov/monetarypolicy/fomccalendars.htm).
+export const FOMC_SCHEDULE: Omit<FomcMeeting, 'decisionMs'>[] = [
+  { start: '2026-01-27', end: '2026-01-28', sep: false },
+  { start: '2026-03-17', end: '2026-03-18', sep: true },
+  { start: '2026-04-28', end: '2026-04-29', sep: false },
+  { start: '2026-06-16', end: '2026-06-17', sep: true },
+  { start: '2026-07-28', end: '2026-07-29', sep: false },
+  { start: '2026-09-15', end: '2026-09-16', sep: true },
+  { start: '2026-10-27', end: '2026-10-28', sep: false },
+  { start: '2026-12-08', end: '2026-12-09', sep: true },
+];
+
+// Upcoming macro events: the curated FOMC anchor + this-week high-impact US (and
+// any SG) releases from Forex Factory's key-free weekly JSON (CPI, PCE, NFP, GDP,
+// the rate decision itself…). No API key, no account. Personal/local use only —
+// the feed rate-limits hard, so we cache for an hour and degrade gracefully.
+export function getCalendar() {
+  return cached('calendar', 60 * 60000, fetchCalendar, { stale: 24 * 60 * 60000 });
+}
+async function fetchCalendar() {
+  const now = Date.now();
+
+  // FOMC: the decision lands on the 2nd day; keep meetings whose end is today/future.
+  const fomc = FOMC_SCHEDULE
+    .map((m) => ({ ...m, decisionMs: Date.parse(m.end + 'T18:30:00Z') })) // ~14:00 ET, DST-neutral
+    .filter((m) => m.decisionMs >= now - 12 * 60 * 60000);
+  if (fomc.length === 0) {
+    // The curated list expired — say so once instead of silently dropping the
+    // FOMC panel. Refresh FOMC_SCHEDULE from federalreserve.gov each December.
+    console.warn('FOMC_SCHEDULE is exhausted (last entry passed). Refresh the list for the new year.');
+  }
+  const nextFomc = fomc[0] || null;
+  const nextSep = fomc.find((m) => m.sep) || null;
+
+  // This-week high-impact events (best effort).
+  let events: CalendarEvent[] = [], eventsOk = false;
+  try {
+    const res = await fetch('https://nfs.faireconomy.media/ff_calendar_thisweek.json',
+      { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(12000) });
+    if (res.ok) {
+      const all: unknown = await res.json();
+      events = (Array.isArray(all) ? all as FfEvent[] : [])
+        .filter((e) => (e.country === 'USD' && e.impact === 'High') || e.country === 'SGD')
+        .map((e) => ({
+          title: e.title, country: e.country, time: e.date, impact: e.impact || '',
+          forecast: e.forecast || '', previous: e.previous || '',
+        }))
+        .sort((a, b) => Date.parse(a.time) - Date.parse(b.time));
+      eventsOk = true;
+    }
+  } catch {}
+
+  return { now, fomc, nextFomc, nextSep, events, eventsOk,
+    sepUrl: 'https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm' };
+}

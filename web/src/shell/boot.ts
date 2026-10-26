@@ -52,7 +52,7 @@ function showOffline() {
   body().add('locked');
   signedIn(false);
   window.FinSight.auth.lock();
-  store().setState({ lock: { ...store().getState().lock, mode: 'offline', msg: 'Start it with  node server.js  (or start.command). Retrying…' } });
+  store().setState({ lock: { ...store().getState().lock, mode: 'offline', msg: 'Start it with  node server.ts  (or start.command). Retrying…' } });
   clearTimeout(offlineTimer);
   offlineTimer = setTimeout(() => void checkAuth(), 5000);
 }

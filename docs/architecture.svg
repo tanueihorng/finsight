@@ -64,20 +64,20 @@
 
   <!-- ================= FINSIGHT ================= -->
   <rect x="324" y="100" width="342" height="92" rx="8" class="box"/>
-  <text x="338" y="122" class="t">HTTP router · server.js</text>
+  <text x="338" y="122" class="t">HTTP router · server.ts</text>
   <text x="338" y="142" class="s">security headers · Host check (anti-rebinding)</text>
   <text x="338" y="160" class="s">42+ /api routes · static files</text>
   <text x="338" y="178" class="m">/api/history/batch for scans</text>
 
   <rect x="324" y="204" width="166" height="96" rx="8" class="box"/>
   <text x="338" y="226" class="t">Auth</text>
-  <text x="338" y="246" class="s">lib/auth.js</text>
+  <text x="338" y="246" class="s">lib/auth.ts</text>
   <text x="338" y="264" class="s">scrypt PIN · sessions</text>
   <text x="338" y="282" class="m">brute-force throttle</text>
 
   <rect x="500" y="204" width="166" height="96" rx="8" class="box"/>
   <text x="514" y="226" class="t">Token gate</text>
-  <text x="514" y="246" class="s">lib/agentlink.js</text>
+  <text x="514" y="246" class="s">lib/agentlink.ts</text>
   <text x="514" y="264" class="s">GET-only allowlist</text>
   <text x="514" y="282" class="m">fails closed w/o PIN</text>
 
@@ -88,7 +88,7 @@
   <text x="338" y="390" class="m">64 KB body (22 MB for uploads) · 503 if offline</text>
 
   <rect x="324" y="416" width="342" height="92" rx="8" class="boxv"/>
-  <text x="338" y="438" class="tv">Agent supervisor · lib/agentproc.js</text>
+  <text x="338" y="438" class="tv">Agent supervisor · lib/agentproc.ts</text>
   <text x="338" y="458" class="s">spawn on start · restart w/ backoff (5/10 min)</text>
   <text x="338" y="476" class="s">stop on SIGINT/TERM/HUP · /api/agent-status</text>
   <text x="338" y="494" class="m">reuses an agent already on :8100</text>
@@ -102,7 +102,7 @@
   <text x="338" y="636" class="m">all money maths lives here</text>
 
   <rect x="324" y="660" width="342" height="54" rx="8" class="box"/>
-  <text x="338" y="682" class="t">Demo mode · scripts/demo.js</text>
+  <text x="338" y="682" class="t">Demo mode · scripts/demo.ts</text>
   <text x="338" y="700" class="m">:8003 + :8103 on ~/FinSightDemo (made-up data)</text>
 
   <!-- ================= KESTREL ================= -->

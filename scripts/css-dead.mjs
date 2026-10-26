@@ -18,7 +18,7 @@ const write = process.argv.includes('--write');
 
 const walk = (dir) => fs.readdirSync(path.join(root, dir), { withFileTypes: true }).flatMap((d) =>
   d.isDirectory() ? walk(path.join(dir, d.name)) : /\.(tsx?|js|mjs)$/.test(d.name) && !/\.test\.|fixture/.test(d.name) ? [path.join(dir, d.name)] : []);
-const sources = [...walk('web/src'), 'public/index.html', 'public/chart.js', 'public/chartgrid.js', 'public/journal.js', 'public/strategy.js', 'public/strategies.js', 'public/indicators.js', 'lib/journal.js']
+const sources = [...walk('web/src'), 'public/index.html', 'public/chart.js', 'public/chartgrid.js', 'public/journal.js', 'public/strategy.js', 'public/strategies.js', 'public/indicators.js', 'lib/journal.ts']
   .filter((f) => fs.existsSync(path.join(root, f)));
 const corpus = sources.map((f) => fs.readFileSync(path.join(root, f), 'utf8')).join('\n');
 // Class names built at runtime ('sb-stage st-' + code, `col-${side}`): any

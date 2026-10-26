@@ -27,7 +27,7 @@ async function settled(page: Page) {
   await expect(page.locator('#markets [data-sym]').first()).toBeVisible();
   await page.waitForLoadState('networkidle');
 }
-// Hashed chunks are served immutable (H1, server.js), so a browser that already
+// Hashed chunks are served immutable (H1, server.ts), so a browser that already
 // fetched one keeps using its copy even after the server lost it, which is
 // correct, since the URL always names the same bytes. These tests are about a
 // client that does not have the chunk: clear the browser's HTTP cache too.

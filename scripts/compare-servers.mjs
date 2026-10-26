@@ -93,7 +93,7 @@ function steps() {
 
   // Static delivery.
   for (const p of ['/', '/index.html', '/sw.js', '/styles.css', '/chart.js', '/indicators.js', '/app/manifest.json', '/app/main.js', '/app/bootstrap.js', '/manifest.webmanifest', '/missing.js',
-    '/../package.json', '/..%2fpackage.json', '/%2e%2e/server.js', '/app/../../lib/config.js']) get('static ' + p, p, { auth: false });
+    '/../package.json', '/..%2fpackage.json', '/%2e%2e/server.js', '/app/../../lib/config.ts']) get('static ' + p, p, { auth: false });
   s.push((ctx) => ({ name: 'static chunks', method: 'GET', path: '/app/manifest.json', auth: false, expand: JSON.parse(ctx.last['static /app/manifest.json'].buf).files }));
   s.push((ctx) => ({ name: 'static 304', method: 'GET', path: '/sw.js', auth: false, headers: { 'if-none-match': ctx.last['static /sw.js'].headers.etag } }));
   get('foreign host', '/api/health', { auth: false, headers: { host: 'evil.example' } });

@@ -12,5 +12,5 @@
     "skipLibCheck": true,
     "types": ["node"]
   },
-  "include": ["shared", "web/e2e", "playwright.config.ts"]
+  "include": ["server.ts", "lib", "test", "scripts", "shared", "web/e2e", "playwright.config.ts"]
 }

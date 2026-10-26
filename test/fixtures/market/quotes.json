@@ -1,5 +1,5 @@
 {
-  "_note": "Fake market for FINSIGHT_FAKE_MARKET=1 (E2E). `price` is today's close; history is a seeded sine walk ending at it (lib/fakemarket.js). Values are made up.",
+  "_note": "Fake market for FINSIGHT_FAKE_MARKET=1 (E2E). `price` is today's close; history is a seeded sine walk ending at it (lib/fakemarket.ts). Values are made up.",
   "fx": { "USD": 1, "SGD": 1.29, "EUR": 0.92, "GBP": 0.79, "JPY": 151.2, "CNY": 7.18, "INR": 84.1, "HKD": 7.78 },
   "symbols": {
     "NVDA":   { "name": "NVIDIA Corporation", "currency": "USD", "price": 182.4, "exchange": "NasdaqGS", "type": "EQUITY", "sector": "Technology", "div": { "amount": 0.01, "months": [3, 6, 9, 12] }, "earningsInDays": 24 },

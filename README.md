@@ -34,7 +34,7 @@ Now with <b>↗ Kestrel</b>, a built-in AI research agent that knows your portfo
 
 ## ✨ Why FinSight
 
-A personal trading terminal that's **small, hackable, and 100% free** — inspired by the Bloomberg-terminal idea but rebuilt as a web app you run locally: a zero-dependency Node server and a pre-built React UI, so a clone plus `node server.js` is all it takes. Your portfolio lives in a single `data/portfolio.json` on your machine and **never leaves it**. No sign-up, no paid feeds, no telemetry — just `node server.js` and a browser tab.
+A personal trading terminal that's **small, hackable, and 100% free** — inspired by the Bloomberg-terminal idea but rebuilt as a web app you run locally: a zero-dependency Node server and a pre-built React UI, so a clone plus `node server.ts` is all it takes. Your portfolio lives in a single `data/portfolio.json` on your machine and **never leaves it**. No sign-up, no paid feeds, no telemetry — just `node server.ts` and a browser tab.
 
 It's built for the investor who **funds in one currency and invests in another** (e.g. convert SGD → USD to buy US stocks): it separates how much of your return came from the **stock moving** vs the **currency moving**, and gives you a real **FX-risk cockpit**.
 
@@ -72,7 +72,7 @@ Press **⌘/** anywhere in FinSight and a chat panel slides in. **Kestrel** is a
 ```bash
 npm run agent:install          # once: installs the agent's dependencies
 export DEEPSEEK_API_KEY=...    # or add it to the macOS Keychain (see agent/README.md)
-node server.js                 # FinSight starts, supervises and stops Kestrel for you
+node server.ts                 # FinSight starts, supervises and stops Kestrel for you
 ```
 
 Then press **⌘/** (or the **↗ KESTREL** button). Use it as a **side panel** (drag the ⋮ edge or press ↔ to change the width) or **dock it into the terminal** with ⊟, where it becomes a normal panel you can drag between columns, collapse ▾ and resize in height. FinSight works exactly as before without it. Full guide: **[agent/README.md](agent/README.md)** · spec: **[agent/docs/SPEC.md](agent/docs/SPEC.md)**.
@@ -80,12 +80,12 @@ Then press **⌘/** (or the **↗ KESTREL** button). Use it as a **side panel** 
 
 ## 🚀 Quick start
 
-> Requires **Node.js 18+** to run — the web UI ships pre-built, so there is nothing to `npm install`. (Rebuilding the UI or running the tests yourself is done on Node 24; see [DOCS.md](DOCS.md).)
+> Requires **Node.js 24+** to run: the server is TypeScript that Node runs directly. The web UI ships pre-built, so there is still nothing to `npm install`. (See [DOCS.md](DOCS.md) for rebuilding the UI and running the tests.)
 
 ```bash
 git clone https://github.com/tanueihorng/finsight.git
 cd finsight
-node server.js
+node server.ts
 ```
 
 Then open **http://localhost:8000**. On a Mac you can also just double-click **`start.command`**.
@@ -223,7 +223,7 @@ Every component, how they talk to each other, and where data lives. FinSight own
 | Layer | Pieces |
 |---|---|
 | **Browser** | Terminal UI — one React app (`web/src/App.tsx`, built to `public/app/`) with the plain-JS `chart.js` canvas chart · ↗ Kestrel panel (React island, SSE stream) · service worker (static shell + build manifest) · PIN lock |
-| **FinSight server** (`:8001`) | `server.js` router with security headers and Host check · `lib/auth` PIN sessions · `lib/agentlink` GET-only agent token and `/api/agent/*` proxy · `lib/agentproc` agent supervisor · domain logic in `lib/` (portfolio, ledger, dividends, performance, market, macro, charts, journal, cache) |
+| **FinSight server** (`:8001`) | `server.ts` router with security headers and Host check · `lib/auth` PIN sessions · `lib/agentlink` GET-only agent token and `/api/agent/*` proxy · `lib/agentproc` agent supervisor · domain logic in `lib/` (portfolio, ledger, dividends, performance, market, macro, charts, journal, cache) |
 | **Kestrel agent** (`127.0.0.1:8100`) | HTTP API (`/v1`, loopback and secret gate) · chat engine (tool loop, limits, retries, SSE events) · model adapters (OpenAI-compatible, Anthropic SDK, Claude Code CLI) · 35 read-only tools · MCP server (stdio) · strategy sandbox · SSRF-guarded fetch · uploads · skills · interaction log |
 | **Storage** | `~/FinSightData`: portfolio and app JSON files (0600) · `agent/agent.db` SQLite (threads, messages, turns, events, traces, cost, cache, proposals, FTS) · logs, uploads, skills, config · macOS Keychain for API keys |
 | **Internet** | LLM providers (DeepSeek, Anthropic) · SEC EDGAR · Tavily/Brave search · Yahoo Finance, FRED, World Bank, Forex Factory (via FinSight only) |
@@ -233,7 +233,7 @@ Every component, how they talk to each other, and where data lives. FinSight own
 
 ```
 finsight/
-├── server.js              # Zero-dependency Node HTTP server (routes only)
+├── server.ts              # Zero-dependency Node HTTP server (routes only)
 ├── lib/                   # Market data, cache, portfolio math, performance, dividends, ledger…
 ├── web/                   # React 19 + TypeScript frontend source (built, never served as-is)
 │   ├── src/App.tsx        #   the whole page as one React app
@@ -246,7 +246,7 @@ finsight/
 │   ├── skills/            #   bundled playbooks (/pre-trade-check …)
 │   └── plugins/brains/    #   one manifest per model (DeepSeek, Claude…)
 ├── scripts/build-web.mjs  # esbuild: web/ → public/app (npm run build · check:web)
-├── scripts/demo.js        # Demo mode on a made-up portfolio
+├── scripts/demo.ts        # Demo mode on a made-up portfolio
 ├── start.command          # Double-click launcher (macOS)
 ├── DOCS.md                # Developer docs: architecture, config, full API reference
 ├── data/                  # Your data — git-ignored, never leaves your machine
