@@ -41,6 +41,25 @@ function request(port, method, p, headers = {}, body) {
   });
 }
 
+// Every server this run starts is registered the moment it is spawned, so a
+// failure anywhere (including the other side's startup) still stops it.
+const owned = new Set();
+const START_TIMEOUT_MS = Number(process.env.COMPARE_START_TIMEOUT_MS) || 10_000;
+const STOP_GRACE_MS = 5000, KILL_WAIT_MS = 2000;
+// SIGTERM, then SIGKILL after a grace period; resolves with the exit (bounded).
+function stopChild(child) {
+  if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve({ code: child.exitCode, signal: child.signalCode });
+  return new Promise((resolve) => {
+    const done = (code, signal) => { clearTimeout(grace); clearTimeout(give); resolve({ code, signal }); };
+    child.once('exit', done);
+    const grace = setTimeout(() => { try { child.kill('SIGKILL'); } catch { /* gone */ } }, STOP_GRACE_MS);
+    const give = setTimeout(() => { child.off('exit', done); resolve({ code: null, signal: 'unstoppable' }); }, STOP_GRACE_MS + KILL_WAIT_MS);
+    try { child.kill('SIGTERM'); } catch { /* gone */ }
+  });
+}
+const stopAll = () => Promise.all([...owned].map(stopChild));
+for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.once(sig, () => { stopAll().finally(() => process.exit(130)); });
+
 async function startSide(name, root) {
   const entry = fs.existsSync(path.join(root, 'server.ts')) ? 'server.ts' : 'server.js';
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), `finsight-cmp-${name}-`));
@@ -50,15 +69,19 @@ async function startSide(name, root) {
     env: { ...process.env, FINSIGHT_DATA_DIR: dataDir, PORT: String(port), FINSIGHT_FAKE_MARKET: '1', NOTIFY: '0', FINSIGHT_CACHE_PERSIST: '0',
       ALERT_INTERVAL: '3600', AGENT_AUTOSTART: '0', AGENT_URL: 'http://127.0.0.1:9', TZ: process.env.TZ || 'Asia/Singapore', COMPARE_T0: String(T0) },
   });
+  owned.add(child);
   child.stdout.on('data', (c) => out.push(String(c))); child.stderr.on('data', (c) => out.push(String(c)));
-  const exited = new Promise((r) => child.on('exit', (code, signal) => r({ code, signal })));
-  for (let i = 0; ; i++) {
+  const deadline = Date.now() + START_TIMEOUT_MS;
+  for (;;) {
     try { await request(port, 'GET', '/api/health'); break; } catch {
-      if (i > 400 || child.exitCode !== null) throw new Error(`${name} did not start:\n${out.join('')}`);
+      if (Date.now() > deadline || child.exitCode !== null || child.signalCode !== null) {
+        await stopChild(child);
+        throw new Error(`${name} did not start:\n${out.join('')}`);
+      }
       await sleep(25);
     }
   }
-  return { name, root, entry, dataDir, port, child, exited, out, cookie: '', last: {} };
+  return { name, root, entry, dataDir, port, child, out, cookie: '', last: {} };
 }
 
 // ---- the scripted session ------------------------------------------------
@@ -283,10 +306,13 @@ function storeFiles(dir) {
 const SECRET_FILES = { 'auth.json': (j) => ({ keys: Object.keys(j).sort() }), 'agent-link.json': (j) => ({ keys: Object.keys(j).sort() }) };
 
 // ---- run -----------------------------------------------------------------
-const sides = [await startSide('a', path.resolve(A)), await startSide('b', path.resolve(B))];
+const sides = [];
 const diffs = [];
 let count = 0;
 try {
+  // Inside the try: if B fails to start, the finally still stops A.
+  sides.push(await startSide('a', path.resolve(A)));
+  sides.push(await startSide('b', path.resolve(B)));
   for (const raw of steps()) {
     const perSide = sides.map((side) => {
       side.json = (name) => JSON.parse(side.last[name].buf.toString('utf8'));
@@ -312,7 +338,7 @@ try {
     }
   }
   // Final stores (after a graceful stop, so shutdown writes are included).
-  const stops = await Promise.all(sides.map((s) => { s.child.kill('SIGTERM'); return s.exited; }));
+  const stops = await Promise.all(sides.map((s) => stopChild(s.child)));
   diffValue(stops[0], stops[1], 'exit', diffs);
   const [fa, fb] = sides.map((s) => storeFiles(s.dataDir));
   for (const f of [...new Set([...Object.keys(fa), ...Object.keys(fb)])].sort()) {
@@ -332,7 +358,7 @@ try {
     if (verbose && !d.length) console.log(`  store ${f}: same`);
   }
 } finally {
-  for (const s of sides) if (s.child.exitCode === null) s.child.kill('SIGKILL');
+  await stopAll();
 }
 
 const allowed = (d) => allow.some((x) => x.step === d.step && (!x.path || d.path.startsWith(x.path)));
