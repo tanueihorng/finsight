@@ -5,20 +5,21 @@
 
 ---
 
-## Selected work
+## Completed implementation — 2026-10-27
 
-Implementation is owned by the existing feature session in `feature/open-features`.
-The feature session has now supplied verification reports and marked its five execution tasks done.
-Implementation remains uncommitted and unmerged in that checkout; no deployment is claimed.
-Read the owner’s reports before integration. This documentation cleanup did not rerun those feature tests.
+Completed and verified on **2026-10-27 SGT** in `feature/open-features`.
+Implementation is complete; commit, merge and deployment remain pending.
+Verification: **213 unit, 111 agent and 247 browser tests passed**; one existing live-fixture test skipped.
+Evidence in the investment workspace: `harness/runs/20261026T171956Z-IBKRTRADES-001-3d89b74e/REPORT.md`.
+Chat deletion spacing follow-up: `harness/runs/20261026T172308Z-CHATDELETE-001-06bb7ec1/SPACING-FIX.md`.
 
-| Spec | Requirement | Execution task | State |
+| Spec | Completed feature | Execution task | Status |
 |---|---|---|---|
-| [FEAT-003](features/FEAT-003-kestrel-chat-deletion.md) | Chat deletion controls | `CHATDELETE-001` | Verified by feature session; integration pending |
-| [FEAT-005](features/FEAT-005-prompt-cache-optimization.md) | Stable prompt prefix and attachment deduplication | `PROMPTCACHE-001` | Verified by feature session; integration pending |
-| [FEAT-006](features/FEAT-006-new-symbol-trade-sheet.md) | + ADD through the trade sheet | `TRADENEW-001` | Verified by feature session; integration pending |
-| [FEAT-007](features/FEAT-007-account-transfers.md) | Account transfers | `TRADEXFER-001` | Verified by feature session; integration pending |
-| [FEAT-008](features/FEAT-008-ibkr-trade-import.md) | IBKR CSV trade import | `IBKRTRADES-001` | Verified by feature session; integration pending |
+| [FEAT-003](features/FEAT-003-kestrel-chat-deletion.md) | Chat deletion, `/delete`, `/clear` and bulk clear | `CHATDELETE-001` | Complete — verified |
+| [FEAT-005](features/FEAT-005-prompt-cache-optimization.md) | Prompt-cache optimization with synthetic measurement | `PROMPTCACHE-001` | Complete — verified |
+| [FEAT-006](features/FEAT-006-new-symbol-trade-sheet.md) | New-symbol purchases through the trade sheet | `TRADENEW-001` | Complete — verified |
+| [FEAT-007](features/FEAT-007-account-transfers.md) | Account transfers preserving lots, FX and undo | `TRADEXFER-001` | Complete — verified |
+| [FEAT-008](features/FEAT-008-ibkr-trade-import.md) | IBKR fill preview and duplicate detection | `IBKRTRADES-001` | Complete — verified |
 
 The earlier panel redesign remains `KESTRELUI-001` / `SEARCHUI-001` in the workspace queue.
 Several UI pieces are already integrated; reconcile its remaining acceptance criteria before starting
@@ -68,3 +69,6 @@ Link selected features to their execution IDs. Update the relevant spec/backlog 
 packet/queue at completion, using evidence from the actual checkout. Record integrated changes
 in [CHANGELOG.md](../CHANGELOG.md), distinguishing verification, merge and deployment.
 Standalone clones use this backlog and explicit user requests without depending on workspace files.
+
+
+Modal layering correction (MODALLAYER-001, 2026-10-27): verified in serving main checkout and mirrored to feature/open-features; selected for commit/merge/push. Setup exit controls remain above Kestrel. Routine bug fix; no new feature scope.
