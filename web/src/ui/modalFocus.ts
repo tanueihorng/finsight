@@ -38,7 +38,10 @@ export function useModalFocus(open: boolean, onClose: () => void, ref: RefObject
     const active = () => dialogs.at(-1) === box && !document.body.classList.contains('locked') && box.getClientRects().length > 0;
     const items = () => [...box.querySelectorAll<HTMLElement>(SELECTOR)].filter((el) => el.tabIndex >= 0 && !el.matches(':disabled, [inert], [hidden]') && el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden');
     const focus = () => { if (active()) (initial.current?.() ?? items()[0] ?? box).focus({ preventScroll: true }); };
-    const timer = setTimeout(focus, 0);
+    // Passive effects may already focus an input, or the user may navigate
+    // before this deferred callback runs. Respect any focus already inside.
+    const focusIfNeeded = () => { if (document.activeElement === box || !box.contains(document.activeElement)) focus(); };
+    const timer = setTimeout(focusIfNeeded, 0);
     const onKey = (e: KeyboardEvent) => {
       if (!active()) return;
       if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); close.current(); return; }
@@ -51,7 +54,7 @@ export function useModalFocus(open: boolean, onClose: () => void, ref: RefObject
     };
     const onFocus = (e: FocusEvent) => { if (active() && !box.contains(e.target as Node)) focus(); };
     const onLock = () => { syncBackground(); };
-    const onUnlock = () => { syncBackground(); setTimeout(focus, 0); };
+    const onUnlock = () => { syncBackground(); setTimeout(focusIfNeeded, 0); };
     document.addEventListener('keydown', onKey, true);
     document.addEventListener('focusin', onFocus);
     window.addEventListener('finsight:unlocked', onUnlock);

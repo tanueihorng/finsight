@@ -37,3 +37,5 @@ Setup and other application dialogs now stay above Kestrel and expanded charts w
 - Stable system-prompt prefix and persisted nullable provider-cache counters. Synthetic DeepSeek cross-date reuse increased from0/825 to640/800 tokens; no guaranteed daily savings.
 - Shared setup/application dialogs remain above Kestrel and expanded charts, below confirmations.
 - Implementation commit `22b0436`; main modal fix `5f2dda1`. Candidate integration checks in progress. No service restart or portfolio mutation.
+
+- Integration review repair: delayed modal autofocus now preserves existing keyboard focus. Deterministic paused-clock regression reproduces the old failure; accessibility/modal/cache upgrade checks cover the repair. Integrated static bundle uses shellv51 because main already used50 for the earlier modal hotfix.

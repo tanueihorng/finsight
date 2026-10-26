@@ -175,3 +175,16 @@ test('keyboard: rings survive cash and chart input outline resets', async ({ pag
   await page.locator('#detail-panel .pc-sym').focus(); await page.keyboard.press('Shift+Tab'); await page.keyboard.press('Tab');
   expect(await page.locator('#detail-panel .pc-sym').evaluate((el) => getComputedStyle(el).outlineStyle)).toBe('solid');
 });
+
+test('delayed modal autofocus does not steal focus after keyboard navigation', async ({ page }) => {
+  await seeded(page);
+  const now = Date.now();
+  await page.clock.install({ time: now });
+  await page.clock.pauseAt(now + 1000);
+  await page.click('#profile-btn');
+  await expect(page.locator('#setup-name')).toBeFocused();
+  await page.locator('#setup-skip').focus(); await page.keyboard.press('Shift+Tab');
+  await expect(page.locator('#setup-save')).toBeFocused();
+  await page.clock.runFor(1); // release the pending initial-focus timer after navigation
+  await expect(page.locator('#setup-save')).toBeFocused();
+});
