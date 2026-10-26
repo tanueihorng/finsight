@@ -1,6 +1,6 @@
 # FINSIGHT // PERSONAL TERMINAL — Developer Docs
 
-Technical reference for the app: architecture, configuration, and the full HTTP API.
+Technical reference for configuration and the HTTP API. Start with [the documentation index](docs/README.md) and [current architecture](docs/architecture/SYSTEM.md).
 For day-to-day usage see [README.md](README.md).
 
 ---
@@ -20,23 +20,23 @@ browser ──HTTP──▶ server.ts ──┬─▶ public/*  (static terminal
 
 | Module | Responsibility |
 |---|---|
-| `config.js` | Ports, paths (`FINSIGHT_DATA_DIR`), Yahoo user agent |
-| `cache.js` | Stale-while-revalidate cache, in-flight de-dupe, persistence to `data/cache.json` |
-| `market.js` | Yahoo: quotes, history, FX, search, markets, news, sectors, earnings/dividend details (429 backoff) |
-| `macro.js` | World Bank, FRED, economic calendar (FOMC schedule + Forex Factory) |
-| `store.js` | Load/migrate/save `portfolio.json`, account views, write lock, undo snapshots |
-| `portfolio.js` | Buy/sell/delete, accounts, cash, live P&L + stock/FX split, FX risk, watchlist, alerts, import |
-| `performance.js` | Trade replay → value, TWR, XIRR, benchmark |
-| `returns.js` | Pure return math (period return, TWR chaining, XIRR) |
-| `dividends.js` | Withholding tax, forward income, upcoming earnings / ex-dividend dates |
-| `ledger.js` | Trade ledger, buy edits/deletes, realized-gains report |
-| `csv.js` | CSV / IBKR statement parsing (pure) |
-| `auth.js` | PIN hashing, sessions, throttling |
+| `config.ts` | Ports, paths (`FINSIGHT_DATA_DIR`), Yahoo user agent |
+| `cache.ts` | Stale-while-revalidate cache, in-flight de-dupe, persistence to `data/cache.json` |
+| `market.ts` | Yahoo: quotes, history, FX, search, markets, news, sectors, earnings/dividend details (429 backoff) |
+| `macro.ts` | World Bank, FRED, economic calendar (FOMC schedule + Forex Factory) |
+| `store.ts` | Load/migrate/save `portfolio.json`, account views, write lock, undo snapshots |
+| `portfolio.ts` | Buy/sell/delete, accounts, cash, live P&L + stock/FX split, FX risk, watchlist, alerts, import |
+| `performance.ts` | Trade replay → value, TWR, XIRR, benchmark |
+| `returns.ts` | Pure return math (period return, TWR chaining, XIRR) |
+| `dividends.ts` | Withholding tax, forward income, upcoming earnings / ex-dividend dates |
+| `ledger.ts` | Trade ledger, buy edits/deletes, realized-gains report |
+| `csv.ts` | CSV / IBKR statement parsing (pure) |
+| `auth.ts` | PIN hashing, sessions, throttling |
 
-Tests: `npm test` (Node's built-in `node:test`). `test/helpers.js` swaps `fetch` for
+Tests: `npm test` (Node's built-in `node:test`). `test/helpers.ts` swaps `fetch` for
 an in-memory fake Yahoo and points `FINSIGHT_DATA_DIR` at a temp dir, so the server suite is offline and
 never touches your data. The same run executes the web unit tests (`web/src/**/*.test.ts`, pure logic)
-and the committed-bundle check (`test/webbuild.test.js` → `npm run check:web`). Browser E2E is
+and the committed-bundle check (`test/webbuild.test.ts` → `npm run check:web`). Browser E2E is
 `npm run e2e` (Playwright): it starts throwaway servers with fake market data and fresh temp data
 folders — never your `~/FinSightData` — on ports `E2E_PORT_BASE` (default 8096) + offset, so two
 worktrees can run E2E at once with different bases. `npm run verify` = typecheck + unit + bundle check
@@ -52,16 +52,12 @@ worktrees can run E2E at once with different bases. `npm run verify` = typecheck
   store, a refresh bus, and the PIN lock/auth state — synchronously, before anything else), then the
   plain-JS chart scripts (`indicators.js`, `strategy.js`, `strategies.js`, `chart.js`, `chartgrid.js`,
   `journal.js`), then the module `/app/main.js`, which mounts the app.
-  `web/src/App.tsx` renders the whole page (topbar, columns, modals). Each panel's mount point is an
-  *island host* (`data-island`): `web/src/main.tsx`'s runtime mounts it lazily from the registry in
-  `web/src/islands.ts`, inside its own error boundary and React root — a failing chunk stays in its
-  panel, a dragged panel keeps its state, and a removed host is unmounted. Server data belongs to
-  TanStack Query (`web/src/api/queries.ts`: polling stops while locked or hidden, and waits for the
-  account); UI state belongs to the Zustand store (`window.FinSight.store`); mutations invalidate
-  queries through the map in `web/src/api/invalidation.ts` (`FinSight.bus`). Startup/lock orchestration
-  lives in `web/src/shell/boot.ts`, the panel layout in `web/src/shell/layout.ts`, and a few
-  compatibility globals that specs and console users still call (`window.detailChart`, `csvCell`,
-  `loadPortfolio`, …) in `web/src/shell/compat.ts`.
+  `web/src/main.tsx` mounts one React application from `web/src/App.tsx`, with TanStack Query
+  and an error boundary. `mountIslands` remains for external embeds and compatibility tests;
+  it is not the main page composition model. Server data belongs to TanStack Query
+  (`web/src/api/queries.ts`); UI state belongs to the Zustand store; mutations invalidate
+  queries through `web/src/api/invalidation.ts`. Startup lives in `web/src/shell/boot.ts`,
+  layout in `web/src/shell/layout.ts`, and compatibility globals in `web/src/shell/compat.ts`.
 - **Chart** (`public/chart.js`, plain JS, kept): a self-contained `window.PriceChart` class that renders the interactive
   security chart — candles/line/area, SMA/EMA/Bollinger overlays, RSI/MACD/volume panes, a crosshair,
   pan/zoom, and the trendline/H-line/Fibonacci drawing tools — on a two-layer HiDPI `<canvas>`. It's
@@ -404,7 +400,7 @@ are bucketed by instrument type.
 - **New data source**: add a fetch helper in `lib/` wrapped in `cached(...)` (stay friendly to free
   APIs), a `/api/...` route in `server.ts`, then render it in the React app — a component in
   `web/src/features/` registered in `web/src/islands.ts` (recipe: `web/src/features/README.md`).
-  Add a test with the fake market in `test/helpers.js`.
+  Add a test with the fake market in `test/helpers.ts`.
 - **New market symbols**: edit `MARKET_GROUPS` in `lib/market.ts`.
 - **New FRED/World Bank series**: add an entry to `fredOptions` / `worldBankOptions` in
   `web/src/features/macro/options.ts` (the FRED / World Bank islands render them as `<select>`s).
