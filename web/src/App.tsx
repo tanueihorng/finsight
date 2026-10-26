@@ -272,11 +272,7 @@ export default function App() {
   return (
     <>
       <div id="lock-screen" className="lock">
-        <div className="lock-box">
-          <div className="lock-logo"><img className="logo-img lock-logo-img" src="/icon.png" alt="" aria-hidden="true" /> FINSIGHT</div>
-          <Host island="lock" style={contents} />
-          <div className="lock-hint muted small">Locked behind your PIN. Data stays on this computer only.</div>
-        </div>
+        <Host island="lock" style={contents} />
       </div>
 
       <header className="topbar">
