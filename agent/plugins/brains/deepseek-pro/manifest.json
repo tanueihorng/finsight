@@ -21,5 +21,14 @@
     "vision": false
   },
   "costTier": "$$",
-  "maxOutputTokens": 8000
+  "maxOutputTokens": 8000,
+  "thinking": {
+    "levels": [
+      "none",
+      "low",
+      "high",
+      "max"
+    ],
+    "default": "high"
+  }
 }

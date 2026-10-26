@@ -2,7 +2,7 @@ import { lazy, Suspense, memo, useEffect, useLayoutEffect, useRef, useState, typ
 import { useStore } from 'zustand';
 import { IslandBoundary } from '../../ui/IslandBoundary.tsx';
 import { agentApi } from './api.ts';
-import { addFiles, chat, chooseBrain, chooseSearch, closeOverlay, deleteThread, menuItems, newChat, openThread, pageContext, railShown, removeFile, setDraft, setNarrow, stop, submit, toggleThreads, type FileChip, type Item } from './chat.ts';
+import { addFiles, chat, chooseBrain, chooseEffort, chooseSearch, closeOverlay, deleteThread, menuItems, newChat, openThread, pageContext, railShown, removeFile, setDraft, setNarrow, stop, submit, toggleThreads, type FileChip, type Item } from './chat.ts';
 import type { Thread } from './api.ts';
 import { Icon } from './icons.tsx';
 import { costLabel, ctxButton, LS, ls, prettyArgs } from './labels.ts';
@@ -331,6 +331,15 @@ export function Chat({ inputRef, onRetry }: { inputRef: RefObject<HTMLTextAreaEl
                 }
                 if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); if (!s.running) send(s.draft); }
               }} />
+            {brain?.thinking && <div className="kx-thinking">
+              <label htmlFor="kestrel-effort">Thinking <strong>{s.effort === 'none' ? 'Off' : s.effort === 'xhigh' ? 'Extra high' : s.effort.charAt(0).toUpperCase() + s.effort.slice(1)}</strong></label>
+              <input id="kestrel-effort" type="range" aria-label="Thinking effort" min="0" max={brain.thinking.levels.length - 1} step="1"
+                value={Math.max(0, brain.thinking.levels.indexOf(s.effort))} disabled={!!s.running || s.sending}
+                aria-valuetext={s.effort === 'none' ? 'Off' : s.effort === 'xhigh' ? 'Extra high' : s.effort}
+                onChange={(e) => chooseEffort(brain.thinking!.levels[Number(e.target.value)]!)} />
+              <div className="kx-thinking-ticks" aria-hidden="true">{brain.thinking.levels.map((level) => <span key={level}>{level === 'none' ? 'Off' : level === 'xhigh' ? 'XHigh' : level.charAt(0).toUpperCase() + level.slice(1)}</span>)}</div>
+              <small>Higher effort can take longer and cost more.</small>
+            </div>}
             <div className="agent-tools-row">
               <button className="agent-icon-btn" title="Attach images or documents (or paste / drop)" aria-label="Attach files" onClick={() => fileRef.current?.click()}><Icon name="clip" /></button>
               <button className={'agent-ctx kx-pill' + (ctxOn ? ' on' : '')} title="Send what you are looking at (symbol, timeframe, strategy) with your message"
@@ -346,7 +355,7 @@ export function Chat({ inputRef, onRetry }: { inputRef: RefObject<HTMLTextAreaEl
               )}
               <label className="kx-pill kx-select" title="Model for this chat">
                 <Icon name="spark" size={13} />
-                <select className="agent-model" aria-label="Model" value={s.brain} onChange={(e) => chooseBrain(e.target.value)}>
+                <select className="agent-model" aria-label="Model" disabled={!!s.running || s.sending} value={s.brain} onChange={(e) => chooseBrain(e.target.value)}>
                   {s.brains.map((b) => <option key={b.id} value={b.id} disabled={!b.available} title={b.available ? b.label : b.reason}>{`${b.label} ${b.costTier}${b.available ? '' : ' · n/a'}`}</option>)}
                 </select>
               </label>

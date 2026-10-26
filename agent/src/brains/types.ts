@@ -4,12 +4,15 @@
 import { z } from 'zod';
 import type { Block, Msg, Usage } from '../types.ts';
 
+export const Effort = z.enum(['none', 'low', 'medium', 'high', 'xhigh', 'max']);
+export type Effort = z.infer<typeof Effort>;
+
 export const BrainManifest = z.object({
   apiVersion: z.literal(1),
   kind: z.literal('brain'),
   id: z.string().regex(/^[a-z0-9-]{2,40}$/),
   label: z.string().max(60),
-  transport: z.enum(['openai-compatible', 'anthropic', 'claude-code', 'mock']),
+  transport: z.enum(['openai-compatible', 'openai-responses', 'anthropic', 'claude-code', 'mock']),
   model: z.string().max(80),
   baseUrl: z.url().optional(),
   keyRef: z.string().regex(/^[A-Z0-9_]{2,60}$/).optional(),
@@ -18,6 +21,7 @@ export const BrainManifest = z.object({
   costTier: z.enum(['$', '$$', '$$$']),
   maxOutputTokens: z.number().int().positive().default(8000),
   options: z.record(z.string(), z.unknown()).default({}),
+  thinking: z.object({ levels: z.array(Effort).min(2), default: Effort }).refine((t) => t.levels.includes(t.default) && new Set(t.levels).size === t.levels.length, 'Invalid thinking defaults/levels').optional(),
   permissions: z.array(z.string()).max(0).default([]), // brains may not request extra permissions
 }).strict();
 export type BrainManifest = z.infer<typeof BrainManifest>;
@@ -25,7 +29,7 @@ export type BrainManifest = z.infer<typeof BrainManifest>;
 export type ToolSchema = { name: string; description: string; parameters: Record<string, unknown> };
 
 export type StepRequest = {
-  system: string; messages: Msg[]; tools: ToolSchema[]; signal: AbortSignal;
+  system: string; messages: Msg[]; tools: ToolSchema[]; signal: AbortSignal; effort?: Effort;
   onText: (delta: string) => void;
 };
 export type StepResult = {

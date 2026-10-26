@@ -31,7 +31,7 @@ test('GPT manifests discover through existing loader, require a key, preserve de
   const unavailable=loadBrains(cfg);
   for(const id of ['gpt-6-luna','gpt-6-sol'])assert.equal(unavailable.brains.get(id)?.available,false);
   process.env.OPENAI_API_KEY='test-openai-key';clearSecretCache();const found=loadBrains(cfg);assert.deepEqual(found.invalid,[]);
-  for(const id of ['gpt-6-luna','gpt-6-sol']){const b=found.brains.get(id)!;assert.equal(b.available,true);assert.equal(b.manifest.capabilities.vision,true);assert.equal(b.manifest.options.reasoning_effort,'none');assert.equal(b.create().kind,'api');}
+  for(const id of ['gpt-6-luna','gpt-6-sol']){const b=found.brains.get(id)!;assert.equal(b.available,true);assert.equal(b.manifest.capabilities.vision,true);assert.equal(b.manifest.thinking?.default,'none');assert.equal(b.manifest.transport,'openai-responses');assert.equal(b.create().kind,'api');}
   assert.equal(cfg.defaultBrain,'deepseek-flash');
   assert.equal(manifest('gpt-6-luna').pricing.inputPerM,.1);assert.equal(manifest('gpt-6-sol').pricing.outputPerM,10);
 });
@@ -96,6 +96,6 @@ test('existing /v1/brains API exposes GPT entries without frontend or response-s
         let body='';r.on('data',c=>{body+=c;});r.on('end',()=>resolve({status:r.statusCode||0,body}));
       });req.on('error',reject);req.end();
     });assert.equal(res.status,200);
-    const data:any=JSON.parse(res.body);assert.equal(data.default,'deepseek-flash');for(const id of ['gpt-6-luna','gpt-6-sol']){const b=data.brains.find((x:any)=>x.id===id);assert.equal(b.available,true);assert.equal(b.tools,true);assert.equal(b.transport,'openai-compatible');}
+    const data:any=JSON.parse(res.body);assert.equal(data.default,'deepseek-flash');for(const id of ['gpt-6-luna','gpt-6-sol']){const b=data.brains.find((x:any)=>x.id===id);assert.equal(b.available,true);assert.equal(b.tools,true);assert.equal(b.transport,'openai-responses');assert.deepEqual(b.thinking.levels,['none','low','medium','high','xhigh','max']);}
   }finally{server.closeAllConnections();await new Promise<void>(r=>server.close(()=>r()));}
 });

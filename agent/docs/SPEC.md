@@ -638,3 +638,28 @@ are deferred. Deterministic mock round-trip/regression coverage is implemented;
 FR-10.5 live qualification and the proposed §12.3 paid UI eval suite remain pending,
 so this amendment does not assert production rollout acceptance. See
 `INTELLIGENT-UI.md` for the implemented contract, limits and rollout criteria.
+
+## Thinking effort amendment — 2026-10-26
+
+Owner requested per-model thinking controls and a UI slider. Kestrel reads optional
+`thinking.levels/default` from brain manifests and exposes a discrete native range
+control with keyboard support, current value and labelled stops. Browser-local
+choices are remembered per brain. `POST /v1/threads/:id/messages` accepts optional
+`effort`, validated against the selected brain before any turn/message/version
+mutation. Omission preserves the manifest default (OpenAI Off, DeepSeek High).
+The selected effort is immutable across steps/retries and recorded in turn-start
+events and audit metadata. Unsupported brains hide the control and reject effort.
+
+GPT Luna/Sol now use `openai-responses` transport with stateless `store:false`
+requests, function tools, streaming, images and opaque encrypted reasoning replay.
+Only completed same-brain/model/origin output items are replayed; foreign histories
+use neutral messages/calls/results. Incomplete/refused tool calls are not executed.
+DeepSeek retains Chat Completions: Off sends thinking disabled with no effort
+parameter; Low/High/Max send thinking enabled and the selected effort.
+Existing cost, time, step and output-token limits remain. Reasoning tokens count
+in total provider output usage. No model default, secret, portfolio or live service
+is changed by this feature. Provider availability is not asserted by offline tests.
+
+Sources checked 2026-10-26: OpenAI Luna/Sol model pages, reasoning guide and
+Responses streaming contract; DeepSeek Thinking Mode guide. See README for user
+behavior and the implementation report for verification and known limits.

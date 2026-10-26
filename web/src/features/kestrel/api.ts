@@ -19,7 +19,8 @@ export async function agentApi<T>(path: string, o: { method?: string; body?: unk
   }
   return j as T;
 }
-export interface Brain { id: string; label: string; costTier: string; available: boolean; reason?: string }
+export interface Thinking { levels: string[]; default: string }
+export interface Brain { thinking?: Thinking; id: string; label: string; costTier: string; available: boolean; reason?: string }
 export interface Skill { name: string; description: string }
 export interface Thread { id: string; title: string; version: number; defaultBrain?: string; updatedAt: number; preview?: string }
 export interface SearchProvider { id: string; label: string; available: boolean; reason?: string }

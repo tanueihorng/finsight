@@ -3,7 +3,7 @@
   "kind": "brain",
   "id": "gpt-6-sol",
   "label": "GPT-6 Sol",
-  "transport": "openai-compatible",
+  "transport": "openai-responses",
   "model": "gpt-6-sol",
   "baseUrl": "https://api.openai.com/v1",
   "keyRef": "OPENAI_API_KEY",
@@ -22,7 +22,16 @@
   },
   "costTier": "$$",
   "maxOutputTokens": 4000,
-  "options": {
-    "reasoning_effort": "none"
+  "options": {},
+  "thinking": {
+    "levels": [
+      "none",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+    ],
+    "default": "none"
   }
 }

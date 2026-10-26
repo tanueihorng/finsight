@@ -43,6 +43,16 @@ export function openAiBrain(manifest: BrainManifest, apiKey: string, fetchImpl: 
       const openai = url.hostname === 'api.openai.com';
       const options = { ...manifest.options };
       delete options.max_tokens; delete options.max_completion_tokens;
+      const effort = req.effort ?? manifest.thinking?.default;
+      if (openai && effort !== undefined) {
+        if (effort !== 'none') throw new AgentError('BAD_INPUT', 'Use the Responses transport for OpenAI thinking with tools');
+        options.reasoning_effort = effort;
+      }
+      if (url.hostname === 'api.deepseek.com' && effort !== undefined) {
+        delete options.reasoning_effort;
+        options.thinking = { type: effort === 'none' ? 'disabled' : 'enabled' };
+        if (effort !== 'none') options.reasoning_effort = effort;
+      }
       const body = {
         model: manifest.model, stream: true, stream_options: { include_usage: true },
         ...(openai ? { max_completion_tokens: manifest.maxOutputTokens } : { max_tokens: manifest.maxOutputTokens }),

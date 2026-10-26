@@ -2,7 +2,7 @@
    shell instantly. Only static files are cached. API responses (your portfolio)
    are never stored in the browser: they stay behind the PIN on the server. */
 'use strict';
-const SHELL = 'finsight-shell-v42'; // v42: trade sheet row actions (styles.css); v41: verified Kestrel stat/table snapshots; v40: Kestrel answer font (bundled Source Serif 4); v39: opening-bell landing on the PIN screen (styles.css); v38: Kestrel panel redesign (new agent-panel.css); v37: activity keyboard access from first render; v36: Phase 6 S1 (offline and start-up guidance names server.ts); v35: Phase 5 (H1 startup and bundling, H3 accessibility, H4 cache pruning)
+const SHELL = 'finsight-shell-v43'; // v43: thinking effort slider (agent-panel.css); v42: trade sheet row actions (styles.css); v41: verified Kestrel stat/table snapshots; v40: Kestrel answer font (bundled Source Serif 4); v39: opening-bell landing on the PIN screen (styles.css); v38: Kestrel panel redesign (new agent-panel.css); v37: activity keyboard access from first render; v36: Phase 6 S1 (offline and start-up guidance names server.ts); v35: Phase 5 (H1 startup and bundling, H3 accessibility, H4 cache pruning)
 const FILES = ['/', '/index.html', '/styles.css', '/chart.js', '/chartgrid.js', '/strategy.js', '/strategies.js', '/indicators.js', '/journal.js', '/agent-panel.css', '/fonts/source-serif-4/SourceSerif4Variable-Roman.ttf.woff2', '/fonts/source-serif-4/SourceSerif4Variable-Italic.ttf.woff2', '/app/manifest.json', '/icon.png', '/icon-192.png', '/manifest.webmanifest'];
 // Content-hashed chunk URLs (esbuild 8-char hash): immutable, so a cached copy
 // is exactly the bytes the loaded manifest asked for.

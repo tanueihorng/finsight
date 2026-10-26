@@ -9,7 +9,7 @@ import type { ToolRegistry, ToolCtx } from '../tools/registry.ts';
 import type { FinsightClient } from '../tools/finsight.ts';
 import type { BrainEntry } from '../brains/registry.ts';
 import type { ApiBrain, Brain, CliBrain, StepResult } from '../brains/types.ts';
-import { costOf } from '../brains/types.ts';
+import { Effort, costOf } from '../brains/types.ts';
 import type { Block, CitationBlock, Msg, PageContext, Usage } from '../types.ts';
 import { AgentError } from '../types.ts';
 import type { EventBus } from './bus.ts';
@@ -22,7 +22,7 @@ import type { Skill } from '../skills.ts';
 import { skillsIndex } from '../skills.ts';
 import { attachmentBlock, ensureDocumentText, getUpload, imageBase64 } from '../uploads.ts';
 
-export type SendInput = { threadId: string; content: string; brain?: string; search?: SearchChoice; pageContext?: PageContext; idempotencyKey?: string; expectedVersion?: number; attachmentIds?: string[] };
+export type SendInput = { threadId: string; content: string; brain?: string; effort?: Effort; search?: SearchChoice; pageContext?: PageContext; idempotencyKey?: string; expectedVersion?: number; attachmentIds?: string[] };
 
 import { UI_GUIDANCE } from '../ui/schema.ts';
 import { bytePrefix, inputBudget, selectContext } from './context.ts';
@@ -74,6 +74,8 @@ export class ChatEngine {
     if (brain.kind === 'api' && store.spendSince(this.db, store.startOfToday()) >= this.cfg.limits.dayUsd) {
       throw new AgentError('BUDGET_EXCEEDED', `Daily API spend cap of US$${this.cfg.limits.dayUsd} reached. Raise limits.dayUsd in config.json or use a CLI brain.`, 429);
     }
+    const effort = input.effort ?? brain.manifest.thinking?.default;
+    if (effort !== undefined && (!Effort.safeParse(effort).success || !brain.manifest.thinking?.levels.includes(effort))) throw new AgentError('BAD_INPUT', 'Thinking effort is not supported by this model', 400);
     const version = store.bumpThreadVersion(this.db, thread.id, input.expectedVersion);
     const turn = store.createTurn(this.db, thread.id, brainId, input.idempotencyKey);
     const ctrl = new AbortController();
@@ -91,9 +93,9 @@ export class ChatEngine {
     store.appendMessage(this.db, thread.id, 'user', blocks, { turnId: turn.id });
     if (thread.title === 'New chat') store.updateThread(this.db, thread.id, { title: content.replace(/\s+/g, ' ').slice(0, 60) });
     if (input.brain && input.brain !== thread.defaultBrain) store.updateThread(this.db, thread.id, { defaultBrain: input.brain });
-    this.bus.emit(thread.id, 'turn.started', { turnId: turn.id, brain: brainId, label: brain.manifest.label, skill: skill?.name, search: cfg.searchProvider });
-    audit('turn.start', { turnId: turn.id, threadId: thread.id, brain: brainId, content, attachments: input.attachmentIds ?? [], skill: skill?.name, search: cfg.searchProvider, pageContext: input.pageContext });
-    void auditContext.run({ turnId: turn.id, threadId: thread.id }, () => this.run(thread.id, turn.id, brain, ctrl, cfg)).finally(() => {
+    this.bus.emit(thread.id, 'turn.started', { turnId: turn.id, brain: brainId, label: brain.manifest.label, skill: skill?.name, effort, search: cfg.searchProvider });
+    audit('turn.start', { turnId: turn.id, threadId: thread.id, brain: brainId, content, attachments: input.attachmentIds ?? [], skill: skill?.name, effort, search: cfg.searchProvider, pageContext: input.pageContext });
+    void auditContext.run({ turnId: turn.id, threadId: thread.id }, () => this.run(thread.id, turn.id, brain, ctrl, cfg, effort)).finally(() => {
       if (this.running.get(thread.id)?.turnId === turn.id) this.running.delete(thread.id);
     });
     return { turnId: turn.id, existing: false, version };
@@ -111,7 +113,7 @@ export class ChatEngine {
   }
 
   // ------------------------------------------------------------------ turn
-  private async run(threadId: string, turnId: string, brain: Brain, ctrl: AbortController, cfg: Config = this.cfg): Promise<void> {
+  private async run(threadId: string, turnId: string, brain: Brain, ctrl: AbortController, cfg: Config = this.cfg, effort?: Effort): Promise<void> {
     const t0 = Date.now();
     const deadline = setTimeout(() => ctrl.abort(new AgentError('BUDGET_EXCEEDED', 'time limit')), this.cfg.limits.turnSeconds * 1000 + 5000);
     const citations: CitationBlock[] = [];
@@ -125,7 +127,7 @@ export class ChatEngine {
       if (brain.kind === 'cli') {
         ({ costUsd } = await this.runCli(threadId, turnId, brain, ctrl, onText, usageTotal, (n) => { step = n; }));
       } else {
-        ({ costUsd, step } = await this.runApi(threadId, turnId, brain, ctx, ctrl, onText, usageTotal, t0, () => { streamed = ''; }));
+        ({ costUsd, step } = await this.runApi(threadId, turnId, brain, ctx, ctrl, onText, usageTotal, t0, () => { streamed = ''; }, effort));
       }
       this.emitCitations(threadId, turnId, citations);
       store.finishTurn(this.db, turnId, 'succeeded', 'end');
@@ -214,7 +216,7 @@ export class ChatEngine {
   }
 
   private async runApi(threadId: string, turnId: string, brain: ApiBrain, ctx: ToolCtx, ctrl: AbortController, onText: (d: string) => void,
-    usageTotal: Usage, t0: number, resetStream: () => void): Promise<{ costUsd: number; step: number }> {
+    usageTotal: Usage, t0: number, resetStream: () => void, effort?: Effort): Promise<{ costUsd: number; step: number }> {
     const { turnSteps, turnSeconds, turnUsd } = this.cfg.limits;
     ctx.ui = { enabled: !!ctx.cfg.uiViews && !!brain.manifest.capabilities.ui && brain.manifest.capabilities.tools, attempts: 0, completed: new Map() };
     const tools = this.tools.schemas().filter((t) => t.name !== 'render_ui' || ctx.ui!.enabled);
@@ -235,11 +237,11 @@ export class ChatEngine {
         warnedContext = true;
         this.bus.emit(threadId, 'budget.warning', { turnId, scope: 'context', note: 'Some earlier conversation or document text is outside the current context. Original messages and documents remain available through search and document tools.' });
       }
-      audit('model.request', { turnId, threadId, step, brain: brain.manifest.id, model: brain.manifest.model, final, tools: final ? [] : tools.map((x) => x.name),
+      audit('model.request', { turnId, threadId, step, brain: brain.manifest.id, model: brain.manifest.model, effort, final, tools: final ? [] : tools.map((x) => x.name),
         messages: messages.map((m) => ({ role: m.role, blocks: m.blocks.map((b) => (b.type === 'image' ? { type: 'image', mime: b.mime, name: b.name, bytes: b.data.length } : b)) })) });
       let res: StepResult;
       try {
-        res = await this.stepWithRetry(brain, { system, messages, tools: final ? [] : tools, signal: ctrl.signal, onText }, threadId, turnId);
+        res = await this.stepWithRetry(brain, { system, messages, effort, tools: final ? [] : tools, signal: ctrl.signal, onText }, threadId, turnId);
       } catch (e) {
         audit('model.error', { turnId, step, brain: brain.manifest.id, ms: Date.now() - t, code: (e as AgentError).code, error: String((e as Error).message) });
         throw e;

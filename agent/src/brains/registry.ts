@@ -8,6 +8,7 @@ import type { Config } from '../config.ts';
 import { getSecret } from '../secrets.ts';
 import { BrainManifest } from './types.ts';
 import type { Brain } from './types.ts';
+import { responsesBrain } from './responses.ts';
 import { openAiBrain } from './openai.ts';
 import { anthropicBrain } from './anthropic.ts';
 import { claudeCodeBrain } from './claudecode.ts';
@@ -29,10 +30,10 @@ export function loadBrains(cfg: Config, dir = path.join(cfg.pluginsDir, 'brains'
       if (m.id !== d) throw new Error(`manifest id "${m.id}" must match folder "${d}"`);
       let available = true, reason: string | undefined;
       let create: () => Brain;
-      if (m.transport === 'openai-compatible' || m.transport === 'anthropic') {
+      if (m.transport === 'openai-compatible' || m.transport === 'openai-responses' || m.transport === 'anthropic') {
         const key = m.keyRef ? getSecret(cfg.home, m.keyRef) : null;
         if (!key) { available = false; reason = `No ${m.keyRef} in Keychain/env`; }
-        create = () => (m.transport === 'anthropic' ? anthropicBrain(m, key!) : openAiBrain(m, key!));
+        create = () => (m.transport === 'anthropic' ? anthropicBrain(m, key!) : m.transport === 'openai-responses' ? responsesBrain(m, key!) : openAiBrain(m, key!));
       } else if (m.transport === 'claude-code') {
         const cmd = String(m.options.command || 'claude');
         if (!hasCommand(cmd)) { available = false; reason = `${cmd} CLI not installed`; }

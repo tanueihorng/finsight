@@ -21,7 +21,7 @@ export interface ChatState {
   welcome: string[]; // the welcome's suggestions, fixed when it is shown (like legacy)
   // Search provider per message, independent of the model ('auto' = the agent's config default).
   searchProviders: SearchProvider[]; searchDefault: string; search: string;
-  todayUsd: number | null;
+  todayUsd: number | null; effort: string;
   // The chat list: a rail beside the chat when the panel is wide (hideable), an overlay when narrow.
   narrow: boolean; railHidden: boolean;
 }
@@ -29,7 +29,7 @@ const initial = (): ChatState => ({
   name: 'Kestrel', named: false, brains: [], skills: [], defaultBrain: null, brain: '', thread: null, version: 0, lastEventId: 0,
   view: 'idle', offline: null, items: [], turns: {}, running: null, sending: false,
   status: { verb: '', start: 0, chars: 0 }, files: [], draft: '', threadsOpen: false, threads: null, stick: 0, welcome: [],
-  searchProviders: [], searchDefault: '', search: 'auto', todayUsd: null,
+  searchProviders: [], searchDefault: '', search: 'auto', todayUsd: null, effort: '',
   narrow: false, railHidden: ls.get(LS.rail, '1') === '0',
 });
 export const chat = createStore<ChatState>()(initial);
@@ -66,9 +66,20 @@ export function pickBrain() {
   const s = get();
   const want = s.thread?.defaultBrain || ls.get(LS.brain, '') || s.defaultBrain;
   const ok = s.brains.find((b) => b.id === want && b.available) || s.brains.find((b) => b.available);
-  set({ brain: ok ? ok.id : '' });
+  set({ brain: ok ? ok.id : '' }); pickEffort();
 }
-export function chooseBrain(id: string) { set({ brain: id }); ls.set(LS.brain, id); }
+export function chooseBrain(id: string) { set({ brain: id }); ls.set(LS.brain, id); pickEffort(); }
+const effortKey = (id: string) => `finsight-agent-effort-${id}`;
+function pickEffort() {
+  const s = get(), spec = s.brains.find((b) => b.id === s.brain)?.thinking;
+  const saved = ls.get(effortKey(s.brain), '');
+  set({ effort: spec ? spec.levels.includes(saved) ? saved : spec.default : '' });
+}
+export function chooseEffort(value: string) {
+  const s = get(), spec = s.brains.find((b) => b.id === s.brain)?.thinking;
+  if (!spec?.levels.includes(value) || s.running || s.sending) return;
+  set({ effort: value }); ls.set(effortKey(s.brain), value);
+}
 export function chooseSearch(id: string) { set({ search: id }); ls.set(LS.search, id); }
 function pickSearch() {
   const want = ls.get(LS.search, 'auto');
@@ -282,10 +293,11 @@ export async function submit(text: string, pc: PageContext | undefined, restore:
   if (cmd && !s.skills.some((x) => x.name === cmd[1])) { restore(''); try { await slash(text); } catch (e) { notice((e as Error).message, 'error'); } return; }
   if (s.files.some((f) => f.state === 'uploading')) { notice('Wait for uploads to finish.', 'warn'); return; }
   const files = s.files.filter((f) => f.id);
+  const brain = s.brain || undefined, effort = s.effort || undefined;
   set({ sending: true });
   try {
     if (!get().thread) {
-      const { thread } = await agentApi<{ thread: Thread }>('/threads', { method: 'POST', body: { brain: get().brain || undefined } });
+      const { thread } = await agentApi<{ thread: Thread }>('/threads', { method: 'POST', body: { brain } });
       set({ thread, version: thread.version, lastEventId: 0 }); ls.set(LS.thread, thread.id);
       clearLog(); openStream(); void listThreads().catch(() => {});
     } else if (get().view === 'welcome') clearLog();
@@ -293,7 +305,7 @@ export async function submit(text: string, pc: PageContext | undefined, restore:
     restore(''); set({ files: [] });
     const k = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random()).replace(/-/g, '');
     const r = await agentApi<{ turnId: string; version: number }>(`/threads/${get().thread!.id}/messages`, { method: 'POST', body: {
-      content: text || 'Please analyse the attached file(s).', brain: get().brain || undefined, search: get().search !== 'auto' ? get().search : undefined, pageContext: pc, idempotencyKey: k,
+      content: text || 'Please analyse the attached file(s).', brain, effort, search: get().search !== 'auto' ? get().search : undefined, pageContext: pc, idempotencyKey: k,
       expectedVersion: get().version, attachmentIds: files.length ? files.map((f) => f.id) : undefined } });
     set({ version: r.version });
     // intended fix (G): a turn that already ended (fast failure) is not marked running again.
