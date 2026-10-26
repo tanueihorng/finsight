@@ -5,4 +5,4 @@ PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 launchctl unload "$PLIST" 2>/dev/null || true
 rm -f "$PLIST"
 echo "Auto-start removed. Background server stopped."
-echo "(You can still run it manually any time with: node server.js)"
+echo "(You can still run it manually any time with: node server.ts)"

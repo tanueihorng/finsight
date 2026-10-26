@@ -12,7 +12,7 @@ Takes about **3 minutes** to set up. You only do steps 1–2 once.
 The app needs a free tool called **Node.js**.
 
 1. Go to **https://nodejs.org**
-2. Click the big **LTS** download button.
+2. Click the big **LTS** download button (FinSight needs **version 24 or newer**).
 3. Open the downloaded installer and click through it (all defaults are fine).
 
 That's the only thing you need to install.
@@ -41,12 +41,12 @@ You'll get a folder called `finsight-main` (you can rename it to `finsight`).
 - Click the address bar at the top of the window, type **`cmd`**, and press Enter (this opens a command window in the folder).
 - Type this and press Enter:
   ```
-  node server.js
+  node server.ts
   ```
 - **Leave that window open** while you use the app.
 
 ### 🐧 On Linux
-- Open a terminal in the folder and run `node server.js`.
+- Open a terminal in the folder and run `node server.ts`.
 
 You should see:
 ```
@@ -83,9 +83,10 @@ repeat **Step 3**.
 | Problem | Fix |
 |---|---|
 | **`node: command not found`** | Node.js isn't installed (Step 1), or you need to **close and reopen** the Terminal window after installing. |
-| Mac: **`start.command` won't open** ("unidentified developer") | **Right-click it → Open → Open.** Or just run `node server.js` in Terminal instead. |
+| **`Unknown file extension ".ts"`**, or "needs Node.js 24 or newer" | Your Node.js is too old. Install the current **LTS** from https://nodejs.org (Step 1), then start again. Check with `node -v`. |
+| Mac: **`start.command` won't open** ("unidentified developer") | **Right-click it → Open → Open.** Or just run `node server.ts` in Terminal instead. |
 | Mac: double-click does nothing | In Terminal, run `chmod +x start.command` once, then double-click again. |
-| **"Port 8000 in use"** / page won't load | Start it on another port: `PORT=9000 node server.js`, then open **http://localhost:9000**. |
+| **"Port 8000 in use"** / page won't load | Start it on another port: `PORT=9000 node server.ts`, then open **http://localhost:9000**. |
 | The page is blank / not loading | Make sure the Terminal window from Step 3 is **still open** — the app only runs while it's open. |
 
 ---

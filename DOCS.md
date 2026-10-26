@@ -7,16 +7,16 @@ For day-to-day usage see [README.md](README.md).
 
 ## Architecture
 
-A single **zero-dependency Node.js** process (built-in `http` + native `fetch`, Node 18+):
+A single **zero-dependency Node.js** process (built-in `http` + native `fetch`, Node 24+, which runs the TypeScript server directly):
 
 ```
-browser ──HTTP──▶ server.js ──┬─▶ public/*  (static terminal UI + service worker)
+browser ──HTTP──▶ server.ts ──┬─▶ public/*  (static terminal UI + service worker)
                               └─▶ /api/*    (JSON API)
                                      ├─▶ Yahoo Finance / World Bank / FRED  (free, no key)
                                      └─▶ data/portfolio.json                (local store)
 ```
 
-`server.js` is only the HTTP layer; the logic lives in `lib/`:
+`server.ts` is only the HTTP layer; the logic lives in `lib/`:
 
 | Module | Responsibility |
 |---|---|
@@ -40,7 +40,7 @@ and the committed-bundle check (`test/webbuild.test.js` → `npm run check:web`)
 `npm run e2e` (Playwright): it starts throwaway servers with fake market data and fresh temp data
 folders — never your `~/FinSightData` — on ports `E2E_PORT_BASE` (default 8096) + offset, so two
 worktrees can run E2E at once with different bases. `npm run verify` = typecheck + unit + bundle check
-+ E2E. Use **Node 24** for development; running the server alone needs Node 18+.
++ E2E. Use **Node 24** for development and for running the server (Node strips the TypeScript types; `npm run typecheck` checks them).
 
 - **Frontend** (`web/` → built to `public/app/`): React 19 + TypeScript.
   The source lives in `web/src` (never served directly) and is bundled by esbuild
@@ -76,7 +76,7 @@ worktrees can run E2E at once with different bases. `npm run verify` = typecheck
   (15 s for portfolio/markets). User preferences (profile name, base currency, summary-card layout, chart type & indicators)
   live in the browser's `localStorage` (`finsight-profile`, `finsight-base`, `finsight-cards`,
   `finsight-chart-cfg`; panel order/visibility in `finsight-layout`/`finsight-panels`); per-symbol chart drawings live under `finsight-draw:<SYMBOL>`.
-- **Backend** (`server.js`): serves static files from `public/` and a JSON API under `/api/`. It
+- **Backend** (`server.ts`): serves static files from `public/` and a JSON API under `/api/`. It
   proxies the free upstream data sources (so the browser avoids CORS and no keys are exposed) and
   persists the portfolio locally.
 - **Storage** (`data/portfolio.json`): `{ accounts: [{ id, name, type, positions[], transactions[], dividends[], cash{} }], watchlist[], alerts[], settings{}, activeId }` — positions/transactions/cash are per-account; watchlist, alerts and settings (e.g. `withholding`) are global.
@@ -91,7 +91,7 @@ worktrees can run E2E at once with different bases. `npm run verify` = typecheck
 - **Write safety**: every read-modify-write (buy/sell/delete/watch/alert/import/reset **and** the
   background alert timer) is serialized onto one promise chain (`withLock`) so concurrent saves can't
   clobber each other.
-- **Caching** (`lib/cache.js`): every upstream call goes through `cached(key, ttl, fn, { stale, persist })`.
+- **Caching** (`lib/cache.ts`): every upstream call goes through `cached(key, ttl, fn, { stale, persist })`.
   Fresh entries are served from memory; *stale* ones are served immediately and refreshed in the
   background; if a refresh fails the last good value is served instead of an error. Concurrent callers
   share one in-flight request. `persist` entries are also written to `data/cache.json` (kept ≤ 30 days),
@@ -118,7 +118,7 @@ worktrees can run E2E at once with different bases. `npm run verify` = typecheck
   native macOS notification via `osascript`, so alerts work even with the browser closed.
 - **FX model**: market value is converted at the **current** FX rate; **cost basis** is reconstructed
   at each lot's **purchase-time** FX (`fxUsd` × historical USD→base). The difference is the FX P&L.
-- **Performance model** (`lib/performance.js`): replays BUY/SELL/DELETE in time order, values the
+- **Performance model** (`lib/performance.ts`): replays BUY/SELL/DELETE in time order, values the
   holdings each trading day with historical prices **and** historical FX, and treats buys/sells as
   cash flows. Daily TWR is measured on the book held since the previous close (new money joins after),
   chained; XIRR solves the dated cash flows. A BUY whose price is outside that day's trading range (an
@@ -134,7 +134,7 @@ worktrees can run E2E at once with different bases. `npm run verify` = typecheck
 
 ## Configuration (environment variables)
 
-Set these when launching, e.g. `PORT=9000 NOTIFY=0 node server.js`.
+Set these when launching, e.g. `PORT=9000 NOTIFY=0 node server.ts`.
 
 | Variable | Default | Effect |
 |---|---|---|
@@ -365,7 +365,7 @@ Alerts with live status.
 (`op` is `">"` or `"<"`; `met` is whether `currentValue op level` holds now; `triggeredAt`/`notifiedAt` are
 one-shot timestamps. `label` is a readable condition, e.g. `AAPL RSI(14, 1d) ≥ 70`.)
 
-Kinds (`lib/alertmath.js` holds the maths):
+Kinds (`lib/alertmath.ts` holds the maths):
 - `price` — live price vs `price`.
 - `line` — live price vs a drawn sloped line `line: { pts: [{t,p},{t,p}], interval, log }`, valued at the
   latest bar in **bar-index** space exactly as the chart draws it (weekends do not bend the line).
@@ -402,10 +402,10 @@ are bucketed by instrument type.
 ## Extending it
 
 - **New data source**: add a fetch helper in `lib/` wrapped in `cached(...)` (stay friendly to free
-  APIs), a `/api/...` route in `server.js`, then render it in the React app — a component in
+  APIs), a `/api/...` route in `server.ts`, then render it in the React app — a component in
   `web/src/features/` registered in `web/src/islands.ts` (recipe: `web/src/features/README.md`).
   Add a test with the fake market in `test/helpers.js`.
-- **New market symbols**: edit `MARKET_GROUPS` in `lib/market.js`.
+- **New market symbols**: edit `MARKET_GROUPS` in `lib/market.ts`.
 - **New FRED/World Bank series**: add an entry to `fredOptions` / `worldBankOptions` in
   `web/src/features/macro/options.ts` (the FRED / World Bank islands render them as `<select>`s).
 - **New portfolio mutation**: wrap it as `withLock(() => withUndo('Label', () => { … }))` so it's

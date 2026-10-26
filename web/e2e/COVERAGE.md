@@ -109,7 +109,7 @@ Card = the migration card(s) that must keep the row green (`docs/frontend-migrat
 | Kestrel | send, stream, finish | `baseline/kestrel-stream.agent` | G1, G2 | pass |
 | Kestrel | stop interrupts a running turn | `baseline/kestrel-stream.agent` | G1, G2 | pass |
 | Kestrel | agent closes the stream: reconnects, no duplicated text | `baseline/kestrel-stream.agent` | G1 | pass |
-| Kestrel | agent connection cut mid-stream: reconnects | `baseline/kestrel-stream.agent` | G1 (+ `lib/agentlink.js`) | pass |
+| Kestrel | agent connection cut mid-stream: reconnects | `baseline/kestrel-stream.agent` | G1 (+ `lib/agentlink.ts`) | pass |
 | Kestrel | attachment uploaded and sent | `baseline/kestrel-stream.agent` | G2 | pass |
 | Kestrel | dock ↔ side switch keeps the conversation | `baseline/kestrel-stream.agent` | G3 | pass |
 | Service worker | precaches shell + manifest files, network-first update, offline shell | `baseline/upgrade.sw` | F1, H4, X1 | pass |

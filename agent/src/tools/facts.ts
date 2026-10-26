@@ -3,15 +3,20 @@
 // carries asOf + source so answers can cite a data time.
 import { z } from 'zod';
 import type { ToolCtx, ToolDef } from './registry.ts';
+import type { Category, History, HistoryPoint, Portfolio, Position } from '../../../shared/types.ts';
 
 const Account = z.string().max(64).optional().describe('FinSight account id. Omit for ALL accounts combined.');
 const Base = z.enum(['SGD', 'USD', 'EUR', 'GBP', 'JPY', 'HKD', 'AUD', 'CNY', 'INR']).optional().describe('Reporting currency. Default SGD.');
 const Symbols = z.array(z.string().min(1).max(24)).min(1).max(50);
 
-type Pos = Record<string, any>;
+// Older responses may omit summary fields or use realized instead of realizedPnl.
+type PortfolioSnapshot = Omit<Partial<Portfolio>, 'summary'> & {
+  summary?: Partial<Portfolio['summary']> & { realized?: number };
+};
+type CashPosition = Portfolio['cash'][number];
 const r2 = (n: unknown): number | null => (typeof n === 'number' && Number.isFinite(n) ? Math.round(n * 100) / 100 : null);
 
-function compactPosition(p: Pos) {
+function compactPosition(p: Position) {
   return {
     symbol: p.symbol, name: p.name, currency: p.currency, quantity: p.quantity, avgCost: r2(p.avgCost), last: r2(p.last),
     marketValue: r2(p.marketValue), weightPct: r2(p.weight), unrealized: r2(p.unrealized), unrealizedPct: r2(p.unrealizedPct),
@@ -19,12 +24,14 @@ function compactPosition(p: Pos) {
   };
 }
 
+type CompactPosition = ReturnType<typeof compactPosition>;
+
 export async function fetchPortfolio(ctx: ToolCtx, account?: string, base = 'SGD') {
-  const d = await ctx.finsight.get('/api/portfolio', { base, account: account || 'ALL' }, ctx.signal);
+  const d = await ctx.finsight.get<Portfolio>('/api/portfolio', { base, account: account || 'ALL' }, ctx.signal);
   return { d, asOf: new Date().toISOString() };
 }
 
-export function summarise(d: any, base: string) {
+export function summarise(d: PortfolioSnapshot, base: string) {
   const s = d.summary || {};
   return {
     base, account: d.account,
@@ -61,21 +68,21 @@ const queryPositions: ToolDef = {
     const base = q.base || 'SGD';
     const { d, asOf } = await fetchPortfolio(ctx, q.account, base);
     let rows = (d.positions || []).map(compactPosition);
-    let cats: Record<string, any> = {};
+    let cats: Record<string, Category> = {};
     if (q.sector) {
-      cats = await ctx.finsight.get('/api/categories', { symbols: rows.map((r: Pos) => r.symbol).join(',') }, ctx.signal);
-      rows = rows.filter((r: Pos) => String(cats[String(r.symbol).toUpperCase()]?.category || '').toLowerCase().includes(q.sector!.toLowerCase()));
+      cats = await ctx.finsight.get<Record<string, Category>>('/api/categories', { symbols: rows.map((r: CompactPosition) => r.symbol).join(',') }, ctx.signal);
+      rows = rows.filter((r: CompactPosition) => String(cats[String(r.symbol).toUpperCase()]?.category || '').toLowerCase().includes(q.sector!.toLowerCase()));
     }
-    if (q.currency) rows = rows.filter((r: Pos) => r.currency === q.currency!.toUpperCase());
-    if (q.symbols) { const set = new Set(q.symbols.map((s: string) => s.toUpperCase())); rows = rows.filter((r: Pos) => set.has(String(r.symbol).toUpperCase())); }
-    if (q.minWeightPct != null) rows = rows.filter((r: Pos) => (r.weightPct ?? 0) >= q.minWeightPct!);
-    if (q.minUnrealizedPct != null) rows = rows.filter((r: Pos) => (r.unrealizedPct ?? -Infinity) >= q.minUnrealizedPct!);
-    if (q.maxUnrealizedPct != null) rows = rows.filter((r: Pos) => (r.unrealizedPct ?? Infinity) <= q.maxUnrealizedPct!);
-    const k = q.sortBy, sign = q.dir === 'asc' ? 1 : -1;
-    rows.sort((a: Pos, b: Pos) => (k === 'symbol' ? String(a.symbol).localeCompare(String(b.symbol)) : ((a[k] ?? -Infinity) - (b[k] ?? -Infinity))) * sign);
+    if (q.currency) rows = rows.filter((r: CompactPosition) => r.currency === q.currency!.toUpperCase());
+    if (q.symbols) { const set = new Set(q.symbols.map((s: string) => s.toUpperCase())); rows = rows.filter((r: CompactPosition) => set.has(String(r.symbol).toUpperCase())); }
+    if (q.minWeightPct != null) rows = rows.filter((r: CompactPosition) => (r.weightPct ?? 0) >= q.minWeightPct!);
+    if (q.minUnrealizedPct != null) rows = rows.filter((r: CompactPosition) => (r.unrealizedPct ?? -Infinity) >= q.minUnrealizedPct!);
+    if (q.maxUnrealizedPct != null) rows = rows.filter((r: CompactPosition) => (r.unrealizedPct ?? Infinity) <= q.maxUnrealizedPct!);
+    const k: 'marketValue' | 'weightPct' | 'unrealized' | 'unrealizedPct' | 'dayChange' | 'symbol' = q.sortBy, sign = q.dir === 'asc' ? 1 : -1;
+    rows.sort((a: CompactPosition, b: CompactPosition) => (k === 'symbol' ? String(a.symbol).localeCompare(String(b.symbol)) : ((a[k] ?? -Infinity) - (b[k] ?? -Infinity))) * sign);
     const matched = rows.length;
     rows = rows.slice(0, q.limit);
-    const sum = (f: string) => r2(rows.reduce((s: number, r: Pos) => s + (r[f] ?? 0), 0));
+    const sum = (f: 'marketValue' | 'weightPct' | 'unrealized') => r2(rows.reduce((s: number, r: CompactPosition) => s + (r[f] ?? 0), 0));
     return { source: 'FinSight /api/portfolio' + (q.sector ? ' + /api/categories' : ''), asOf, base, matched, returned: rows.length,
       totals: { marketValue: sum('marketValue'), weightPct: sum('weightPct'), unrealized: sum('unrealized') }, rows };
   },
@@ -97,14 +104,14 @@ const getExposures: ToolDef = {
       }
     } else {
       const { d } = await fetchPortfolio(ctx, undefined, base);
-      const positions: Pos[] = d.positions || [];
+      const positions: Position[] = d.positions || [];
       if (by === 'currency') {
         for (const p of positions) add(p.currency, p.marketValue);
         for (const c of d.cash || []) add(`${c.ccy} (cash)`, c.base);
       } else {
-        const cats = positions.length ? await ctx.finsight.get('/api/categories', { symbols: positions.map((p) => p.symbol).join(',') }, ctx.signal) : {};
+        const cats = positions.length ? await ctx.finsight.get<Record<string, Category>>('/api/categories', { symbols: positions.map((p) => p.symbol).join(',') }, ctx.signal) : {};
         for (const p of positions) add(cats[String(p.symbol).toUpperCase()]?.category || 'Other', p.marketValue);
-        const cash = (d.cash || []).reduce((s: number, c: Pos) => s + (c.base || 0), 0);
+        const cash = (d.cash || []).reduce((s: number, c: CashPosition) => s + (c.base || 0), 0);
         if (cash) add('Cash', cash);
       }
     }
@@ -122,7 +129,7 @@ const getCash: ToolDef = {
   input: z.object({ account: Account, base: Base }),
   async handler({ account, base = 'SGD' }, ctx) {
     const { d, asOf } = await fetchPortfolio(ctx, account, base);
-    return { source: 'FinSight /api/portfolio', asOf, base, cash: d.cash, totalBase: r2((d.cash || []).reduce((s: number, c: Pos) => s + (c.base || 0), 0)) };
+    return { source: 'FinSight /api/portfolio', asOf, base, cash: d.cash, totalBase: r2((d.cash || []).reduce((s: number, c: CashPosition) => s + (c.base || 0), 0)) };
   },
 };
 
@@ -153,8 +160,8 @@ const getHistory: ToolDef = {
     includeBars: z.boolean().default(false),
   }),
   async handler({ symbol, range, interval, includeBars }, ctx) {
-    const d = await ctx.finsight.get('/api/history', { symbol, range, interval }, ctx.signal);
-    const pts: Pos[] = (d.points || d.bars || []).filter((p: Pos) => Number.isFinite(p.c));
+    const d = await ctx.finsight.get<History & { bars?: HistoryPoint[] }>('/api/history', { symbol, range, interval }, ctx.signal);
+    const pts: HistoryPoint[] = (d.points || d.bars || []).filter((p: HistoryPoint) => Number.isFinite(p.c));
     if (!pts.length) return { source: 'FinSight /api/history', symbol, error: 'no data' };
     let peak = -Infinity, mdd = 0;
     for (const p of pts) { peak = Math.max(peak, p.c); mdd = Math.min(mdd, p.c / peak - 1); }

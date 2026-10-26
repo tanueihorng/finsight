@@ -72,7 +72,7 @@ test('server unreachable: offline message, no PIN field, recovers by itself', as
   await page.route('**/api/auth/status', (r) => (down ? r.abort() : r.fallback()));
   await page.goto('/');
   await expect(title(page)).toHaveText("Can't reach the FinSight server");
-  await expect(msg(page)).toHaveText('Start it with  node server.js  (or start.command). Retrying…');
+  await expect(msg(page)).toHaveText('Start it with  node server.ts  (or start.command). Retrying…');
   await expect(page.locator('#lock-pin')).toBeHidden();
   await expect(page.locator('#lock-go')).toBeHidden();
   down = false;

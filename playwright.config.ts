@@ -54,9 +54,9 @@ export default defineConfig({
   ],
   webServer: [
     // A closed port, so the main server never talks to a real Kestrel agent on 8100.
-    { command: 'node server.js', url: health(PORT), reuseExistingServer: false, timeout: 30_000, env: finsightEnv(DATA, PORT, 'http://127.0.0.1:9') },
+    { command: 'node server.ts', url: health(PORT), reuseExistingServer: false, timeout: 30_000, env: finsightEnv(DATA, PORT, 'http://127.0.0.1:9') },
     { command: 'node web/e2e/fake-agent.mjs', url: `http://127.0.0.1:${FAKE_AGENT_PORT}/v1/info`, reuseExistingServer: false, timeout: 15_000, env: { FAKE_AGENT_PORT: String(FAKE_AGENT_PORT) } },
-    { command: 'node server.js', url: health(AGENT_FINSIGHT_PORT), reuseExistingServer: false, timeout: 30_000,
+    { command: 'node server.ts', url: health(AGENT_FINSIGHT_PORT), reuseExistingServer: false, timeout: 30_000,
       env: finsightEnv(AGENT_DATA, AGENT_FINSIGHT_PORT, `http://127.0.0.1:${FAKE_AGENT_PORT}`) },
     { command: `node web/e2e/sw-server.mjs ${JSON.stringify(SW_ROOT)}`, url: health(SW_PORT), reuseExistingServer: false, timeout: 30_000,
       env: finsightEnv(path.join(SW_ROOT, 'data'), SW_PORT, 'http://127.0.0.1:9') },

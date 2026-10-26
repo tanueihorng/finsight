@@ -4,7 +4,7 @@ import { expect, type APIRequestContext, type Page } from '@playwright/test';
 
 export const PIN = '2468';
 
-// Same portfolio as scripts/demo.js DEMO_CSV (kept inline: *.csv files are never committed).
+// Same portfolio as scripts/demo.ts DEMO_CSV (kept inline: *.csv files are never committed).
 export const DEMO_CSV = [
   'symbol,quantity,avg price,date',
   'NVDA,60,95.5,2024-11-04', 'MSFT,18,402,2025-01-15', 'AAPL,25,188,2024-12-02', 'GOOGL,30,165,2025-02-10',

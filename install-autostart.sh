@@ -10,7 +10,13 @@ set -e
 DIR="$(cd "$(dirname "$0")" && pwd)"
 NODE="$(command -v node || true)"
 if [ -z "$NODE" ]; then
-  echo "ERROR: could not find 'node' in PATH. Install Node.js (>=18) first."
+  echo "ERROR: could not find 'node' in PATH. Install Node.js (>=24) first."
+  exit 1
+fi
+# The server is TypeScript run directly by Node, which needs Node 24+. launchd
+# keeps using this exact binary until the agent is installed again.
+if ! "$NODE" -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 24 ? 0 : 1)'; then
+  echo "ERROR: $NODE is Node $("$NODE" -v); FinSight needs Node.js 24 or newer."
   exit 1
 fi
 
@@ -28,7 +34,7 @@ cat > "$PLIST" <<EOF
   <key>ProgramArguments</key>
   <array>
     <string>$NODE</string>
-    <string>$DIR/server.js</string>
+    <string>$DIR/server.ts</string>
   </array>
   <key>WorkingDirectory</key><string>$DIR</string>
   <key>EnvironmentVariables</key>
