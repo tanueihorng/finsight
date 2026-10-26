@@ -1,8 +1,6 @@
-import { useEffect } from 'react';
 import { usePortfolio } from '../../api/queries.ts';
 import { fmt, signStr } from '../../ui/format.ts';
 export default function ActivityIsland() {
-  useEffect(() => { const el = document.getElementById('activity'); if (el) { el.tabIndex = 0; el.setAttribute('aria-label', 'Recent activity'); } }, []);
   const { data } = usePortfolio();
   if (!data) return null;
   return data.transactions?.length ? <>{data.transactions.map((t, i) => {
