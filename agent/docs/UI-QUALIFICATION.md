@@ -1,6 +1,7 @@
 # Phase 1 live qualification — 2026-10-26
 
-DeepSeek Flash/Pro and GPT-6 Luna/Sol passed and have capabilities.ui enabled.
+DeepSeek Flash/Pro and GPT-6 Luna/Sol passed and had capabilities.ui enabled. After the
+move to the Responses transport, Sol's views are disabled (see the addendum below).
 The global operator gate remains off on a new installation: enable uiViews in the
 private agent config, or KESTREL_UI=1. Explicit environment0 disables it. Enabled
 models show views in the picker and offer Show my holdings as a table.
@@ -71,3 +72,30 @@ the local cost ledger. No keys or hidden reasoning are exported. Local evidence:
 IUIQUAL-001 resumption packet, adjudication.json, revised-eval results/screenshots,
 sol-timing records and browser.log. Private connection diagnostics stay outside
 this public repository.
+
+## Responses transport requalification — 2026-10-26
+
+GPT-6 Luna/Sol moved from Chat Completions to the Responses transport with the
+thinking-effort change, so the same fixed 40-case suite was rerun at the default
+effort (Off), with `openai-responses` added to the runner's eligible transports.
+
+| Measure | Luna | Sol | Required |
+|---|---:|---:|---:|
+| Appropriate positive use |25/25|25/25|>=85%|
+| Short-answer restraint |15/15|15/15|>=90%|
+| First-attempt schema validity |24/25|25/25|>=90%|
+| Valid by one repair |25/25|25/25|>=98%|
+| Accepted binding fidelity |100%|100%|100%|
+| Median extra latency |+11.7%|+37.9%|<=25%|
+| Median extra token cost |+1.3%|+26.2%|<=30%|
+| Follow-up after completed view |pass|pass|pass|
+
+Sol's first five pairs measured +71.7% latency; the two pre-fixed repeat rounds used
+for the earlier Sol check were run and all 15 pairs are reported (15/15 successful).
+Sol fails the latency criterion on Responses and `capabilities.ui` is now false for
+Sol; Luna stays enabled. Higher thinking efforts are not covered by this run.
+Cost US$0.21 (main run, smoke and timing), recorded as ui_qualification.
+
+A stale OPENAI_API_KEY in an inherited environment takes precedence over the
+private secrets file; the first attempt hit a deactivated account (401) at no cost.
+Run with env -u OPENAI_API_KEY when the agent's own key should be used.

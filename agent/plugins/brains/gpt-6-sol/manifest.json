@@ -19,7 +19,7 @@
     "nativeSearch": false,
     "vision": true,
     "contextTokens": 272000,
-    "ui": true
+    "ui": false
   },
   "costTier": "$$",
   "maxOutputTokens": 4000,

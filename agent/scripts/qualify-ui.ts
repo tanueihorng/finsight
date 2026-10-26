@@ -34,7 +34,7 @@ const perfRepeats = integerArg('--performance-repeats', 1, 3, 0);
 const cases = perfRepeats ? Array.from({ length: perfRepeats }, (_, i) => UI_CASES.filter((c) => c.paired).map((c) => ({ ...c, id: `${c.id}-repeat-${i + 1}` }))).flat() : null;
 const limit = integerArg('--limit', 1, 40, 40);
 if (perfRepeats && process.argv.includes('--limit')) throw new Error('Do not combine --performance-repeats with --limit');
-const eligible = [...discovered.brains.values()].filter((b) => (!pick || pick.has(b.manifest.id)) && b.available && ['anthropic', 'openai-compatible'].includes(b.manifest.transport));
+const eligible = [...discovered.brains.values()].filter((b) => (!pick || pick.has(b.manifest.id)) && b.available && ['anthropic', 'openai-compatible', 'openai-responses'].includes(b.manifest.transport));
 const ledger = new Database(production.dbPath, { fileMustExist: true });
 ledger.pragma('busy_timeout = 5000');
 const spent = () => (ledger.prepare('SELECT COALESCE(SUM(usd),0) total FROM cost_ledger WHERE ts >= ?').get(store.startOfToday()) as { total: number }).total;
