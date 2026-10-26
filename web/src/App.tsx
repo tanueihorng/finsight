@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type AriaRole } from 'react';
 import { createPortal } from 'react-dom';
 import { useStore } from 'zustand';
 import { createStore } from 'zustand/vanilla';
@@ -17,7 +17,7 @@ import { columns, dropBefore, hiddenPanels, HIDE_ID, movePanel, saveLayout, type
 // guarantees the specs check). Panels live in stable elements that the
 // layout moves between the columns, as legacy did, with their head and body
 // rendered into them through portals. Order and visibility: shell/layout.ts.
-type HostProps = { id?: string; className?: string; title?: string; style?: object; [k: `data-${string}`]: string };
+type HostProps = { id?: string; className?: string; title?: string; style?: object; tabIndex?: number; role?: AriaRole; 'aria-label'?: string; [k: `data-${string}`]: string };
 // H1: a host gets its data-island (so main.tsx mounts it) once the island's
 // chunk has loaded, failed, or taken 300 ms, React's reveal throttle (islands.ts).
 // Until then it stays empty instead of showing a fallback, so one slow chunk
@@ -163,7 +163,7 @@ const PANELS: Record<string, () => ReactNode> = {
   activity: () => (
     <Panel pid="activity" title={<span className="panel-title">RECENT ACTIVITY</span>} head={
       <button id="ledger-btn" className="mini-btn" title="All trades — fix dates/prices, realized gains by year" onClick={() => open('ledgerOpen')}>LEDGER</button>}>
-      <Host island="activity" id="activity" className="activity" />
+      <Host island="activity" id="activity" className="activity" role="region" tabIndex={0} aria-label="Recent activity" />
     </Panel>
   ),
   detail: () => (
