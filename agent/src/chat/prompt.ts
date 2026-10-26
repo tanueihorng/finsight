@@ -1,5 +1,5 @@
 // System prompt: stable text (cache-friendly; only the date changes daily).
-// Same rules are mirrored in AGENTS.md for interactive Claude Code / Codex use.
+// Same rules are mirrored in the repo-root AGENTS.md for interactive Claude Code / Codex use.
 export function systemPrompt(today = new Date(), opts: { name?: string; skills?: string; timezone?: string } = {}): string {
   const tz = opts.timezone || 'UTC';
   const date = today.toLocaleDateString('en-GB', { timeZone: tz, weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });

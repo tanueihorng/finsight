@@ -233,7 +233,7 @@ All facts tools are **read-only** and call FinSight with the GET-only token [D-Q
 | FR-7.4 | `search_memory(query, scope: notes\|threads\|all, limit)` uses SQLite FTS5 with BM25 ranking and returns passages with source paths or links. No embeddings in the MVP. Embeddings are added only if evals show retrieval failures. |
 | FR-7.5 | **Context assembly per brain call**, in this order (cache-friendly): ① stable system prompt + tool menu (byte-stable for prompt caching) ② context pack (refreshed when > 15 min old or on a new thread) ③ thread summary (if the thread is long) ④ recent turns ⑤ page context ⑥ current message. |
 | FR-7.6 | When the token count of history exceeds a configurable threshold (default 60 % of the brain's context or 50k tokens, whichever is lower), older turns are summarised by the cheapest configured brain. The summary is stored and the raw history is kept. |
-| FR-7.7 | The instruction file `AGENTS.md` in the agent repo (+ a `CLAUDE.md` pointer) holds the same rules for interactive Claude Code and Codex sessions. Prompts MUST be plain markdown with no vendor-only syntax. |
+| FR-7.7 | The instruction file `AGENTS.md` at the FinSight repository root (+ a root `CLAUDE.md` pointer) holds the same rules for interactive Claude Code and Codex sessions, including work inside `agent/` (moved from `agent/` by owner decision, 2026-10-26). Prompts MUST be plain markdown with no vendor-only syntax. |
 
 ### FR-8 Cost and budgets
 
@@ -389,7 +389,7 @@ investment/agent/                 private repo
   src/ (api, chat, tasks, brains, tools, strategy-runtime, plugins, store, obs)
   plugins/workflows/ ask/ strategy-scan/ …     plugins/brains/ deepseek/ haiku/ claude-code/
   plugins/search/ tavily/ brave/
-  evals/  test/  docs/ (SPEC.md, adr/, threat-model.md)  AGENTS.md  CLAUDE.md
+  evals/  test/  docs/ (SPEC.md, adr/, threat-model.md)   (AGENTS.md and CLAUDE.md live at the repo root)
 finsight/strategies/<id>/          public built-in strategy plugins
 ~/FinSightData/strategies/<id>/    private strategy plugins (never committed)
 ~/FinSightData/agent/              agent.db, config.json, token (0600), logs/
