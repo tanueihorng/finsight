@@ -5,7 +5,7 @@
 import type { Config } from '../config.ts';
 import type { DB, StoredMsg } from '../store/db.ts';
 import * as store from '../store/db.ts';
-import type { ToolRegistry, ToolCtx } from '../tools/registry.ts';
+import { MAX_RESULT_CHARS, type ToolRegistry, type ToolCtx } from '../tools/registry.ts';
 import type { FinsightClient } from '../tools/finsight.ts';
 import type { BrainEntry } from '../brains/registry.ts';
 import type { ApiBrain, Brain, CliBrain, StepResult } from '../brains/types.ts';
@@ -271,13 +271,26 @@ export class ChatEngine {
         }
         return { type: 'tool_result', callId: call.id, name: call.name, ok: r.ok, content: r.content } as Block;
       });
-      for (const result of results) if (ctx.ui.enabled && result.type === 'tool_result' && result.ok && result.name !== 'render_ui') {
+      // Provider-generated call IDs are protocol metadata, not a reliable model
+      // input. Give each eligible result a short reference inside visible JSON.
+      // Do this only after the entire batch finishes: no same-step bindings.
+      for (const result of results) if (ctx.ui.enabled && result.type === 'tool_result' && result.ok && ['get_portfolio', 'query_positions', 'get_cash', 'get_exposures', 'get_accounts', 'get_quote'].includes(result.name)) {
         try {
+          const data = JSON.parse(result.content);
+          if (!data || typeof data !== 'object' || Array.isArray(data) || data.error) continue;
+          const ref = `ui_source_${ctx.ui.completed.size + 1}`;
+          const visible = JSON.stringify({ ...data, uiSource: { ref, tool: result.name } });
+          if (visible.length > MAX_RESULT_CHARS) continue; // narrow instead of exceeding the normal tool cap
           const args = calls.find((c) => c.id === result.callId)?.args as Record<string, unknown> | undefined;
-          if (!ctx.ui.completed.has(result.callId)) ctx.ui.completed.set(result.callId, { name: result.name, data: JSON.parse(result.content), completedAt: new Date().toISOString(), account: typeof args?.account === 'string' && args.account.length > 0 ? args.account.slice(0, 64) : 'ALL' });
+          ctx.ui.completed.set(ref, { callId: result.callId, name: result.name, data, completedAt: new Date().toISOString(), account: typeof args?.account === 'string' && args.account.length > 0 ? args.account.slice(0, 64) : 'ALL' });
+          result.content = visible;
         } catch { /* truncated/non-JSON results are not usable facts */ }
       }
       store.appendMessage(this.db, threadId, 'tool', results, { turnId });
+      // The model can explicitly finish a presentation-only answer. Never skip
+      // repair after a rejected view, or end a mixed research/tool batch early.
+      if (calls.every((c) => c.name === 'render_ui' && (c.args as { complete?: unknown } | null)?.complete === true)
+        && results.every((r) => r.type === 'tool_result' && r.ok)) break;
     }
     return { costUsd, step };
   }

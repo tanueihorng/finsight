@@ -21,10 +21,10 @@ async function send(page: Page, text: string) { await input(page).fill(text); aw
 
 test('a fresh chat shows attachment and upload notices under the welcome', async ({ page }) => {
   await open(page);
-  await expect(page.locator('.agent-welcome:visible')).toBeVisible();
+  await expect(page.locator('.kx-start:visible')).toBeVisible();
   await page.locator('input[type="file"][multiple]').setInputFiles({ name: 'huge.pdf', mimeType: 'application/pdf', buffer: Buffer.alloc(15 * 1024 * 1024 + 1) });
   await expect(log(page).locator('.agent-notice.error')).toHaveText('huge.pdf: larger than 15 MB');
-  await expect(page.locator('.agent-welcome:visible')).toBeVisible();
+  await expect(page.locator('.kx-start:visible')).toBeVisible();
   await expect(page.locator('.agent-attach-row:visible .agent-file')).toHaveCount(0);
 
   // Hold the upload so the chip stays "uploading", then try to send.
@@ -35,7 +35,7 @@ test('a fresh chat shows attachment and upload notices under the welcome', async
   await expect(page.locator('.agent-attach-row:visible')).toContainText('notes.txt uploading…');
   await send(page, 'read this');
   await expect(log(page).locator('.agent-notice.warn')).toHaveText('Wait for uploads to finish.');
-  await expect(page.locator('.agent-welcome:visible')).toBeVisible();
+  await expect(page.locator('.kx-start:visible')).toBeVisible();
   await expect(input(page)).toHaveValue('read this');
   release();
   await expect(page.locator('.agent-attach-row:visible')).not.toContainText('uploading');
@@ -43,13 +43,13 @@ test('a fresh chat shows attachment and upload notices under the welcome', async
   // Sending starts the chat: the welcome and its notices give way to the conversation.
   await input(page).press('Enter');
   await expect(lastTurn(page).locator('.agent-text')).toHaveText('Echo: read this (1 attachment)');
-  await expect(page.locator('.agent-welcome')).toHaveCount(0);
+  await expect(page.locator('.kx-start')).toHaveCount(0);
   await expect(log(page).locator('.agent-notice')).toHaveCount(0);
 });
 
 test('the welcome keeps the suggestions it opened with; the context button follows the selection', async ({ page }) => {
   await open(page);
-  const first = page.locator('.agent-try .agent-chip').first();
+  const first = page.locator('.agent-try .kx-strategy');
   await expect(first).toHaveText('What do my strategies say about VOO right now?');
   await page.locator('#positions-body tr[data-sym="NVDA"]').click();
   await expect(page.locator('#detail-title')).toHaveText('NVDA · DETAIL');
@@ -57,7 +57,7 @@ test('the welcome keeps the suggestions it opened with; the context button follo
   await expect(first).toHaveText('What do my strategies say about VOO right now?');
   // A new chat builds a new welcome from what is selected then.
   await page.locator('.agent-icon-btn[title="New chat (/new)"]:visible').click();
-  await expect(page.locator('.agent-try .agent-chip').first()).toHaveText('What do my strategies say about NVDA right now?');
+  await expect(page.locator('.agent-try .kx-strategy')).toHaveText('What do my strategies say about NVDA right now?');
 });
 
 // The send reply and the turn.started event can each start a reply (whichever
@@ -151,7 +151,7 @@ test('offline: retry reconnects once the agent is back', async ({ page }) => {
   await page.unroute('**/api/agent/**');
   await page.unroute('**/api/agent-status');
   await offline.getByRole('button', { name: 'retry' }).click();
-  await expect(page.locator('.agent-welcome:visible')).toBeVisible();
+  await expect(page.locator('.kx-start:visible')).toBeVisible();
   await expect(page.locator('.agent-send:visible')).toBeEnabled();
   await send(page, 'back online');
   await expect(lastTurn(page).locator('.agent-text')).toHaveText('Echo: back online');
@@ -184,8 +184,8 @@ test('Kestrel boots after the PIN is entered on a locked reload; the earlier cha
   await page.press('#lock-pin', 'Enter');
   await expect(page.locator('body')).not.toHaveClass(/\blocked\b/);
   // KESTRELUI-001: a reload starts on a new chat; the earlier one is listed on the start screen.
-  await expect(page.locator('.agent-welcome:visible')).toBeVisible();
-  await page.locator('.kx-recent-row', { hasText: 'kept chat' }).first().click();
+  await expect(page.locator('.kx-start:visible')).toBeVisible();
+  await page.locator('.kx-jump-row', { hasText: 'kept chat' }).first().click();
   await expect(page.locator('.agent-user:visible').last()).toContainText('kept chat');
   await send(page, 'and again');
   await expect(lastTurn(page).locator('.agent-text')).toHaveText('Echo: and again');

@@ -639,6 +639,32 @@ FR-10.5 live qualification and the proposed §12.3 paid UI eval suite remain pen
 so this amendment does not assert production rollout acceptance. See
 `INTELLIGENT-UI.md` for the implemented contract, limits and rollout criteria.
 
+
+### Live UI rollout and source references — 2026-10-26
+
+Owner selected all configured models for qualification and activation. The engine
+now exposes uiSource.ref in eligible completed tool results, mapping that visible
+reference to real protocol call IDs; models no longer need to guess hidden IDs.
+An explicit complete:true can finish an accepted presentation-only turn, with
+normal repair behavior on errors. The durable private uiViews setting or an
+environment override controls the global gate. Model discovery reports readiness
+and the panel shows a views label and table starter for enabled models.
+
+DeepSeek Flash and Pro pass the documented live synthetic run. Other API brains
+are not qualified in this environment and remain disabled. CLI bridging remains
+out of scope. Qualification uses no private holdings and does not authorize trades.
+See UI-QUALIFICATION.md for measured results and limitations.
+
+
+### OpenAI views qualification resumed — 2026-10-26
+
+Luna/Sol now pass live synthetic UI qualification with an operational provider
+connection. Guidance explicitly chooses interactive views for supported card/table
+requests, uses prose for text-only/single-fact prompts, and distinguishes the
+view's50-row cap from a fetch's100-row limit. All four configured API models were
+rechecked; only qualified flags are enabled. Thinking-effort work is still separate.
+Measurements and repeated-timing method are in UI-QUALIFICATION.md.
+
 ## Thinking effort amendment — 2026-10-26
 
 Owner requested per-model thinking controls and a UI slider. Kestrel reads optional

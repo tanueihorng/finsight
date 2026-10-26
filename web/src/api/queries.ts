@@ -124,6 +124,13 @@ export function useHistory(symbol: string | null, range: string, interval: strin
     placeholderData: keepPreviousData,
     queryFn: ({ signal }) => api<History>(`/api/history?symbol=${encodeURIComponent(symbol!)}&range=${range}&interval=${interval}`, { signal }) });
 }
+// Today's 5-minute bars for many symbols in one request (the Kestrel briefing charts).
+export function useIntraday(symbols: string[]) {
+  const { enabled } = useScope();
+  const key = [...new Set(symbols)].sort().join(',');
+  return useQuery({ queryKey: ['intraday', key], enabled: enabled && key !== '', staleTime: 60_000, refetchInterval: 60_000,
+    queryFn: ({ signal }) => api<{ results: Record<string, History | { error: string }> }>(`/api/history/batch?symbols=${encodeURIComponent(key)}&range=1d&interval=5m`, { signal }) });
+}
 // A failed quote is not an error: the header falls back to the history meta.
 export function useQuote(symbol: string | null) {
   const { enabled } = useScope();

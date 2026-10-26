@@ -26,9 +26,9 @@ async function command(page: Page, text: string) {
 
 test('welcome, suggestion chips, page context on the message, model list', async ({ page }) => {
   await open(page);
-  await expect(page.locator('.agent-welcome .hi')).toHaveText('What are we looking at today?');
+  await expect(page.locator('.kx-hello .hi')).toHaveText(/^Good (morning|afternoon|evening)$/);
   await expect(page.locator('.agent-try .agent-chip')).toHaveCount(4);
-  await expect(page.locator('.agent-try .agent-chip').first()).toHaveText('What do my strategies say about VOO right now?');
+  await expect(page.locator('.agent-try .kx-strategy')).toHaveText('What do my strategies say about VOO right now?');
   await expect(page.locator('.agent-ctx:visible')).toHaveText('◉ VOO 1d');
   await expect(page.locator('.agent-model:visible option')).toHaveText(['Fake model $']);
   await expect(input(page)).toHaveAttribute('placeholder', 'Ask Kestrel anything…  (/ for skills)');
@@ -96,7 +96,7 @@ test('slash menu: skills and commands, keyboard pick, /model, /cost, /skills, /n
   await command(page, '/skills');
   await expect(page.locator('.agent-log:visible .agent-notice').last()).toHaveText('/pre-trade-check — Check a trade against the policy');
   await command(page, '/new');
-  await expect(page.locator('.agent-welcome:visible')).toBeVisible();
+  await expect(page.locator('.kx-start:visible')).toBeVisible();
 });
 
 test('Kestrel opens on a new chat beside the chat list; a chat opens from the list and deletes', async ({ page }) => {
@@ -106,8 +106,8 @@ test('Kestrel opens on a new chat beside the chat list; a chat opens from the li
   await page.reload();
   await expect(page.locator('body')).toHaveClass(/\bagent-open\b/);
   // KESTRELUI-001: a reload starts a new chat; the narrow panel lists recent chats on the start screen.
-  await expect(page.locator('.agent-welcome:visible')).toBeVisible();
-  await expect(page.locator('.kx-recent-row', { hasText: 'first chat' }).first()).toBeVisible();
+  await expect(page.locator('.kx-start:visible')).toBeVisible();
+  await expect(page.locator('.kx-jump-row', { hasText: 'first chat' }).first()).toBeVisible();
   await expect(page.locator('.kx-rail')).toHaveCount(0);
   await page.locator('.agent-icon-btn[title="Chats"]:visible').click();
   const row = page.locator('.agent-thread-row', { hasText: 'first chat' }).first();
@@ -117,15 +117,46 @@ test('Kestrel opens on a new chat beside the chat list; a chat opens from the li
   await expect(page.locator('.agent-threads')).toBeHidden();
   await expect(lastTurn(page).locator('.agent-text')).toHaveText('Echo: first chat');
   await page.locator('.agent-icon-btn[title="New chat (/new)"]:visible').click();
-  await expect(page.locator('.agent-welcome:visible')).toBeVisible();
-  await page.locator('.kx-recent-row', { hasText: 'first chat' }).first().click();
+  await expect(page.locator('.kx-start:visible')).toBeVisible();
+  await page.locator('.kx-jump-row', { hasText: 'first chat' }).first().click();
   await expect(lastTurn(page).locator('.agent-text')).toHaveText('Echo: first chat');
   await page.locator('.agent-icon-btn[title="Chats"]:visible').click();
   const first = page.locator('.agent-thread-row', { hasText: 'first chat' }).first();
   await first.hover(); // the delete button shows on hover
   await first.locator('.x').click();
   await answerDialog(page);
-  await expect(page.locator('.agent-welcome:visible')).toBeVisible();
+  await expect(page.locator('.kx-start:visible')).toBeVisible();
+});
+
+test('KESTRELUI-002 start screen: briefing tiles, colour-coded questions, keyboard jump list; model before search', async ({ page }) => {
+  await open(page);
+  await send(page, 'jump chat');
+  await expect(lastTurn(page).locator('.agent-text')).toHaveText('Echo: jump chat');
+  await page.locator('.agent-icon-btn[title="New chat (/new)"]:visible').click();
+  const start = page.locator('.kx-start:visible');
+  await expect(start.locator('.kx-market')).toHaveText(/^US (open · closes|closed · opens) in \d+[mhd]$/);
+  await expect(start.locator('.kx-tile .lbl')).toHaveText(['Portfolio today', 'Top mover', /^Next event(in \d+[mhd]|now)?$/]); // with a countdown when an event is due
+  await expect(start.locator('.kx-tile .kx-spark')).toHaveCount(2); // today's line for the portfolio and the top mover
+  await expect(start.locator('.kx-tile').first().locator('.big')).toHaveText(/^[+-]?\d+\.\d+%$/); // from FinSight's own data, no model call
+  await expect(start.locator('.agent-try .agent-chip')).toHaveClass([/kx-portfolio/, /kx-event/, /kx-macro/, /kx-strategy/]);
+  // Up/Down move through the jump list; the commands row opens the slash menu.
+  // (the fake agent keeps earlier tests' chats, so rows are found by name and position)
+  const rows = start.locator('.kx-jump-row'), cmd = start.locator('.kx-jump-row.cmd');
+  await expect(rows.first()).toContainText('jump chat'); // newest first
+  await expect(rows.last()).toHaveClass(/\bcmd\b/);
+  await rows.first().focus();
+  await page.keyboard.press('ArrowDown');
+  await expect(rows.nth(1)).toBeFocused();
+  await rows.first().focus();
+  await page.keyboard.press('ArrowUp'); // wraps to the commands row
+  await expect(cmd).toBeFocused();
+  await cmd.click();
+  await expect(input(page)).toHaveValue('/');
+  await expect(page.locator('.agent-menu:visible')).toBeVisible();
+  expect(await page.locator('.agent-tools-row:visible select').evaluateAll((els) => els.map((e) => e.getAttribute('aria-label')))).toEqual(['Model', 'Web search']);
+  await input(page).fill('');
+  await rows.first().click();
+  await expect(lastTurn(page).locator('.agent-text')).toHaveText('Echo: jump chat');
 });
 
 test('wide panel: the chat rail sits beside the chat; search provider is picked per message, remembered and shown', async ({ page }) => {
@@ -134,8 +165,8 @@ test('wide panel: the chat rail sits beside the chat; search provider is picked 
   await page.reload();
   const rail = page.locator('.kx-rail:visible');
   await expect(rail).toBeVisible();
-  await expect(page.locator('.agent-welcome:visible')).toBeVisible();
-  await expect(page.locator('.kx-recent')).toHaveCount(0); // the rail lists the chats instead
+  await expect(page.locator('.kx-start:visible')).toBeVisible();
+  await expect(page.locator('.kx-jump-row:not(.cmd)')).toHaveCount(0); // the rail lists the chats instead
   const search = page.locator('.agent-search:visible');
   await expect(search.locator('option')).toHaveText(['Auto (Tavily)', 'DeepSeek', 'Tavily', 'Brave · no key']);
   await expect(search).toHaveValue('auto');

@@ -30,3 +30,33 @@ test('script, HTML and non-http links are neutralised', () => {
   // a quote inside a link URL cannot break out of the attribute (it is escaped before the link rule runs)
   assert.ok(!md('[x](https://a.com/"onmouseover="alert(1))').includes('"onmouseover="'));
 });
+
+test('nested emphasis from the reported answer renders without raw delimiters', () => {
+  const answer = '**"Hottest" splits into two answers right now: momentum leader is Micron (MU, +301% over 12 months), and Friday\'s hottest *move* was cybersecurity.** I can\'t name one definitive winner.';
+  const out = md(answer);
+  assert.ok(out.includes('<strong>&quot;Hottest&quot; splits into two answers right now:'));
+  assert.ok(out.includes('hottest <em>move</em> was cybersecurity.</strong>'));
+  assert.ok(!out.includes('**'), out);
+  assert.equal(md('**bold *italic***'), '<p><strong>bold <em>italic</em></strong></p>');
+  assert.equal(md('*italic **bold***'), '<p><em>italic <strong>bold</strong></em></p>');
+  assert.equal(md('***both***'), '<p><strong><em>both</em></strong></p>');
+  assert.equal(md('**one** and **two**'), '<p><strong>one</strong> and <strong>two</strong></p>');
+});
+
+test('inline code and link URLs are not reformatted as emphasis', () => {
+  assert.equal(md('`**literal** *code* [x](https://example.com)`'), '<p><code>**literal** *code* [x](https://example.com)</code></p>');
+  assert.equal(md('**Use `a*b` here**'), '<p><strong>Use <code>a*b</code> here</strong></p>');
+  assert.equal(md('[**bold** *label*](https://example.com/a*b)'), '<p><a href="https://example.com/a*b" target="_blank" rel="noopener noreferrer"><strong>bold</strong> <em>label</em></a></p>');
+  assert.equal(md('\\*literal\\*'), '<p>*literal*</p>');
+});
+
+test('incomplete streamed emphasis stays balanced and malicious nested text remains escaped', () => {
+  const input = '**bold *italic* and [link](https://example.com) done**';
+  for (let n = 0; n <= input.length; n++) {
+    const out = md(input.slice(0, n));
+    for (const tag of ['strong', 'em', 'code', 'a']) assert.equal((out.match(new RegExp('<' + tag + '(?:>| )', 'g')) || []).length, (out.match(new RegExp('</' + tag + '>', 'g')) || []).length, out);
+  }
+  const out = md('**<img src=x onerror=alert(1)> *bad* [no](javascript:alert(1))**');
+  assert.ok(!out.includes('<img')); assert.ok(!out.includes('href="javascript:')); assert.ok(out.includes('&lt;img'));
+  assert.doesNotThrow(() => md('**a '.repeat(1000) + '*b '.repeat(1000)));
+});

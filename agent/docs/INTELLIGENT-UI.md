@@ -2,8 +2,8 @@
 
 Status: Phase 1 implementation in `feature/kestrel-verified-views`, 2026-10-26.
 The owner requested implementation after review. The first release is deliberately
-limited to verified stat cards and tables. It remains **off by default** pending
-live provider qualification. The rest of the original proposal remains a roadmap.
+limited to verified stat cards and tables. The global operator setting remains **off by default**. DeepSeek Flash/Pro and GPT-6 Luna/Sol
+passed live synthetic qualification; see UI-QUALIFICATION.md. The rest of the original proposal remains a roadmap.
 
 ## What Phase 1 does
 
@@ -43,13 +43,13 @@ committed browser output. The renderer and validator load lazily.
     {
       "id": "overview",
       "kind": "stat_grid",
-      "sourceCallId": "p1",
+      "sourceCallId": "ui_source_1",
       "fields": ["/summary/netWorth", "/summary/cash"]
     },
     {
       "id": "holdings",
       "kind": "table",
-      "sourceCallId": "p1",
+      "sourceCallId": "ui_source_1",
       "rowsPath": "/positions",
       "fields": ["/symbol", "/marketValue", "/weightPct"],
       "limit": 10
@@ -58,8 +58,11 @@ committed browser output. The renderer and validator load lazily.
 }
 ```
 
-For this example `p1` must be a successful `get_portfolio` call from an earlier
-completed step of this turn. Same-batch calls cannot refer to each other's results.
+For this example `ui_source_1` must be the uiSource.ref printed inside a successful
+get_portfolio result from an earlier completed step of this turn. Provider-generated
+protocol call IDs are not a reliable model-visible reference. The engine adds the
+short ref only after all calls in a batch finish and maps it to the true tool ID
+for canonical provenance. A model cannot invent an accepted reference. Same-batch calls cannot refer to each other's results.
 Failed, truncated/non-JSON, foreign-turn and unsupported tool results are rejected.
 No filesystem paths or web-document values can become facts through this tool.
 
@@ -83,6 +86,11 @@ takes precedence over request context; where a tool does not report it, the view
 explicitly labels the requested account rather than claiming a reported identity.
 Net worth includes the existing liabilities caveat; exposures retain the no ETF
 look-through caveat; filtered position totals explicitly cover returned rows only.
+
+Optional complete:true ends the turn after a successfully accepted UI-only batch
+when the model says the view and preceding explanation fully answer the request.
+It never skips repair after rejection or ends a mixed research batch early. This
+avoids an unnecessary final model call; ordinary text answers are unchanged.
 
 Caps: four components; eight stats/columns each; fifty rows per table (default
 twenty); unique component ids and fields; 24 KiB serialized UTF-8 request and
@@ -128,8 +136,11 @@ agent home and audited under the existing logging policy.
 
 ## Gates and qualification
 
-Both `KESTREL_UI=1` and the selected API brain's `capabilities.ui: true` are required.
-All bundled manifests stay disabled. Direct tool invocation also checks the gate.
+Both a global operator setting (`uiViews: true` in the private agent config, or
+`KESTREL_UI=1`) and the selected API brain's `capabilities.ui: true` are required.
+An explicit KESTREL_UI environment value overrides the config; 0 disables it.
+DeepSeek Flash/Pro and GPT-6 Luna/Sol have capabilities.ui enabled after qualification; all other
+bundled manifests remain disabled. Direct tool invocation also checks the gate.
 MCP/CLI does not advertise the tool because it lacks the thread/turn UI bridge.
 Turning the environment flag off prevents new views; accepted historical snapshots
 remain readable. No adapter, model default, reasoning mode or price changes.
@@ -139,13 +150,16 @@ races, old-turn references, restart and API reload, deletion, duplicate replay,
 privacy/copy, keyboard sorting, narrow panels, unsupported views and accessibility.
 They use synthetic tools and mock brains, not paid providers or personal holdings.
 
-Before enabling a real brain, run a separately authorized live evaluation against
+Before enabling another brain, run a separately authorized live evaluation against
 fixed synthetic cases: appropriate view use and text-only restraint, tool/schema
 validity (including repair), source fidelity, clarity, extra latency and extra cost.
 Keep the original proposal's qualification targets: 85% appropriate use, 90%
 restraint, 90% first-try validity and 98% after repair, 100% bound figure fidelity,
-4/5 clarity, median additional latency <=25% and cost <=30%. No live qualification
-or automated LLM-judge suite is included or claimed by this gated implementation.
+4/5 clarity, median additional latency <=25% and cost <=30%. The explicit opt-in scripts/qualify-ui.ts runs 40 synthetic cases, five paired
+text baselines and a follow-up using the six eligible facts tools plus render_ui.
+It uses existing credentials and records estimated token cost in the normal ledger,
+with day/turn caps intact. No paid LLM judge or private holdings are used.
+UI-QUALIFICATION.md records the actual qualified models and remaining blockers.
 
 ## Later phases
 

@@ -19,6 +19,11 @@ const PATHS = {
   trash: 'M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12',
   collapse: 'M6 15l6-6l6 6',
   expand: 'M6 9l6 6l6-6',
+  trend: 'M3 17l6-6l4 4l8-8M15 7h6v6',
+  calendar: 'M4 6h16v14H4zM4 10h16M8 3v4M16 3v4',
+  chat: 'M5 5h14v10H9l-4 4z',
+  slash: 'M15 4L9 20',
+  table: 'M4 5h16v14H4zM4 10h16M4 15h16M10 5v14',
 } as const;
 export type IconName = keyof typeof PATHS;
 export function Icon({ name, size = 16 }: { name: IconName; size?: number }) {

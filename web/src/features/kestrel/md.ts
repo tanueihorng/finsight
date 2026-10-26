@@ -3,12 +3,54 @@
 // added, and links must be http(s). The output is safe to set as innerHTML.
 export const esc = (s: unknown) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 
-function inline(s: string): string {
-  return s
-    .replace(/`([^`\n]+)`/g, '<code>$1</code>')
-    .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
-    .replace(/(^|[\s(])\*([^*\n]+)\*(?=[\s).,;:!?]|$)/g, '$1<em>$2</em>')
-    .replace(/\[([^\]\n]{1,200})\]\((https?:\/\/[^\s)]{1,2000})\)/g, (_m, t: string, u: string) => `<a href="${u}" target="_blank" rel="noopener noreferrer">${t}</a>`);
+// Parse escaped text into balanced inline markup. A delimiter stack handles
+// nested bold/italic (including ***); code and URLs are atomic, so formatting
+// never rewrites generated HTML attributes or the contents of a code span.
+function inline(s: string, depth = 0): string {
+  type Frame = { marker: '*' | '**' | ''; parts: string[] };
+  const stack: Frame[] = [{ marker: '', parts: [] }];
+  const append = (text: string) => stack[stack.length - 1]!.parts.push(text);
+  let i = 0;
+  while (i < s.length) {
+    const start = i;
+    while (i < s.length && !'*`[\\'.includes(s[i]!)) i++;
+    if (i > start) { append(s.slice(start, i)); continue; }
+    if (s[i] === '\\' && /[\\*`[\]]/.test(s[i + 1] || '')) { append(s[i + 1]!); i += 2; continue; }
+    if (s[i] === '`') {
+      const end = s.indexOf('`', i + 1);
+      if (end > i + 1) { append('<code>' + s.slice(i + 1, end) + '</code>'); i = end + 1; continue; }
+    }
+    if (s[i] === '[' && depth < 8) {
+      const link = s.slice(i).match(/^\[([^\]\n]{1,200})\]\((https?:\/\/[^\s)]{1,2000})\)/);
+      if (link) { append(`<a href="${link[2]}" target="_blank" rel="noopener noreferrer">${inline(link[1]!, depth + 1)}</a>`); i += link[0].length; continue; }
+    }
+    if (s[i] === '*') {
+      let end = i; while (s[end] === '*') end++;
+      let count = end - i;
+      const before = s[i - 1] || '', after = s[end] || '';
+      const canClose = !!before && !/\s/.test(before);
+      const canOpen = !!after && !/\s/.test(after);
+      if (canClose) while (stack.length > 1 && count >= stack[stack.length - 1]!.marker.length) {
+        const closed = stack.pop()!, tag = closed.marker === '**' ? 'strong' : 'em';
+        append(`<${tag}>${closed.parts.join('')}</${tag}>`);
+        count -= closed.marker.length;
+      }
+      // Single-star openers retain the subset's word-boundary rule, avoiding
+      // accidental emphasis in arithmetic such as price*quantity*rate.
+      while (count > 0 && canOpen && stack.length < 17) {
+        const marker = count >= 2 ? '**' : '*';
+        if (marker === '*' && count === end - i && before && !/[\s(*]/.test(before)) break;
+        stack.push({ marker, parts: [] }); count -= marker.length;
+      }
+      if (count) append('*'.repeat(count));
+      i = end; continue;
+    }
+    append(s[i++]!);
+  }
+  // While a response is streaming, unmatched delimiters remain literal. Never
+  // emit an opening HTML tag without its closing tag.
+  while (stack.length > 1) { const open = stack.pop()!; append(open.marker + open.parts.join('')); }
+  return stack[0]!.parts.join('');
 }
 // A table column is numeric (right-aligned) when every filled cell looks like a number or amount.
 const isNum = (c: string) => /^[\s(+−-]*[$S€£¥]*[+−-]?[\d,.]+%?[)\s]*[A-Za-z%]{0,4}$/.test(c.replace(/&[a-z]+;/g, ''));

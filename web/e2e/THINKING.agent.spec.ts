@@ -20,9 +20,9 @@ const model = (p: Page) => p.getByRole('combobox', { name: 'Model', exact: true 
 
 test('effort slider uses model levels, remembers each model across reloads, submits selected effort and hides for unsupported models', async ({ page }) => {
   await setup(page);
-  await expect(slider(page)).toHaveAttribute('aria-valuetext', 'high');
+  await expect(slider(page)).toHaveAttribute('aria-valuetext', 'High');
   await slider(page).focus(); await slider(page).press('Home'); await expect(slider(page)).toHaveAttribute('aria-valuetext', 'Off');
-  await slider(page).press('ArrowRight'); await expect(slider(page)).toHaveAttribute('aria-valuetext', 'low');
+  await slider(page).press('ArrowRight'); await expect(slider(page)).toHaveAttribute('aria-valuetext', 'Low');
   await model(page).selectOption('gpt-6-luna'); await expect(slider(page)).toHaveAttribute('aria-valuetext', 'Off');
   await slider(page).focus(); await slider(page).press('End'); await slider(page).press('ArrowLeft');
   await expect(slider(page)).toHaveAttribute('aria-valuetext', 'Extra high');
@@ -32,7 +32,7 @@ test('effort slider uses model levels, remembers each model across reloads, subm
   await expect(slider(page)).toBeDisabled();
   await expect(page.locator('.agent-turn:visible').last().locator('.agent-meta')).toBeVisible();
   await expect(slider(page)).toBeEnabled();
-  await model(page).selectOption('deepseek-flash'); await expect(slider(page)).toHaveAttribute('aria-valuetext', 'low');
+  await model(page).selectOption('deepseek-flash'); await expect(slider(page)).toHaveAttribute('aria-valuetext', 'Low');
   await model(page).selectOption('gpt-6-sol'); await expect(slider(page)).toHaveAttribute('aria-valuetext', 'Off');
   await model(page).selectOption('gpt-6-luna'); await expect(slider(page)).toHaveAttribute('aria-valuetext', 'Extra high');
   await page.reload(); await expect(slider(page)).toBeVisible(); await expect(slider(page)).toHaveAttribute('aria-valuetext', 'Extra high');
@@ -49,5 +49,4 @@ test('narrow panel slider is accessible, fits its container and sends DeepSeek o
   const fits = await slider(page).evaluate((el) => { const a = el.getBoundingClientRect(), b = el.parentElement!.getBoundingClientRect(); return a.left >= b.left && a.right <= b.right + 1; });
   expect(fits).toBe(true);
   const a11y = await new AxeBuilder({ page }).include('.kx-thinking').analyze(); expect(a11y.violations).toEqual([]);
-  await page.screenshot({ path: '/Users/tanueihorng/Desktop/investment/harness/runs/20261026T124149Z-KEFFORT-001-9b791a56/thinking-narrow.png' });
 });

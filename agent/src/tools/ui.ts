@@ -4,7 +4,7 @@ import { AgentError } from '../types.ts';
 import { getUiView, saveUiView, newId } from '../store/db.ts';
 
 type Obj = Record<string, unknown>;
-export type UiSource = { name: string; data: unknown; completedAt: string; account: string };
+export type UiSource = { callId?: string; name: string; data: unknown; completedAt: string; account: string };
 export type UiState = { enabled: boolean; attempts: number; completed: Map<string, UiSource> };
 const fail = (s: string): never => { throw new AgentError('UI_REJECTED', s); };
 function obj(x: unknown): Obj { return x !== null && typeof x === 'object' && !Array.isArray(x) ? x as Obj : fail('Source is not an object'); }
@@ -59,7 +59,7 @@ export function bindUi(input: UiRequest, state: UiState): UiSpec {
     const reportedAccount = s.name === 'get_portfolio' ? obj(data.summary).account : data.account;
     const hasReportedAccount = typeof reportedAccount === 'string' && reportedAccount.length > 0;
     const accountScope = hasReportedAccount ? `Account: ${reportedAccount}` : `Requested account: ${s.account}`;
-    const source = { callId: c.sourceCallId, tool: s.name, asOf: typeof data.asOf === 'string' ? data.asOf : s.completedAt,
+    const source = { callId: s.callId ?? c.sourceCallId, tool: s.name, asOf: typeof data.asOf === 'string' ? data.asOf : s.completedAt,
       scope: `${accountScope}${typeof base === 'string' ? ` · reporting currency: ${base}` : ''}${typeof data.by === 'string' ? ` · by ${data.by}` : ''}`,
       note: s.name === 'get_portfolio' ? 'Liabilities are not tracked; net worth excludes them.' : s.name === 'get_exposures' ? 'No ETF look-through. ' + String(data.note ?? '') : s.name === 'query_positions' ? `Returned ${String(data.returned)} of ${String(data.matched)} matched positions; totals cover returned positions only.` : '' };
     if (c.kind === 'stat_grid') {
@@ -91,7 +91,7 @@ export function bindUi(input: UiRequest, state: UiState): UiSpec {
 }
 export const uiTool: ToolDef = {
   name: 'render_ui', input: UiRequest,
-  description: 'Show verified stat cards or a sortable table from completed earlier-step get_portfolio/query_positions/get_cash/get_exposures/get_accounts/get_quote results in this turn. Choose JSON pointer fields, NOT values or labels. Server binds exact figures and units. No formulas, actions or markup. Prefer prose for short answers.',
+  description: 'Render interactive stat cards or a sortable table for explicit card/table requests. Sources: completed earlier-step get_portfolio, query_positions, get_cash, get_exposures, get_accounts or get_quote. Copy sourceCallId from result.uiSource.ref. Choose field pointers; server binds figures, labels and units. Table limit max50 (default20). complete:true finishes an answered request. No formulas, actions or markup.',
   async handler(input, ctx: ToolCtx) {
     if (!ctx.ui?.enabled || !ctx.cfg.uiViews || !ctx.threadId || !ctx.turnId || !ctx.callId || ctx.signal.aborted) return fail('Interactive views are disabled or unavailable on this surface');
     const prior = getUiView(ctx.db, ctx.turnId, ctx.callId);

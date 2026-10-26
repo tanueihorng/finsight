@@ -5,6 +5,7 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { fakeFinsight, testConfig, testCtx, PROXY_SECRET, type Fake } from './helpers.ts';
+import { loadConfig } from '../src/config.ts';
 import { UiRequest, UiView, MAX_UI_BYTES } from '../src/ui/schema.ts';
 import { bindUi, type UiState } from '../src/tools/ui.ts';
 import { buildRegistry } from '../src/tools/index.ts';
@@ -87,10 +88,19 @@ test('mock round trip: accepted API snapshot survives restart/event pruning and 
   const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'ui-db-')), 'agent.db');
   const o = await run((req, step) => {
     assert.ok(req.tools.some((t) => t.name === 'render_ui'));
-    return step === 0 ? [fetchCash] : step === 1 ? [render] : [{ type: 'text', text: 'Cash snapshot above.' }];
+    if (step === 0) return [fetchCash];
+    if (step === 1) {
+      const result = req.messages.at(-1)!.blocks.find((b) => b.type === 'tool_result');
+      assert.ok(result?.type === 'tool_result');
+      const data = JSON.parse(result.content);
+      assert.match(data.uiSource.ref, /^ui_source_\d+$/);
+      assert.equal(data.uiSource.tool, 'get_cash');
+      return [{ ...render, args: { version: 1, components: [{ ...request.components[0], sourceCallId: data.uiSource.ref }] } }];
+    }
+    return [{ type: 'text', text: 'Cash snapshot above.' }];
   }, true, true, file);
   const views = store.listUiViews(o.db, o.t.id); assert.equal(views.length, 1);
-  assert.ok(UiView.safeParse(views[0]).success); assert.match(views[0]!.spec.fallback, /SGD 4,350.00/);
+  assert.ok(UiView.safeParse(views[0]).success); assert.equal(views[0]!.spec.components[0]!.source.callId, 'cash1'); assert.match(views[0]!.spec.fallback, /SGD 4,350.00/);
   assert.equal(store.eventsAfter(o.db, o.t.id, 0).filter((e) => e.type === 'ui.render').length, 1);
   const canonical = JSON.stringify(views);
   o.engine.setBrain('other', mockBrain({ ...o.manifest, id: 'other' }, (_req, step) => step === 0 ? [render] : [{ type: 'text', text: 'Use a fresh source.' }]));
@@ -190,4 +200,87 @@ test('reported portfolio account takes precedence over request context; other to
   const ui = bindUi(parse({ version: 1, components: [{ id: 'net', kind: 'stat_grid', sourceCallId: 'p1', fields: ['/summary/netWorth'] }] }), s);
   assert.match(ui.fallback, /Account: actual/); assert.doesNotMatch(ui.fallback, /Account: requested/);
   assert.match(bindUi(parse(request), state()).fallback, /Requested account: main/);
+});
+
+test('operator UI setting persists in config while an explicit environment value takes precedence', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'ui-operator-'));
+  try {
+    fs.writeFileSync(path.join(home, 'config.json'), JSON.stringify({ uiViews: true }));
+    assert.equal(loadConfig({ AGENT_HOME: home }).uiViews, true);
+    assert.equal(loadConfig({ AGENT_HOME: home, KESTREL_UI: '0' }).uiViews, false);
+    assert.equal(loadConfig({ AGENT_HOME: home, KESTREL_UI: '1' }).uiViews, true);
+    fs.writeFileSync(path.join(home, 'config.json'), JSON.stringify({ uiViews: 'yes' }));
+    assert.throws(() => loadConfig({ AGENT_HOME: home }), /Invalid/);
+  } finally { fs.rmSync(home, { recursive: true, force: true }); }
+});
+
+test('explicit complete view avoids another model call; a rejected complete view still gets a repair step', async () => {
+  let steps = 0;
+  const o = await run((req, step) => {
+    steps++;
+    if (step === 0) return [fetchCash];
+    if (step === 1) {
+      const b = req.messages.at(-1)!.blocks[0]; assert.ok(b?.type === 'tool_result');
+      const ref = JSON.parse(b.content).uiSource.ref;
+      return [{ ...render, args: { version: 1, complete: true, components: [{ ...request.components[0], sourceCallId: ref }] } }];
+    }
+    throw new Error('An already complete view must not request another model step');
+  });
+  assert.equal(steps, 2); assert.equal(store.listUiViews(o.db, o.t.id).length, 1); o.db.close();
+  let repairSteps = 0;
+  const bad = await run((_req, step) => { repairSteps++; return step === 0 ? [{ ...render, args: { ...request, complete: true } }] : [{ type: 'text', text: 'Text fallback after rejection.' }]; });
+  assert.equal(repairSteps, 2); assert.equal(store.listUiViews(bad.db, bad.t.id).length, 0); bad.db.close();
+});
+
+test('model discovery advertises views only when the operator gate and an available tool-capable API brain agree', async () => {
+  const cfg = testConfig(fake, { uiViews: true }), db = store.openDb(':memory:'), tools = buildRegistry(), bus = new EventBus(db), finsight = testCtx(cfg, db).finsight;
+  const base = BrainManifest.parse({ apiVersion: 1, kind: 'brain', id: 'api', label: 'API', transport: 'openai-compatible', model: 'synthetic', pricing: { inputPerM: 0, outputPerM: 0, version: 't' }, capabilities: { tools: true, ui: true, streaming: true, contextTokens: 100000 }, costTier: '$' });
+  const entries = [base, { ...base, id: 'no-tools', capabilities: { ...base.capabilities, tools: false } }, { ...base, id: 'offline' }, { ...base, id: 'cli', transport: 'claude-code' as const }];
+  const brains = new Map(entries.map((manifest) => [manifest.id, { manifest, available: manifest.id !== 'offline', create: () => mockBrain(manifest, () => []) }]));
+  const engine = new ChatEngine({ cfg, db, tools, bus, finsight, brains });
+  const server = createApi({ cfg, db, tools, bus, finsight, brains, engine, brainsInvalid: [] });
+  await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+  const get = () => new Promise<{ brains: { id: string; ui: boolean }[] }>((resolve, reject) => {
+    http.get({ hostname: '127.0.0.1', port: (server.address() as AddressInfo).port, path: '/v1/brains', headers: { 'X-Agent-Secret': PROXY_SECRET, Host: `127.0.0.1:${cfg.port}` } }, (r) => {
+      let body = ''; r.on('data', (d) => { body += d; }); r.on('end', () => resolve(JSON.parse(body)));
+    }).on('error', reject);
+  });
+  try {
+    assert.deepEqual((await get()).brains.map((b) => [b.id, b.ui]), [['api', true], ['no-tools', false], ['offline', false], ['cli', false]]);
+    cfg.uiViews = false; assert.ok((await get()).brains.every((b) => !b.ui));
+  } finally { server.closeAllConnections(); await new Promise<void>((r) => server.close(() => r())); db.close(); }
+});
+
+// Thinking-effort merge: Luna/Sol views now run through the Responses transport.
+test('Responses brain at high effort: source reference, render_ui and complete view persist with encrypted reasoning kept private', async () => {
+  const { responsesBrain } = await import('../src/brains/responses.ts');
+  const luna = BrainManifest.parse(JSON.parse(fs.readFileSync(new URL('../plugins/brains/gpt-6-luna/manifest.json', import.meta.url), 'utf8')));
+  assert.equal(luna.transport, 'openai-responses'); assert.equal(luna.capabilities.ui, true);
+  const sse = (output: unknown[]) => new Response(`data: ${JSON.stringify({ type: 'response.completed', response: { status: 'completed', output, usage: { input_tokens: 10, output_tokens: 5 } } })}\n\n`);
+  const reasoning = { type: 'reasoning', id: 'rs_1', summary: [], encrypted_content: 'opaque-view-test' };
+  let step = 0;
+  const brain = responsesBrain(luna, 'test', async (_u, o) => {
+    const sent = JSON.parse(String(o?.body)); step++;
+    assert.equal(sent.reasoning.effort, 'high');
+    assert.ok(sent.tools.some((t: { name: string }) => t.name === 'render_ui'));
+    if (step === 1) return sse([reasoning, { type: 'function_call', id: 'fc_1', call_id: 'call_cash', name: 'get_cash', arguments: '{}' }]);
+    const out = sent.input.find((i: { type: string; call_id?: string }) => i.type === 'function_call_output' && i.call_id === 'call_cash');
+    const ref = JSON.parse(out.output).uiSource.ref as string;
+    assert.ok(sent.input.some((i: { encrypted_content?: string }) => i.encrypted_content === 'opaque-view-test'));
+    return sse([{ type: 'function_call', id: 'fc_2', call_id: 'call_ui', name: 'render_ui',
+      arguments: JSON.stringify({ version: 1, complete: true, components: [{ kind: 'stat_grid', id: 'cash', sourceCallId: ref, fields: ['/totalBase'] }] }) }]);
+  });
+  const cfg = testConfig(fake, { uiViews: true }); cfg.defaultBrain = 'gpt-6-luna';
+  const db = store.openDb(':memory:');
+  try {
+    const engine = new ChatEngine({ cfg, db, tools: buildRegistry(), bus: new EventBus(db), finsight: testCtx(cfg, db).finsight, brains: new Map() });
+    engine.setBrain('gpt-6-luna', brain);
+    const t = store.createThread(db);
+    engine.send({ threadId: t.id, content: 'Show my cash as cards', effort: 'high' });
+    for (let i = 0; i < 500 && engine.isRunning(t.id); i++) await new Promise((r) => setTimeout(r, 10));
+    assert.equal(step, 2, 'complete:true ends the turn without another model call');
+    const views = store.listUiViews(db, t.id); assert.equal(views.length, 1); assert.equal(views[0]!.spec.components[0]!.source.callId, 'call_cash');
+    assert.ok(store.eventsAfter(db, t.id, 0).some((e) => e.type === 'turn.finished'));
+    assert.ok(!JSON.stringify(store.listMessages(db, t.id).flatMap((m) => m.blocks)).includes('opaque-view-test'));
+  } finally { db.close(); }
 });
