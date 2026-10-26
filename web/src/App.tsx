@@ -1,3 +1,4 @@
+import { openNewTrade } from './features/trade/trade.ts';
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type AriaRole } from 'react';
 import { createPortal } from 'react-dom';
 import { useStore } from 'zustand';
@@ -106,7 +107,7 @@ const PANELS: Record<string, () => ReactNode> = {
   positions: () => (
     <Panel pid="positions" title={<span className="panel-title">PORTFOLIO &nbsp;·&nbsp; POSITIONS</span>} head={
       <div className="head-btns">
-        <button id="add-toggle" className="mini-btn" onClick={() => store().setState({ addFormOpen: !store().getState().addFormOpen })}>+ ADD</button>
+        <button id="add-toggle" className="mini-btn" aria-haspopup="dialog" aria-controls="trade-sheet" onClick={openNewTrade}>+ ADD</button>
         <button id="cash-btn" className="mini-btn" title="Set uninvested cash per currency (counts toward net worth and FX exposure)" onClick={() => open('cashEditorOpen')}>CASH</button>
         <button id="import-btn" className="mini-btn" onClick={() => open('importOpen')}>IMPORT</button>
         <button id="export-btn" className="mini-btn" onClick={() => void window.FinSight.actions?.exportPortfolio()}>EXPORT</button>

@@ -17,8 +17,6 @@ export default function AddFormIsland() {
   const symbolRef = useRef<HTMLInputElement>(null), qtyRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const button = document.getElementById('add-toggle');
-    button?.setAttribute('aria-expanded', String(open)); button?.setAttribute('aria-controls', 'add-form');
     if (open) symbolRef.current?.focus();
   }, [open]);
   useEffect(() => {

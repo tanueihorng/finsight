@@ -1,3 +1,5 @@
+import { transfer } from './lib/transfers.ts';
+import { previewTradeImport, importTrades } from './lib/trade-import.ts';
 /*
  * FINSIGHT // PERSONAL TERMINAL  -  backend
  * ----------------------------------------------------------------------------
@@ -276,6 +278,13 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
       const b = await readBody(req); await buy(b.symbol, b.quantity, b.price, b.date ? Date.parse(b.date) : null, acct, base);
       return sendJson(res, 200, await portfolioWithQuotes(base, acct));
     }
+    if (p === '/api/portfolio/transfer' && req.method === 'POST') {
+      const b = await readBody(req); await transfer(b.symbol, b.quantity, acct, b.toAccount);
+      return sendJson(res, 200, await portfolioWithQuotes(base, acct));
+    }
+    if (p === '/api/portfolio/import-preview' && req.method === 'POST') {
+      const b = await readBody(req); return sendJson(res, 200, previewTradeImport(b.csv, acct));
+    }
     if (p === '/api/portfolio/sell' && req.method === 'POST') {
       const b = await readBody(req); const r = await sell(b.symbol, b.quantity, b.price, acct, base, b.date ? Date.parse(b.date) : null);
       const pf = { ...await portfolioWithQuotes(base, acct), lastRealized: r.realized };
@@ -286,7 +295,9 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
       return sendJson(res, 200, await portfolioWithQuotes(base, acct));
     }
     if (p === '/api/portfolio/import' && req.method === 'POST') {
-      const b = await readBody(req); const r = await importCsv(b.csv, !!b.replace, acct, base);
+      const b = await readBody(req); const preview = previewTradeImport(b.csv, acct);
+      if (preview.kind === 'trades' && b.replace) throw new Error('Trade imports preserve history; turn off Replace');
+      const r = preview.kind === 'trades' ? await importTrades(b.csv, b.previewToken, acct, base) : await importCsv(b.csv, !!b.replace, acct, base);
       const pf = { ...await portfolioWithQuotes(base, acct), imported: r };
       return sendJson(res, 200, pf);
     }

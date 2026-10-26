@@ -146,3 +146,37 @@ export function parseCsv(text: unknown): CsvRow[] {
   }
   return rows;
 }
+
+export interface IbkrTrade { symbol: string; type: 'BUY' | 'SELL'; quantity: number; price: number; time: number; currency: string }
+// Explicit IBKR Trades sections only; never mistake a positions snapshot for fills.
+// Fail on unsupported instruments or malformed rows rather than silently losing trades.
+export function parseIbkrTrades(text: unknown): IbkrTrade[] | null {
+  const rows = String(text || '').split(/\r?\n/).filter((l) => l.trim()).map(splitCsvLine);
+  if (!rows.some((r) => r[0] === 'Trades')) return null;
+  const exchanges: Record<string, string> = {};
+  for (const r of rows) if (r[0] === 'Financial Instrument Information' && r[1] === 'Data') exchanges[r[3] || ''] = r[8] || '';
+  let header: string[] = [];
+  const out: IbkrTrade[] = [];
+  const num = (v: string) => v.trim() ? Number(v.replaceAll(',', '')) : NaN;
+  for (const r of rows) {
+    if (r[0] !== 'Trades') continue;
+    if (r[1] === 'Header') { header = r; continue; }
+    if (r[1] !== 'Data' || /total/i.test(r[2] || '') || r.slice(2, 5).some((c) => /^(Total|SubTotal)(\b|$)/i.test(c))) continue;
+    const get = (...names: string[]) => r[header.findIndex((h) => names.includes(h))] || '';
+    const category = get('Asset Category');
+    if (!/^(Stocks|ETFs|Equities|ADRs)$/i.test(category)) throw new Error(`Unsupported IBKR trade category: ${category || 'missing header'}`);
+    const discriminator = get('DataDiscriminator');
+    if (discriminator && !/^(Order|Trade|Execution)$/i.test(discriminator)) throw new Error(`Unsupported IBKR trade row: ${discriminator}`);
+    const symbol = applyExchangeSuffix(get('Symbol'), exchanges[get('Symbol')]);
+    const signed = num(get('Quantity')), price = num(get('T. Price', 'Trade Price', 'Price'));
+    const date = get('Date/Time', 'Date', 'Trade Date');
+    // Statements have no timezone column. Use the displayed trade day at UTC
+    // midnight for deterministic matching with manually dated ledger entries.
+    const day = date.match(/^(\d{4}-\d{2}-\d{2})(?:$|[, T])/ )?.[1];
+    const time = day ? Date.parse(day + 'T00:00:00Z') : NaN;
+    const currency = get('Currency').toUpperCase();
+    if (!/^[A-Z0-9.^=\-_:]{1,24}$/.test(symbol) || !Number.isFinite(signed) || signed === 0 || !Number.isFinite(price) || price < 0 || !Number.isFinite(time) || new Date(time).toISOString().slice(0, 10) !== day || time > Date.now() || !/^[A-Z]{3}$/.test(currency)) throw new Error('Invalid IBKR trade: check symbol, quantity, price, currency and date');
+    out.push({ symbol, type: signed > 0 ? 'BUY' : 'SELL', quantity: Math.abs(signed), price, time, currency });
+  }
+  return out;
+}

@@ -45,6 +45,8 @@ const MIGRATIONS: string[] = [
     turn_id TEXT NOT NULL, call_id TEXT NOT NULL, view_json TEXT NOT NULL,
     UNIQUE(turn_id, call_id));
    CREATE INDEX ui_views_thread ON ui_views(thread_id);`,
+  `ALTER TABLE trace_steps ADD COLUMN cache_read_tokens INTEGER;
+   ALTER TABLE trace_steps ADD COLUMN cache_write_tokens INTEGER;`,
 ];
 
 export function openDb(file: string): DB {
@@ -107,6 +109,7 @@ export function updateThread(db: DB, id: string, patch: { title?: string; archiv
 }
 export function deleteThread(db: DB, id: string): void {
   db.transaction(() => {
+    db.prepare('DELETE FROM trace_steps WHERE turn_id IN (SELECT id FROM turns WHERE thread_id = ?)').run(id);
     for (const sql of ['DELETE FROM ui_views WHERE thread_id = ?', 'DELETE FROM fts_messages WHERE thread_id = ?', 'DELETE FROM events WHERE thread_id = ?', 'DELETE FROM messages WHERE thread_id = ?', 'DELETE FROM turns WHERE thread_id = ?', 'DELETE FROM threads WHERE id = ?']) db.prepare(sql).run(id);
   })();
 }
@@ -195,9 +198,9 @@ export function pruneEvents(db: DB, olderThanMs = 30 * 864e5): number {
 
 // ---------------------------------------------------------------- traces
 export function addTraceStep(db: DB, turnId: string, step: number, s: { kind: string; name?: string; args?: unknown; resultSummary?: string; ok?: boolean; usage?: Usage; costUsd?: number; ms?: number }): void {
-  db.prepare('INSERT OR REPLACE INTO trace_steps(turn_id, step, kind, name, args_json, result_summary, ok, input_tokens, output_tokens, cost_usd, ms, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
+  db.prepare('INSERT OR REPLACE INTO trace_steps(turn_id, step, kind, name, args_json, result_summary, ok, input_tokens, output_tokens, cost_usd, ms, created_at, cache_read_tokens, cache_write_tokens) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
     .run(turnId, step, s.kind, s.name ?? null, s.args === undefined ? null : JSON.stringify(s.args), s.resultSummary ?? null, s.ok === undefined ? null : (s.ok ? 1 : 0),
-      s.usage?.inputTokens ?? null, s.usage?.outputTokens ?? null, s.costUsd ?? null, s.ms ?? null, Date.now());
+      s.usage?.inputTokens ?? null, s.usage?.outputTokens ?? null, s.costUsd ?? null, s.ms ?? null, Date.now(), s.usage?.cacheReadTokens ?? null, s.usage?.cacheWriteTokens ?? null);
 }
 export function getTrace(db: DB, turnId: string): unknown[] {
   return db.prepare('SELECT * FROM trace_steps WHERE turn_id = ? ORDER BY step').all(turnId);

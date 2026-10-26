@@ -51,8 +51,9 @@ export async function ledger(baseIn: string | null | undefined, accountId?: stri
       id: t.id, type: t.type as LedgerRow['type'], symbol: t.symbol, quantity: t.quantity ?? null, price: t.price ?? null,
       currency: t.currency || null, time: t.time, account: a.name, accountId: a.id,
     };
+    if (t.type === 'TRANSFER') { row.transferSide = t.transferSide; row.otherAccount = p.accounts.find((a) => a.id === t.otherAccountId)?.name || 'Removed account'; }
     if (t.type === 'BUY') {
-      row.editable = !!lotForBuy(findPos(a, t.symbol), t);
+      row.editable = !t.transferred && !!lotForBuy(findPos(a, t.symbol), t);
       row.valueBase = t.quantity! * t.price! * rate(t.currency); // a BUY stores both
     }
     if (t.type === 'SELL' && t.realized != null) {
@@ -98,6 +99,7 @@ export function editBuy(id: unknown, { date, price, quantity }: { date?: unknown
   return withLock(() => withUndo('Edit buy', async () => {
     const p = loadPortfolio();
     const { acc, tx } = findTx(p, id);
+    if (tx.transferred) throw new Error('This buy has transferred lots; use UNDO to reverse the transfer first');
     if (tx.type !== 'BUY') throw new Error('Only buys can be edited — use UNDO to reverse a sale');
     const pos = findPos(acc, tx.symbol);
     const lot = lotForBuy(pos, tx);
@@ -138,6 +140,7 @@ export function deleteBuy(id: unknown) {
   return withLock(() => withUndo('Delete buy', () => {
     const p = loadPortfolio();
     const { acc, tx } = findTx(p, id);
+    if (tx.transferred) throw new Error('This buy has transferred lots; use UNDO to reverse the transfer first');
     if (tx.type !== 'BUY') throw new Error('Only buys can be deleted here — use UNDO to reverse a sale');
     const pos = findPos(acc, tx.symbol);
     const lot = lotForBuy(pos, tx);

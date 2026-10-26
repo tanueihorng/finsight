@@ -4,7 +4,7 @@ const scoped = [...holdings, 'alerts', 'detail'] as const;
 // refreshed in order: 'accounts' comes first where a write can remove the
 // active account, so later readers use the corrected account.
 export const mutationInvalidations = {
-  buy: holdings, sell: holdings, delete: holdings, import: holdings, reset: holdings,
+  transfer: holdings, buy: holdings, sell: holdings, delete: holdings, import: holdings, reset: holdings,
   'ledger-edit': holdings, 'ledger-delete': holdings,
   // Undo can revert trades, cash, accounts, the watchlist and alerts.
   undo: ['accounts', ...holdings.filter((key) => key !== 'accounts'), 'watchlist', 'chart-watch', 'alerts', 'chart-alerts'],

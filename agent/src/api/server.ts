@@ -113,6 +113,18 @@ async function route(d: ApiDeps, req: http.IncomingMessage, res: http.ServerResp
   }
   if (p === '/v1/plugins' && m === 'GET') return send(res, 200, { brains: { valid: [...d.brains.keys()], invalid: d.brainsInvalid }, tools: d.tools.list().map((t) => t.name) });
 
+  if (p === '/v1/threads/delete-all/preview' && m === 'GET') {
+    const ids = (d.db.prepare('SELECT id FROM threads ORDER BY id').all() as { id: string }[]).map((r) => r.id);
+    return send(res, 200, { ids });
+  }
+  if (p === '/v1/threads/delete-all' && m === 'POST') {
+    const b = z.object({ confirm: z.literal(true), ids: z.array(z.string()).max(100000) }).parse(await readJson(req, 4 * 1024 * 1024));
+    const ids = (d.db.prepare('SELECT id FROM threads ORDER BY id').all() as { id: string }[]).map((r) => r.id);
+    if (JSON.stringify([...b.ids].sort()) !== JSON.stringify(ids)) throw new AgentError('CONFLICT', 'Chat list changed; review Clear all chats again', 409);
+    if (ids.some((id) => d.engine.isRunning(id))) throw new AgentError('CONFLICT', 'Stop all running replies first', 409);
+    d.db.transaction(() => { for (const id of ids) store.deleteThread(d.db, id); })();
+    return send(res, 200, { ok: true, deleted: ids.length });
+  }
   if (p === '/v1/threads' && m === 'GET') return send(res, 200, { threads: store.listThreads(d.db, u.searchParams.get('archived') === '1').map((t) => ({ ...t, preview: store.threadPreview(d.db, t.id) })) });
   if (p === '/v1/threads' && m === 'POST') {
     const b = NewThread.parse(await readJson(req));

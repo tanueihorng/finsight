@@ -689,3 +689,20 @@ is changed by this feature. Provider availability is not asserted by offline tes
 Sources checked 2026-10-26: OpenAI Luna/Sol model pages, reasoning guide and
 Responses streaming contract; DeepSeek Thinking Mode guide. See README for user
 behavior and the implementation report for verification and known limits.
+
+## Chat management and cache observability amendment — 2026-10-27
+
+Owner selected FEAT-003 and FEAT-005 for implementation. FR-1.8 deletion confirmation
+now appears in the active header and recent-chat list. `/delete` asks for permanent
+thread deletion; `/clear` is a history-preserving alias for `/new`. Bulk deletion
+requires two UI confirmations, includes archived/unpaginated threads, validates the
+confirmed ID snapshot and rejects any running reply before one atomic transaction.
+Thread deletion also purges trace-step content. Uploads and operational logs retain
+their existing retention policy; this does not promise secure erasure.
+
+System instructions, skill index and optional UI guidance form a stable prefix;
+the current date/timezone follows an explicit runtime-context delimiter. Anthropic
+sets its system breakpoint before that suffix. Provider cache read/write counters
+are persisted as nullable trace columns through migration3. A synthetic DeepSeek
+probe supports date-prefix reuse; no other-provider or long-term savings claim is
+made. Tool permissions, existing spend limits and portfolio read-only rules remain.

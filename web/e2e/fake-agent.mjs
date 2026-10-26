@@ -87,6 +87,12 @@ const server = http.createServer(async (req, res) => {
     { id: 'deepseek', label: 'DeepSeek', available: true }, { id: 'tavily', label: 'Tavily', available: true }, { id: 'brave', label: 'Brave', available: false, reason: 'Add BRAVE_API_KEY' }] });
   if (req.method === 'GET' && p === '/skills') return json(res, 200, { skills: [{ name: 'pre-trade-check', description: 'Check a trade against the policy' }] });
   if (req.method === 'GET' && p === '/cost') return json(res, 200, { period: u.searchParams.get('period') || 'day', totalUsd: 0.5, capUsdPerDay: 2 });
+  if (req.method === 'GET' && p === '/threads/delete-all/preview') return json(res, 200, { ids: [...threads.keys()].sort() });
+  if (req.method === 'POST' && p === '/threads/delete-all') {
+    const b = await readBody(req);
+    if (!b.confirm || JSON.stringify([...b.ids].sort()) !== JSON.stringify([...threads.keys()].sort())) return json(res, 409, { error: { message: 'Chat list changed' } });
+    threads.clear(); return json(res, 200, { ok: true });
+  }
   if (req.method === 'GET' && p === '/threads') return json(res, 200, { threads: [...threads.values()].map(publicThread).reverse() });
   if (req.method === 'POST' && p === '/threads') {
     const b = await readBody(req);

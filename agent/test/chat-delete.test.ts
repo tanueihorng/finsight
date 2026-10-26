@@ -1,0 +1,41 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import type { AddressInfo } from 'node:net';
+import { createApi } from '../src/api/server.ts';
+import * as store from '../src/store/db.ts';
+import { fakeFinsight, testConfig, PROXY_SECRET } from './helpers.ts';
+import { EventBus } from '../src/chat/bus.ts';
+import { ChatEngine } from '../src/chat/engine.ts';
+import { buildRegistry } from '../src/tools/index.ts';
+import { finsightClient } from '../src/tools/finsight.ts';
+test('bulk delete requires confirmation, rejects changed lists or active replies, and removes all archived and unpaginated chats atomically', async () => {
+  const fake = await fakeFinsight(), cfg = testConfig(fake), db = store.openDb(':memory:');
+  const bus = new EventBus(db), tools = buildRegistry(), finsight = finsightClient(cfg.finsightUrl, cfg.finsightDataDir);
+  const engine = new ChatEngine({ cfg, db, tools, brains: new Map(), finsight, bus });
+  let server = createApi({ cfg, db, engine, bus, brains: new Map(), brainsInvalid: [], tools, finsight });
+  await new Promise<void>((r) => server.listen(0, '127.0.0.1', r)); cfg.port = (server.address() as AddressInfo).port;
+  await new Promise<void>((r) => server.close(() => r()));
+  server = createApi({ cfg, db, engine, bus, brains: new Map(), brainsInvalid: [], tools, finsight });
+  await new Promise<void>((r) => server.listen(cfg.port, '127.0.0.1', r));
+  const url = `http://127.0.0.1:${cfg.port}/v1/threads/delete-all`;
+  const headers = { 'x-agent-secret': PROXY_SECRET, 'Content-Type': 'application/json' };
+  const post = (body: unknown) => fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
+  try {
+    for (let i = 0; i < 205; i++) store.createThread(db, `Chat ${i}`);
+    const t = store.listThreads(db)[0]!; store.updateThread(db, t.id, { archived: true });
+    const turn = store.createTurn(db, t.id, 'fake');
+    store.addTraceStep(db, turn.id, 0, { kind: 'tool', args: { text: 'synthetic private chat' } });
+    const preview = await fetch(url + '/preview', { headers }); assert.equal(preview.status, 200);
+    const { ids } = await preview.json() as { ids: string[] }; assert.equal(ids.length, 205);
+    assert.equal((await post({ ids })).status, 400);
+    assert.equal((await post({ confirm: true, ids: ids.slice(1) })).status, 409);
+    const realRunning = engine.isRunning.bind(engine);
+    engine.isRunning = (id) => id === t.id ? turn.id : null;
+    assert.equal((await post({ confirm: true, ids })).status, 409);
+    assert.equal((db.prepare('SELECT COUNT(*) n FROM threads').get() as any).n, 205);
+    engine.isRunning = realRunning;
+    assert.equal((await post({ confirm: true, ids })).status, 200);
+    assert.equal((db.prepare('SELECT COUNT(*) n FROM threads').get() as any).n, 0);
+    assert.equal(store.getTrace(db, turn.id).length, 0);
+  } finally { server.closeAllConnections(); await new Promise<void>((r) => server.close(() => r())); db.close(); await fake.close(); }
+});

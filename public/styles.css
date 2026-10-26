@@ -371,7 +371,9 @@ body {
 .news .news-meta { color: var(--dim); font-size: 10px; margin-top: 2px; }
 
 /* ---------------- modal ---------------- */
-.modal { position: fixed; inset: 0; background: rgba(0,0,0,.7); display: flex; align-items: center; justify-content: center; z-index: 100; }
+/* App dialogs sit above chat (900), trade sheet (950) and expanded charts (1000).
+   In-app confirmations (1100) remain above these dialogs. */
+.modal { position: fixed; inset: 0; background: rgba(0,0,0,.7); display: flex; align-items: center; justify-content: center; z-index: 1050; }
 .modal-box { background: var(--panel); border: 1px solid var(--amber); border-radius: 5px; width: 560px; max-width: 92vw; box-shadow: 0 12px 50px rgba(0,0,0,.6); max-height: 90vh; display: flex; flex-direction: column; }
 .modal-box.wide { width: 920px; }
 .modal-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--head); }

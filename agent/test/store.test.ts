@@ -11,7 +11,7 @@ test('migrations apply once; db file is private (0600)', () => {
   const f = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'db-')), 'a.db');
   const db = store.openDb(f); db.close();
   const db2 = store.openDb(f);
-  assert.equal((db2.prepare('SELECT COUNT(*) n FROM schema_migrations').get() as any).n, 2);
+  assert.equal((db2.prepare('SELECT COUNT(*) n FROM schema_migrations').get() as any).n, 3);
   assert.equal(fs.statSync(f).mode & 0o777, 0o600);
 });
 
@@ -67,7 +67,7 @@ test('cache honours TTL', async () => {
 test('migration backup includes committed WAL data and preserves v1 rollback before adding views', () => {
   const f = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'db-upgrade-')), 'a.db');
   const old = store.openDb(f);
-  old.exec('DROP TABLE ui_views; DELETE FROM schema_migrations WHERE version = 2');
+  old.exec('DROP TABLE ui_views; ALTER TABLE trace_steps DROP COLUMN cache_read_tokens; ALTER TABLE trace_steps DROP COLUMN cache_write_tokens; DELETE FROM schema_migrations WHERE version >= 2');
   const t = store.createThread(old, 'Committed WAL row');
   assert.ok(fs.statSync(f + '-wal').size > 0);
   const upgraded = store.openDb(f);

@@ -49,7 +49,7 @@ export interface Summary {
 }
 /** lib/store.ts transactions; lib/portfolio.ts buyUnlocked, sell, del; legacy fields optional. */
 export interface Transaction {
-  id?: string; type: 'BUY' | 'SELL' | 'DELETE'; symbol: string; time?: number | null;
+  id?: string; type: 'BUY' | 'SELL' | 'DELETE' | 'TRANSFER'; symbol: string; time?: number | null;
   quantity?: number; price?: number; currency?: string; realized?: number;
   fxUsd?: number | null; fxUsdSell?: number | null; usdBaseSell?: number | null; usdBaseSellCcy?: string;
   lotsSold?: { q: number; px: number; fxUsd: number | null; t: number | null; usdBase: number | null; usdBaseCcy: string | null }[];
@@ -101,8 +101,9 @@ export interface DividendsReport {
 }
 /** lib/ledger.ts ledger: DELETE/legacy SELL rows have no valueBase; old ids/times may be absent. */
 export interface LedgerRow {
-  id?: string; type: 'BUY' | 'SELL' | 'DELETE'; symbol: string;
+  id?: string; type: 'BUY' | 'SELL' | 'DELETE' | 'TRANSFER'; symbol: string;
   quantity: number | null; price: number | null; currency: string | null; time?: number | null;
+  transferSide?: 'in' | 'out'; otherAccount?: string;
   account: string; accountId: string; editable?: boolean; valueBase?: number;
   realized?: number; realizedStock?: number; realizedFx?: number; legacy?: boolean;
 }
