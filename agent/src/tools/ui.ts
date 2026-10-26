@@ -91,7 +91,7 @@ export function bindUi(input: UiRequest, state: UiState): UiSpec {
 }
 export const uiTool: ToolDef = {
   name: 'render_ui', input: UiRequest,
-  description: 'Show verified stat cards or a sortable table from completed earlier-step get_portfolio/query_positions/get_cash/get_exposures/get_accounts/get_quote results in this turn. Copy sourceCallId from uiSource.ref INSIDE a completed result; never invent it or use a protocol call ID. Choose JSON pointer fields, NOT values or labels. Server binds exact figures and units. No formulas, actions or markup. Prefer prose for short answers.',
+  description: 'Render interactive stat cards or a sortable table for explicit card/table requests. Sources: completed earlier-step get_portfolio, query_positions, get_cash, get_exposures, get_accounts or get_quote. Copy sourceCallId from result.uiSource.ref. Choose field pointers; server binds figures, labels and units. Table limit max50 (default20). complete:true finishes an answered request. No formulas, actions or markup.',
   async handler(input, ctx: ToolCtx) {
     if (!ctx.ui?.enabled || !ctx.cfg.uiViews || !ctx.threadId || !ctx.turnId || !ctx.callId || ctx.signal.aborted) return fail('Interactive views are disabled or unavailable on this surface');
     const prior = getUiView(ctx.db, ctx.turnId, ctx.callId);

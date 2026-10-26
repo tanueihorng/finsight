@@ -654,3 +654,13 @@ DeepSeek Flash and Pro pass the documented live synthetic run. Other API brains
 are not qualified in this environment and remain disabled. CLI bridging remains
 out of scope. Qualification uses no private holdings and does not authorize trades.
 See UI-QUALIFICATION.md for measured results and limitations.
+
+
+### OpenAI views qualification resumed — 2026-10-26
+
+Luna/Sol now pass live synthetic UI qualification with an operational provider
+connection. Guidance explicitly chooses interactive views for supported card/table
+requests, uses prose for text-only/single-fact prompts, and distinguishes the
+view's50-row cap from a fetch's100-row limit. All four configured API models were
+rechecked; only qualified flags are enabled. Thinking-effort work is still separate.
+Measurements and repeated-timing method are in UI-QUALIFICATION.md.

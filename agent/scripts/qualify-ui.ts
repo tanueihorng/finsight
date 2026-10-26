@@ -24,7 +24,16 @@ if (!fs.statSync(out).isDirectory()) throw new Error('Output directory must exis
 const production = loadConfig();
 const discovered = loadBrains(production); // resolve existing credentials before test helper disables Keychain
 const pick = process.argv.includes('--models') ? new Set(process.argv[process.argv.indexOf('--models') + 1]!.split(',')) : null;
-const limit = process.argv.includes('--limit') ? Math.max(1, Math.min(40, Number(process.argv[process.argv.indexOf('--limit') + 1]))) : 40;
+const integerArg = (name: string, min: number, max: number, fallback: number) => {
+  const i = process.argv.indexOf(name); if (i < 0) return fallback;
+  const n = Number(process.argv[i + 1]);
+  if (!Number.isInteger(n) || n < min || n > max) throw new Error(`${name} must be an integer from ${min} to ${max}`);
+  return n;
+};
+const perfRepeats = integerArg('--performance-repeats', 1, 3, 0);
+const cases = perfRepeats ? Array.from({ length: perfRepeats }, (_, i) => UI_CASES.filter((c) => c.paired).map((c) => ({ ...c, id: `${c.id}-repeat-${i + 1}` }))).flat() : null;
+const limit = integerArg('--limit', 1, 40, 40);
+if (perfRepeats && process.argv.includes('--limit')) throw new Error('Do not combine --performance-repeats with --limit');
 const eligible = [...discovered.brains.values()].filter((b) => (!pick || pick.has(b.manifest.id)) && b.available && ['anthropic', 'openai-compatible'].includes(b.manifest.transport));
 const ledger = new Database(production.dbPath, { fileMustExist: true });
 ledger.pragma('busy_timeout = 5000');
@@ -114,7 +123,7 @@ async function qualify(entry: typeof eligible[number]) {
     return row;
   }
   try {
-    for (const c of UI_CASES.slice(0, limit)) {
+    for (const c of (cases ?? UI_CASES.slice(0, limit))) {
       const candidate = await turn(c, true);
       let baseline = null;
       if (c.paired && !blocked) baseline = await turn(c, false);
@@ -125,9 +134,9 @@ async function qualify(entry: typeof eligible[number]) {
     }
   } finally {
     const positives = details.filter((x) => x.candidate.expected !== 'text'), negatives = details.filter((x) => x.candidate.expected === 'text');
-    const attempts = details.filter((x) => x.candidate.attempts.length), pairs = details.filter((x) => x.baseline && x.candidate.status === 'succeeded' && x.baseline.status === 'succeeded');
+    const attempts = details.filter((x) => x.candidate.attempts.length), pairs = details.filter((x) => x.baseline && x.candidate.appropriate && x.candidate.views.length > 0 && x.candidate.status === 'succeeded' && x.baseline.status === 'succeeded');
     const ratio = (yes: number, total: number) => total ? yes / total : 0;
-    const stats = { completed: details.length, expectedCases: UI_CASES.length, positiveRate: ratio(positives.filter((x) => x.candidate.appropriate).length, positives.length),
+    const stats = { mode: perfRepeats ? 'performance-only' : 'full', completed: details.length, expectedCases: UI_CASES.length, positiveRate: ratio(positives.filter((x) => x.candidate.appropriate).length, positives.length),
       restraintRate: ratio(negatives.filter((x) => x.candidate.appropriate).length, negatives.length),
       firstTryRate: ratio(attempts.filter((x) => x.candidate.attempts[0]).length, attempts.length),
       repairRate: ratio(attempts.filter((x) => x.candidate.attempts.slice(0, 2).some(Boolean)).length, attempts.length),
@@ -135,8 +144,8 @@ async function qualify(entry: typeof eligible[number]) {
       medianExtraCost: median(pairs.map((x) => x.candidate.costUsd / Math.max(x.baseline.costUsd, 1e-9) - 1)),
       medianExtraLatency: median(pairs.map((x) => x.candidate.ms / Math.max(x.baseline.ms, 1) - 1)),
       costUsd: modelCost, blocked: blocked || null, unknownUsage };
-    const contractPass = stats.completed === UI_CASES.length && stats.positiveRate >= .85 && stats.restraintRate >= .9 && stats.firstTryRate >= .9 && stats.repairRate >= .98 && stats.faithful && stats.followupPass;
-    const performancePass = stats.pairs === 5 && stats.medianExtraCost !== null && stats.medianExtraCost <= .3 && stats.medianExtraLatency !== null && stats.medianExtraLatency <= .25;
+    const contractPass = !perfRepeats && stats.completed === UI_CASES.length && stats.positiveRate >= .85 && stats.restraintRate >= .9 && stats.firstTryRate >= .9 && stats.repairRate >= .98 && stats.faithful && stats.followupPass;
+    const performancePass = stats.pairs >= 5 && stats.medianExtraCost !== null && stats.medianExtraCost <= .3 && stats.medianExtraLatency !== null && stats.medianExtraLatency <= .25;
     results[id] = { ...stats, contractPass, performancePass, enabled: false, note: 'Human clarity review and rollout decision still required.' };
     writeSummary();
     fs.rmSync(cfg.home, { recursive: true, force: true }); fs.rmSync(cfg.recordsDir, { recursive: true, force: true });

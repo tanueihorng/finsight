@@ -7,7 +7,8 @@ import AxeBuilder from '@axe-core/playwright';
 import { seeded } from './helpers';
 const dir = process.env.UI_QUAL_DIR;
 if (!dir) test.skip('live synthetic UI visual proof requires UI_QUAL_DIR', () => {});
-else for (const model of ['deepseek-flash', 'deepseek-pro']) {
+else for (const model of (process.env.UI_QUAL_MODELS || 'deepseek-flash,deepseek-pro').split(',').filter(Boolean)) {
+  if (!/^[a-z0-9-]+$/.test(model)) throw new Error('Invalid UI proof model id');
   const rows = JSON.parse(fs.readFileSync(path.join(dir, `${model}.json`), 'utf8')) as { candidate: { prompt: string; text: string; views: any[] } }[];
   for (const kind of ['stat_grid', 'table']) test(`${model}: recorded live ${kind} renders accessibly`, async ({ page }) => {
     const c = rows.map((x) => x.candidate).find((x) => x.views.some((v) => v.spec.components.some((p: any) => p.kind === kind)));
