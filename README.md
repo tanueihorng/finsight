@@ -10,7 +10,7 @@ Now with <b>↗ Kestrel</b>, a built-in AI research agent that knows your portfo
 
 <p>
 <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-a78bfa">
-<img alt="Node ≥ 18" src="https://img.shields.io/badge/node-%E2%89%A5%2018-2ec27e">
+<img alt="Node ≥ 24" src="https://img.shields.io/badge/node-%E2%89%A5%2024-2ec27e">
 <img alt="API keys: none" src="https://img.shields.io/badge/API%20keys-none-38bdf8">
 <img alt="Dependencies: zero" src="https://img.shields.io/badge/dependencies-zero-a78bfa">
 <img alt="Runs 100% local" src="https://img.shields.io/badge/runs-100%25%20local-2ec27e">
@@ -51,11 +51,12 @@ Press **⌘/** anywhere in FinSight and a chat panel slides in. **Kestrel** is a
 | | |
 |---|---|
 | 🧠 **Any model** | DeepSeek (default, very cheap), Claude Haiku, Claude Code, or any OpenAI-compatible model. Switch mid-chat from the model picker; adding a model is one manifest file |
-| 📊 **Knows your portfolio** | 35 read-only tools: positions, exposure by currency/sector, cash, dividends, events, ledger, journal. Totals and weights come from code, not model arithmetic |
+| 📊 **Knows your portfolio** | 38 read-only tools: positions, exposure by currency/sector, cash, dividends, events, ledger, journal. Totals and weights come from code, not model arithmetic |
 | 📈 **Uses your strategies** | Runs the same strategy engines as the chart (pullback, breakout, MA trend, RSI-2, DCA zones), scans holdings for live setups, sizes positions from your real cash |
-| 🔎 **Researches** | SEC EDGAR filings and XBRL financials, web search and page reading. Every fact carries a source and a date |
+| 🔎 **Researches** | SEC EDGAR filings and XBRL financials, web search (Tavily / Brave / SearchGPT) and page reading. Every fact carries a source and a date |
 | 🧩 **Skills** | `/pre-trade-check`, `/position-review`, `/earnings-review`, `/why-did-it-move`, `/strategy-scan` — or drop in your own [Agent Skills](https://github.com/anthropics/skills)-format playbooks |
 | 📎 **Files & pictures** | Paste or drop PDFs, Word docs, CSVs or chart screenshots and ask about them |
+| 🗂️ **Session rail & prompt library** | Session history rail (switch, rename, pin, delete threads), start screen with prompt ideas, and Claude-style typography (bundled Source Serif 4 answers) |
 | 🖥️ **Terminal-style chat** | Inspired by Claude Code: streamed answers, live tool calls (`⏺ get_portfolio ⎿ 6 positions`), a "Pricing it in…" status line with rising green candles and a $, `/` command menu, per-answer cost and trace |
 | 🔍 **Fully traceable** | Every model call, tool call and data request is logged locally, so any answer can be traced end to end |
 
@@ -130,7 +131,7 @@ Or drop in a raw **Interactive Brokers / moomoo / Tiger** statement — FinSight
 | 📲 **Installable** | Install as its own app window; opens instantly; warm cache survives restarts and Yahoo hiccups |
 | 🔔 **Price alerts** | Desktop notification + toast + beep, even when the browser is closed |
 | 🎨 **Themes & fonts** | Switch accent palette and font; remembered per browser |
-| 🔒 **PIN lock** | Hashed PIN with brute-force throttling; the data API stays locked |
+| 🔒 **PIN lock & opening bell** | Hashed PIN with brute-force throttling; "Opening Bell" landing stage with live diagnostic feed & clock |
 | 🗂️ **Multiple accounts** | Separate portfolios (IBKR / Crypto / SGX…) + an All-Accounts view |
 | ⚙️ **Configurable layout** | Choose & reorder cards and panels; drag the ⠿ grip to rearrange |
 
@@ -211,7 +212,7 @@ All free, no key:
 
 Every component, how they talk to each other, and where data lives. FinSight owns your portfolio data and all market-data fetching. Kestrel runs as a supervised loopback service with read-only access, and everything except model and data providers stays on your machine.
 
-<div align="center"><img src="docs/architecture.svg" alt="Full FinSight + Kestrel architecture: browser, FinSight server, Kestrel agent (API, chat engine, model adapters, 35 tools, MCP server, sandbox), internet services and local storage" width="100%"></div>
+<div align="center"><img src="docs/architecture.svg" alt="Full FinSight + Kestrel architecture: browser, FinSight server, Kestrel agent (API, chat engine, model adapters, 38 tools, MCP server, sandbox), internet services and local storage" width="100%"></div>
 
 **How the Kestrel chatbot works with FinSight**, in six steps:
 
@@ -223,8 +224,8 @@ Every component, how they talk to each other, and where data lives. FinSight own
 | Layer | Pieces |
 |---|---|
 | **Browser** | Terminal UI — one React app (`web/src/App.tsx`, built to `public/app/`) with the plain-JS `chart.js` canvas chart · ↗ Kestrel panel (React island, SSE stream) · service worker (static shell + build manifest) · PIN lock |
-| **FinSight server** (`:8001`) | `server.ts` router with security headers and Host check · `lib/auth` PIN sessions · `lib/agentlink` GET-only agent token and `/api/agent/*` proxy · `lib/agentproc` agent supervisor · domain logic in `lib/` (portfolio, ledger, dividends, performance, market, macro, charts, journal, cache) |
-| **Kestrel agent** (`127.0.0.1:8100`) | HTTP API (`/v1`, loopback and secret gate) · chat engine (tool loop, limits, retries, SSE events) · model adapters (OpenAI-compatible, Anthropic SDK, Claude Code CLI) · 35 read-only tools · MCP server (stdio) · strategy sandbox · SSRF-guarded fetch · uploads · skills · interaction log |
+| **FinSight server** (`:8000`) | `server.ts` router with security headers and Host check · `lib/auth` PIN sessions · `lib/agentlink` GET-only agent token and `/api/agent/*` proxy · `lib/agentproc` agent supervisor · domain logic in `lib/` (portfolio, ledger, dividends, performance, market, macro, charts, journal, cache) |
+| **Kestrel agent** (`127.0.0.1:8100`) | HTTP API (`/v1`, loopback and secret gate) · chat engine (tool loop, limits, retries, SSE events) · model adapters (OpenAI-compatible, Anthropic SDK, Claude Code CLI) · 38 read-only tools · MCP server (stdio) · strategy sandbox · SSRF-guarded fetch · uploads · skills · interaction log |
 | **Storage** | `~/FinSightData`: portfolio and app JSON files (0600) · `agent/agent.db` SQLite (threads, messages, turns, events, traces, cost, cache, proposals, FTS) · logs, uploads, skills, config · macOS Keychain for API keys |
 | **Internet** | LLM providers (DeepSeek, Anthropic) · SEC EDGAR · Tavily/Brave search · Yahoo Finance, FRED, World Bank, Forex Factory (via FinSight only) |
 </details>
