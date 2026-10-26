@@ -71,7 +71,7 @@ function readBody(req: IncomingMessage): Promise<Body> {
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.svg': 'image/svg+xml',
-  '.ico': 'image/x-icon', '.png': 'image/png', '.webmanifest': 'application/manifest+json',
+  '.ico': 'image/x-icon', '.png': 'image/png', '.webmanifest': 'application/manifest+json', '.woff2': 'font/woff2',
 };
 // Content-hashed build chunks (esbuild's 8-character hash) never change under
 // the same URL, so the browser may keep them without asking again (H1).

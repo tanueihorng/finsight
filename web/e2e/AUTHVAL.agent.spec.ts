@@ -248,7 +248,7 @@ test('4a. Kestrel sends the selected account and base as page context across swi
     await sendKestrel(page, text);
     const body = (await req).postDataJSON();
     await expect(page.locator('.agent-turn:visible').last().locator('.agent-text')).toHaveText(`Echo: ${text}`);
-    await expect(page.locator('.agent-send:visible')).toHaveText('⏎'); // Enter does not send while a reply runs
+    await expect(page.locator('.agent-send:visible')).toHaveAttribute('aria-label', 'Send'); // Enter does not send while a reply runs
     return body.pageContext;
   };
   expect(await ctx('first')).toMatchObject({ account: a, base: 'SGD' });
@@ -353,7 +353,7 @@ test('4c. side drawer open during lock (stream cut while locked): after unlock t
   await sendKestrel(page, 'after unlock');
   await expect(page.locator('.agent-turn:visible').last().locator('.agent-text')).toHaveText('Echo: after unlock', { timeout: 10_000 });
   // One stream reopened, no replayed or doubled messages.
-  await expect(page.locator('.agent-send:visible')).toHaveText('⏎');
+  await expect(page.locator('.agent-send:visible')).toHaveAttribute('aria-label', 'Send');
   expect(streams.length, 'event streams opened after unlock').toBe(1);
   await expect(page.locator('.agent-user:visible')).toHaveCount(2);
   await expect(page.locator('.agent-turn:visible .agent-text')).toHaveText(['Echo: before lock', 'Echo: after unlock']);
@@ -364,14 +364,14 @@ test('4d. docked, lock and unlock without a cut stream: no second stream, each r
   await openKestrel(page, 'dock');
   await sendKestrel(page, 'one');
   await expect(page.locator('.agent-turn:visible').last().locator('.agent-text')).toHaveText('Echo: one');
-  await expect(page.locator('.agent-send:visible')).toHaveText('⏎');
+  await expect(page.locator('.agent-send:visible')).toHaveAttribute('aria-label', 'Send');
   await lockByButton(page);
   const streams: string[] = [];
   page.on('request', (r) => { if (/^\/api\/agent\/threads\/[^/]+\/events$/.test(new URL(r.url()).pathname)) streams.push(r.url()); });
   await unlockWithPin(page);
   await sendKestrel(page, 'two');
   await expect(page.locator('.agent-turn:visible').last().locator('.agent-text')).toHaveText('Echo: two');
-  await expect(page.locator('.agent-send:visible')).toHaveText('⏎');
+  await expect(page.locator('.agent-send:visible')).toHaveAttribute('aria-label', 'Send');
   expect(streams, 'the live stream is reused').toEqual([]);
   await expect(page.locator('.agent-turn:visible .agent-text')).toHaveText(['Echo: one', 'Echo: two']);
 });

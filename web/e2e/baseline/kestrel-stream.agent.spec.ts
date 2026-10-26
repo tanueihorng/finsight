@@ -25,7 +25,7 @@ test('a message streams in and the turn finishes', async ({ page }) => {
   await send(page, 'hello there kestrel');
   await expect(page.locator('.agent-user:visible').last()).toContainText('hello there kestrel');
   await expect(lastTurn(page).locator('.agent-text')).toHaveText('Echo: hello there kestrel');
-  await expect(page.locator('.agent-send:visible')).toHaveText('⏎');
+  await expect(page.locator('.agent-send:visible')).toHaveAttribute('aria-label', 'Send');
 });
 
 test('stop interrupts a running turn', async ({ page }) => {
@@ -33,10 +33,10 @@ test('stop interrupts a running turn', async ({ page }) => {
   await send(page, 'slow one please');
   const text = lastTurn(page).locator('.agent-text');
   await expect(text).toContainText('w3');
-  await expect(page.locator('.agent-send:visible')).toHaveText('■');
+  await expect(page.locator('.agent-send:visible')).toHaveAttribute('aria-label', 'Stop');
   await page.locator('.agent-send:visible').click();
   await expect(lastTurn(page)).toContainText('Interrupted by you.');
-  await expect(page.locator('.agent-send:visible')).toHaveText('⏎');
+  await expect(page.locator('.agent-send:visible')).toHaveAttribute('aria-label', 'Send');
   await page.waitForTimeout(800);
   await expect(text).not.toContainText('w40');
 });

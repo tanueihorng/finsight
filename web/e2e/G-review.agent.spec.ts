@@ -105,14 +105,14 @@ test('a streaming reply updates with each delta while earlier answers stay rende
   await send(page, 'markdown please');
   const earlier = page.locator('.agent-turn:visible').first().locator('.agent-text');
   await expect(earlier.locator('td.num')).toHaveText('+1.5%');
-  await expect(page.locator('.agent-send:visible')).toHaveText('⏎'); // Enter does not send while a reply runs
+  await expect(page.locator('.agent-send:visible')).toHaveAttribute('aria-label', 'Send'); // Enter does not send while a reply runs
   await send(page, 'slow one please');
   const text = lastTurn(page).locator('.agent-text');
   await expect(text).toContainText('w3');
-  await expect(page.locator('.agent-send:visible')).toHaveText('■');
+  await expect(page.locator('.agent-send:visible')).toHaveAttribute('aria-label', 'Stop');
   const mid = (await text.innerText()).split(/\s+/).length;
   await expect.poll(async () => (await text.innerText()).split(/\s+/).length).toBeGreaterThan(mid + 2);
-  await expect(page.locator('.agent-send:visible')).toHaveText('■');
+  await expect(page.locator('.agent-send:visible')).toHaveAttribute('aria-label', 'Stop');
   await expect(text).toContainText('w40', { timeout: 15_000 });
   expect((await text.innerText()).split(/\s+/)).toEqual(Array.from({ length: 40 }, (_, i) => `w${i + 1}`));
   await expect(earlier.locator('h2')).toHaveText('Head');
@@ -125,10 +125,10 @@ test('Esc in the composer stops a running reply and keeps the panel open', async
   await send(page, 'slow one please');
   const text = lastTurn(page).locator('.agent-text');
   await expect(text).toContainText('w3');
-  await expect(page.locator('.agent-send:visible')).toHaveText('■');
+  await expect(page.locator('.agent-send:visible')).toHaveAttribute('aria-label', 'Stop');
   await input(page).press('Escape');
   await expect(lastTurn(page)).toContainText('Interrupted by you.');
-  await expect(page.locator('.agent-send:visible')).toHaveText('⏎');
+  await expect(page.locator('.agent-send:visible')).toHaveAttribute('aria-label', 'Send');
   await expect(page.locator('body')).toHaveClass(/\bagent-open\b/);
   await page.waitForTimeout(800);
   await expect(text).not.toContainText('w40');
@@ -170,10 +170,10 @@ test('lock and unlock with the chat open: the conversation stays and replies sti
   await expect(page.locator('.agent-user:visible').first()).toContainText('before the lock');
   await send(page, 'after the unlock');
   await expect(lastTurn(page).locator('.agent-text')).toHaveText('Echo: after the unlock');
-  await expect(page.locator('.agent-send:visible')).toHaveText('⏎');
+  await expect(page.locator('.agent-send:visible')).toHaveAttribute('aria-label', 'Send');
 });
 
-test('a chat left open boots after the PIN is entered on a locked reload', async ({ page, context }) => {
+test('Kestrel boots after the PIN is entered on a locked reload; the earlier chat is in the list', async ({ page, context }) => {
   await open(page);
   await send(page, 'kept chat');
   await expect(lastTurn(page).locator('.agent-text')).toHaveText('Echo: kept chat');
@@ -183,6 +183,9 @@ test('a chat left open boots after the PIN is entered on a locked reload', async
   await page.fill('#lock-pin', PIN);
   await page.press('#lock-pin', 'Enter');
   await expect(page.locator('body')).not.toHaveClass(/\blocked\b/);
+  // KESTRELUI-001: a reload starts on a new chat; the earlier one is listed on the start screen.
+  await expect(page.locator('.agent-welcome:visible')).toBeVisible();
+  await page.locator('.kx-recent-row', { hasText: 'kept chat' }).first().click();
   await expect(page.locator('.agent-user:visible').last()).toContainText('kept chat');
   await send(page, 'and again');
   await expect(lastTurn(page).locator('.agent-text')).toHaveText('Echo: and again');

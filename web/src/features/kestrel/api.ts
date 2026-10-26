@@ -21,7 +21,8 @@ export async function agentApi<T>(path: string, o: { method?: string; body?: unk
 }
 export interface Brain { id: string; label: string; costTier: string; available: boolean; reason?: string }
 export interface Skill { name: string; description: string }
-export interface Thread { id: string; title: string; version: number; defaultBrain?: string; updatedAt: number }
+export interface Thread { id: string; title: string; version: number; defaultBrain?: string; updatedAt: number; preview?: string }
+export interface SearchProvider { id: string; label: string; available: boolean; reason?: string }
 export interface Block { type: string; text?: string; id?: string; name?: string; args?: unknown; callId?: string; ok?: boolean; kind?: string }
 export interface Message { id: string; role: string; turnId?: string; brain?: string; blocks: Block[] }
 export interface Citation { turnId?: string; url: string; title?: string; class?: string; retrievedAt?: string }

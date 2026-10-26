@@ -20,11 +20,12 @@ import { z } from 'zod';
 import type { Skill } from '../skills.ts';
 import { saveUpload, MAX_UPLOAD_BYTES } from '../uploads.ts';
 import { getAudit } from '../obs/audit.ts';
+import { SEARCH_CHOICES, searchProviders } from '../tools/web.ts';
 
 export type ApiDeps = { cfg: Config; db: DB; engine: ChatEngine; bus: EventBus; brains: Map<string, BrainEntry>; brainsInvalid: { id: string; error: string }[]; tools: ToolRegistry; finsight: FinsightClient; skills?: () => Map<string, Skill> };
 
 const Send = z.object({
-  content: z.string().min(1).max(12_000), brain: z.string().max(40).optional(),
+  content: z.string().min(1).max(12_000), brain: z.string().max(40).optional(), search: z.enum(SEARCH_CHOICES).optional(),
   pageContext: z.object({ view: z.string().max(40).optional(), symbol: z.string().max(24).optional(), timeframe: z.string().max(10).optional(),
     strategy: z.string().max(40).optional(), account: z.string().max(64).optional(), base: z.string().max(3).optional() }).strict().optional(),
   idempotencyKey: z.string().min(8).max(80).optional(), expectedVersion: z.number().int().min(0).optional(),
@@ -95,6 +96,7 @@ async function route(d: ApiDeps, req: http.IncomingMessage, res: http.ServerResp
       id: b.manifest.id, label: b.manifest.label, costTier: b.manifest.costTier, transport: b.manifest.transport,
       tools: b.manifest.capabilities.tools, nativeSearch: b.manifest.capabilities.nativeSearch, available: b.available, reason: b.reason })) });
   }
+  if (p === '/v1/search-providers' && m === 'GET') return send(res, 200, searchProviders(d.cfg));
   if (p === '/v1/info' && m === 'GET') return send(res, 200, { name: d.cfg.assistantName, version: '0.2.0' });
   if (p === '/v1/skills' && m === 'GET') {
     return send(res, 200, { skills: [...(d.skills?.() ?? new Map()).values()].map((s) => ({ name: s.name, description: s.description, source: s.source })) });
@@ -109,7 +111,7 @@ async function route(d: ApiDeps, req: http.IncomingMessage, res: http.ServerResp
   }
   if (p === '/v1/plugins' && m === 'GET') return send(res, 200, { brains: { valid: [...d.brains.keys()], invalid: d.brainsInvalid }, tools: d.tools.list().map((t) => t.name) });
 
-  if (p === '/v1/threads' && m === 'GET') return send(res, 200, { threads: store.listThreads(d.db, u.searchParams.get('archived') === '1') });
+  if (p === '/v1/threads' && m === 'GET') return send(res, 200, { threads: store.listThreads(d.db, u.searchParams.get('archived') === '1').map((t) => ({ ...t, preview: store.threadPreview(d.db, t.id) })) });
   if (p === '/v1/threads' && m === 'POST') {
     const b = NewThread.parse(await readJson(req));
     if (b.brain && !d.brains.get(b.brain)?.available) throw new AgentError('BRAIN_UNAVAILABLE', `Model ${b.brain} is not available`);

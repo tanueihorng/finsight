@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useStore } from 'zustand';
-import { boot, chat, newChat, resumeStream, stop, toggleThreads } from './chat.ts';
+import { boot, chat, closeOverlay, newChat, railShown, resumeStream, stop, toggleThreads } from './chat.ts';
+import { Icon } from './icons.tsx';
 import { Chat } from './Chat.tsx';
 import { kestrelDock } from './dock.ts';
 import { clampHeight, clampWidth, DEFAULT_H, DEFAULT_W, LS, ls, nextWidth } from './labels.ts';
@@ -17,7 +18,9 @@ const resizeEvent = () => window.dispatchEvent(new Event('resize'));
 const cssWidth = () => parseInt(getComputedStyle(document.documentElement).getPropertyValue('--agent-w'), 10) || DEFAULT_W;
 
 export default function KestrelIsland() {
-  const name = useStore(chat, (s) => s.name), named = useStore(chat, (s) => s.named), threadsOpen = useStore(chat, (s) => s.threadsOpen);
+  const name = useStore(chat, (s) => s.name), named = useStore(chat, (s) => s.named), rail = useStore(chat, railShown);
+  // The list has the title the agent set from the first message; the open thread object keeps its creation title.
+  const chatTitle = useStore(chat, (s) => (s.view === 'welcome' ? 'New chat' : s.threads?.find((x) => x.id === s.thread?.id)?.title || s.thread?.title || ''));
   const [mode, setModeState] = useState<Mode>(() => (ls.get(LS.mode, 'side') === 'dock' ? 'dock' : 'side'));
   const [open, setOpen] = useState(false);
   const [collapsed, setCollapsedState] = useState(() => ls.get(LS.collapsed, '0') === '1');
@@ -111,18 +114,21 @@ export default function KestrelIsland() {
     if (e.key === 'ArrowUp') { e.preventDefault(); setHeight(curHeight() - 40, true); }
   };
 
-  const title = <span className="agent-title"><span className="mark">↗</span> <span className="nm">{name}</span><small>research agent</small></span>;
+  const title = (
+    <span className="agent-title"><span className="mark">↗</span> <span className="nm">{name}</span>
+      {chatTitle && <><span className="sep" aria-hidden="true">/</span><span className="chat-title" title={chatTitle}>{chatTitle}</span></>}</span>
+  );
   const dockTitle = mode === 'dock' ? 'Pop out to the side panel' : 'Dock into the terminal';
   const tools = (
     <span className="agent-head-tools">
-      <button className="agent-icon-btn" title="Chats" aria-label="Show chats" aria-expanded={threadsOpen} aria-controls="agent-threads" onClick={() => toggleThreads()}>☰</button>
-      <button className="agent-icon-btn" title="New chat (/new)" aria-label="New chat" onClick={() => { newChat(); inputRef.current?.focus(); }}>＋</button>
+      <button className="agent-icon-btn" title="Chats" aria-label="Show chats" aria-expanded={rail} aria-controls="agent-threads" onClick={() => toggleThreads()}><Icon name="sidebar" /></button>
+      <button className="agent-icon-btn" title="New chat (/new)" aria-label="New chat" onClick={() => { newChat(); closeOverlay(); inputRef.current?.focus(); }}><Icon name="plus" /></button>
       <button className="agent-icon-btn" title="Panel width: small · medium · large · wide" aria-label="Change panel width" hidden={mode !== 'side'}
-        onClick={() => setWidth(nextWidth(cssWidth(), Math.max(320, Math.round(window.innerWidth * 0.6))), true)}>↔</button>
-      <button className="agent-icon-btn" title={dockTitle} aria-label={dockTitle} onClick={() => setMode(mode === 'dock' ? 'side' : 'dock')}>{mode === 'dock' ? '⊡' : '⊟'}</button>
+        onClick={() => setWidth(nextWidth(cssWidth(), Math.max(320, Math.round(window.innerWidth * 0.6))), true)}><Icon name="width" /></button>
+      <button className="agent-icon-btn" title={dockTitle} aria-label={dockTitle} onClick={() => setMode(mode === 'dock' ? 'side' : 'dock')}><Icon name={mode === 'dock' ? 'popout' : 'dock'} /></button>
       <button className="agent-icon-btn" title={collapsed ? 'Expand' : 'Collapse'} aria-label="Collapse chat" aria-expanded={!collapsed} hidden={mode !== 'dock'}
-        onClick={() => setCollapsed(!collapsed)}>{collapsed ? '▸' : '▾'}</button>
-      <button className="agent-icon-btn" title="Close (Esc)" aria-label="Close chat" onClick={() => toggle(false)}>✕</button>
+        onClick={() => setCollapsed(!collapsed)}><Icon name={collapsed ? 'expand' : 'collapse'} /></button>
+      <button className="agent-icon-btn" title="Close (Esc)" aria-label="Close chat" onClick={() => toggle(false)}><Icon name="close" /></button>
     </span>
   );
   const body = <Chat inputRef={inputRef} onRetry={() => { booted.current = true; void boot(); }} />;

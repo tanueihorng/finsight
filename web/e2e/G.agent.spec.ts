@@ -26,7 +26,7 @@ async function command(page: Page, text: string) {
 
 test('welcome, suggestion chips, page context on the message, model list', async ({ page }) => {
   await open(page);
-  await expect(page.locator('.agent-welcome .hi')).toHaveText('↗ Welcome to Kestrel');
+  await expect(page.locator('.agent-welcome .hi')).toHaveText('What are we looking at today?');
   await expect(page.locator('.agent-try .agent-chip')).toHaveCount(4);
   await expect(page.locator('.agent-try .agent-chip').first()).toHaveText('What do my strategies say about VOO right now?');
   await expect(page.locator('.agent-ctx:visible')).toHaveText('◉ VOO 1d');
@@ -53,7 +53,7 @@ test('tool rows, citations and cost; markdown is rendered safely; failures show'
   await expect(tool.locator('summary .args')).toHaveText('(account: main)');
   await expect(tool.locator('.res')).toHaveText('9 positions · 1.2 s');
   const cite = lastTurn(page).locator('.agent-cite');
-  await expect(cite).toHaveText('P example.com');
+  await expect(cite).toHaveText('example.com');
   await expect(cite).toHaveAttribute('href', 'https://www.example.com/report');
   await expect(cite).toHaveClass('agent-cite primary');
   await expect(lastTurn(page).locator('.agent-meta')).toContainText('$0.012'); // 3 decimals from $0.01 up
@@ -70,7 +70,7 @@ test('tool rows, citations and cost; markdown is rendered safely; failures show'
 
   await send(page, 'please fail now');
   await expect(lastTurn(page).locator('.agent-notice.error')).toHaveText('model exploded');
-  await expect(page.locator('.agent-send:visible')).toHaveText('⏎');
+  await expect(page.locator('.agent-send:visible')).toHaveAttribute('aria-label', 'Send');
 });
 
 test('slash menu: skills and commands, keyboard pick, /model, /cost, /skills, /new', async ({ page }) => {
@@ -99,28 +99,64 @@ test('slash menu: skills and commands, keyboard pick, /model, /cost, /skills, /n
   await expect(page.locator('.agent-welcome:visible')).toBeVisible();
 });
 
-test('chats list opens and deletes a chat; the open chat survives a reload', async ({ page }) => {
+test('Kestrel opens on a new chat beside the chat list; a chat opens from the list and deletes', async ({ page }) => {
   await open(page);
   await send(page, 'first chat');
   await expect(lastTurn(page).locator('.agent-text')).toHaveText('Echo: first chat');
   await page.reload();
   await expect(page.locator('body')).toHaveClass(/\bagent-open\b/);
-  await expect(page.locator('.agent-user:visible').last()).toContainText('first chat');
-  await expect(lastTurn(page).locator('.agent-text')).toHaveText('Echo: first chat');
-  await page.locator('.agent-icon-btn[title="New chat (/new)"]:visible').click();
+  // KESTRELUI-001: a reload starts a new chat; the narrow panel lists recent chats on the start screen.
   await expect(page.locator('.agent-welcome:visible')).toBeVisible();
+  await expect(page.locator('.kx-recent-row', { hasText: 'first chat' }).first()).toBeVisible();
+  await expect(page.locator('.kx-rail')).toHaveCount(0);
   await page.locator('.agent-icon-btn[title="Chats"]:visible').click();
   const row = page.locator('.agent-thread-row', { hasText: 'first chat' }).first();
   await expect(row).toBeVisible();
+  await expect(row.locator('.p')).toHaveText('Echo: first chat');
   await row.click();
   await expect(page.locator('.agent-threads')).toBeHidden();
+  await expect(lastTurn(page).locator('.agent-text')).toHaveText('Echo: first chat');
+  await page.locator('.agent-icon-btn[title="New chat (/new)"]:visible').click();
+  await expect(page.locator('.agent-welcome:visible')).toBeVisible();
+  await page.locator('.kx-recent-row', { hasText: 'first chat' }).first().click();
   await expect(lastTurn(page).locator('.agent-text')).toHaveText('Echo: first chat');
   await page.locator('.agent-icon-btn[title="Chats"]:visible').click();
   page.once('dialog', (d) => d.accept());
   const first = page.locator('.agent-thread-row', { hasText: 'first chat' }).first();
-  await first.hover(); // the ✕ shows on hover
+  await first.hover(); // the delete button shows on hover
   await first.locator('.x').click();
   await expect(page.locator('.agent-welcome:visible')).toBeVisible();
+});
+
+test('wide panel: the chat rail sits beside the chat; search provider is picked per message, remembered and shown', async ({ page }) => {
+  await open(page);
+  await page.evaluate(() => localStorage.setItem('finsight-agent-w', '800'));
+  await page.reload();
+  const rail = page.locator('.kx-rail:visible');
+  await expect(rail).toBeVisible();
+  await expect(page.locator('.agent-welcome:visible')).toBeVisible();
+  await expect(page.locator('.kx-recent')).toHaveCount(0); // the rail lists the chats instead
+  const search = page.locator('.agent-search:visible');
+  await expect(search.locator('option')).toHaveText(['Auto (Tavily)', 'DeepSeek', 'Tavily', 'Brave · no key']);
+  await expect(search).toHaveValue('auto');
+  await send(page, 'auto search');
+  await expect(lastTurn(page).locator('.agent-meta')).toContainText('Tavily search');
+  await search.selectOption('deepseek');
+  await send(page, 'picked search');
+  await expect(lastTurn(page).locator('.agent-meta')).toContainText('DeepSeek search');
+  await expect(rail.locator('.agent-thread-row.active .t')).toHaveText('auto search');
+  await expect(rail.locator('.kx-spend')).toHaveText('Today$0.500');
+  await rail.locator('.kx-find input').fill('no such chat');
+  await expect(rail.locator('.kx-empty')).toHaveText('No chats match.');
+  await rail.locator('.kx-find input').fill('');
+  // The pick and a hidden rail are remembered per browser.
+  await page.locator('.agent-icon-btn[title="Chats"]:visible').click();
+  await expect(page.locator('.kx-rail')).toHaveCount(0);
+  await page.reload();
+  await expect(page.locator('.agent-search:visible')).toHaveValue('deepseek');
+  await expect(page.locator('.kx-rail')).toHaveCount(0);
+  await page.locator('.agent-icon-btn[title="Chats"]:visible').click();
+  await expect(page.locator('.kx-rail:visible')).toBeVisible();
 });
 
 test('⌘/ and Esc open and close; Esc keeps a typed message; width presets persist', async ({ page }) => {
@@ -172,6 +208,6 @@ test('a turn that fails before the send request returns does not leave the chat 
   await send(page, 'quickfail now');
   await expect(lastTurn(page).locator('.agent-notice.error')).toHaveText('model exploded');
   await page.waitForTimeout(600);
-  await expect(page.locator('.agent-send:visible')).toHaveText('⏎');
+  await expect(page.locator('.agent-send:visible')).toHaveAttribute('aria-label', 'Send');
   await expect(page.locator('.agent-status')).toHaveCount(0);
 });

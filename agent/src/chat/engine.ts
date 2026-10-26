@@ -15,13 +15,14 @@ import { AgentError } from '../types.ts';
 import type { EventBus } from './bus.ts';
 import { systemPrompt, FINAL_ANSWER_NUDGE } from './prompt.ts';
 import { buildContextPack } from '../tools/index.ts';
+import { searchProviders, type SearchChoice } from '../tools/web.ts';
 import { log, redactValue } from '../log.ts';
 import { audit, auditContext } from '../obs/audit.ts';
 import type { Skill } from '../skills.ts';
 import { skillsIndex } from '../skills.ts';
 import { attachmentBlock, ensureDocumentText, getUpload, imageBase64 } from '../uploads.ts';
 
-export type SendInput = { threadId: string; content: string; brain?: string; pageContext?: PageContext; idempotencyKey?: string; expectedVersion?: number; attachmentIds?: string[] };
+export type SendInput = { threadId: string; content: string; brain?: string; search?: SearchChoice; pageContext?: PageContext; idempotencyKey?: string; expectedVersion?: number; attachmentIds?: string[] };
 
 import { bytePrefix, inputBudget, selectContext } from './context.ts';
 const PACK_TTL_MS = 15 * 60_000;
@@ -65,6 +66,10 @@ export class ChatEngine {
       if (prior) return { turnId: prior, existing: true, version: thread.version };
     }
     if (this.running.has(thread.id)) throw new AgentError('CONFLICT', 'A reply is still running in this chat. Stop it or wait.', 409);
+    // A picked search provider applies to API brains; CLI brains search through their own MCP process (config default).
+    const pick = input.search && input.search !== 'auto' && brain.kind === 'api' ? input.search : undefined;
+    if (pick && !searchProviders(this.cfg).providers.find((p) => p.id === pick)?.available) throw new AgentError('SEARCH_NOT_CONFIGURED', `Search provider ${pick} has no API key`, 400);
+    const cfg: Config = pick ? { ...this.cfg, searchProvider: pick } : this.cfg;
     if (brain.kind === 'api' && store.spendSince(this.db, store.startOfToday()) >= this.cfg.limits.dayUsd) {
       throw new AgentError('BUDGET_EXCEEDED', `Daily API spend cap of US$${this.cfg.limits.dayUsd} reached. Raise limits.dayUsd in config.json or use a CLI brain.`, 429);
     }
@@ -85,9 +90,9 @@ export class ChatEngine {
     store.appendMessage(this.db, thread.id, 'user', blocks, { turnId: turn.id });
     if (thread.title === 'New chat') store.updateThread(this.db, thread.id, { title: content.replace(/\s+/g, ' ').slice(0, 60) });
     if (input.brain && input.brain !== thread.defaultBrain) store.updateThread(this.db, thread.id, { defaultBrain: input.brain });
-    this.bus.emit(thread.id, 'turn.started', { turnId: turn.id, brain: brainId, label: brain.manifest.label, skill: skill?.name });
-    audit('turn.start', { turnId: turn.id, threadId: thread.id, brain: brainId, content, attachments: input.attachmentIds ?? [], skill: skill?.name, pageContext: input.pageContext });
-    void auditContext.run({ turnId: turn.id, threadId: thread.id }, () => this.run(thread.id, turn.id, brain, ctrl)).finally(() => {
+    this.bus.emit(thread.id, 'turn.started', { turnId: turn.id, brain: brainId, label: brain.manifest.label, skill: skill?.name, search: cfg.searchProvider });
+    audit('turn.start', { turnId: turn.id, threadId: thread.id, brain: brainId, content, attachments: input.attachmentIds ?? [], skill: skill?.name, search: cfg.searchProvider, pageContext: input.pageContext });
+    void auditContext.run({ turnId: turn.id, threadId: thread.id }, () => this.run(thread.id, turn.id, brain, ctrl, cfg)).finally(() => {
       if (this.running.get(thread.id)?.turnId === turn.id) this.running.delete(thread.id);
     });
     return { turnId: turn.id, existing: false, version };
@@ -105,11 +110,11 @@ export class ChatEngine {
   }
 
   // ------------------------------------------------------------------ turn
-  private async run(threadId: string, turnId: string, brain: Brain, ctrl: AbortController): Promise<void> {
+  private async run(threadId: string, turnId: string, brain: Brain, ctrl: AbortController, cfg: Config = this.cfg): Promise<void> {
     const t0 = Date.now();
     const deadline = setTimeout(() => ctrl.abort(new AgentError('BUDGET_EXCEEDED', 'time limit')), this.cfg.limits.turnSeconds * 1000 + 5000);
     const citations: CitationBlock[] = [];
-    const ctx: ToolCtx = { cfg: this.cfg, db: this.db, finsight: this.finsight, signal: ctrl.signal, turnId, threadId,
+    const ctx: ToolCtx = { cfg, db: this.db, finsight: this.finsight, signal: ctrl.signal, turnId, threadId,
       budget: { searches: this.cfg.limits.searchesPerTurn, fetches: this.cfg.limits.fetchesPerTurn }, citations };
     let streamed = '', step = 0, costUsd = 0;
     const usageTotal: Usage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0 };
