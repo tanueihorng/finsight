@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useStore } from 'zustand';
 import { api } from '../../api/client.ts';
+import { confirmDialog } from '../../ui/dialog.tsx';
 import { useModalFocus } from '../../ui/modalFocus.ts';
 import type { ImportResult, Portfolio } from '../../../../shared/types.ts';
 import { importStatusText } from './ledger.ts';
@@ -39,7 +40,7 @@ export default function ImportIsland() {
     } catch (e) { setStatus({ m: 'Import failed: ' + (e as Error).message, k: 'err' }); }
   }
   async function clearAll() {
-    if (!confirm('Clear ALL positions and transaction history?\n(Watchlist and alerts are kept.)')) return;
+    if (!await confirmDialog({ title: 'Clear ALL positions and transaction history?', body: 'Watchlist and alerts are kept. UNDO can restore it.', ok: 'Clear everything', danger: true })) return;
     try {
       await api('/api/portfolio/reset' + qs(), { method: 'POST' });
       store().setState({ selected: null }); await window.FinSight.bus.write('reset');

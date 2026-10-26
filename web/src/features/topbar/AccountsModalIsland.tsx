@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { useStore } from 'zustand';
+import { confirmDialog, promptDialog } from '../../ui/dialog.tsx';
 import { useModalFocus } from '../../ui/modalFocus.ts';
 import type { Accounts } from '../../../../shared/types.ts';
 import { accountDetail, afterRemove } from './topbar.ts';
@@ -27,11 +28,11 @@ export default function AccountsModalIsland() {
     } catch (e) { fail(e); }
   }
   async function rename(id: string, current: string) {
-    const n = prompt('Rename account:', current); if (n == null) return;
+    const n = await promptDialog({ title: 'Rename account', value: current, ok: 'Rename' }); if (n == null) return;
     try { await post('/api/accounts/rename', { id, name: n }); await window.FinSight.bus.write('account-rename'); } catch (e) { fail(e); }
   }
   async function remove(id: string, current: string) {
-    if (!confirm(`Delete account "${current}" and all its holdings?`)) return;
+    if (!await confirmDialog({ title: `Delete account "${current}"?`, body: 'All its holdings go with it. UNDO can restore it.', ok: 'Delete account', danger: true })) return;
     try {
       const d = await post<Accounts>('/api/accounts/remove', { id });
       const next = afterRemove(store().getState().account, id, d.activeId);

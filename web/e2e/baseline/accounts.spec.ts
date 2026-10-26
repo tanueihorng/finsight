@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { seeded } from '../helpers';
+import { seeded, answerDialog } from '../helpers';
 
 test.beforeEach(async ({ page }) => { await seeded(page); });
 
@@ -22,14 +22,14 @@ test('add, switch, rename and delete an account', async ({ page }) => {
 
   await sel.selectOption('__manage');
   const row = page.locator('#accounts-list .card-edit-row', { hasText: 'Crypto' });
-  page.once('dialog', (d) => d.accept('Coins'));
   await row.locator('.acct-rename').click();
+  await answerDialog(page, { text: 'Coins' });
   await expect(page.locator('#accounts-list')).toContainText('Coins');
   await expect(sel.locator('option', { hasText: 'Coins' })).toHaveCount(1);
   await expect(crypto).toHaveCount(0);
 
-  page.once('dialog', (d) => d.accept());
   await page.locator('#accounts-list .card-edit-row', { hasText: 'Coins' }).locator('.acct-del').click();
+  await answerDialog(page);
   await expect(page.locator('#accounts-list')).not.toContainText('Coins');
 });
 

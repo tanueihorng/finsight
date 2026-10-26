@@ -1,13 +1,13 @@
 import { test, expect } from '@playwright/test';
-import { unlock, seeded, cmd } from '../helpers';
+import { unlock, seeded, cmd, answerDialog } from '../helpers';
 
 test('empty portfolio: clear all positions', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await seeded(page);
   await page.click('#import-btn');
-  page.once('dialog', (d) => { expect(d.message()).toContain('Clear ALL positions'); d.accept(); });
   await page.click('#import-clear');
+  await answerDialog(page, { title: /Clear ALL positions/ });
   await expect(page.locator('#import-status')).toHaveText('Portfolio cleared.');
   await expect(page.locator('#positions-body')).toContainText('No positions yet');
   await expect(page.locator('#summary')).toContainText('S$0.00');

@@ -1,7 +1,7 @@
 // F8: topbar (account, base, profile + setup wizard, peek, appearance).
 // Written against legacy first.
 import { test, expect, type Page } from '@playwright/test';
-import { seeded, unlock, cmd } from './helpers';
+import { seeded, unlock, cmd, answerDialog } from './helpers';
 
 const sel = (page: Page) => page.locator('#account-sel');
 const status = (page: Page) => page.locator('#cmd-status');
@@ -9,16 +9,16 @@ const status = (page: Page) => page.locator('#cmd-status');
 test('account selector options, counts and switching persist; New account… creates and selects', async ({ page }) => {
   await seeded(page);
   await expect(sel(page).locator('option')).toHaveText(['All Accounts', 'Main (9)', '＋ New account…', '⚙ Manage…']);
-  page.once('dialog', (d) => { expect(d.message()).toBe('New account name (e.g. Crypto, SGX, IBKR):'); d.accept('Crypto'); });
   await sel(page).selectOption('__new');
+  await answerDialog(page, { title: 'New account', text: 'Crypto' });
   await expect(status(page)).toHaveText('Account "Crypto" created.');
   await expect(sel(page).locator('option:checked')).toHaveText('Crypto');
   await expect(page.locator('#positions-body')).toContainText('No positions yet');
   await page.reload();
   await expect(sel(page).locator('option:checked')).toHaveText('Crypto');
   expect(await page.evaluate(() => localStorage.getItem('finsight-account'))).toBe(await sel(page).inputValue());
-  page.once('dialog', (d) => d.dismiss());
   await sel(page).selectOption('__new');
+  await answerDialog(page, { accept: false });
   await expect(sel(page).locator('option:checked')).toHaveText('Crypto'); // cancelled: selection unchanged
   await sel(page).selectOption({ label: 'Main (9)' });
   await expect(page.locator('#positions-body tr[data-sym]')).toHaveCount(9);
@@ -44,12 +44,12 @@ test('manage accounts: add with type, rename, delete the active one falls back',
 
   await sel(page).selectOption({ label: 'IBKR' });
   await sel(page).selectOption('__manage');
-  page.once('dialog', (d) => d.accept('Interactive'));
   await page.locator('#accounts-list .card-edit-row', { hasText: 'IBKR' }).locator('.acct-rename').click();
+  await answerDialog(page, { title: 'Rename account', text: 'Interactive' });
   await expect(page.locator('#accounts-list')).toContainText('Interactive');
   await expect(sel(page).locator('option:checked')).toHaveText('Interactive');
-  page.once('dialog', (d) => d.accept());
   await page.locator('#accounts-list .card-edit-row', { hasText: 'Interactive' }).locator('.acct-del').click();
+  await answerDialog(page, { title: 'Delete account "Interactive"?' });
   await expect(page.locator('#accounts-list .card-edit-row')).toHaveCount(1);
   await page.click('#accounts-done');
   await expect(sel(page).locator('option:checked')).toHaveText('Main (9)');

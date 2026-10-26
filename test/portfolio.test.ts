@@ -83,6 +83,20 @@ test('selling more than held is rejected; selling all removes the position', asy
   assert.equal(loadPortfolio().accounts[0]!.positions.length, 0);
 });
 
+test('a dated sell records that day and its FX; it cannot predate the purchase', async () => {
+  setupMarket();
+  await pf.buy('AAPL', 10, 100, BOUGHT, undefined, 'SGD');
+  await assert.rejects(pf.sell('AAPL', 5, 130, undefined, 'SGD', BOUGHT - 30 * DAY), /sale date can't be earlier/);
+  const SOLD = Date.now() - 300 * DAY; // FX was still 1.40 then
+  await pf.sell('AAPL', 5, 130, undefined, 'SGD', SOLD);
+  const tx = loadPortfolio().accounts[0]!.transactions.find((t) => t.type === 'SELL')!;
+  assert.equal(tx.time, SOLD);
+  close(tx.usdBaseSell, 1.40);
+  const r = await pf.portfolioWithQuotes('SGD');
+  close(r.summary.realizedFxPnl, 0); // bought and sold at the same USD/SGD
+  close(r.summary.realizedStockPnl, 5 * (130 - 100) * 1.40);
+});
+
 test('fxRisk reconciles with portfolio FX P&L', async () => {
   setupMarket();
   await pf.buy('AAPL', 10, 100, BOUGHT, undefined, 'SGD');

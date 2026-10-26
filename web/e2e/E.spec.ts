@@ -1,7 +1,7 @@
 // E1 + E2: the security detail (header, stats, ranges) and the chart host.
 // Written against legacy first.
 import { test, expect, type Page } from '@playwright/test';
-import { seeded, cmd } from './helpers';
+import { seeded, cmd, answerDialog } from './helpers';
 
 declare const detailChart: { symbol: string; maxed?: boolean; root: HTMLElement; toggleMax(v?: boolean): void;
   onRequest(r: { interval: string }): void; onGrid(o: { n: number }): void };
@@ -93,9 +93,9 @@ test('removing the selected holding selects the first one again; a sale reloads 
   const trades = page.waitForRequest((r) => path(r.url()) === '/api/chart-trades' && r.url().includes('symbol=VOO'), { timeout: 35_000 });
   await cmd(page, 'SELL VOO 1');
   await trades;
-  page.once('dialog', (d) => d.accept());
   await page.locator('#positions-body tr[data-sym="VOO"]').hover();
   await page.locator('#positions-body tr[data-sym="VOO"] [data-act="del"]').click();
+  await answerDialog(page, { title: 'Remove VOO?' });
   await expect(page.locator('#detail-title')).toHaveText('NVDA · DETAIL');
   await expect(hdr(page).locator('.detail-sym')).toHaveText('NVDA');
 });

@@ -1,7 +1,7 @@
 // G1–G3: Kestrel chat against the fake agent. Written against legacy
 // agent-panel.js first. Prompt words drive the fake: "tools", "markdown", "fail".
 import { test, expect, type Page } from '@playwright/test';
-import { seeded } from './helpers';
+import { seeded, answerDialog } from './helpers';
 
 const input = (page: Page) => page.locator('.agent-input:visible');
 const lastTurn = (page: Page) => page.locator('.agent-turn:visible').last();
@@ -121,10 +121,10 @@ test('Kestrel opens on a new chat beside the chat list; a chat opens from the li
   await page.locator('.kx-recent-row', { hasText: 'first chat' }).first().click();
   await expect(lastTurn(page).locator('.agent-text')).toHaveText('Echo: first chat');
   await page.locator('.agent-icon-btn[title="Chats"]:visible').click();
-  page.once('dialog', (d) => d.accept());
   const first = page.locator('.agent-thread-row', { hasText: 'first chat' }).first();
   await first.hover(); // the delete button shows on hover
   await first.locator('.x').click();
+  await answerDialog(page);
   await expect(page.locator('.agent-welcome:visible')).toBeVisible();
 });
 

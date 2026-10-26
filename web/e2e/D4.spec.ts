@@ -1,7 +1,7 @@
 // D4: ledger + CSV import/export. Written against legacy first.
 import { test, expect, type Page } from '@playwright/test';
 import fs from 'node:fs';
-import { seeded, cmd, unlock } from './helpers';
+import { seeded, cmd, unlock, answerDialog } from './helpers';
 
 const body = (page: Page) => page.locator('#ledger-body');
 const lstatus = (page: Page) => page.locator('#ledger-status');
@@ -30,8 +30,8 @@ test('ledger: open from LEDGER button, filter by type, cancel an edit, dismiss a
   await expect(body(page).locator('.le-qty')).toHaveValue('18');
   await body(page).locator('[data-act="cancel"]').click();
   await expect(body(page).locator('.le-date')).toHaveCount(0);
-  page.once('dialog', (d) => d.dismiss());
   await body(page).locator('[data-act="delete"]').click();
+  await answerDialog(page, { accept: false });
   await expect(body(page).locator('tr')).toHaveCount(1);
   await expect(lstatus(page)).toHaveText('');
 
@@ -115,8 +115,8 @@ test('import: needs text, refuses All Accounts, reads a file, reports failures; 
   await expect(page.locator('#positions-body tr[data-sym]')).toHaveCount(9);
   await page.click('#positions-body tr[data-sym="NVDA"]');
   await page.click('#import-btn');
-  page.once('dialog', (d) => { expect(d.message()).toContain('Clear ALL positions'); d.accept(); });
   await page.click('#import-clear');
+  await answerDialog(page, { title: /Clear ALL positions/ });
   await expect(page.locator('#import-status')).toHaveText('Portfolio cleared.');
   await expect(page.locator('#positions-body')).toContainText('No positions yet');
   expect(await page.evaluate(() => window.FinSight.store.getState().selected)).toBeNull();

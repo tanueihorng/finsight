@@ -71,3 +71,15 @@ export async function dragPanel(page: Page, pid: string, column: '.col-left' | '
   for (let i = 1; i <= 10; i++) await page.mouse.move(from.x + (to.x - from.x) * i / 10, from.y + (to.y - from.y) * i / 10);
   await page.mouse.up();
 }
+
+// The in-app confirm / prompt (web/src/ui/dialog.tsx), which replaced
+// window.confirm and window.prompt. Checks the title when given, types text
+// into a prompt, then confirms (or cancels).
+export async function answerDialog(page: Page, { accept = true, text, title }: { accept?: boolean; text?: string; title?: string | RegExp } = {}): Promise<void> {
+  const dlg = page.locator('#app-dialog');
+  await expect(dlg).toBeVisible();
+  if (title) await expect(dlg.locator('#app-dialog-title')).toHaveText(title);
+  if (text != null) await dlg.locator('#app-dialog-input').fill(text);
+  await dlg.locator(accept ? '#app-dialog-ok' : '#app-dialog-cancel').click();
+  await expect(dlg).toHaveCount(0);
+}
