@@ -2,7 +2,7 @@
 
 Status: Phase 1 implementation in `feature/kestrel-verified-views`, 2026-10-26.
 The owner requested implementation after review. The first release is deliberately
-limited to verified stat cards and tables. The global operator setting remains **off by default**. DeepSeek Flash and Pro
+limited to verified stat cards and tables. The global operator setting remains **off by default**. DeepSeek Flash/Pro and GPT-6 Luna/Sol
 passed live synthetic qualification; see UI-QUALIFICATION.md. The rest of the original proposal remains a roadmap.
 
 ## What Phase 1 does
@@ -139,7 +139,7 @@ agent home and audited under the existing logging policy.
 Both a global operator setting (`uiViews: true` in the private agent config, or
 `KESTREL_UI=1`) and the selected API brain's `capabilities.ui: true` are required.
 An explicit KESTREL_UI environment value overrides the config; 0 disables it.
-DeepSeek Flash and Pro have capabilities.ui enabled after qualification; all other
+DeepSeek Flash/Pro and GPT-6 Luna/Sol have capabilities.ui enabled after qualification; all other
 bundled manifests remain disabled. Direct tool invocation also checks the gate.
 MCP/CLI does not advertise the tool because it lacks the thread/turn UI bridge.
 Turning the environment flag off prevents new views; accepted historical snapshots
