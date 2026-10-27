@@ -73,4 +73,6 @@ Standalone clones use this backlog and explicit user requests without depending 
 
 Modal layering correction (MODALLAYER-001, 2026-10-27): verified in serving main checkout and committed on main at `5f2dda1` and reconciled into feature/open-features. Setup exit controls remain above Kestrel. Routine bug fix; no new feature scope.
 
-Integration evidence in the investment workspace: `harness/runs/20261026T180610Z-FEATURESHIP-001-b6b72115/REPORT.md`. The final source includes the deferred-autofocus repair and static cache shellv51.
+Integration evidence in the investment workspace: `harness/runs/20261026T180610Z-FEATURESHIP-001-b6b72115/REPORT.md`. The final source includes the deferred-autofocus repair and static cache shellv52.
+
+Canonical and symlinked-worktree build artifacts are now reproducible through esbuild dependency identity preservation. Both build checks pass60 files and the normalized bundle passes the full integration suite. Deployment/restart remains separate.

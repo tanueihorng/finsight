@@ -46,3 +46,10 @@ Setup and other application dialogs now stay above Kestrel and expanded charts w
 - Five selected features and both UI fixes merged into main at `d9ee5c8`; source review additionally repaired a delayed-autofocus race (`a9da04e`) with a paused-clock regression.
 - Final checks:213 unit tests,111 agent tests + secret scan,253 browser tests;1 existing live UI qualification fixture skipped. Build consistency60 files.44 focused modal/accessibility/SW checks also pass.
 - Shellv51 separates the merged bundle from the earlier modal-only cache. Services have not been restarted; no portfolio data, credentials or accepted policy changed.
+
+
+### Build reproducibility correction — 2026-10-27
+
+- Preserve dependency symlink identities in esbuild so canonical and worktree builds produce the same chunk hashes and source maps. Both checkout checks pass60 files;61 artifacts including index are byte-identical.
+- Shellv52 isolates the normalized bundle. The corrected bundle passes213 unit,111 agent + secret scan,253 browser checks, with1 existing live-fixture skip.
+- Corrects the post-merge build mismatch in the first publication; no application/backend behavior or financial records changed by this build correction.

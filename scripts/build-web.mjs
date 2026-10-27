@@ -25,6 +25,9 @@ const shared = {
   absWorkingDir: root,
   outdir: OUT,
   bundle: true,
+  // Keep dependency module identities relative to this checkout, even when
+  // node_modules is symlinked from a worktree to the canonical installation.
+  preserveSymlinks: true,
   target: 'es2022',
   minify: true,
   sourcemap: true,
