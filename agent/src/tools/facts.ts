@@ -152,14 +152,15 @@ const getQuote: ToolDef = {
 
 const getHistory: ToolDef = {
   name: 'get_history',
-  description: 'Price history summary for one symbol: first/last close, return %, high/low, max drawdown and the last 15 closes. Set includeBars for raw OHLCV (max 300 bars).',
+  description: 'Price history summary for one symbol: first/last close, return %, high/low, max drawdown and the last 15 closes. Set includeBars for raw OHLCV (max 300 bars). For a chat price chart use includeBars:true and chartOnly:true to return compact closing prices.',
   input: z.object({
     symbol: z.string().min(1).max(24),
     range: z.enum(['1mo', '3mo', '6mo', '1y', '2y', '5y', '10y']).default('1y'),
     interval: z.enum(['1d', '1wk', '1mo']).default('1d'),
     includeBars: z.boolean().default(false),
+    chartOnly: z.boolean().default(false),
   }),
-  async handler({ symbol, range, interval, includeBars }, ctx) {
+  async handler({ symbol, range, interval, includeBars, chartOnly }, ctx) {
     const d = await ctx.finsight.get<History & { bars?: HistoryPoint[] }>('/api/history', { symbol, range, interval }, ctx.signal);
     const pts: HistoryPoint[] = (d.points || d.bars || []).filter((p: HistoryPoint) => Number.isFinite(p.c));
     if (!pts.length) return { source: 'FinSight /api/history', symbol, error: 'no data' };
@@ -167,12 +168,12 @@ const getHistory: ToolDef = {
     for (const p of pts) { peak = Math.max(peak, p.c); mdd = Math.min(mdd, p.c / peak - 1); }
     const first = pts[0]!, last = pts[pts.length - 1]!;
     return {
-      source: 'FinSight /api/history (Yahoo)', symbol, range, interval, currency: d.meta?.currency ?? null, bars: pts.length,
+      source: 'FinSight /api/history (Yahoo)', asOf: new Date().toISOString(), symbol, range, interval, currency: d.meta?.currency ?? null, bars: pts.length,
       from: new Date(first.t).toISOString().slice(0, 10), to: new Date(last.t).toISOString().slice(0, 10),
       firstClose: r2(first.c), lastClose: r2(last.c), returnPct: r2((last.c / first.c - 1) * 100),
       high: r2(Math.max(...pts.map((p) => p.h ?? p.c))), low: r2(Math.min(...pts.map((p) => p.l ?? p.c))), maxDrawdownPct: r2(mdd * 100),
       lastCloses: pts.slice(-15).map((p) => ({ date: new Date(p.t).toISOString().slice(0, 10), c: r2(p.c) })),
-      ohlcv: includeBars ? pts.slice(-300).map((p) => ({ t: p.t, o: p.o, h: p.h, l: p.l, c: p.c, v: p.v })) : undefined,
+      ohlcv: includeBars ? (chartOnly && pts.length > 150 ? Array.from({ length: 150 }, (_, i) => pts[Math.floor(i * (pts.length - 1) / 149)]!) : chartOnly ? pts : pts.slice(-300)).map((p) => chartOnly ? { t: p.t, c: p.c } : { t: p.t, o: p.o, h: p.h, l: p.l, c: p.c, v: p.v }) : undefined,
     };
   },
 };

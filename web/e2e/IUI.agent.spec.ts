@@ -74,3 +74,19 @@ test('late snapshot events while locked are ignored; accepted snapshot reloads a
   await page.reload(); await reopen(page, 'uidelay slow');
   await expect(page.locator('.kx-ui')).toHaveCount(1);
 });
+
+test('stock chart shows source prices, supports keyboard inspection and survives reload', async ({ page }) => {
+  await open(page); await send(page, 'uichart price');
+  const view = page.locator('.kx-ui:visible');
+  await expect(view.getByRole('img', { name: 'AMD historical closing prices in USD' })).toBeVisible();
+  const slider = view.getByRole('slider', { name: 'AMD chart date' });
+  await expect(slider).toHaveAttribute('aria-valuetext', '2024-01-11: USD 120');
+  await expect(view.locator('polyline')).toHaveAttribute('points', /^0\.00,[\d.]+ 60\.00,[\d.]+ 600\.00,[\d.]+$/);
+  await slider.focus(); await page.keyboard.press('ArrowLeft');
+  await expect(slider).toHaveAttribute('aria-valuetext', '2024-01-02: USD 110');
+  await expect(view).toContainText('Historical close prices; snapshot, not a live quote.');
+  await page.reload(); await reopen(page, 'uichart price');
+  await expect(page.getByRole('img', { name: 'AMD historical closing prices in USD' })).toBeVisible();
+  await page.evaluate(() => window.FinSight.store.setState({ peek: false }));
+  await expect(page.locator('.kx-ui-hidden')).toBeVisible();
+});

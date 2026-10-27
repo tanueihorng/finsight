@@ -25,6 +25,12 @@ The earlier panel redesign remains `KESTRELUI-001` / `SEARCHUI-001` in the works
 Several UI pieces are already integrated; reconcile its remaining acceptance criteria before starting
 or closing it. This documentation cleanup does not certify completion.
 
+## Selected work in progress
+
+| Feature | Execution | Status |
+|---|---|---|
+| In-chat stock price charts, source-bound to historical close prices | `CHATCHART-001` | Verified; included in the merge containing CHARTSHIP-001; deployment and live-provider chart qualification pending |
+
 ## Deferred proposals
 
 | Spec | Proposal | Execution relationship | Gate |

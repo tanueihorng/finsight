@@ -52,7 +52,7 @@ export function bindUi(input: UiRequest, state: UiState): UiSpec {
   const ids = new Set<string>();
   const components: UiSpec['components'] = input.components.map((c) => {
     if (ids.has(c.id)) return fail('Duplicate component id'); ids.add(c.id);
-    if (new Set(c.fields).size !== c.fields.length) return fail('Duplicate fields');
+    if (c.kind !== 'price_chart' && new Set(c.fields).size !== c.fields.length) return fail('Duplicate fields');
     const s = state.completed.get(c.sourceCallId) ?? fail('Source must be a successful supported tool from an earlier step of THIS turn');
     const data = obj(s.data); if (data.error) return fail('Source returned an error');
     const base = s.name === 'get_portfolio' ? obj(data.summary).base : data.base;
@@ -62,6 +62,19 @@ export function bindUi(input: UiRequest, state: UiState): UiSpec {
     const source = { callId: s.callId ?? c.sourceCallId, tool: s.name, asOf: typeof data.asOf === 'string' ? data.asOf : s.completedAt,
       scope: `${accountScope}${typeof base === 'string' ? ` · reporting currency: ${base}` : ''}${typeof data.by === 'string' ? ` · by ${data.by}` : ''}`,
       note: s.name === 'get_portfolio' ? 'Liabilities are not tracked; net worth excludes them.' : s.name === 'get_exposures' ? 'No ETF look-through. ' + String(data.note ?? '') : s.name === 'query_positions' ? `Returned ${String(data.returned)} of ${String(data.matched)} matched positions; totals cover returned positions only.` : '' };
+    if (c.kind === 'price_chart') {
+      if (s.name !== 'get_history') return fail('Price chart requires a get_history source');
+      if (typeof data.symbol !== 'string' || !/^[A-Za-z0-9.^=_-]{1,24}$/.test(data.symbol)) return fail('Invalid history symbol');
+      if (typeof data.currency !== 'string' || !/^[A-Z]{3}$/.test(data.currency)) return fail('History currency unavailable');
+      if (typeof data.range !== 'string' || typeof data.interval !== 'string' || !Array.isArray(data.ohlcv) || data.ohlcv.length < 2 || data.ohlcv.length > 150) return fail('Price chart requires 2–150 history bars; use includeBars:true');
+      let previous = -1;
+      const points = data.ohlcv.map((bar: unknown) => {
+        const row = obj(bar), time = row.t, close = row.c;
+        if (typeof time !== 'number' || !Number.isSafeInteger(time) || time < 0 || time > 8640000000000000 || time <= previous || typeof close !== 'number' || !Number.isFinite(close) || close <= 0) return fail('Invalid or unordered history bars');
+        previous = time; return { time, close };
+      });
+      return { id: c.id, kind: c.kind, source: { ...source, scope: `${data.symbol} · ${data.currency} · ${data.range} · ${data.interval}`, note: `Source: FinSight /api/history (Yahoo). Historical close prices; snapshot, not a live quote. Showing ${points.length} sampled of ${typeof data.bars === 'number' ? data.bars : points.length} source bars.` }, symbol: data.symbol, currency: data.currency, range: data.range, interval: data.interval, points };
+    }
     if (c.kind === 'stat_grid') {
       const items = c.fields.map((field) => {
         const j = field.lastIndexOf('/'), path = field.slice(0, j), key = field.slice(j + 1);
@@ -82,7 +95,7 @@ export function bindUi(input: UiRequest, state: UiState): UiSpec {
     return { id: c.id, kind: c.kind, source, columns, rows: bound, shown: bound.length, available: rows.length };
   });
   const fallback = components.map((c) => {
-    const lines = c.kind === 'stat_grid' ? c.items.map((i) => `${i.label}: ${i.cell.text}`) : [c.columns.map((i) => i.label).join(' | '), ...c.rows.map((r) => r.map((v) => v.text).join(' | ')), `Showing ${c.shown} of ${c.available} source rows.`];
+    const lines = c.kind === 'price_chart' ? [`${c.symbol} close prices (${c.currency}), ${c.points.length} points`, ...c.points.map((p) => `${new Date(p.time).toISOString()}: ${p.close}`)] : c.kind === 'stat_grid' ? c.items.map((i) => `${i.label}: ${i.cell.text}`) : [c.columns.map((i) => i.label).join(' | '), ...c.rows.map((r) => r.map((v) => v.text).join(' | ')), `Showing ${c.shown} of ${c.available} source rows.`];
     return [`Snapshot · ${c.source.tool} · ${c.source.asOf}`, c.source.scope, c.source.note, ...lines].filter(Boolean).join('\n');
   }).join('\n\n');
   const spec = { version: 1, components, fallback };
@@ -91,7 +104,7 @@ export function bindUi(input: UiRequest, state: UiState): UiSpec {
 }
 export const uiTool: ToolDef = {
   name: 'render_ui', input: UiRequest,
-  description: 'Render interactive stat cards or a sortable table for explicit card/table requests. Sources: completed earlier-step get_portfolio, query_positions, get_cash, get_exposures, get_accounts or get_quote. Copy sourceCallId from result.uiSource.ref. Choose field pointers; server binds figures, labels and units. Table limit max50 (default20). complete:true finishes an answered request. No formulas, actions or markup.',
+  description: 'Render interactive stock price charts, stat cards or a sortable table for explicit requests. For a price_chart, first call get_history with includeBars:true and chartOnly:true and use its uiSource.ref. Sources: completed earlier-step get_portfolio, query_positions, get_cash, get_exposures, get_accounts or get_quote. Copy sourceCallId from result.uiSource.ref. Choose field pointers; server binds figures, labels and units. Table limit max50 (default20). complete:true finishes an answered request. No formulas, actions or markup.',
   async handler(input, ctx: ToolCtx) {
     if (!ctx.ui?.enabled || !ctx.cfg.uiViews || !ctx.threadId || !ctx.turnId || !ctx.callId || ctx.signal.aborted) return fail('Interactive views are disabled or unavailable on this surface');
     const prior = getUiView(ctx.db, ctx.turnId, ctx.callId);

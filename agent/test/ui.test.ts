@@ -61,6 +61,18 @@ test('strict version/kinds/counts/duplicate ids and serialized byte limits', asy
   const result = await buildRegistry().execute('render_ui', { junk: '字'.repeat(MAX_UI_BYTES / 2) }, ctx);
   assert.equal(result.ok, false); assert.match(result.content, /24 KiB/); ctx.db.close();
 });
+test('price chart binds source history exactly and rejects fabricated or invalid bars', () => {
+  const input = parse({ version: 1, components: [{ id: 'chart', kind: 'price_chart', sourceCallId: 'h1' }] });
+  const history = { symbol: 'AMD', currency: 'USD', range: '1mo', interval: '1d', asOf: time, ohlcv: [{ t: 1704067200000, c: 100.12345 }, { t: 1704153600000, c: 101.75 }] };
+  const st = (data: unknown, name = 'get_history'): UiState => ({ enabled: true, attempts: 0, completed: new Map([['h1', { name, data, completedAt: time, account: 'ALL' }]]) });
+  const result = bindUi(input, st(history)), chart = result.components[0];
+  assert.equal(chart?.kind, 'price_chart');
+  if (chart?.kind === 'price_chart') { assert.deepEqual(chart.points, [{ time: 1704067200000, close: 100.12345 }, { time: 1704153600000, close: 101.75 }]); assert.equal(chart.currency, 'USD'); }
+  assert.match(result.fallback, /100.12345/);
+  assert.throws(() => parse({ version: 1, components: [{ id: 'chart', kind: 'price_chart', sourceCallId: 'h1', points: [999] }] }));
+  assert.throws(() => bindUi(input, st(history, 'get_quote')));
+  for (const invalid of [{ ...history, currency: null }, { ...history, ohlcv: [] }, { ...history, ohlcv: [history.ohlcv[1], history.ohlcv[0]] }, { ...history, ohlcv: [{ t: 1, c: Infinity }, { t: 2, c: 10 }] }]) assert.throws(() => bindUi(input, st(invalid)));
+});
 test('direct/MCP/aborted calls cannot persist; invalid attempts count toward three-call cap', async () => {
   const ctx = testCtx(testConfig(fake, { uiViews: true }));
   assert.equal((await buildRegistry().execute('render_ui', request, ctx)).ok, false);
@@ -82,6 +94,22 @@ async function run(script: Script, enabled = true, capable = true, file = ':memo
   assert.equal(engine.isRunning(t.id), null);
   return { cfg, db, tools, bus, finsight, engine, t, turn, manifest };
 }
+test('mock model uses actual compact history reference to render and persist a chart', async () => {
+  const o = await run((req, step) => {
+    if (step === 0) return [{ type: 'tool_call', id: 'hist', name: 'get_history', args: { symbol: 'AMD', range: '1y', interval: '1d', includeBars: true, chartOnly: true } }];
+    if (step === 1) {
+      const result = req.messages.at(-1)!.blocks.find((b) => b.type === 'tool_result');
+      assert.ok(result?.type === 'tool_result'); const data = JSON.parse(result.content);
+      assert.equal(data.ohlcv.length, 150); assert.equal(data.uiSource.tool, 'get_history');
+      return [{ type: 'tool_call', id: 'chart1', name: 'render_ui', args: { version: 1, complete: true, components: [{ id: 'chart', kind: 'price_chart', sourceCallId: data.uiSource.ref }] } }];
+    }
+    return [{ type: 'text', text: 'Done' }];
+  });
+  const view = store.listUiViews(o.db, o.t.id)[0]; assert.ok(view);
+  const chart = view.spec.components[0]; assert.equal(chart?.kind, 'price_chart');
+  if (chart?.kind === 'price_chart') { assert.equal(chart.points.length, 150); assert.equal(chart.symbol, 'AMD'); assert.match(chart.source.note, /150 sampled of 500/); }
+  o.db.close();
+});
 const fetchCash = { type: 'tool_call' as const, id: 'cash1', name: 'get_cash', args: {} };
 const render = { type: 'tool_call' as const, id: 'ui1', name: 'render_ui', args: request };
 test('mock round trip: accepted API snapshot survives restart/event pruning and deletion', async () => {

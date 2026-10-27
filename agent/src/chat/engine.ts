@@ -275,7 +275,7 @@ export class ChatEngine {
       // Provider-generated call IDs are protocol metadata, not a reliable model
       // input. Give each eligible result a short reference inside visible JSON.
       // Do this only after the entire batch finishes: no same-step bindings.
-      for (const result of results) if (ctx.ui.enabled && result.type === 'tool_result' && result.ok && ['get_portfolio', 'query_positions', 'get_cash', 'get_exposures', 'get_accounts', 'get_quote'].includes(result.name)) {
+      for (const result of results) if (ctx.ui.enabled && result.type === 'tool_result' && result.ok && ['get_portfolio', 'query_positions', 'get_cash', 'get_exposures', 'get_accounts', 'get_quote', 'get_history'].includes(result.name)) {
         try {
           const data = JSON.parse(result.content);
           if (!data || typeof data !== 'object' || Array.isArray(data) || data.error) continue;

@@ -47,8 +47,10 @@ function runTurn(t, turnId, content, attachments, search = 'tavily') {
     emit(t, 'tool.finished', { turnId, callId: 'c1', name: 'mcp__finsight__get_portfolio', ok: true, resultSummary: '9 positions', ms: 1200 });
     emit(t, 'citation', { turnId, url: 'https://www.example.com/report', title: 'Report', class: 'primary', retrievedAt: '2026-10-25T00:00:00Z' });
   }
-  if (/\buiview\b|\buibad\b|\buiunknown\b|\buidelay\b/i.test(content)) {
+  if (/\buiview\b|\buibad\b|\buiunknown\b|\buidelay\b|\buichart\b/i.test(content)) {
     const view = uiFixture(t.id, turnId), bad = /\buibad\b/i.test(content);
+    if (/\buichart\b/i.test(content)) view.spec = { version: 1, fallback: 'AMD close prices (USD)\n2024-01-01: 100\n2024-01-02: 110\n2024-01-11: 120', components: [{ id: 'chart', kind: 'price_chart', source: { callId: 'history1', tool: 'get_history', asOf: '2026-10-26T01:00:00.000Z', scope: 'AMD · USD · 1mo · 1d', note: 'Historical close prices; snapshot, not a live quote.' }, symbol: 'AMD', currency: 'USD', range: '1mo', interval: '1d', points: [{ time: 1704067200000, close: 100 }, { time: 1704153600000, close: 110 }, { time: 1704931200000, close: 120 }] }] };
+
     t.messages.push({ id: `m${++ids}`, role: 'assistant', turnId, blocks: [{ type: 'tool_call', id: view.callId, name: 'render_ui', args: { version: 1, value: 999999 } }] });
     t.messages.push({ id: `m${++ids}`, role: 'tool', turnId, blocks: [{ type: 'tool_result', callId: view.callId, name: 'render_ui', ok: !bad, content: bad ? 'UI_REJECTED' : 'accepted' }] });
     emit(t, 'tool.started', { turnId, callId: view.callId, name: 'render_ui', argsSummary: '{}' });
