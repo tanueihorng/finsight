@@ -53,7 +53,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     file = parsed.data;
   }
   return {
-    uiViews: env.KESTREL_UI === undefined ? (file.uiViews ?? false) : env.KESTREL_UI === '1',
+    uiViews: env.KESTREL_UI === undefined ? (file.uiViews ?? (env.FINSIGHT_DEMO_MODE === '1')) : env.KESTREL_UI === '1',
     home,
     dbPath: path.join(home, 'agent.db'),
     port: Number(env.AGENT_PORT) || file.port || 8100,

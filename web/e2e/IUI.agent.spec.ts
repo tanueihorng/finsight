@@ -80,13 +80,65 @@ test('stock chart shows source prices, supports keyboard inspection and survives
   const view = page.locator('.kx-ui:visible');
   await expect(view.getByRole('img', { name: 'AMD historical closing prices in USD' })).toBeVisible();
   const slider = view.getByRole('slider', { name: 'AMD chart date' });
-  await expect(slider).toHaveAttribute('aria-valuetext', '2024-01-11: USD 120');
+  await expect(slider).toHaveAttribute('aria-valuetext', '2024-01-11: USD 120.00');
   await expect(view.locator('polyline')).toHaveAttribute('points', /^0\.00,[\d.]+ 60\.00,[\d.]+ 600\.00,[\d.]+$/);
   await slider.focus(); await page.keyboard.press('ArrowLeft');
-  await expect(slider).toHaveAttribute('aria-valuetext', '2024-01-02: USD 110');
+  await expect(slider).toHaveAttribute('aria-valuetext', '2024-01-02: USD 110.00');
   await expect(view).toContainText('Historical close prices; snapshot, not a live quote.');
   await page.reload(); await reopen(page, 'uichart price');
   await expect(page.getByRole('img', { name: 'AMD historical closing prices in USD' })).toBeVisible();
   await page.evaluate(() => window.FinSight.store.setState({ peek: false }));
   await expect(page.locator('.kx-ui-hidden')).toBeVisible();
+});
+
+test('price chart range and safe actions prepare an editable alert without saving', async ({ page }) => {
+  await open(page); await send(page, 'uichart actions');
+  const view = page.locator('.kx-ui:visible');
+  await view.getByRole('button', { name: '1M', exact: true }).click();
+  await expect(view.getByRole('button', { name: '1M', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(view).toContainText('Ranges filter this saved snapshot');
+  await view.getByRole('button', { name: 'Open full chart' }).click();
+  await expect(page.locator('#detail-title')).toContainText('AMD');
+  let writes = 0; page.on('request', (r) => { if (r.url().includes('/api/alerts/add')) writes++; });
+  await view.getByRole('button', { name: 'Prepare price alert' }).click();
+  await expect(page.locator('#alert-form')).toBeVisible();
+  await expect(page.getByLabel('Alert symbol')).toHaveValue('AMD');
+  await expect(page.getByLabel('Alert price')).toHaveValue('120');
+  await expect(page.locator('#alert-form')).toContainText('Nothing is saved until you press SET');
+  await page.getByLabel('Alert price').fill('125');
+  await expect(page.locator('#alert-form')).toContainText('initially uses the historical close');
+  expect(writes).toBe(0);
+});
+test('exposure visualization displays bound values and can open the ledger', async ({ page }) => {
+  await open(page); await send(page, 'uiexposure breakdown');
+  const view = page.locator('.kx-ui:visible');
+  await expect(view).toContainText('Tech'); await expect(view).toContainText('60%');
+  await expect(view.locator('.kx-exposure-track i').first()).toHaveAttribute('style', 'width: 60%;');
+  await expect(view).toContainText('no look-through');
+  await view.getByRole('button', { name: 'Open ledger' }).click();
+  await expect(page.getByRole('dialog', { name: 'Trades and realized gains' })).toBeVisible();
+});
+
+test('preparing a chart alert preserves an existing unsaved alert draft', async ({ page }) => {
+  await open(page); await send(page, 'uichart preserve');
+  await page.locator('#alert-toggle').click();
+  await page.getByLabel('Alert symbol').fill('VOO'); await page.getByLabel('Alert price').fill('200');
+  await page.locator('#alert-toggle').click(); // hidden forms retain unsaved input
+  await page.locator('.kx-ui:visible').getByRole('button', { name: 'Prepare price alert' }).click();
+  await page.locator('#alert-toggle').click();
+  await expect(page.getByLabel('Alert symbol')).toHaveValue('VOO');
+  await expect(page.getByLabel('Alert price')).toHaveValue('200');
+  await expect(page.locator('#cmd-status')).toContainText('Finish or clear the current alert draft');
+});
+
+test('chart filters only the saved dates and supports pointer inspection', async ({ page }) => {
+  await open(page); await send(page, 'uichartrange test');
+  const view = page.locator('.kx-ui:visible');
+  await view.getByRole('button', { name: '1M', exact: true }).click();
+  await expect(view.getByRole('slider', { name: 'AMD chart date' })).toHaveAttribute('min', '1');
+  await expect(view).toContainText('2024-02-01');
+  const graph = view.getByRole('img', { name: 'AMD historical closing prices in USD' });
+  const box = await graph.boundingBox(); expect(box).not.toBeNull();
+  await page.mouse.move(box!.x + 1, box!.y + box!.height / 2);
+  await expect(view.getByRole('slider', { name: 'AMD chart date' })).toHaveAttribute('aria-valuetext', '2024-02-01: USD 110.00');
 });

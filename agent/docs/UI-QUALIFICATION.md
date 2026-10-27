@@ -2,7 +2,7 @@
 
 DeepSeek Flash/Pro and GPT-6 Luna/Sol passed and had capabilities.ui enabled. After the
 move to the Responses transport, Sol's views are disabled (see the addendum below).
-The global operator gate remains off on a new installation: enable uiViews in the
+The global operator gate remains off on a new personal installation (demo mode defaults on): enable uiViews in the
 private agent config, or KESTREL_UI=1. Explicit environment0 disables it. Enabled
 models show views in the picker and offer Show my holdings as a table.
 

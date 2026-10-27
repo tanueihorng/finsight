@@ -2,12 +2,11 @@
 
 Status: Phase 1 implementation in `feature/kestrel-verified-views`, 2026-10-26.
 The owner requested implementation after review. The first release is deliberately
-limited to verified stat cards and tables. The global operator setting remains **off by default**. DeepSeek Flash/Pro and GPT-6 Luna/Sol
-passed live synthetic qualification; see UI-QUALIFICATION.md. Source-bound price charts are implemented in CHATCHART-001; other later phases remain a roadmap.
+limited to verified stat cards and tables. The global operator setting defaults **off for personal installations** and **on in demo mode**, unless explicitly overridden. DeepSeek Flash/Pro and GPT-6 Luna are enabled following live synthetic qualification; GPT-6 Sol remains disabled after the Responses transport qualification; see UI-QUALIFICATION.md. Source-bound price charts are implemented in CHATCHART-001; other later phases remain a roadmap.
 
 ## What Phase 1 does
 
-An API brain may request a fixed stat grid, sortable table or historical closing-price chart when several figures
+An API brain may request a fixed stat grid, sortable table, exposure breakdown or historical closing-price chart when several figures
 or rows would be clearer than prose. The model chooses source fields and layout;
 the server supplies every displayed value, label, currency, data time, scope,
 limitation and plain text equivalent. No model-supplied HTML, CSS, JS, numbers,
@@ -104,6 +103,12 @@ selection and overflow safeguards remain in force, including provider state.
 
 For an explicit chart request, the model calls `get_history` with `includeBars:true` and `chartOnly:true`, then references that completed result in a `price_chart` component. The server validates the source, symbol, currency and ordered finite prices; the model supplies no data values. At most 150 actual bars are evenly sampled across the requested range, with the count disclosed, and retained as a snapshot. The chart provides keyboard-operable date inspection and a text equivalent. Values are historical close prices, not a live quote. A missing currency, insufficient data, malformed data or unavailable source produces a rejection and prose fallback. Existing UI gates and privacy behavior apply. Synthetic end-to-end tests do not establish live model-provider chart compliance.
 
+## View selection, exposure, and safe actions (UIUPGRADE-001)
+
+Natural requests such as “show me NVDA” are guided toward a price chart, while explicit text-only, table and card requests take precedence. Opt-in natural selection evaluation uses `NATURAL_UI_CASES` with synthetic data; a small run is not model qualification. Exposure charts bind group names, currency, values and weights exclusively to a completed `get_exposures` result. They state the all-account scope and sector ETF look-through limitation. The existing sortable table supports comparisons.
+
+Chart range buttons filter only the existing saved snapshot; they do not fetch more data. Pointer movement and the keyboard slider inspect source points. Buttons can open the full chart, open the ledger, or prepare an editable price alert using the selected historical close. Preparing does not submit an alert or request notification permission. An already open alert draft is not overwritten. The user must review and press SET to save an alert; no financial action is created by `render_ui`.
+
 ## Persistence and delivery
 
 Migration 2 adds `ui_views`, unique on `(turn_id, call_id)`. Only a validated,
@@ -143,7 +148,7 @@ agent home and audited under the existing logging policy.
 Both a global operator setting (`uiViews: true` in the private agent config, or
 `KESTREL_UI=1`) and the selected API brain's `capabilities.ui: true` are required.
 An explicit KESTREL_UI environment value overrides the config; 0 disables it.
-DeepSeek Flash/Pro and GPT-6 Luna/Sol have capabilities.ui enabled after qualification; all other
+DeepSeek Flash/Pro and GPT-6 Luna have capabilities.ui enabled after qualification; all other
 bundled manifests remain disabled. Direct tool invocation also checks the gate.
 MCP/CLI does not advertise the tool because it lacks the thread/turn UI bridge.
 Turning the environment flag off prevents new views; accepted historical snapshots

@@ -90,7 +90,7 @@ Every interaction is logged, one JSON line per event, in `~/FinSightData/agent/l
 
 ## Demo (no real data)
 
-From the `finsight` folder, double-click `start-demo.command`, or run `npm run demo`. It starts FinSight on :8003 and a separate Kestrel on :8103 with a made-up portfolio in `~/FinSightDemo`. The PIN is 2468. `npm run demo:reset` reseeds it.
+From the `finsight` folder, double-click `start-demo.command`, or run `npm run demo`. It starts FinSight on :8003 and a separate Kestrel on :8103 with a made-up portfolio in `~/FinSightDemo`. The PIN is 2468. Supported Intelligent UI views default on in demo mode, while explicit agent settings and model capability/credential checks still apply. `npm run demo:reset` reseeds it.
 
 ## Settings
 

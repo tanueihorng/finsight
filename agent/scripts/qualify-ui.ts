@@ -14,7 +14,7 @@ import { ToolRegistry } from '../src/tools/registry.ts';
 import { buildRegistry } from '../src/tools/index.ts';
 import { bindUi, type UiState } from '../src/tools/ui.ts';
 import { UiRequest } from '../src/ui/schema.ts';
-import { UI_CASES, median, type UiCase } from '../src/ui/qualification.ts';
+import { UI_CASES, NATURAL_UI_CASES, median, type UiCase } from '../src/ui/qualification.ts';
 
 if (!process.argv.includes('--live')) throw new Error('Live provider calls require --live and an explicit --out directory.');
 const outArg = process.argv.indexOf('--out');
@@ -30,9 +30,11 @@ const integerArg = (name: string, min: number, max: number, fallback: number) =>
   if (!Number.isInteger(n) || n < min || n > max) throw new Error(`${name} must be an integer from ${min} to ${max}`);
   return n;
 };
+const natural = process.argv.includes('--natural');
 const perfRepeats = integerArg('--performance-repeats', 1, 3, 0);
 const cases = perfRepeats ? Array.from({ length: perfRepeats }, (_, i) => UI_CASES.filter((c) => c.paired).map((c) => ({ ...c, id: `${c.id}-repeat-${i + 1}` }))).flat() : null;
 const limit = integerArg('--limit', 1, 40, 40);
+if (natural && perfRepeats) throw new Error('Do not combine --natural with --performance-repeats');
 if (perfRepeats && process.argv.includes('--limit')) throw new Error('Do not combine --performance-repeats with --limit');
 const eligible = [...discovered.brains.values()].filter((b) => (!pick || pick.has(b.manifest.id)) && b.available && ['anthropic', 'openai-compatible', 'openai-responses'].includes(b.manifest.transport));
 const ledger = new Database(production.dbPath, { fileMustExist: true });
@@ -40,8 +42,8 @@ ledger.pragma('busy_timeout = 5000');
 const spent = () => (ledger.prepare('SELECT COALESCE(SUM(usd),0) total FROM cost_ledger WHERE ts >= ?').get(store.startOfToday()) as { total: number }).total;
 const startSpend = spent(); let reserved = 0, runCost = 0;
 const { fakeFinsight, testConfig, testCtx } = await import('../test/helpers.ts');
-const fake = await fakeFinsight({ scopedAccounts: true });
-const allowed = new Set(['get_portfolio', 'query_positions', 'get_cash', 'get_exposures', 'get_accounts', 'get_quote', 'render_ui']);
+const fake = await fakeFinsight({ scopedAccounts: true, naturalHistory: natural });
+const allowed = new Set(['get_portfolio', 'query_positions', 'get_cash', 'get_exposures', 'get_accounts', 'get_quote', 'get_history', 'render_ui']);
 const defs = buildRegistry().list().filter((t) => allowed.has(t.name));
 const results: Record<string, unknown> = {};
 const skipped = [...discovered.brains.values()].filter((b) => !eligible.includes(b)).map((b) => ({ id: b.manifest.id, reason: !b.available ? 'credentials unavailable' : b.manifest.transport === 'claude-code' ? 'CLI bridge unsupported in Phase 1' : 'not selected in this run' }));
@@ -123,7 +125,7 @@ async function qualify(entry: typeof eligible[number]) {
     return row;
   }
   try {
-    for (const c of (cases ?? UI_CASES.slice(0, limit))) {
+    for (const c of (cases ?? (natural ? NATURAL_UI_CASES : UI_CASES).slice(0, limit))) {
       const candidate = await turn(c, true);
       let baseline = null;
       if (c.paired && !blocked) baseline = await turn(c, false);
@@ -136,7 +138,7 @@ async function qualify(entry: typeof eligible[number]) {
     const positives = details.filter((x) => x.candidate.expected !== 'text'), negatives = details.filter((x) => x.candidate.expected === 'text');
     const attempts = details.filter((x) => x.candidate.attempts.length), pairs = details.filter((x) => x.baseline && x.candidate.appropriate && x.candidate.views.length > 0 && x.candidate.status === 'succeeded' && x.baseline.status === 'succeeded');
     const ratio = (yes: number, total: number) => total ? yes / total : 0;
-    const stats = { mode: perfRepeats ? 'performance-only' : 'full', completed: details.length, expectedCases: UI_CASES.length, positiveRate: ratio(positives.filter((x) => x.candidate.appropriate).length, positives.length),
+    const stats = { mode: natural ? 'natural-selection' : perfRepeats ? 'performance-only' : 'full', completed: details.length, expectedCases: natural ? NATURAL_UI_CASES.length : UI_CASES.length, positiveRate: ratio(positives.filter((x) => x.candidate.appropriate).length, positives.length),
       restraintRate: ratio(negatives.filter((x) => x.candidate.appropriate).length, negatives.length),
       firstTryRate: ratio(attempts.filter((x) => x.candidate.attempts[0]).length, attempts.length),
       repairRate: ratio(attempts.filter((x) => x.candidate.attempts.slice(0, 2).some(Boolean)).length, attempts.length),
@@ -144,7 +146,7 @@ async function qualify(entry: typeof eligible[number]) {
       medianExtraCost: median(pairs.map((x) => x.candidate.costUsd / Math.max(x.baseline.costUsd, 1e-9) - 1)),
       medianExtraLatency: median(pairs.map((x) => x.candidate.ms / Math.max(x.baseline.ms, 1) - 1)),
       costUsd: modelCost, blocked: blocked || null, unknownUsage };
-    const contractPass = !perfRepeats && stats.completed === UI_CASES.length && stats.positiveRate >= .85 && stats.restraintRate >= .9 && stats.firstTryRate >= .9 && stats.repairRate >= .98 && stats.faithful && stats.followupPass;
+    const contractPass = !natural && !perfRepeats && stats.completed === UI_CASES.length && stats.positiveRate >= .85 && stats.restraintRate >= .9 && stats.firstTryRate >= .9 && stats.repairRate >= .98 && stats.faithful && stats.followupPass;
     const performancePass = stats.pairs >= 5 && stats.medianExtraCost !== null && stats.medianExtraCost <= .3 && stats.medianExtraLatency !== null && stats.medianExtraLatency <= .25;
     results[id] = { ...stats, contractPass, performancePass, enabled: false, note: 'Human clarity review and rollout decision still required.' };
     writeSummary();

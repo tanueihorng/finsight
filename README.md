@@ -210,7 +210,7 @@ Commodities: `GC=F` (gold) `CL=F` (oil) · Non-US suffixes: `0700.HK` `D05.SI` `
 
 ## 🎭 Demo mode
 
-Double-click **`start-demo.command`** or run `npm run demo`. A second FinSight opens on `http://127.0.0.1:8003` with a made-up portfolio in `~/FinSightDemo` (PIN `2468`) and its own Kestrel instance. Your real data folder is never used, and `npm run demo:reset` reseeds it. Handy for screenshots, testing and showing friends.
+Double-click **`start-demo.command`** or run `npm run demo`. A second FinSight opens on `http://127.0.0.1:8003` with a made-up portfolio in `~/FinSightDemo` (PIN `2468`) and its own Kestrel instance. Your real data folder is never used, and `npm run demo:reset` reseeds it. The demo runs the same app features and enables supported Intelligent UI views by default; model availability still depends on configured provider credentials and model capabilities. An explicit `KESTREL_UI` or demo agent config setting overrides the default. Handy for screenshots, testing and showing friends.
 
 ## 🔌 Data sources &nbsp;·&nbsp; ⚠️ disclaimer
 

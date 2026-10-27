@@ -39,7 +39,7 @@ function bars(n: number, start = 100, drift = 0.002) {
 
 export type Fake = { url: string; dataDir: string; calls: { method: string; path: string; auth: string | undefined }[]; close: () => Promise<void>; down: boolean };
 
-export async function fakeFinsight(options: { scopedAccounts?: boolean } = {}): Promise<Fake> {
+export async function fakeFinsight(options: { scopedAccounts?: boolean; naturalHistory?: boolean } = {}): Promise<Fake> {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-fs-'));
   fs.writeFileSync(path.join(dataDir, 'agent-link.json'), JSON.stringify({ token: TOKEN, proxySecret: PROXY_SECRET }), { mode: 0o600 });
   const calls: Fake['calls'] = [];
@@ -66,7 +66,17 @@ export async function fakeFinsight(options: { scopedAccounts?: boolean } = {}): 
         const p = PORTFOLIO.positions.find((p) => p.symbol === symbol);
         return { symbol, name: p?.name || symbol, price: p?.last ?? 10, currency: p?.currency || 'USD', change: 1, changePct: 1 };
       }) });
-      case '/api/history': return j(200, { symbol: u.searchParams.get('symbol'), meta: { currency: 'USD' }, points: bars(500) });
+      case '/api/history': {
+        if (options.naturalHistory) {
+          const now = Math.floor(Date.now() / 864e5) * 864e5;
+          const symbol = u.searchParams.get('symbol');
+          const position = PORTFOLIO.positions.find((p) => p.symbol === symbol);
+          const latest = position?.last ?? 10;
+          const points = Array.from({ length: 90 }, (_, i) => { const c = latest * (0.775 + i * 0.225 / 89); return { t: now - (89 - i) * 864e5, o: c, h: c, l: c, c, v: 1e6 }; });
+          return j(200, { symbol, meta: { currency: position?.currency ?? 'USD' }, points });
+        }
+        return j(200, { symbol: u.searchParams.get('symbol'), meta: { currency: 'USD' }, points: bars(500) });
+      }
       case '/api/history/batch': {
         const results: Record<string, unknown> = {};
         for (const s of (u.searchParams.get('symbols') || '').split(',')) results[s.toUpperCase()] = { points: bars(500, 50 + s.length * 10) };

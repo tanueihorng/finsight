@@ -8,6 +8,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn, execFile } from 'node:child_process';
+import { isInsidePersonalData } from './demo-safety.ts';
 
 const ROOT = path.join(import.meta.dirname, '..');
 const DEMO_DIR = path.resolve(process.env.FINSIGHT_DEMO_DIR || path.join(os.homedir(), 'FinSightDemo'));
@@ -16,7 +17,7 @@ const DEMO_PIN = '2468'; // demo only: the demo folder holds no real data
 const URL = `http://127.0.0.1:${PORT}`; // 127.0.0.1, not localhost: keeps demo browser storage apart from the personal app
 
 const real = path.resolve(os.homedir(), 'FinSightData');
-if (DEMO_DIR === real || DEMO_DIR.startsWith(real + path.sep)) { console.error('Refusing: the demo folder must not be your real FinSightData.'); process.exit(1); }
+if (isInsidePersonalData(DEMO_DIR, real)) { console.error('Refusing: the demo folder must not be your real FinSightData.'); process.exit(1); }
 
 if (process.argv.includes('--reset')) { fs.rmSync(DEMO_DIR, { recursive: true, force: true }); console.log(`Reset ${DEMO_DIR}`); }
 
@@ -56,7 +57,7 @@ async function seed(): Promise<boolean> {
   const finsight = spawn(process.execPath, [path.join(ROOT, 'server.ts')], {
     cwd: ROOT, stdio: 'inherit',
     env: { ...process.env, FINSIGHT_DATA_DIR: DEMO_DIR, PORT: String(PORT), AGENT_URL: `http://127.0.0.1:${AGENT_PORT}`, NOTIFY: '0',
-      AGENT_HOME: path.join(DEMO_DIR, 'agent'), RECORDS_DIR: path.join(DEMO_DIR, 'records') },
+      FINSIGHT_DEMO_MODE: '1', AGENT_HOME: path.join(DEMO_DIR, 'agent'), RECORDS_DIR: path.join(DEMO_DIR, 'records') },
   });
   console.log(`\n  DEMO MODE   ${URL}   PIN ${DEMO_PIN}   data: ${DEMO_DIR}${fresh ? ' (freshly seeded)' : ''}`);
   console.log('  Made-up portfolio. Your real FinSightData is not used. Ctrl-C stops the demo.\n');

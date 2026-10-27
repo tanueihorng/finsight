@@ -1,6 +1,7 @@
 import { keyboardClick } from '../../ui/keyboard.ts';
 import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { useStore } from 'zustand';
 import { useAlerts } from '../../api/queries.ts';
 import { api } from '../../api/client.ts';
 import type { Alert } from '../../../../shared/types.ts';
@@ -13,8 +14,16 @@ export default function AlertsIsland() {
   const q = useAlerts(), client = useQueryClient();
   const [shown, setShown] = useState(false), [symbol, setSymbol] = useState(''), [price, setPrice] = useState(''), [op, setOp] = useState('>');
   const input = useRef<HTMLInputElement>(null), fromChart = useRef(false);
+  const draft = useStore(window.FinSight.store, (s) => s.alertDraft);
+  const [draftNote, setDraftNote] = useState('');
   const [track] = useState(createTriggerTracker), [notifier] = useState(createNotifier);
   useEffect(() => () => notifier.dispose(), []);
+  useEffect(() => {
+    if (!draft) return;
+    if (symbol || price) { setStatus('Finish or clear the current alert draft before preparing another.', 'err'); }
+    else { setSymbol(draft.symbol); setPrice(String(draft.price)); setOp('<'); setDraftNote(`Review this draft: it initially uses the historical close from ${draft.date}. Nothing is saved until you press SET.`); setShown(true); requestAnimationFrame(() => document.getElementById('alert-form')?.scrollIntoView({ block: 'center' })); }
+    window.FinSight.store.setState({ alertDraft: null });
+  }, [draft]);
   useEffect(() => { if (shown) input.current?.focus(); }, [shown]);
   useEffect(() => {
     let active = true;
@@ -36,8 +45,8 @@ export default function AlertsIsland() {
   const head = <PanelHeadSlot island="alerts"><button id="alert-toggle" aria-expanded={shown} aria-controls="alert-form" className="mini-btn" onClick={() => { setShown((s) => !s); input.current?.focus(); requestNotify(); }}>+ ALERT</button></PanelHeadSlot>;
   const form = <PanelHeadSlot island="alerts-form"><form id="alert-form" className={`alert-form ${shown ? '' : 'hidden'}`} autoComplete="off" onSubmit={async (e) => {
     e.preventDefault(); const s = symbol.trim().toUpperCase(); if (!s || !price) return setStatus('Alert needs a symbol and a price.', 'err');
-    try { await change({ symbol: s, op, price }); setSymbol(''); setPrice(''); setStatus(`Alert set: ${s} ${op} ${price}`, 'ok'); requestNotify(); }
+    try { await change({ symbol: s, op, price }); setSymbol(''); setPrice(''); setDraftNote(''); setStatus(`Alert set: ${s} ${op} ${price}`, 'ok'); requestNotify(); }
     catch (error) { setStatus('Alert failed: ' + (error as Error).message, 'err'); }
-  }}><input ref={input} id="alert-symbol" aria-label="Alert symbol" value={symbol} placeholder="SYMBOL" onChange={(e) => setSymbol(e.target.value)} /><select id="alert-op" aria-label="Alert condition" value={op} onChange={(e) => setOp(e.target.value)}><option value=">">rises above ≥</option><option value="<">falls below ≤</option></select><input id="alert-price" aria-label="Alert price" type="number" step="any" min="0" placeholder="PRICE" value={price} onChange={(e) => setPrice(e.target.value)} /><button type="submit" className="mini-btn solid">SET</button></form></PanelHeadSlot>;
+  }}><input ref={input} id="alert-symbol" aria-label="Alert symbol" value={symbol} placeholder="SYMBOL" onChange={(e) => setSymbol(e.target.value)} /><select id="alert-op" aria-label="Alert condition" value={op} onChange={(e) => setOp(e.target.value)}><option value=">">rises above ≥</option><option value="<">falls below ≤</option></select><input id="alert-price" aria-label="Alert price" type="number" step="any" min="0" placeholder="PRICE" value={price} onChange={(e) => setPrice(e.target.value)} /><button type="submit" className="mini-btn solid">SET</button>{draftNote && <span className="small" role="status">{draftNote}</span>}</form></PanelHeadSlot>;
   return <>{head}{form}{q.data?.alerts.length ? q.data.alerts.map((a) => <div className={`al-row ${a.met ? 'met' : ''}`} key={a.id}><div><span className="al-sym" role="button" tabIndex={0} onKeyDown={keyboardClick} aria-label={`View ${a.symbol}`} data-sym={a.symbol} onClick={() => selectSymbol(a.symbol)}>{a.symbol}</span> <span className="al-cond">{(a.label || '').replace(a.symbol + ' ', '')}</span><span className="muted small">now {a.currentValue != null ? fmt(a.currentValue) : '—'}{a.level != null && a.kind !== 'price' ? ' · level ' + fmt(a.level) : ''}</span></div><span className="al-badge">{a.met ? 'TRIGGERED' : 'armed'}</span><button className="al-x" aria-label={`Remove alert for ${a.symbol}`} data-id={a.id} onClick={() => { void change({ id: a.id }, true).catch(() => {}); }}>✕</button></div>) : q.data && <div className="al-empty">No alerts — add one above, type <b>ALERT AAPL &gt; 320</b>, or use the bell on the chart (price, trend line, RSI, moving average).</div>}</>;
 }

@@ -344,3 +344,12 @@ body.agent-resizing-v { user-select: none; cursor: row-resize; }
 .kx-price-chart svg { display:block; width:100%; height:150px; color:var(--accent,#dfb36a); }
 .kx-price-chart label { display:block; font-size:11px; margin:8px 0; }
 .kx-price-chart input { display:block; width:100%; accent-color:var(--accent,#dfb36a); }
+
+.kx-chart-ranges,.kx-chart-actions { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0; }
+.kx-chart-ranges button,.kx-chart-actions button,.kx-exposure button { color:inherit; background:transparent; border:1px solid var(--line,#555); border-radius:5px; padding:4px 8px; cursor:pointer; }
+.kx-chart-ranges button[aria-pressed="true"] { border-color:var(--accent,#dfb36a); color:var(--accent,#dfb36a); }
+.kx-exposure ul { list-style:none; padding:0; }
+.kx-exposure li { margin:10px 0; }
+.kx-exposure li > div:first-child { display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap; }
+.kx-exposure-track { height:6px; background:var(--line,#444); border-radius:5px; margin-top:5px; }
+.kx-exposure-track i { display:block; height:100%; background:var(--accent,#dfb36a); border-radius:5px; }

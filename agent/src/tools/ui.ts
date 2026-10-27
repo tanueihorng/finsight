@@ -52,7 +52,7 @@ export function bindUi(input: UiRequest, state: UiState): UiSpec {
   const ids = new Set<string>();
   const components: UiSpec['components'] = input.components.map((c) => {
     if (ids.has(c.id)) return fail('Duplicate component id'); ids.add(c.id);
-    if (c.kind !== 'price_chart' && new Set(c.fields).size !== c.fields.length) return fail('Duplicate fields');
+    if (c.kind !== 'price_chart' && c.kind !== 'exposure_chart' && new Set(c.fields).size !== c.fields.length) return fail('Duplicate fields');
     const s = state.completed.get(c.sourceCallId) ?? fail('Source must be a successful supported tool from an earlier step of THIS turn');
     const data = obj(s.data); if (data.error) return fail('Source returned an error');
     const base = s.name === 'get_portfolio' ? obj(data.summary).base : data.base;
@@ -62,6 +62,16 @@ export function bindUi(input: UiRequest, state: UiState): UiSpec {
     const source = { callId: s.callId ?? c.sourceCallId, tool: s.name, asOf: typeof data.asOf === 'string' ? data.asOf : s.completedAt,
       scope: `${accountScope}${typeof base === 'string' ? ` · reporting currency: ${base}` : ''}${typeof data.by === 'string' ? ` · by ${data.by}` : ''}`,
       note: s.name === 'get_portfolio' ? 'Liabilities are not tracked; net worth excludes them.' : s.name === 'get_exposures' ? 'No ETF look-through. ' + String(data.note ?? '') : s.name === 'query_positions' ? `Returned ${String(data.returned)} of ${String(data.matched)} matched positions; totals cover returned positions only.` : '' };
+    if (c.kind === 'exposure_chart') {
+      if (s.name !== 'get_exposures' || !['sector', 'currency', 'account'].includes(String(data.by)) || typeof data.base !== 'string' || !/^[A-Z]{3}$/.test(data.base) || !Array.isArray(data.rows) || !data.rows.length || data.rows.length > 50) return fail('Exposure chart requires a nonempty supported get_exposures result');
+      const rows = data.rows.map((item: unknown) => {
+        const r = obj(item);
+        if (typeof r.group !== 'string' || !r.group || r.group.length > 80 || typeof r.value !== 'number' || !Number.isFinite(r.value) || r.value < 0 || typeof r.weightPct !== 'number' || !Number.isFinite(r.weightPct) || r.weightPct < 0) return fail('Exposure chart requires nonnegative finite values and weights');
+        return { group: r.group, value: r.value, weightPct: r.weightPct };
+      });
+      const by = data.by as 'sector' | 'currency' | 'account';
+      return { id: c.id, kind: c.kind, source: { ...source, scope: `All accounts · ${by} · ${data.base}`, note: by === 'sector' ? 'ETFs and funds are counted as single lines; no look-through.' : 'Exposure includes cash where relevant.' }, base: data.base, by, rows };
+    }
     if (c.kind === 'price_chart') {
       if (s.name !== 'get_history') return fail('Price chart requires a get_history source');
       if (typeof data.symbol !== 'string' || !/^[A-Za-z0-9.^=_-]{1,24}$/.test(data.symbol)) return fail('Invalid history symbol');
@@ -95,7 +105,7 @@ export function bindUi(input: UiRequest, state: UiState): UiSpec {
     return { id: c.id, kind: c.kind, source, columns, rows: bound, shown: bound.length, available: rows.length };
   });
   const fallback = components.map((c) => {
-    const lines = c.kind === 'price_chart' ? [`${c.symbol} close prices (${c.currency}), ${c.points.length} points`, ...c.points.map((p) => `${new Date(p.time).toISOString()}: ${p.close}`)] : c.kind === 'stat_grid' ? c.items.map((i) => `${i.label}: ${i.cell.text}`) : [c.columns.map((i) => i.label).join(' | '), ...c.rows.map((r) => r.map((v) => v.text).join(' | ')), `Showing ${c.shown} of ${c.available} source rows.`];
+    const lines = c.kind === 'exposure_chart' ? c.rows.map((r) => `${r.group}: ${c.base} ${r.value} (${r.weightPct}%)`) : c.kind === 'price_chart' ? [`${c.symbol} close prices (${c.currency}), ${c.points.length} points`, ...c.points.map((p) => `${new Date(p.time).toISOString()}: ${p.close}`)] : c.kind === 'stat_grid' ? c.items.map((i) => `${i.label}: ${i.cell.text}`) : [c.columns.map((i) => i.label).join(' | '), ...c.rows.map((r) => r.map((v) => v.text).join(' | ')), `Showing ${c.shown} of ${c.available} source rows.`];
     return [`Snapshot · ${c.source.tool} · ${c.source.asOf}`, c.source.scope, c.source.note, ...lines].filter(Boolean).join('\n');
   }).join('\n\n');
   const spec = { version: 1, components, fallback };
@@ -104,7 +114,7 @@ export function bindUi(input: UiRequest, state: UiState): UiSpec {
 }
 export const uiTool: ToolDef = {
   name: 'render_ui', input: UiRequest,
-  description: 'Render interactive stock price charts, stat cards or a sortable table for explicit requests. For a price_chart, first call get_history with includeBars:true and chartOnly:true and use its uiSource.ref. Sources: completed earlier-step get_portfolio, query_positions, get_cash, get_exposures, get_accounts or get_quote. Copy sourceCallId from result.uiSource.ref. Choose field pointers; server binds figures, labels and units. Table limit max50 (default20). complete:true finishes an answered request. No formulas, actions or markup.',
+  description: 'Render source-bound exposure charts, stock price charts, stat cards or sortable tables when useful. For exposure_chart first call get_exposures and use its uiSource.ref. For a price_chart, first call get_history with includeBars:true and chartOnly:true and use its uiSource.ref. Sources: completed earlier-step get_portfolio, query_positions, get_cash, get_exposures, get_accounts or get_quote. Copy sourceCallId from result.uiSource.ref. Choose field pointers; server binds figures, labels and units. Table limit max50 (default20). complete:true finishes an answered request. No formulas, actions or markup.',
   async handler(input, ctx: ToolCtx) {
     if (!ctx.ui?.enabled || !ctx.cfg.uiViews || !ctx.threadId || !ctx.turnId || !ctx.callId || ctx.signal.aborted) return fail('Interactive views are disabled or unavailable on this surface');
     const prior = getUiView(ctx.db, ctx.turnId, ctx.callId);

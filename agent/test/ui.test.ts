@@ -73,6 +73,17 @@ test('price chart binds source history exactly and rejects fabricated or invalid
   assert.throws(() => bindUi(input, st(history, 'get_quote')));
   for (const invalid of [{ ...history, currency: null }, { ...history, ohlcv: [] }, { ...history, ohlcv: [history.ohlcv[1], history.ohlcv[0]] }, { ...history, ohlcv: [{ t: 1, c: Infinity }, { t: 2, c: 10 }] }]) assert.throws(() => bindUi(input, st(invalid)));
 });
+test('exposure chart binds only supported actual groups, weights and currency', () => {
+  const req = parse({ version: 1, components: [{ id: 'exposure', kind: 'exposure_chart', sourceCallId: 'e1' }] });
+  const data = { base: 'SGD', by: 'sector', asOf: time, rows: [{ group: 'Tech', value: 1200, weightPct: 60 }, { group: 'Cash', value: 800, weightPct: 40 }] };
+  const st = (value: unknown, name = 'get_exposures'): UiState => ({ enabled: true, attempts: 0, completed: new Map([['e1', { name, data: value, completedAt: time, account: 'ALL' }]]) });
+  const view = bindUi(req, st(data)); const c = view.components[0];
+  assert.equal(c?.kind, 'exposure_chart'); if (c?.kind === 'exposure_chart') { assert.deepEqual(c.rows, data.rows); assert.equal(c.base, 'SGD'); assert.match(c.source.note, /no look-through/); }
+  assert.match(view.fallback, /Tech: SGD 1200 \(60%\)/);
+  assert.throws(() => bindUi(req, st(data, 'get_quote')));
+  assert.throws(() => bindUi(req, st({ ...data, rows: [{ group: 'Tech', value: -1, weightPct: -1 }] })));
+  assert.throws(() => parse({ version: 1, components: [{ id: 'exposure', kind: 'exposure_chart', sourceCallId: 'e1', rows: data.rows }] }));
+});
 test('direct/MCP/aborted calls cannot persist; invalid attempts count toward three-call cap', async () => {
   const ctx = testCtx(testConfig(fake, { uiViews: true }));
   assert.equal((await buildRegistry().execute('render_ui', request, ctx)).ok, false);
@@ -108,6 +119,34 @@ test('mock model uses actual compact history reference to render and persist a c
   const view = store.listUiViews(o.db, o.t.id)[0]; assert.ok(view);
   const chart = view.spec.components[0]; assert.equal(chart?.kind, 'price_chart');
   if (chart?.kind === 'price_chart') { assert.equal(chart.points.length, 150); assert.equal(chart.symbol, 'AMD'); assert.match(chart.source.note, /150 sampled of 500/); }
+  o.db.close();
+});
+test('natural-selection synthetic histories match each symbol quote and currency', async () => {
+  const synthetic = await fakeFinsight({ scopedAccounts: true, naturalHistory: true });
+  const ctx = testCtx(testConfig(synthetic));
+  try {
+    const registry = buildRegistry();
+    for (const symbol of ['NVDA', 'VOO', 'D05.SI']) {
+      const history = await registry.execute('get_history', { symbol, range: '1y', interval: '1d', includeBars: true, chartOnly: true }, ctx);
+      const quotes = await registry.execute('get_quote', { symbols: [symbol] }, ctx);
+      assert.equal(history.ok, true); assert.equal(quotes.ok, true);
+      const h = JSON.parse(history.content), q = JSON.parse(quotes.content).quotes[0];
+      assert.equal(h.currency, q.currency); assert.equal(h.ohlcv.at(-1).c, q.price);
+    }
+  } finally { ctx.db.close(); await synthetic.close(); fs.rmSync(synthetic.dataDir, { recursive: true, force: true }); }
+});
+test('mock model can render an exposure chart from its earlier completed facts result', async () => {
+  const o = await run((req, step) => {
+    if (step === 0) return [{ type: 'tool_call', id: 'exp', name: 'get_exposures', args: { by: 'sector', base: 'SGD' } }];
+    if (step === 1) {
+      const result = req.messages.at(-1)!.blocks.find((b) => b.type === 'tool_result'); assert.ok(result?.type === 'tool_result');
+      const data = JSON.parse(result.content); assert.equal(data.uiSource.tool, 'get_exposures');
+      return [{ type: 'tool_call', id: 'view', name: 'render_ui', args: { version: 1, complete: true, components: [{ id: 'exposure', kind: 'exposure_chart', sourceCallId: data.uiSource.ref }] } }];
+    }
+    return [{ type: 'text', text: 'Done' }];
+  });
+  const c = store.listUiViews(o.db, o.t.id)[0]?.spec.components[0]; assert.equal(c?.kind, 'exposure_chart');
+  if (c?.kind === 'exposure_chart') { assert.equal(c.by, 'sector'); assert.ok(c.rows.length); assert.match(c.source.note, /no look-through/); }
   o.db.close();
 });
 const fetchCash = { type: 'tool_call' as const, id: 'cash1', name: 'get_cash', args: {} };
@@ -239,6 +278,19 @@ test('operator UI setting persists in config while an explicit environment value
     assert.equal(loadConfig({ AGENT_HOME: home, KESTREL_UI: '1' }).uiViews, true);
     fs.writeFileSync(path.join(home, 'config.json'), JSON.stringify({ uiViews: 'yes' }));
     assert.throws(() => loadConfig({ AGENT_HOME: home }), /Invalid/);
+  } finally { fs.rmSync(home, { recursive: true, force: true }); }
+});
+
+test('demo enables interactive views by default without overriding explicit settings or personal defaults', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'ui-demo-'));
+  try {
+    assert.equal(loadConfig({ AGENT_HOME: home }).uiViews, false);
+    assert.equal(loadConfig({ AGENT_HOME: home, FINSIGHT_DEMO_MODE: '1' }).uiViews, true);
+    assert.equal(loadConfig({ AGENT_HOME: home, FINSIGHT_DEMO_MODE: '0' }).uiViews, false);
+    assert.equal(loadConfig({ AGENT_HOME: home, FINSIGHT_DEMO_MODE: '1', KESTREL_UI: '0' }).uiViews, false);
+    fs.writeFileSync(path.join(home, 'config.json'), JSON.stringify({ uiViews: false }));
+    assert.equal(loadConfig({ AGENT_HOME: home, FINSIGHT_DEMO_MODE: '1' }).uiViews, false);
+    assert.equal(loadConfig({ AGENT_HOME: home, FINSIGHT_DEMO_MODE: '1', KESTREL_UI: '1' }).uiViews, true);
   } finally { fs.rmSync(home, { recursive: true, force: true }); }
 });
 

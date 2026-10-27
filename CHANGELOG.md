@@ -5,6 +5,9 @@ The earlier draft with unverified release numbers is preserved in `docs/archive/
 
 ## Unreleased
 
+- `UIUPGRADE-001`: natural view-selection guidance, source-bound exposure charts, snapshot chart range and pointer controls, and user-invoked navigation or unsaved alert drafts. Live model qualification remains limited to the recorded synthetic sample.
+- `DEMOPARITY-001`: demo defaults supported Intelligent UI on, respecting explicit overrides and model capability gates; the demo data guard also resolves symlinked paths before any reset.
+
 - In-chat price charts (`CHATCHART-001`): source-bound historical closes, keyboard date inspection, saved snapshots and privacy hiding. Synthetic tests cover source binding and the chart interface. Live provider chart compliance and deployment remain separate.
 
 - 2026-10-27: backlog marks FEAT-003/005/006/007/008 complete and verified in `feature/open-features`; 213 unit, 111 agent and 247 browser tests passed, with one existing live-fixture skip. Implementation committed in `22b0436`; user selected integration and push. Deployment remains separate. Evidence: workspace `harness/runs/20261026T171956Z-IBKRTRADES-001-3d89b74e/REPORT.md`.

@@ -711,3 +711,8 @@ made. Tool permissions, existing spend limits and portfolio read-only rules rema
 ### Source-bound in-chat price charts — CHATCHART-001
 
 The owner selected in-chat stock price charts. The existing render_ui presentation contract now supports a historical closing-price chart bound exclusively to an earlier successful get_history result in the same turn. The server validates and snapshots source-derived values, symbol, currency and timestamps; the UI provides keyboard inspection and follows existing privacy and persistence rules. No financial action or model-supplied prices are permitted. Synthetic verification is separate from live provider qualification.
+
+
+### Intelligent UI improvements — UIUPGRADE-001
+
+The owner selected smarter presentation selection, richer chat charts, portfolio exposure visuals and safe navigation/drafts. `render_ui` accepts a validated source-bound exposure chart from completed `get_exposures`; chart display may filter its snapshot and inspect data via pointer or keyboard. Static user-invoked controls may select a symbol, open the ledger or prefill an alert draft from a historical source value. Drafts are not submitted automatically and existing unsaved drafts are preserved. This extends the presentation boundary without authorizing trades or autonomous changes. Model choice remains probabilistic and qualification evidence is separate.

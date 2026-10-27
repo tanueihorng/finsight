@@ -1,5 +1,5 @@
 // Fixed synthetic Phase 1 evaluation: no personal holdings, web or paid judges.
-export type UiCase = { id: string; prompt: string; kind: 'stat_grid' | 'table' | 'text'; paired?: boolean };
+export type UiCase = { id: string; prompt: string; kind: 'stat_grid' | 'table' | 'price_chart' | 'exposure_chart' | 'text'; paired?: boolean };
 const groups: { prefix: string; kind: UiCase['kind']; prompts: string[] }[] = [
   { prefix: 'portfolio', kind: 'stat_grid', prompts: [
     'Show my net worth, securities value and cash as snapshot cards.',
@@ -53,3 +53,13 @@ const short = [
 ];
 UI_CASES.push(...short.map((prompt, i): UiCase => ({ id: `text-${i + 1}`, prompt, kind: 'text' })));
 export const median = (xs: number[]) => { const a = [...xs].sort((x, y) => x - y); const m = Math.floor(a.length / 2); return a.length ? (a.length % 2 ? a[m]! : (a[m - 1]! + a[m]!) / 2) : null; };
+
+// Opt-in natural-language selection cases; synthetic facts only. This set does not confer model qualification.
+export const NATURAL_UI_CASES: UiCase[] = [
+  { id: 'natural-stock', prompt: 'Show me NVDA.', kind: 'price_chart' },
+  { id: 'natural-concentration', prompt: 'Where is my portfolio concentrated?', kind: 'exposure_chart' },
+  { id: 'natural-definition', prompt: 'What is an ETF? Give me a short text-only answer.', kind: 'text' },
+  { id: 'natural-performance', prompt: 'How has VOO been doing over the last year?', kind: 'price_chart' },
+  { id: 'natural-comparison', prompt: 'Compare my holdings by market value and weight.', kind: 'table' },
+  { id: 'natural-explicit-table', prompt: 'Show my sector exposure as a table, not a chart.', kind: 'table' },
+];

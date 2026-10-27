@@ -30,6 +30,8 @@ or closing it. This documentation cleanup does not certify completion.
 | Feature | Execution | Status |
 |---|---|---|
 | In-chat stock price charts, source-bound to historical close prices | `CHATCHART-001` | Verified; included in the merge containing CHARTSHIP-001; deployment and live-provider chart qualification pending |
+| Smarter visual selection, richer charts, exposure views and safe navigation/alert drafts | `UIUPGRADE-001` | Verified for integration; demo activated; broader model qualification remains pending |
+| Demo defaults to supported Intelligent UI views | `DEMOPARITY-001` | Verified for integration; explicit settings and model gates remain effective |
 
 ## Deferred proposals
 
