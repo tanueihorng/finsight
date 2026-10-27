@@ -706,3 +706,8 @@ sets its system breakpoint before that suffix. Provider cache read/write counter
 are persisted as nullable trace columns through migration3. A synthetic DeepSeek
 probe supports date-prefix reuse; no other-provider or long-term savings claim is
 made. Tool permissions, existing spend limits and portfolio read-only rules remain.
+
+
+### Source-bound in-chat price charts — CHATCHART-001
+
+The owner selected in-chat stock price charts. The existing render_ui presentation contract now supports a historical closing-price chart bound exclusively to an earlier successful get_history result in the same turn. The server validates and snapshots source-derived values, symbol, currency and timestamps; the UI provides keyboard inspection and follows existing privacy and persistence rules. No financial action or model-supplied prices are permitted. Synthetic verification is separate from live provider qualification.

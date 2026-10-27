@@ -3,11 +3,11 @@
 Status: Phase 1 implementation in `feature/kestrel-verified-views`, 2026-10-26.
 The owner requested implementation after review. The first release is deliberately
 limited to verified stat cards and tables. The global operator setting remains **off by default**. DeepSeek Flash/Pro and GPT-6 Luna/Sol
-passed live synthetic qualification; see UI-QUALIFICATION.md. The rest of the original proposal remains a roadmap.
+passed live synthetic qualification; see UI-QUALIFICATION.md. Source-bound price charts are implemented in CHATCHART-001; other later phases remain a roadmap.
 
 ## What Phase 1 does
 
-An API brain may request a fixed stat grid or sortable table when several figures
+An API brain may request a fixed stat grid, sortable table or historical closing-price chart when several figures
 or rows would be clearer than prose. The model chooses source fields and layout;
 the server supplies every displayed value, label, currency, data time, scope,
 limitation and plain text equivalent. No model-supplied HTML, CSS, JS, numbers,
@@ -100,6 +100,10 @@ result and therefore costs context tokens; repairs are ordinary billable model
 steps, not free. No history compaction is claimed: existing whole-turn context
 selection and overflow safeguards remain in force, including provider state.
 
+## Price charts (CHATCHART-001)
+
+For an explicit chart request, the model calls `get_history` with `includeBars:true` and `chartOnly:true`, then references that completed result in a `price_chart` component. The server validates the source, symbol, currency and ordered finite prices; the model supplies no data values. At most 150 actual bars are evenly sampled across the requested range, with the count disclosed, and retained as a snapshot. The chart provides keyboard-operable date inspection and a text equivalent. Values are historical close prices, not a live quote. A missing currency, insufficient data, malformed data or unavailable source produces a rejection and prose fallback. Existing UI gates and privacy behavior apply. Synthetic end-to-end tests do not establish live model-provider chart compliance.
+
 ## Persistence and delivery
 
 Migration 2 adds `ui_views`, unique on `(turn_id, call_id)`. Only a validated,
@@ -163,7 +167,7 @@ UI-QUALIFICATION.md records the actual qualified models and remaining blockers.
 
 ## Later phases
 
-1. Source-bound charts; checklist reading aids; explicitly illustrative calculators
+1. Checklist reading aids; explicitly illustrative calculators
    with a real expression parser and an enforceable portfolio-calculation boundary.
    Read-only navigation or composer-fill actions require explicit contracts.
 2. Progressive argument streaming with unverified previews kept distinct from final

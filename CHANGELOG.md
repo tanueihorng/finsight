@@ -5,6 +5,8 @@ The earlier draft with unverified release numbers is preserved in `docs/archive/
 
 ## Unreleased
 
+- In-chat price charts (`CHATCHART-001`): source-bound historical closes, keyboard date inspection, saved snapshots and privacy hiding. Synthetic tests cover source binding and the chart interface. Live provider chart compliance and deployment remain separate.
+
 - 2026-10-27: backlog marks FEAT-003/005/006/007/008 complete and verified in `feature/open-features`; 213 unit, 111 agent and 247 browser tests passed, with one existing live-fixture skip. Implementation committed in `22b0436`; user selected integration and push. Deployment remains separate. Evidence: workspace `harness/runs/20261026T171956Z-IBKRTRADES-001-3d89b74e/REPORT.md`.
 
 
