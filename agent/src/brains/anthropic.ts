@@ -5,7 +5,7 @@ import { DATE_SUFFIX } from '../chat/prompt.ts';
 // replayed unchanged to the same brain, as the API requires.
 import Anthropic from '@anthropic-ai/sdk';
 import type { ApiBrain, BrainManifest, StepRequest, StepResult } from './types.ts';
-import { safeId } from './types.ts';
+import { outputLimit, safeId } from './types.ts';
 import type { Block, Msg } from '../types.ts';
 import { AgentError } from '../types.ts';
 
@@ -53,7 +53,7 @@ export function anthropicBrain(manifest: BrainManifest, apiKey: string): ApiBrai
       }));
       const stream = client.messages.stream({
         model: manifest.model,
-        max_tokens: manifest.maxOutputTokens,
+        max_tokens: outputLimit(manifest, req),
         system: anthropicSystem(req.system),
         tools,
         messages: toAnthropicMessages(manifest.id, req.messages),

@@ -1,9 +1,10 @@
+import { LENS_IDS } from '../../../../shared/council-lenses.ts';
 import { createStore } from 'zustand/vanilla';
 import { confirmDialog } from '../../ui/dialog.tsx';
 import { agentApi, AgentError, type Brain, type Citation, type Message, type SearchProvider, type Skill, type Thread } from './api.ts';
 import { COMMANDS, ctxLabel, friendly, LS, ls, offlineWhy, randomVerb, suggestions, TOOL_VERBS, prettyTool, type PageContext } from './labels.ts';
 import type { UiView } from '../../../../shared/ui.ts';
-import { addUi, addCite, addNotice, addText, addTool, endSegment, finish, newTurn, toolDone, type Turn } from './turns.ts';
+import { addCouncil, addUi, addCite, addNotice, addText, addTool, endSegment, finish, newTurn, toolDone, type Turn } from './turns.ts';
 
 // Kestrel chat state and actions (G1/G2). Lives outside React so the chat
 // keeps its stream, turns and draft while the view moves between the side
@@ -22,6 +23,7 @@ export interface ChatState {
   welcomeCtx: PageContext; // the page context the start screen opened with
   // Search provider per message, independent of the model ('auto' = the agent's config default).
   searchProviders: SearchProvider[]; searchDefault: string; search: string;
+  council: boolean; lens: string;
   todayUsd: number | null; effort: string;
   // The chat list: a rail beside the chat when the panel is wide (hideable), an overlay when narrow.
   narrow: boolean; railHidden: boolean;
@@ -30,7 +32,7 @@ const initial = (): ChatState => ({
   name: 'Kestrel', named: false, brains: [], skills: [], defaultBrain: null, brain: '', thread: null, version: 0, lastEventId: 0,
   view: 'idle', offline: null, items: [], turns: {}, running: null, sending: false,
   status: { verb: '', start: 0, chars: 0 }, files: [], draft: '', threadsOpen: false, threads: null, stick: 0, welcome: [], welcomeCtx: { view: 'terminal' },
-  searchProviders: [], searchDefault: '', search: 'auto', todayUsd: null, effort: '',
+  searchProviders: [], searchDefault: '', search: 'auto', todayUsd: null, effort: '', council: false, lens: 'balanced',
   narrow: false, railHidden: ls.get(LS.rail, '1') === '0',
 });
 export const chat = createStore<ChatState>()(initial);
@@ -109,7 +111,8 @@ function openStream() {
     fn(d);
   });
   type D = { turnId: string; [k: string]: unknown };
-  on<D>('turn.started', (d) => { setRunning(d.turnId); updateTurn(d.turnId, (t) => ({ ...t, label: String(d.label || ''), search: d.search ? String(d.search) : undefined })); if (d.skill) updateTurn(d.turnId, (t) => addNotice(t, `using skill ${d.skill}`, '')); });
+  on<D>('council.progress', (d) => updateTurn(d.turnId, (t) => addCouncil(t, String(d.text))));
+  on<D>('turn.started', (d) => { setRunning(d.turnId); updateTurn(d.turnId, (t) => ({ ...t, label: String(d.label || ''), search: d.search ? String(d.search) : undefined })); if (d.lens && d.lens !== 'balanced:1') updateTurn(d.turnId, (t) => addNotice(t, 'Lens ' + String(d.lens), '')); if (d.skill) updateTurn(d.turnId, (t) => addNotice(t, `using skill ${d.skill}`, '')); });
   on<D>('message.delta', (d) => { const text = String(d.text || ''); updateTurn(d.turnId, (t) => addText(t, text)); set({ status: { ...get().status, chars: get().status.chars + text.length }, stick: get().stick + 1 }); });
   on<D>('tool.started', (d) => {
     updateTurn(d.turnId, (t) => addTool(t, d.callId as string | undefined, String(d.name), d.argsSummary as string | undefined));
@@ -150,8 +153,9 @@ export function pageContext(): PageContext {
 }
 export function showWelcome() { const c = pageContext(); set({ view: 'welcome', items: [], turns: {}, welcome: suggestions(c), welcomeCtx: c }); }
 function clearLog() { set({ view: 'log', items: [], turns: {} }); }
+export function chooseLens(lens: string) { if (LENS_IDS.some((id) => id === lens)) set({ lens }); }
 export function newChat() {
-  closeStream(); set({ thread: null }); setRunning(null); ls.set(LS.thread, ''); showWelcome();
+  closeStream(); set({ thread: null, lens: 'balanced' }); setRunning(null); ls.set(LS.thread, ''); showWelcome();
 }
 function renderHistory(messages: Message[], citations: Citation[], uiViews: UiView[] = []) {
   const byTurn = new Map<string, Message[]>();
@@ -165,6 +169,8 @@ function renderHistory(messages: Message[], citations: Citation[], uiViews: UiVi
     }
     const asst = msgs.filter((m) => m.role !== 'user');
     if (!asst.length) continue;
+    const lens = user?.blocks.find((b) => b.type === 'notice' && b.kind === 'lens');
+    if (lens?.text && lens.text !== 'balanced:1') updateTurn(k, (t) => addNotice(t, 'Lens ' + lens.text, ''));
     let brain = '';
     for (const m of asst) {
       if (m.brain) brain = m.brain;
@@ -172,6 +178,7 @@ function renderHistory(messages: Message[], citations: Citation[], uiViews: UiVi
         if (b.type === 'text' && m.role === 'assistant') updateTurn(k, (t) => endSegment(addText(t, String(b.text))));
         else if (b.type === 'tool_call') updateTurn(k, (t) => addTool(t, b.id, String(b.name), JSON.stringify(b.args || {})));
         else if (b.type === 'tool_result') updateTurn(k, (t) => toolDone(t, b.callId, String(b.name), !!b.ok, '', null));
+        else if (b.type === 'notice' && b.kind === 'council') updateTurn(k, (t) => addCouncil(t, String(b.text)));
         else if (b.type === 'notice' && m.role === 'assistant') updateTurn(k, (t) => addNotice(t, String(b.text), b.kind === 'error' || b.kind === 'refusal' ? 'error' : 'warn'));
       }
     }
@@ -187,7 +194,10 @@ export async function openThread(id: string) {
   closeStream();
   set({ thread: d.thread, version: d.thread.version, lastEventId: d.lastEventId || 0 });
   ls.set(LS.thread, id); pickBrain(); clearLog();
+  const saved = [...d.messages].reverse().flatMap((m) => m.blocks).find((b) => b.type === 'notice' && b.kind === 'lens');
+  set({ lens: saved?.text?.split(':')[0] || 'balanced' });
   renderHistory(d.messages, d.citations || [], d.uiViews || []);
+  if (!d.runningTurn) for (const [id, turn] of Object.entries(get().turns)) updateTurn(id, () => ({ ...turn, parts: turn.parts.map((p) => p.kind === 'council' && p.status === 'running' ? { ...p, status: 'stopped', detail: 'Interrupted; automatic resume is unsupported.' } : p) }));
   setRunning(d.runningTurn || null);
   openStream(); scrollDown();
 }
@@ -196,10 +206,10 @@ export async function openThread(id: string) {
 let retry: ReturnType<typeof setTimeout> | undefined;
 export async function boot(): Promise<'ok' | 'locked'> {
   try {
-    const [info, b, sk, sp] = await Promise.all([agentApi<{ name?: string }>('/info').catch(() => ({} as { name?: string })), agentApi<{ brains: Brain[]; default: string }>('/brains'),
+    const [info, b, sk, sp] = await Promise.all([agentApi<{ name?: string; council?: boolean }>('/info').catch(() => ({} as { name?: string; council?: boolean })), agentApi<{ brains: Brain[]; default: string }>('/brains'),
       agentApi<{ skills: Skill[] }>('/skills').catch(() => ({ skills: [] })),
       agentApi<{ default: string; providers: SearchProvider[] }>('/search-providers').catch(() => ({ default: '', providers: [] }))]);
-    set({ name: info.name || get().name, named: get().named || !!info.name, brains: b.brains, defaultBrain: b.default, skills: sk.skills || [], offline: null,
+    set({ council: !!info.council, name: info.name || get().name, named: get().named || !!info.name, brains: b.brains, defaultBrain: b.default, skills: sk.skills || [], offline: null,
       searchProviders: sp.providers, searchDefault: sp.default });
     pickBrain(); pickSearch();
     // Kestrel opens on a new chat with the chat list beside it; past chats open from the list.
@@ -308,7 +318,7 @@ export async function submit(text: string, pc: PageContext | undefined, restore:
   const s = get();
   if ((!text && !s.files.length) || s.view === 'offline') return;
   const cmd = text.match(/^\/([\w-]+)/);
-  if (cmd && !s.skills.some((x) => x.name === cmd[1])) { restore(''); try { await slash(text); } catch (e) { notice((e as Error).message, 'error'); } return; }
+  if (cmd && !((cmd[1] === 'committee' || cmd[1] === 'debate') && s.council) && !s.skills.some((x) => x.name === cmd[1])) { restore(''); try { await slash(text); } catch (e) { notice((e as Error).message, 'error'); } return; }
   if (s.files.some((f) => f.state === 'uploading')) { notice('Wait for uploads to finish.', 'warn'); return; }
   const files = s.files.filter((f) => f.id);
   const brain = s.brain || undefined, effort = s.effort || undefined;
@@ -323,7 +333,7 @@ export async function submit(text: string, pc: PageContext | undefined, restore:
     restore(''); set({ files: [] });
     const k = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random()).replace(/-/g, '');
     const r = await agentApi<{ turnId: string; version: number }>(`/threads/${get().thread!.id}/messages`, { method: 'POST', body: {
-      content: text || 'Please analyse the attached file(s).', brain, effort, search: get().search !== 'auto' ? get().search : undefined, pageContext: pc, idempotencyKey: k,
+      content: text || 'Please analyse the attached file(s).', brain, effort, lens: s.council ? s.lens : undefined, search: get().search !== 'auto' ? get().search : undefined, pageContext: pc, idempotencyKey: k,
       expectedVersion: get().version, attachmentIds: files.length ? files.map((f) => f.id) : undefined } });
     set({ version: r.version });
     // intended fix (G): a turn that already ended (fast failure) is not marked running again.

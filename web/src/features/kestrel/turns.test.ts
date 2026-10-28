@@ -1,3 +1,4 @@
+import { addCouncil } from './turns.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { addUi, addCite, addNotice, addText, addTool, citeHost, endSegment, finish, newTurn, toolDone } from './turns.ts';
@@ -45,4 +46,13 @@ test('accepted views replace their tool row and replay without duplicates; raw a
   assert.equal(t.allText, 'After.');
   t = toolDone(t, 'view1', 'render_ui', true, 'done', 1);
   assert.equal(t.parts.filter((p) => p.kind === 'ui').length, 1);
+});
+
+test('council replay replaces status by stable child ID and rejects unknown roles', () => {
+  const r = { id: 'child', role: 'growth', phase: 'assessment', status: 'running', model: 'mock', costUsd: null, ms: 0 };
+  let t = addCouncil(newTurn('parent'), JSON.stringify(r));
+  t = addCouncil(t, JSON.stringify({ ...r, status: 'completed', ms: 10, findings: { findings: [] } }));
+  assert.equal(t.parts.length, 1);
+  assert.equal(t.parts[0]?.kind, 'council');
+  assert.deepEqual(addCouncil(t, JSON.stringify({ ...r, role: 'injected' })), t);
 });

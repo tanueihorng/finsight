@@ -1,0 +1,111 @@
+# Investment council: implementation and rollout
+
+Selected by the user 2026-10-28. Implementation branch: feature/investment-council.
+This is an experimental foreground workflow. It remains default off, with no
+live evaluation, production activation or performance qualification implied.
+
+## Modules
+
+- `chat/council-contract.ts`: versioned lenses and validated assessment/evidence contracts.
+- `chat/council.ts`: provider-neutral bounded orchestration; no database or UI imports.
+- `chat/council-service.ts`: existing SQLite events/messages, durable cost reservations and traces.
+- ChatEngine: feature admission, thread lock, deadline/stop, final conversational envelope.
+- Frontend: existing lens picker/state plus CouncilActivity and replay reducers.
+
+## Execution contract
+
+API brains only; native paid search and CLI brains are rejected. Three initial
+analysts (Business & Growth, Macro & Valuation, Portfolio Risk), concurrency two,
+one challenge call per analyst and one separate chair. Up to two tool requests
+and one follow-up model call per initial analyst: at most ten model calls total.
+A turn must permit at least ten steps. No recursive delegation, automatic council
+routing, retries, attachments or restart/resume. Text questions must state their
+scope. Simple questions keep the normal single-agent route.
+
+Growth/macro can read quotes, histories and SEC filings/financials; risk can read
+exposures, positions, cash and policy. Paid web search/fetch are excluded in this
+first implementation. Every tool is checked both in offered schemas and at
+execution. Context is bounded at 60k serialized bytes; oversized packets fail
+explicitly rather than silently dropping evidence. Core rules remain shared;
+missing policy, valuations and sources remain gaps rather than assumed facts.
+
+Initial assessments have separate histories, without peer conclusions. Later
+roles may receive newly gathered evidence. The challenge round receives initial
+findings; the chair receives both rounds. Structured validation establishes
+shape and reference integrity, not factual truth or source entailment.
+
+## Accounting and cancellation
+
+Provider calls reserve conservative input/output cost before dispatch in both
+turn and daily budgets. A quarter of the turn ceiling is held for synthesis.
+Daily ledger reservations persist before dispatch and reconcile on known usage.
+Unknown usage/failure retains the reserved amount (kind council-reserved), not a
+claim of measured spend. No other API reply is admitted while a council runs;
+a council is rejected while another turn runs. Budget caps may reject a model
+whose maximum output cannot fit. These are conservative limits, not an invoice.
+
+Cancellation aborts the full tree; late provider results cannot complete a run.
+Persisted notices/events reconstruct child status by stable ID. On reload with
+no active parent, formerly running children are labelled interrupted/stopped.
+Automatic restart and duplicate paid-call replay are unsupported.
+
+## Rollout gates still required
+
+Mock/unit/integration and browser tests must pass. Before activation, evaluate
+on identical synthetic evidence/questions against Balanced single-agent output,
+checking unsupported claims, stale data, missing policy, shared sources and a
+correct minority. Record accuracy, gaps, contradictions, clarity, latency and
+measured costs. Define an explicit live-trial spending ceiling for approval.
+A zero-provider mock test cannot establish investment usefulness.
+
+Set council=true in isolated agent config or KESTREL_COUNCIL=1 only for deliberate
+trial activation. Removing the setting disables new council/lens requests while
+retaining historical labels and findings. No broker actions, portfolio writes,
+policy acceptance or monitoring are added.
+
+## Proposed bounded live trial (not authorized or executed)
+
+Six synthetic cases: unsupported bullish claim; stale quote; missing accepted
+policy; three analysts citing the same source; correct minority against a
+misleading majority; portfolio overlap with a missing valuation input.
+
+For each case hold the evidence/question fixed across Balanced, a relevant
+single lens, a single-call simulated council, and the real council. Label the
+simulated variant honestly. Proposed ceiling US$2 total, maximum US$0.05 per
+review, using one configured API model. A preflight budget check must cover the
+entire comparison; stop after two budget/admission failures rather than raising
+limits. The evaluator and implementation author are the same unless separately
+authorized; do not label the review independent or blind.
+
+Hard gates: zero invented evidence IDs, zero unsupported material numeric
+claims, no treating missing policy as accepted, no majority vote substituted for
+evidence, and all six cases explicitly identify their planted material gap.
+Compare each answer with the fixture's expected facts. Retain the council only
+if it improves material gap/contradiction handling on at least two cases without
+regressing on another hard gate. Record per-case latency and measured cost;
+these six cases establish only a pilot result, not investment efficacy.
+
+Production activation, a wider trial, extra providers or personal-data use
+require a separate rollout decision after results are available.
+
+## Production hardening — 2026-10-28
+
+Production is the requested endpoint, not the earlier experimental slice. The
+initial pilot's failure and absence of demonstrated superiority remain recorded
+in the workspace LIVE-PILOT-RESULT.md; a rerun does not erase them. The second
+reliability trial is recorded separately. Broader rollout remains subject to
+review of the evidence, not a change of label.
+
+Completed malformed output may receive one schema repair, within a hard maximum
+of12 total dispatched calls and the existing time/cost caps. Refusal, truncation
+and uncertain transport failures are never silently retried. Single JSON fences
+are accepted; arbitrary surrounding prose is not scraped. Invalid IDs still fail.
+Per-call output is bounded at1200 tokens without changing normal chat defaults.
+Only DeepSeek Flash with thinking off is a live-tested council configuration;
+other real models/efforts are rejected before mutation. Test-only injected mock
+brains exercise lifecycle cases without credentials or provider traffic.
+
+A separate Playwright configuration exercises the real API, ChatEngine and
+SQLite store with a deterministic brain and disposable FinSight data. It covers
+captured quote evidence, reload/replay, cancellation and failed-specialist partial
+synthesis. It never uses the personal data directory or calls a provider.

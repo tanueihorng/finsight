@@ -33,6 +33,7 @@ const health = (port: number) => `http://127.0.0.1:${port}/api/health`;
 
 export default defineConfig({
   testDir: 'web/e2e',
+  testIgnore: /\.realagent\.spec\.ts$/,
   // One server and one data folder per project: specs run in order, one at a time.
   fullyParallel: false,
   workers: 1,
@@ -48,7 +49,7 @@ export default defineConfig({
     viewport: { width: 1600, height: 1000 },
   },
   projects: [
-    { name: 'chromium', testIgnore: /\.(agent|sw)\.spec\.ts$/, use: { baseURL: `http://127.0.0.1:${PORT}` } },
+    { name: 'chromium', testIgnore: /\.(agent|sw|realagent)\.spec\.ts$/, use: { baseURL: `http://127.0.0.1:${PORT}` } },
     { name: 'agent', testMatch: /\.agent\.spec\.ts$/, use: { baseURL: `http://127.0.0.1:${AGENT_FINSIGHT_PORT}` } },
     { name: 'sw', testMatch: /\.sw\.spec\.ts$/, use: { baseURL: `http://127.0.0.1:${SW_PORT}`, serviceWorkers: 'allow' } },
   ],

@@ -1,7 +1,7 @@
 # FEAT-002: Investment Lenses & Council Mode
 
 - **ID:** FEAT-002
-- **Status:** Deferred proposal; not selected for implementation
+- **Status:** Selected 2026-10-28; experimental implementation on feature/investment-council, default off
 - **Priority:** High
 - **Related Tasks:** `MULTIAGENT-001`
 
@@ -40,3 +40,14 @@ Allow the user to evaluate investment ideas through diverse analytical perspecti
   3. **Risk Defense (Risk Officer):** Actual portfolio concentration impact, correlation with existing holdings, and invalidation triggers.
   4. **Chair Synthesis:** Clear trade-off matrix for the user as the final decision-maker.
 - [ ] Fixed delegation budget (no infinite recursive multi-agent loops; aggregate token cost capped within turn limits).
+
+
+## Implementation scope approved 2026-10-28
+
+User approved three specialists (Business & Growth, Macro & Valuation, Portfolio
+Risk), a separate chair, single lenses, bounded execution and synthetic testing
+before live-trial approval. See [runtime and rollout contract](../../agent/docs/COUNCIL.md).
+The earlier draft is retained above; this dated scope refines it. No forced bull
+case, no automatic invocation and no claim of independent source confirmation.
+Live comparative evaluation, model usefulness and production activation remain
+unverified. No paid trials have been run for this implementation.

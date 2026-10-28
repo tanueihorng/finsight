@@ -1,7 +1,7 @@
 // OpenAI-compatible chat-completions adapter (DeepSeek, GLM, and any other
 // provider that speaks this format). Streams text and tool-call deltas.
 import type { ApiBrain, BrainManifest, StepRequest, StepResult, ToolSchema } from './types.ts';
-import { safeId } from './types.ts';
+import { outputLimit, safeId } from './types.ts';
 import type { Block, Msg } from '../types.ts';
 import { AgentError } from '../types.ts';
 
@@ -55,7 +55,7 @@ export function openAiBrain(manifest: BrainManifest, apiKey: string, fetchImpl: 
       }
       const body = {
         model: manifest.model, stream: true, stream_options: { include_usage: true },
-        ...(openai ? { max_completion_tokens: manifest.maxOutputTokens } : { max_tokens: manifest.maxOutputTokens }),
+        ...(openai ? { max_completion_tokens: outputLimit(manifest, req) } : { max_tokens: outputLimit(manifest, req) }),
         messages: toOpenAiMessages(req.system, req.messages, { brain: manifest.id, model: manifest.model, origin: url.origin }),
         ...(req.tools.length ? { tools: toTools(req.tools), tool_choice: 'auto' } : {}),
         ...options,

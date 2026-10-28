@@ -1,10 +1,12 @@
+import { LENSES } from '../../../../shared/council-lenses.ts';
+import { CouncilActivity } from './CouncilActivity.tsx';
 import { lazy, Suspense, memo, useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
 import { useStore } from 'zustand';
 import { useCalendar, useEvents, useIntraday, usePortfolio } from '../../api/queries.ts';
 import { Money } from '../../ui/Money.tsx';
 import { IslandBoundary } from '../../ui/IslandBoundary.tsx';
 import { agentApi } from './api.ts';
-import { addFiles, chat, chooseBrain, chooseEffort, chooseSearch, clearAllChats, closeOverlay, deleteThread, menuItems, newChat, openThread, pageContext, railShown, removeFile, setDraft, setNarrow, stop, submit, toggleThreads, type FileChip, type Item } from './chat.ts';
+import { addFiles, chat, chooseLens, chooseBrain, chooseEffort, chooseSearch, clearAllChats, closeOverlay, deleteThread, menuItems, newChat, openThread, pageContext, railShown, removeFile, setDraft, setNarrow, stop, submit, toggleThreads, type FileChip, type Item } from './chat.ts';
 import type { Thread } from './api.ts';
 import { asks, brief, eventTime, greeting, pctText, portfolioLine, prevClose, symbolLine, usMarket, type Ask, type Brief, type Kind } from './briefing.ts';
 import { Icon, type IconName } from './icons.tsx';
@@ -117,6 +119,7 @@ function TurnView({ t }: { t: Turn }) {
       while (i < t.parts.length && t.parts[i]!.kind === 'tool') tools.push(t.parts[i++] as ToolPart);
       i--; blocks.push(<ToolGroup key={'g' + tools[0]!.key} tools={tools} />);
     } else if (p.kind === 'text') blocks.push(<TextPart key={i} text={p.text} />);
+    else if (p.kind === 'council') blocks.push(<CouncilActivity key={p.key} run={p} />);
     else if (p.kind === 'ui') blocks.push(<Suspense key={p.key} fallback={<div className="agent-notice">Loading snapshot…</div>}><IslandBoundary><UiView view={p.view} /></IslandBoundary></Suspense>);
     else blocks.push(<div key={i} className={'agent-notice ' + p.cls}>{p.text}</div>);
   }
@@ -428,6 +431,8 @@ export function Chat({ inputRef, onRetry, docked }: { inputRef: RefObject<HTMLTe
                 if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); if (!s.running) send(s.draft); }
               }} />
             <div className="agent-tools-row">
+              {s.council && <><label className="kx-pill kx-select" title="Analytical lens"><select aria-label="Analytical lens" value={s.lens} onChange={(e) => chooseLens(e.target.value)}>{LENSES.map(({id, label}) => <option key={id} value={id}>{label}</option>)}</select></label><button className="agent-ctx kx-pill" disabled={!!s.running} onClick={() => setDraft('/committee ')} title="Ask the investment council">Council</button></>}
+
               <button className="agent-icon-btn" title="Attach images or documents (or paste / drop)" aria-label="Attach files" onClick={() => fileRef.current?.click()}><Icon name="clip" /></button>
               <button className={'agent-ctx kx-pill' + (ctxOn ? ' on' : '')} title="Send what you are looking at (symbol, timeframe, strategy) with your message"
                 onClick={() => { const v = !ctxOn; setCtxOn(v); ls.set(LS.ctx, v ? '1' : '0'); }}>{ctxButton(ctxOn, pc)}</button>

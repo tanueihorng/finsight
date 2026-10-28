@@ -64,12 +64,18 @@ export const qtyCell = (page: Page, sym: string) => page.locator(`#positions-bod
 export async function dragPanel(page: Page, pid: string, column: '.col-left' | '.col-right'): Promise<void> {
   const grip = page.locator(`.panel[data-pid="${pid}"] .drag-grip`);
   await grip.scrollIntoViewIfNeeded();
+  await grip.hover(); // locator actionability waits for a stable, hittable grip
   const g = (await grip.boundingBox())!, c = (await page.locator(column).boundingBox())!;
   const from = { x: g.x + g.width / 2, y: g.y + g.height / 2 }, to = { x: c.x + 100, y: Math.max(c.y, 0) + 300 };
   await page.mouse.move(from.x, from.y);
   await page.mouse.down();
-  for (let i = 1; i <= 10; i++) await page.mouse.move(from.x + (to.x - from.x) * i / 10, from.y + (to.y - from.y) * i / 10);
-  await page.mouse.up();
+  try {
+    for (let i = 1; i <= 10; i++) await page.mouse.move(from.x + (to.x - from.x) * i / 10, from.y + (to.y - from.y) * i / 10);
+    // HTML dragenter and dragover are distinct: deliver a second movement at
+    // the destination before releasing, rather than relying on event timing.
+    await page.mouse.move(to.x, to.y);
+    await expect(page.locator(`${column} > .panel[data-pid="${pid}"]`)).toHaveCount(1);
+  } finally { await page.mouse.up(); }
 }
 
 // The in-app confirm / prompt (web/src/ui/dialog.tsx), which replaced
