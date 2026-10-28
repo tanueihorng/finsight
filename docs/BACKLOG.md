@@ -36,7 +36,7 @@ The Kestrel panel redesign and search-provider picker (`KESTRELUI-001` / `SEARCH
 | Spec | Proposal | Execution relationship | Gate |
 |---|---|---|---|
 | [FEAT-001](features/FEAT-001-ibkr-mcp-integration.md) | IBKR MCP integration and live sync | Deferred architecture captured alongside `MULTIAGENT-001`; distinct from CSV import | Explicit user selection and verified design |
-| [FEAT-002](features/FEAT-002-investment-council-lenses.md) | Investment lenses and council | `MULTIAGENT-001` blocked/deferred | Explicit user selection; no delegation currently authorized |
+| [FEAT-002](features/FEAT-002-investment-council-lenses.md) | Investment lenses and council | `MULTIAGENT-001` selected 2026-10-28 | Implemented and verified; personal activation authorized 2026-10-29; generic default off; DeepSeek Flash / thinking off |
 
 ---
 

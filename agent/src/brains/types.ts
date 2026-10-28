@@ -29,7 +29,7 @@ export type BrainManifest = z.infer<typeof BrainManifest>;
 export type ToolSchema = { name: string; description: string; parameters: Record<string, unknown> };
 
 export type StepRequest = {
-  system: string; messages: Msg[]; tools: ToolSchema[]; signal: AbortSignal; effort?: Effort;
+  maxOutputTokens?: number; system: string; messages: Msg[]; tools: ToolSchema[]; signal: AbortSignal; effort?: Effort;
   onText: (delta: string) => void;
 };
 export type StepResult = {
@@ -65,3 +65,10 @@ export function costOf(m: BrainManifest, u: Usage, searches = 0): number {
 
 /** Provider tool-call ids must match ^[A-Za-z0-9_-]+$ for some APIs; normalise once, consistently. */
 export const safeId = (id: string): string => id.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 64) || 'call';
+
+/** Per-call output bounds never mutate a cached model's default manifest. */
+export function outputLimit(manifest: BrainManifest, req: Pick<StepRequest, 'maxOutputTokens'>): number {
+  const n = req.maxOutputTokens ?? manifest.maxOutputTokens;
+  if (!Number.isSafeInteger(n) || n < 1 || n > manifest.maxOutputTokens) throw Error('Invalid per-call output limit');
+  return n;
+}
