@@ -285,6 +285,7 @@ export default function App() {
           <Host as="label" island="account" className="base-sel" title="Account / portfolio — each holds its own positions" />
           <Host as="span" island="profile" style={contents} />
           <Host as="span" island="peek" style={contents} />
+          <Host as="span" island="mode" style={contents} />
           <Host as="span" island="layout-button" style={contents} />
           <Host as="label" island="base" className="base-sel" title="Base currency — your whole portfolio is converted into this. You deposit SGD." />
           <span id="market-state" className="pill">MKT</span>

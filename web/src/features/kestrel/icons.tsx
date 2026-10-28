@@ -24,6 +24,8 @@ const PATHS = {
   chat: 'M5 5h14v10H9l-4 4z',
   slash: 'M15 4L9 20',
   table: 'M4 5h16v14H4zM4 10h16M4 15h16M10 5v14',
+  maximize: 'M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7',
+  minimize: 'M4 14h6v6M20 10h-6V4M14 10l6-6M10 14l-6 6',
   bulb: 'M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z',
 } as const;
 export type IconName = keyof typeof PATHS;

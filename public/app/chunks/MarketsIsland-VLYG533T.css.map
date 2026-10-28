@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["scoped-css:web/src/features/markets/Markets.module.css"],
+  "sourcesContent": ["/* Copied from the legacy .mkt-* rules in public/styles.css (removed there).\n   The host keeps the global .markets grid class (legacy layout owns it). */\n.fs-Markets-6ef44_group .fs-Markets-6ef44_h { color: var(--cyan); font-size: 10px; letter-spacing: 1px; border-bottom: 1px solid var(--border); padding-bottom: 3px; margin-bottom: 3px; }\n.fs-Markets-6ef44_row { display: flex; justify-content: space-between; align-items: center; padding: 2px 0; font-size: 11px; cursor: pointer; }\n.fs-Markets-6ef44_row:hover { background: var(--choice-hover); }\n.fs-Markets-6ef44_row .fs-Markets-6ef44_label { color: var(--text); }\n.fs-Markets-6ef44_row .fs-Markets-6ef44_px { font-variant-numeric: tabular-nums; }\n.fs-Markets-6ef44_row .fs-Markets-6ef44_chg { font-variant-numeric: tabular-nums; min-width: 56px; text-align: right; }\n"],
+  "mappings": "AAEA,CAAC,uBAAuB,CAAC,mBAAqB,MAAO,IAAI,QAAS,UAAW,KAAM,eAAgB,IAAK,cAAe,IAAI,MAAM,IAAI,UAAW,eAAgB,IAAK,cAAe,GAAK,CACzL,CAAC,qBAAuB,QAAS,KAAM,gBAAiB,cAAe,YAAa,OAHpF,QAGqG,IAAI,EAAG,UAAW,KAAM,OAAQ,OAAS,CAC9I,CADC,oBACoB,OAAS,WAAY,IAAI,eAAiB,CAC/D,CAFC,qBAEqB,CAAC,uBAAyB,MAAO,IAAI,OAAS,CACpE,CAHC,qBAGqB,CAAC,oBAAsB,qBAAsB,YAAc,CACjF,CAJC,qBAIqB,CAAC,qBAAuB,qBAAsB,aAAc,UAAW,KAAM,WAAY,KAAO",
+  "names": []
+}

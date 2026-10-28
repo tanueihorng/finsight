@@ -79,22 +79,22 @@ Dark = the existing `:root` violet theme in [`public/styles.css`](../../public/s
 | `--dim` | `#85859e` | `#5f5f78` | tertiary |
 | `--amber` (accent) | `#a78bfa` | `#6d4ee0` | brand accent; the name is legacy |
 | `--amber-2` | `#c4b5fd` | `#5a3dc8` | accent text on panels |
-| `--up` | `#2ec27e` | `#0f7a52` | gains, done |
-| `--down` | `#f87171` | `#c93434` | losses, stop |
+| `--up` | `#2ec27e` | `#0b6e49` | gains, done (darkened from the mockup's `#0f7a52` to pass 4.5:1 on `--selected`) |
+| `--down` | `#f87171` | `#b3302f` | losses, stop (darkened from `#c93434` to pass 4.5:1 on `--head`) |
 | `--cyan` | `#38bdf8` | `#0369a1` | Business & Growth role |
 | `--tint` | `rgba(167,139,250,.10)` | `rgba(109,78,224,.08)` | soft accent fill |
 | `--glow` | `rgba(167,139,250,.30)` | `rgba(109,78,224,.22)` | focus, hover |
 | `--selected` | `#1b1633` | `#ece7fd` | selected row |
 
-Each accent preset needs a light variant too: keep its hue and darken it until accent text passes 4.5:1 on `#ffffff`.
+Each accent preset needs a light variant too: keep its hue and darken it until accent text passes 4.5:1 on `#ffffff` and on `--head`. As built: amber `#a14a08` / `#8a3e06`, teal `#0f766e` / `#115e59`, phosphor `#166534` / `#14532d`.
 
-**Role colours** (council). Use the existing `--cyan` / `--amber` / `--up` mapping from `Council.module.css`. The mockups use these concrete values:
+**Role colours** (council). As built they are `--kx-growth`, `--kx-macro` and `--kx-risk` in `agent-panel.css`, falling back to `--cyan` / `--amber` / `--up`. The values:
 
 | Role | Dark | Light |
 |---|---|---|
 | Business & Growth (`growth`) | `#38bdf8` | `#0369a1` |
-| Macro & Valuation (`macro`) | `#fb923c` | `#c2410c` |
-| Portfolio Risk (`risk`) | `#2ec27e` | `#0f7a52` |
+| Macro & Valuation (`macro`) | `#fb923c` | `#b33d0b` |
+| Portfolio Risk (`risk`) | `#2ec27e` | `#0b6e49` |
 | Kestrel Chair (`chair`) | accent | accent |
 
 Soft fills are the role colour at about 14–22% alpha in dark and 8–14% in light.
@@ -307,37 +307,37 @@ The mockup has 5 lanes of live reasoning. Build **4 lanes: 3 specialists plus th
 Run `npm run typecheck`, `npm test`, `npm run check:web` and `npm run e2e` after each phase. Run `npm run agent:test` before committing.
 
 ### Phase 0 — Tokens and light mode
-- [ ] `data-mode` light tokens, persisted with pre-paint, top-bar ◐ toggle and APPEARANCE control
-- [ ] No hard-coded colour remains in `styles.css` or `agent-panel.css` chrome rules
-- [ ] Charts repaint on a mode switch; a11y specs pass in light and dark
+- [x] `data-mode` light tokens, persisted with pre-paint, top-bar ◐ toggle and APPEARANCE control
+- [x] No hard-coded colour remains in `styles.css` or `agent-panel.css` chrome rules
+- [x] Charts repaint on a mode switch; a11y specs pass in light and dark
 
 ### Phase 1 — Panel states
-- [ ] `full` mode in `KestrelIsland` (top bar stays visible; ⇲ ▁ ■ controls; `⌘⇧/`; Esc rules)
-- [ ] Capsule shows only while the panel is closed and a turn is running; ⇱ and ⤢ work; `role="status"`; UNPEEK-safe line
-- [ ] ASK button pulse and top-bar sweep while hidden work runs
-- [ ] Side panel never overlays the terminal; state persists across reloads as specified
-- [ ] e2e: open, collapse, full, restore, keyboard, focus return
+- [x] `full` mode in `KestrelIsland` (top bar stays visible; ⇲ ▁ ■ controls; `⌘⇧/`; Esc rules)
+- [x] Capsule shows only while the panel is closed and a turn is running; ⇱ and ⤢ work; `role="status"`; UNPEEK-safe line
+- [x] ASK button pulse and top-bar sweep while hidden work runs
+- [x] Side panel never overlays the terminal; state persists across reloads as specified
+- [x] e2e: open, collapse, full, restore, keyboard, focus return (`KESTRELUX.agent.spec.ts`)
 
 ### Phase 2 — Start screen and conversation
-- [ ] Start screen layout from §5.1 with existing data and behaviour (frozen asks, recent delete, commands)
-- [ ] Tool step log card (running, ok and failed rows, stagger, collapsible)
-- [ ] Workspace column for `ui` parts in full page; inline in the side panel
-- [ ] Existing Kestrel e2e (G, G-review, IUI, KFORMAT, UIQUAL, THINKING, CHATDELETE, `baseline/kestrel*`) pass or are updated intentionally
+- [x] Start screen layout from §5.1 with existing data and behaviour (frozen asks, recent delete, commands)
+- [x] Tool step log card (running, ok and failed rows, stagger, collapsible)
+- [x] Workspace column for `ui` parts in full page; inline in the side panel
+- [x] Existing Kestrel e2e (G, G-review, IUI, KFORMAT, UIQUAL, THINKING, CHATDELETE, `baseline/kestrel*`) pass or are updated intentionally
 
 ### Phase 3 — Council views
-- [ ] Cards view (§6.2), mapped only to real fields; stance chip and uncertainty gauge left out
-- [ ] Chain of thought view (§6.3), with 4 lanes built from real steps and focus behaviour
-- [ ] Cards / Chain of thought switch, saved; `⌘.`
-- [ ] Compact side-panel council and capsule council summary
-- [ ] UNPEEK hides every finding in every view and in copy output
-- [ ] Failed, stopped, queued and not-run states each render correctly
-- [ ] COUNCIL.agent, COUNCIL.motion and COUNCIL.realagent specs updated; `data-council-board` and `data-council-result` kept
+- [x] Cards view (§6.2), mapped only to real fields; stance chip and uncertainty gauge left out
+- [x] Chain of thought view (§6.3), with 4 lanes built from real steps and focus behaviour
+- [x] Cards / Chain of thought switch, saved; `⌘.`
+- [x] Compact side-panel council (the narrow card rows) and capsule council summary
+- [x] UNPEEK hides every finding in every view and in copy output
+- [x] Failed, stopped, queued and not-run states each render correctly
+- [x] COUNCIL.agent, COUNCIL.motion and COUNCIL.realagent specs updated; `data-council-board` and `data-council-result` kept
 
 ### Phase 4 — Motion
-- [ ] Motion tokens (§3.4) as CSS custom properties; each loop tied to a real state attribute (`data-state="running"`)
-- [ ] Reduced motion: no loops, static final states (extend `COUNCIL.motion.spec.ts`)
-- [ ] Animation pauses when the board is off-screen or the tab is hidden
-- [ ] A perf spec run while a council is live shows no long tasks from animation (transforms and opacity only)
+- [x] Motion tokens (§3.4) as CSS custom properties; each loop tied to a real state attribute (`data-state="running"`)
+- [x] Reduced motion: no loops, static final states (extend `COUNCIL.motion.spec.ts`)
+- [x] Animation pauses when the board is off-screen or the tab is hidden
+- [x] A perf spec run while a council is live shows no long tasks from animation (transforms and opacity only)
 
 ---
 
@@ -386,7 +386,7 @@ No server, agent, API or data-model change is needed (§9 lists the optional age
 | Area | Impact | What to do |
 |---|---|---|
 | **Every panel's colours** | Light mode touches all of `styles.css`: positions, summary, markets, news, detail, trade sheet, modals, lock screen, setup. About 23 hard-coded dark hex values sit in chrome rules, and there are about 29 hex literals in `web/src` | Tokenize first with **no dark-mode pixel change** (Phase 0a), then add light values (Phase 0b) |
-| **Charts (`public/chart.js`)** | **The largest light-mode job.** It has about 177 colour literals (hex/rgba) and reads only 3 computed CSS values, so most chart colours are hard-coded for dark | Move chart colours to CSS custom properties read through `getComputedStyle` (`--chart-grid`, `--chart-axis`, `--chart-up`, `--chart-down`, `--chart-candle-*`, overlays). Repaint through `chartHooks.repaint()` on a mode change. Check indicator and strategy overlays too |
+| **Charts (`public/chart.js`)** | **Smaller than first estimated.** The 177 literals are mostly drawing-tool and indicator palette colours that read on both backgrounds; the chart chrome (background, grid, axis, text, up and down) already comes from CSS tokens through `_theme()`. The one dark-only default was the text tool's white | As built: the text tool's default follows the mode; repaint through `chartHooks.repaint()` on a mode change. User-chosen drawing colours are kept as saved |
 | **Accent presets** | violet, amber, teal and phosphor each need a light variant | Write `:root[data-mode="light"][data-theme=…]` blocks, contrast-checked |
 | **Fonts** | None in the product. FinSight keeps its own stacks: `--font` (SF Mono…), `--kx-font` (system sans) and Kestrel Serif (already shipped and precached) | The Inter and JetBrains Mono in the mockups only stand in for those system stacks. **Do not add them to `public/`**; the "system fonts only" rule in `styles.css` stands |
 | **Layout and space** | Side mode is unchanged. Full page covers the grid below the top bar; the grid stays mounted | Hide the grid with `inert` and `aria-hidden` while full page is open. TanStack Query polling continues as it does when the drawer is open; chart repaints can be skipped while hidden |
@@ -407,7 +407,7 @@ No server, agent, API or data-model change is needed (§9 lists the optional age
 2. **0b: light mode.** Add the light values, the mode switch, light chart colours and light baselines. Ship it on its own; it is useful even without the Kestrel work.
 3. **1: panel states.** Capsule, full page and shortcuts, using the current Kestrel contents.
 4. **2: start screen and conversation restyle,** including the workspace column in full page.
-5. **3: council views** (Cards, Chain of thought, compact, capsule). While this phase is in progress, gate the new views behind `localStorage['kestrel.ui'] = 'v2'` (default off) so the current `CouncilBoard` keeps working. Flip the default and delete `CouncilBoard` only after the council specs pass, including `COUNCIL.realagent`.
+5. **3: council views** (Cards, Chain of thought, compact, capsule). As built, `CouncilBoard` was rebuilt in place on the shared view model with every test hook and aria label kept, so no `kestrel.ui` gate was needed; the council specs, including `COUNCIL.realagent`, are the gate.
 6. **4: motion polish and perf.**
 
 Each step is its own commit with `npm run verify` and `npm run agent:test` green, and an entry in `CHANGELOG.md`. Nothing here needs a backend deploy; a FinSight restart picks up the new `public/app/` build.

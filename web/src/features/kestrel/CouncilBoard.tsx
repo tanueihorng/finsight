@@ -1,30 +1,16 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useStore } from 'zustand';
 import { Assessment } from '../../../../agent/src/chat/council-contract.ts';
-import type { Part } from './turns.ts';
 import { CouncilActivity } from './CouncilActivity.tsx';
+import { CouncilChain } from './CouncilChain.tsx';
+import { councilModel, councilView, setCouncilView, STAGES, STATE_LABEL, type CouncilPart, type CouncilView, type RoleView } from './council.ts';
 import { Icon } from './icons.tsx';
 import styles from './Council.module.css';
-export type CouncilPart = Extract<Part, { kind: 'council' }>;
-const roles = [
-  { id: 'growth', label: 'Business & Growth', short: 'Business', focus: 'Quality & growth' },
-  { id: 'macro', label: 'Macro & Valuation', short: 'Macro', focus: 'Value & economic forces' },
-  { id: 'risk', label: 'Portfolio Risk', short: 'Risk', focus: 'Exposure & downside' },
-];
-function firstClaim(runs: CouncilPart[]) {
-  for (const run of [...runs].reverse()) {
-    try { const result = Assessment.safeParse(JSON.parse(run.detail)); if (result.success && result.data.findings[0]) return result.data.findings[0].claim; } catch { /* not findings */ }
-  }
-  return '';
-}
-export function councilState(runs: CouncilPart[], finished: boolean) {
-  if (runs.some((r) => r.status === 'running')) return 'running';
-  if (runs.some((r) => r.status === 'failed')) return 'failed';
-  if (runs.some((r) => r.status === 'stopped')) return 'stopped';
-  if (runs.length && runs.every((r) => r.status === 'completed')) return 'completed';
-  return finished ? 'not-run' : 'queued';
-}
-const statusLabel: Record<string, string> = { running: 'Working', completed: 'Ready', failed: 'Failed', stopped: 'Stopped', queued: 'Queued', 'not-run': 'Not run' };
+export { councilState, type CouncilPart } from './council.ts';
+
+// FEAT-009 §6.2: the council as cards (default) or, on the full page, as a
+// chain of thought. Everything shown comes from run status and the validated
+// Assessment; UNPEEK blanks every finding (councilModel).
 function CouncilOrb({ role, active }: { role: string; active: boolean }) {
   return <span className={styles.orb} data-orb={role} data-active={active} aria-hidden="true">
     <span className={styles.orbAura} />
@@ -34,14 +20,51 @@ function CouncilOrb({ role, active }: { role: string; active: boolean }) {
     <span className={styles.orbReticle} />
   </span>;
 }
-function CouncilFlow({ runs, chairActive }: { runs: CouncilPart[]; chairActive: boolean }) {
+function CouncilFlow({ v }: { v: CouncilView }) {
   const paths = ['M100 0 C100 48 300 25 300 82', 'M300 0 V82', 'M500 0 C500 48 300 25 300 82'];
-  return <svg className={styles.flow} data-active={chairActive || runs.some((r) => r.status === 'running')} viewBox="0 0 600 84" preserveAspectRatio="none" aria-hidden="true">{roles.map((role, i) => {
-    const active = chairActive || runs.some((r) => r.role === role.id && r.status === 'running');
+  const chairActive = v.chair.state === 'running';
+  return <svg className={styles.flow} data-active={chairActive || v.working} viewBox="0 0 600 84" preserveAspectRatio="none" aria-hidden="true">{v.roles.map((role, i) => {
+    const active = chairActive || role.state === 'running';
     return <g key={role.id} data-flow={role.id} data-active={active}><path className={styles.flowTrack} d={paths[i]} /><path className={styles.flowLight} d={paths[i]} /><circle className={styles.flowNode} cx={[100,300,500][i]} cy="1" r="3" /></g>;
   })}<path className={styles.mobileFlow} d="M300 0 V82" /><circle className={styles.flowHub} cx="300" cy="82" r="4" /></svg>;
 }
-export function CouncilBoard({ runs, finished }: { runs: CouncilPart[]; finished: boolean }) {
+const list = (title: string, items: string[]) => items.length > 0 && <div className={styles.more}><h5>{title}</h5><ul>{items.map((x) => <li key={x}>{x}</li>)}</ul></div>;
+function Card({ r, open, onToggle, hidden }: { r: RoleView; open: boolean; onToggle: () => void; hidden: boolean }) {
+  const excerpt = r.claim || (hidden && r.runs.some((x) => x.status === 'completed') ? 'Findings hidden' : r.phaseNote);
+  return <button type="button" data-role={r.id} data-state={r.state} className={styles.card + (open ? ' ' + styles.selected : '')} aria-label={'Inspect ' + r.label} aria-expanded={open} disabled={!r.runs.length} onClick={onToggle}>
+    <span className={styles.cardTop}><CouncilOrb role={r.id} active={r.state === 'running'} /><span className={styles.state}><i />{STATE_LABEL[r.state]}</span></span>
+    <span className={styles.cardName}><span className={styles.roleEyebrow}>{`SPECIALIST 0${r.index + 1}`}</span><strong>{r.short}</strong><span>{r.focus}</span></span>
+    <span className={styles.phaseNote}>{r.phaseNote}</span>
+    <span className={styles.excerpt}>{excerpt}</span>
+    {(r.evidence != null || r.uncertainty) && <span className={styles.chips}>
+      {r.evidence != null && <span className={styles.chip}>EVIDENCE <b>{r.evidence}</b></span>}
+      {r.against != null && <span className={styles.chip}>AGAINST <b>{r.against}</b></span>}
+      {r.uncertainty && <span className={styles.chip + ' ' + styles.chipWide}>UNCERTAINTY <span>{r.uncertainty}</span></span>}
+    </span>}
+    {open && <span className={styles.moreGrid}>
+      {list('Assumes', r.assumptions)}{list('Opposing evidence', r.counter)}{list('Still needed', r.missing)}
+      {r.challengeClaim && <div className={styles.more}><h5>Challenge round</h5><p>{r.challengeClaim}</p></div>}
+      <div className={styles.more}><h5>Runs</h5><ul>{r.runs.map((x) => <li key={x.key}>{`${x.phase} · ${x.status} · ${x.model}${x.ms ? ` · ${(x.ms / 1000).toFixed(1)}s` : ''}${x.costUsd != null ? ` · $${x.costUsd.toFixed(4)}` : ''}`}</li>)}</ul></div>
+    </span>}
+    <span className={styles.cardFoot}>{r.invalidation ? <span className={styles.change}>Would change if: {r.invalidation}</span> : r.challenged ? 'Challenge round' : 'Independent assessment'}<span aria-hidden="true">{open ? '▾' : '▸'}</span></span>
+  </button>;
+}
+function Chair({ v, open, onToggle }: { v: CouncilView; open: boolean; onToggle: () => void }) {
+  const c = v.chair;
+  return <button type="button" className={styles.chair + (open ? ' ' + styles.selected : '')} data-state={c.state} aria-label="Inspect Kestrel Chair" aria-expanded={open} disabled={!c.runs.length} onClick={onToggle}>
+    <CouncilOrb role="chair" active={c.state === 'running'} />
+    <span className={styles.chairCopy}><strong>Kestrel Chair</strong><span>{c.waiting}</span>
+      {c.state === 'running' && <span className={styles.shimmer} aria-hidden="true"><i /><i /></span>}
+      {c.lead && <span className={styles.chairLead}>{c.lead}</span>}
+      {c.state === 'completed' && !v.hidden && <span className={styles.chairTiles}>
+        <span><b>{c.missing.length}</b> still needed</span><span><b>{c.changes.length}</b> would change the view</span><span><b>{c.questions.length}</b> open question{c.questions.length === 1 ? '' : 's'}</span>
+      </span>}
+    </span>
+    <span className={styles.state}><i />{STATE_LABEL[c.state]}</span>
+  </button>;
+}
+
+export function CouncilBoard({ runs, finished, full = false, onAsk }: { runs: CouncilPart[]; finished: boolean; full?: boolean; onAsk?: (q: string) => void }) {
   const boardRef = useRef<HTMLElement>(null);
   const [motionVisible, setMotionVisible] = useState(true);
   useEffect(() => {
@@ -54,43 +77,31 @@ export function CouncilBoard({ runs, finished }: { runs: CouncilPart[]; finished
   }, []);
   const [selected, setSelected] = useState<string | null>(null), [expanded, setExpanded] = useState(true);
   const peek = useStore(window.FinSight.store, (s) => s.peek);
-  const phase = runs.some((r) => r.role === 'chair') ? 2 : runs.some((r) => r.phase === 'challenge') ? 1 : 0;
-  const working = runs.some((r) => r.status === 'running');
-  const failed = runs.some((r) => r.status === 'failed' || r.status === 'stopped');
-  const incomplete = failed || !['assessment','challenge'].every((phase) => roles.every((role) => runs.some((r) => r.role === role.id && r.phase === phase))) || !runs.some((r) => r.role === 'chair');
-  const stageDone = (index: number) => index === 2 ? runs.some((r) => r.role === 'chair' && r.status === 'completed') : roles.every((role) => runs.some((r) => r.role === role.id && r.phase === (index === 0 ? 'assessment' : 'challenge') && r.status === 'completed'));
-  const title = finished ? incomplete ? 'Review ended with gaps' : 'Review complete' : working ? 'Council in session' : 'Preparing the next stage';
-  const knownCost = runs.every((r) => r.costUsd !== null) ? runs.reduce((sum, r) => sum + r.costUsd!, 0) : null;
-  const chair = runs.filter((r) => r.role === 'chair');
-  const chairState = councilState(chair, finished);
-  const selectedRuns = runs.filter((r) => r.role === selected);
-  return <section ref={boardRef} className={styles.board} data-visible={motionVisible} data-active={working} aria-label="Investment council" data-council-board>
+  const saved = useStore(councilView, (s) => s.view);
+  const view = full ? saved : 'cards';
+  const v = councilModel(runs, finished, peek);
+  const selectedRuns = selected === 'chair' ? v.chair.runs : v.roles.find((r) => r.id === selected)?.runs ?? [];
+  const toggle = (id: string) => setSelected(selected === id ? null : id);
+  return <section ref={boardRef} className={styles.board} data-visible={motionVisible} data-active={v.working} data-view={view} aria-label="Investment council" data-council-board>
     <header className={styles.head}>
       <div className={styles.emblem}><Icon name="spark" size={19} /></div>
-      <div className={styles.heading}><span className={styles.eyebrow}>INVESTMENT COUNCIL</span><h3>{title}{working && <span className={styles.signal} aria-hidden="true"><i /><i /><i /><i /></span>}</h3></div>
+      <div className={styles.heading}><span className={styles.eyebrow}>INVESTMENT COUNCIL</span><h3>{v.title}{v.working && <span className={styles.signal} aria-hidden="true"><i /><i /><i /><i /></span>}</h3></div>
+      {full && <span className={styles.switch} role="group" aria-label="Council view (⌘.)">
+        <button type="button" aria-pressed={view === 'cards'} onClick={() => setCouncilView('cards')}>◫ Cards</button>
+        <button type="button" aria-pressed={view === 'chain'} onClick={() => setCouncilView('chain')}>≡ Chain of thought</button>
+      </span>}
       <button type="button" className={styles.collapse} aria-label={expanded ? 'Collapse council activity' : 'Expand council activity'} aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>{expanded ? '−' : '+'}</button>
     </header>
-    <div className={styles.steps} aria-label="Review stages">{['Assess', 'Challenge', 'Synthesize'].map((step, i) => <span key={step} className={i === phase ? styles.current : stageDone(i) ? styles.past : ''} aria-current={i === phase ? 'step' : undefined}><i>{stageDone(i) ? '✓' : '0' + (i + 1)}</i>{step}</span>)}</div>
-    {expanded && <>
-      <div className={styles.team}>{roles.map((role) => {
-        const ownRuns = runs.filter((r) => r.role === role.id);
-        const state = councilState(ownRuns, finished);
-        const challenged = ownRuns.some((r) => r.phase === 'challenge');
-        const claim = peek ? firstClaim(ownRuns) : '';
-        return <button type="button" key={role.id} data-role={role.id} data-state={state} className={styles.card + (selected === role.id ? ' ' + styles.selected : '')} aria-label={'Inspect ' + role.label} aria-expanded={selected === role.id} disabled={!ownRuns.length} onClick={() => setSelected(selected === role.id ? null : role.id)}>
-          <span className={styles.cardTop}><CouncilOrb role={role.id} active={state === 'running'} /><span className={styles.state}><i />{statusLabel[state]}{state === 'running' && ownRuns.some((r) => r.status === 'failed') ? ' · gap' : ''}</span></span>
-          <span className={styles.cardName}><strong>{role.short}</strong><span>{role.focus}</span></span>
-          <span className={styles.excerpt}>{claim || (!peek && ownRuns.length ? 'Findings hidden' : state === 'queued' ? 'Waiting for a research slot' : state === 'running' ? challenged ? 'Testing the other assessments' : 'Forming an independent assessment' : state === 'failed' ? 'Inspect the missing assessment' : state === 'stopped' ? 'Review interrupted' : 'Assessment available')}</span>
-          <span className={styles.cardFoot}>{challenged ? 'Challenge round' : 'Independent assessment'}<span aria-hidden="true">↗</span></span>
-        </button>;
-      })}</div>
-      <CouncilFlow runs={runs} chairActive={chairState === 'running'} />
-      <button type="button" className={styles.chair + (selected === 'chair' ? ' ' + styles.selected : '')} data-state={chairState} aria-label="Inspect Kestrel Chair" aria-expanded={selected === 'chair'} disabled={!chair.length} onClick={() => setSelected(selected === 'chair' ? null : 'chair')}>
-        <CouncilOrb role="chair" active={chairState === 'running'} /><span className={styles.chairCopy}><strong>Kestrel Chair</strong><span>{chairState === 'running' ? 'Weighing the evidence and unresolved views' : chairState === 'completed' ? 'Synthesis ready · evidence over votes' : chairState === 'failed' || chairState === 'stopped' ? 'Synthesis incomplete · inspect the result' : finished ? 'Synthesis did not run' : 'Receives all assessments and challenges'}</span></span><span className={styles.state}><i />{statusLabel[chairState]}</span>
-      </button>
+    <div className={styles.steps} aria-label="Review stages">{STAGES.map((step, i) => <span key={step} className={i === v.stage ? styles.current : v.stageDone[i] ? styles.past : ''} aria-current={i === v.stage ? 'step' : undefined}><i>{v.stageDone[i] ? '✓' : '0' + (i + 1)}</i>{step}</span>)}</div>
+    {expanded && view === 'chain' && <CouncilChain v={v} onAsk={onAsk} />}
+    {expanded && view === 'cards' && <>
+      <div className={styles.team} data-open={selected && selected !== 'chair' ? selected : undefined}>{v.roles.map((r) => <Card key={r.id} r={r} hidden={v.hidden} open={selected === r.id} onToggle={() => toggle(r.id)} />)}</div>
+      <CouncilFlow v={v} />
+      <Chair v={v} open={selected === 'chair'} onToggle={() => toggle('chair')} />
       {selected && <div className={styles.inspector} aria-label="Specialist findings">{selectedRuns.map((run) => <CouncilActivity key={run.key} run={run} />)}</div>}
-      <footer className={styles.foot}><span><i className={working ? styles.liveDot : styles.idleDot} />{working ? 'Live specialist activity' : '3 specialists · 1 chair'}</span><span>{knownCost === null ? finished ? 'Cost unavailable' : 'Cost pending' : '$' + knownCost.toFixed(4) + ' recorded'}</span></footer>
     </>}
+    {expanded && <footer className={styles.foot}><span><i className={v.working ? styles.liveDot : styles.idleDot} />{v.working ? `Live · ${v.activeLabel}` : '3 specialists · 1 chair'}</span><span>{v.cost === null ? finished ? 'Cost unavailable' : 'Cost pending' : '$' + v.cost.toFixed(4) + ' recorded'}</span>
+      {!full && <button type="button" className={styles.sideBySide} onClick={() => { setCouncilView('chain'); window.dispatchEvent(new Event('kestrel:full')); }}>See every lens side by side ⤢</button>}</footer>}
   </section>;
 }
 

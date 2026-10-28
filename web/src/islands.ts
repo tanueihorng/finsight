@@ -15,6 +15,7 @@ import * as AccountsModalIsland from './features/topbar/AccountsModalIsland.tsx'
 import * as BaseIsland from './features/topbar/BaseIsland.tsx';
 import * as ProfileIsland from './features/topbar/ProfileIsland.tsx';
 import * as PeekIsland from './features/topbar/PeekIsland.tsx';
+import * as ModeIsland from './features/topbar/ModeIsland.tsx';
 import * as SetupIsland from './features/topbar/SetupIsland.tsx';
 import * as LockIsland from './features/lock/LockIsland.tsx';
 import * as LockButtonIsland from './features/lock/LockButtonIsland.tsx';
@@ -84,6 +85,7 @@ export const islands: IslandRegistry = preloadable({
   base: () => Promise.resolve(BaseIsland),
   profile: () => Promise.resolve(ProfileIsland),
   peek: () => Promise.resolve(PeekIsland),
+  mode: () => Promise.resolve(ModeIsland),
   setup: () => Promise.resolve(SetupIsland),
   lock: () => Promise.resolve(LockIsland),
   'lock-button': () => Promise.resolve(LockButtonIsland),

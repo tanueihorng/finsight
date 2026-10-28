@@ -30,6 +30,7 @@ The Kestrel panel redesign and search-provider picker (`KESTRELUI-001` / `SEARCH
 | In-chat stock price charts, source-bound to historical close prices | `CHATCHART-001` | Verified; included in the merge containing CHARTSHIP-001; deployment and live-provider chart qualification pending |
 | Smarter visual selection, richer charts, exposure views and safe navigation/alert drafts | `UIUPGRADE-001` | Integrated on main at `dc8a7c9`; demo activated; broader model qualification remains pending |
 | Demo defaults to supported Intelligent UI views | `DEMOPARITY-001` | Integrated on main at `dc8a7c9`; explicit settings and model gates remain effective |
+| [FEAT-009](features/FEAT-009-kestrel-terminal-redesign.md) Kestrel terminal redesign: panel states, light mode, start screen, conversation, council Cards / Chain of thought | `KESTRELUX-001` | Selected 2026-10-29; in progress on `claude/chatbot-ui-concepts-b7a075`, phase by phase per spec §8 |
 
 ## Council delivered — 2026-10-29
 
@@ -40,7 +41,6 @@ The Kestrel panel redesign and search-provider picker (`KESTRELUI-001` / `SEARCH
 | Spec | Proposal | Execution relationship | Gate |
 |---|---|---|---|
 | [FEAT-001](features/FEAT-001-ibkr-mcp-integration.md) | IBKR MCP integration and live sync | Deferred architecture captured alongside `MULTIAGENT-001`; distinct from CSV import | Explicit user selection and verified design |
-| [FEAT-009](features/FEAT-009-kestrel-terminal-redesign.md) | Kestrel terminal redesign: capsule / side / full-page states, light mode, start screen, conversation, council Cards and Chain of thought views | Suggested `KESTRELUX-001`; builds on FEAT-002 with no agent change. Agent-side extras listed separately in the spec (§9) | Design approved 2026-10-29; explicit selection for execution |
 
 ---
 

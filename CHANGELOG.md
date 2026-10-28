@@ -15,6 +15,13 @@ The earlier draft with unverified release numbers is preserved in `docs/archive/
 
 ## Unreleased
 
+- `KESTRELUX-001` ([FEAT-009](docs/features/FEAT-009-kestrel-terminal-redesign.md)), on `claude/chatbot-ui-concepts-b7a075`, not merged:
+  - Colour tokens with dark mode pixel-unchanged, plus light mode (`data-mode`, ◐ top-bar button, APPEARANCE control, a darker light variant per accent, contrast-checked).
+  - Kestrel full page (`⌘⇧/`), a capsule while a hidden run continues, and a busy ASK button and top-bar sweep.
+  - Clickable briefing tiles, Ask / Council tabs, a tool log card, a streaming caret, and a full-page workspace column for views.
+  - Council Cards and Chain of thought views on one UNPEEK-safe view model, with the switch saved and `⌘.` to toggle.
+  - No agent or API change.
+
 - Isolate the standalone and demo launchers in separate data directories and agent ports, and reject agent configurations that redirect them to another data directory. Show Kestrel's name and connection errors, and keep its chat rail available in the dock. These changes do not migrate existing data.
 
 - `UIUPGRADE-001` (`dc8a7c9`): natural view-selection guidance, source-bound exposure charts, snapshot chart range and pointer controls, and user-invoked navigation or unsaved alert drafts. Live model qualification remains limited to the recorded synthetic sample.
