@@ -65,6 +65,7 @@ body.agent-resizing-v { user-select: none; cursor: row-resize; }
 .agent-chat { position: relative; flex-direction: row; }
 .kx-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .kx-rail { width: 236px; flex: none; display: flex; flex-direction: column; gap: 8px; padding: 12px 8px 10px; border-right: 1px solid var(--border); background: var(--panel); min-height: 0; }
+.agent-dock .kx-rail { width: min(236px, 40%); }
 .agent-chat.narrow .kx-rail { position: absolute; left: 0; top: 0; bottom: 0; z-index: 5; width: min(300px, 86%); box-shadow: 8px 0 28px rgba(0,0,0,.35); animation: kx-slide .16s ease-out; }
 .kx-scrim { position: absolute; inset: 0; z-index: 4; background: rgba(0,0,0,.35); animation: kx-fade .16s ease-out; }
 @keyframes kx-slide { from { transform: translateX(-16px); } }

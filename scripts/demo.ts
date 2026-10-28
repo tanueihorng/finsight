@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn, execFile } from 'node:child_process';
-import { isInsidePersonalData } from './demo-safety.ts';
+import { assertAgentDataDir, isInsidePersonalData } from './demo-safety.ts';
 
 const ROOT = path.join(import.meta.dirname, '..');
 const DEMO_DIR = path.resolve(process.env.FINSIGHT_DEMO_DIR || path.join(os.homedir(), 'FinSightDemo'));
@@ -17,7 +17,13 @@ const DEMO_PIN = '2468'; // demo only: the demo folder holds no real data
 const URL = `http://127.0.0.1:${PORT}`; // 127.0.0.1, not localhost: keeps demo browser storage apart from the personal app
 
 const real = path.resolve(os.homedir(), 'FinSightData');
-if (isInsidePersonalData(DEMO_DIR, real)) { console.error('Refusing: the demo folder must not be your real FinSightData.'); process.exit(1); }
+const standalone = path.resolve(os.homedir(), 'FinSightStandalone');
+if ([DEMO_DIR, path.join(DEMO_DIR, 'agent'), path.join(DEMO_DIR, 'agent', 'config.json'), path.join(DEMO_DIR, 'records')].some((target) =>
+  [real, standalone].some((other) => isInsidePersonalData(target, other) || isInsidePersonalData(other, target)))) {
+  console.error('Refusing: the demo folder must not overlap personal or standalone storage.'); process.exit(1);
+}
+// Check before seeding or starting; reset intentionally removes the old config.
+if (!process.argv.includes('--reset')) assertAgentDataDir(DEMO_DIR);
 
 if (process.argv.includes('--reset')) { fs.rmSync(DEMO_DIR, { recursive: true, force: true }); console.log(`Reset ${DEMO_DIR}`); }
 

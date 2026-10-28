@@ -21,9 +21,7 @@ Chat deletion spacing follow-up: `harness/runs/20261026T172308Z-CHATDELETE-001-0
 | [FEAT-007](features/FEAT-007-account-transfers.md) | Account transfers preserving lots, FX and undo | `TRADEXFER-001` | Merged — verified |
 | [FEAT-008](features/FEAT-008-ibkr-trade-import.md) | IBKR fill preview and duplicate detection | `IBKRTRADES-001` | Merged — verified |
 
-The earlier panel redesign remains `KESTRELUI-001` / `SEARCHUI-001` in the workspace queue.
-Several UI pieces are already integrated; reconcile its remaining acceptance criteria before starting
-or closing it. This documentation cleanup does not certify completion.
+The Kestrel panel redesign and search-provider picker (`KESTRELUI-001` / `SEARCHUI-001`) were reconciled and verified on 2026-10-28. The existing design was already integrated; this revision includes a docked-rail correction. The full browser rerun passed 259 tests with one skipped. See `harness/runs/20261028T033406Z-KESTRELUI-001-b6b7fc11/RUN.md` in the investment workspace.
 
 ## Selected work in progress
 
