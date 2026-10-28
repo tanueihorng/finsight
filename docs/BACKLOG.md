@@ -40,6 +40,7 @@ The Kestrel panel redesign and search-provider picker (`KESTRELUI-001` / `SEARCH
 | Spec | Proposal | Execution relationship | Gate |
 |---|---|---|---|
 | [FEAT-001](features/FEAT-001-ibkr-mcp-integration.md) | IBKR MCP integration and live sync | Deferred architecture captured alongside `MULTIAGENT-001`; distinct from CSV import | Explicit user selection and verified design |
+| [FEAT-009](features/FEAT-009-kestrel-terminal-redesign.md) | Kestrel terminal redesign: capsule / side / full-page states, light mode, start screen, conversation, council Cards and Chain of thought views | Suggested `KESTRELUX-001`; builds on FEAT-002 with no agent change. Agent-side extras listed separately in the spec (§9) | Design approved 2026-10-29; explicit selection for execution |
 
 ---
 
