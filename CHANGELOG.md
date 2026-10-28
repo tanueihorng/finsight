@@ -7,7 +7,7 @@ The earlier draft with unverified release numbers is preserved in `docs/archive/
 
 - Investment council and lenses (`c387f52`): independent Business & Growth, Macro & Valuation and Portfolio Risk assessments, a challenge round and Kestrel chair. Read-only tools, durable cost reservations, cancellation, partial results and persisted replay.
 - Chat presentation (`84c6c0c`): one council board with actual-event specialist/chair motion and a distinct synthesis, responsive layout, reduced-motion support and UNPEEK privacy. Standalone synthetic preview is separate.
-- User authorized local merge and personal activation. Generic installations remain default off. Council qualification covers DeepSeek Flash with thinking off; the small synthetic evaluation did not establish superiority over Balanced or investment efficacy.
+- Merged locally at `d06cabf` and activated in personal FinSight on localhost:8001. Live agent advertises council enabled; all30 served manifest assets match the canonical build.262 browser checks plus3 real-backend council checks passed, with one existing live-fixture skip;216 unit and130 agent plus secret scan passed. Generic installations remain default off. Council qualification covers DeepSeek Flash with thinking off; the small synthetic evaluation did not establish superiority over Balanced or investment efficacy.
 
 ## Unreleased
 

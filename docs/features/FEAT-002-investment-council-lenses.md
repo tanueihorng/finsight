@@ -1,7 +1,7 @@
 # FEAT-002: Investment Lenses & Council Mode
 
 - **ID:** FEAT-002
-- **Status:** Implemented and verified; personal activation authorized 2026-10-29; generic default off
+- **Status:** Merged and verified; personal activation completed 2026-10-29; generic default off
 - **Priority:** High
 - **Related Tasks:** `MULTIAGENT-001`
 
@@ -62,3 +62,8 @@ reliability rerun completed 6/6 synthetic cases; the original 5/6 pilot and no
 demonstrated superiority to Balanced remain limitations. DeepSeek Flash with
 thinking off is the qualified council configuration. No automatic invocation,
 trade authority or investment-performance claim is added.
+
+Personal activation verified after local merge d06cabf: live council feature
+flag and DeepSeek Flash availability checked, with30 served manifest assets
+matching the canonical build.262 ordinary browser checks and3 real-backend
+council checks passed (one existing live-fixture skip). See COUNCIL.md for scope.

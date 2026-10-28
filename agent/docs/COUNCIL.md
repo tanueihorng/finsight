@@ -153,3 +153,17 @@ turn/day limits apply, and every provider call reserves its maximum estimated
 cost before dispatch. Replies can take longer and cost more than a single reply.
 Disable new runs by setting council=false and restarting the personal agent;
 historical conversations remain readable.
+
+### Activation verified
+
+Merged locally into main at d06cabf. Personal FinSight on localhost:8001 and
+Kestrel on loopback8100 started from the canonical checkout with council=true.
+Health passed; the agent advertises council enabled and DeepSeek Flash available.
+All30 served manifest assets match the canonical build; canonical and feature
+checkout builds match all64 static files. Current full verification:262 browser
+checks plus3 real-backend council checks passed, one existing live-fixture skip;
+216 unit,130 agent plus secret scan, typechecks and build consistency passed.
+Personal PIN and financial files and chat record counts were preserved. No new
+paid provider call or personal synthetic conversation was created for activation.
+Enter the existing PIN, open Kestrel, choose DeepSeek Flash with thinking off,
+and use Council or /committee. The localhost8866 HTML remains a synthetic preview.

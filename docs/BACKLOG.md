@@ -31,12 +31,15 @@ The Kestrel panel redesign and search-provider picker (`KESTRELUI-001` / `SEARCH
 | Smarter visual selection, richer charts, exposure views and safe navigation/alert drafts | `UIUPGRADE-001` | Integrated on main at `dc8a7c9`; demo activated; broader model qualification remains pending |
 | Demo defaults to supported Intelligent UI views | `DEMOPARITY-001` | Integrated on main at `dc8a7c9`; explicit settings and model gates remain effective |
 
+## Council delivered — 2026-10-29
+
+[FEAT-002](features/FEAT-002-investment-council-lenses.md) / `MULTIAGENT-001`: merged locally in `d06cabf` and activated in personal FinSight. The actual agent advertises council enabled, DeepSeek Flash is available, and all30 manifest assets match the rebuilt checkout. Current verification:262 browser checks and3 real-backend council checks passed; one existing live-fixture check skipped. Also216 unit,130 agent plus secret scan, typechecks and build consistency passed. Generic installations remain default off. Council uses DeepSeek Flash with thinking off; no investment-performance advantage is established. No remote push in this release.
+
 ## Deferred proposals
 
 | Spec | Proposal | Execution relationship | Gate |
 |---|---|---|---|
 | [FEAT-001](features/FEAT-001-ibkr-mcp-integration.md) | IBKR MCP integration and live sync | Deferred architecture captured alongside `MULTIAGENT-001`; distinct from CSV import | Explicit user selection and verified design |
-| [FEAT-002](features/FEAT-002-investment-council-lenses.md) | Investment lenses and council | `MULTIAGENT-001` selected 2026-10-28 | Implemented and verified; personal activation authorized 2026-10-29; generic default off; DeepSeek Flash / thinking off |
 
 ---
 
