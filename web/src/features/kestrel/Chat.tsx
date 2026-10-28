@@ -332,7 +332,7 @@ function Offline({ name, why, onRetry }: { name: string; why: [string, string]; 
 // The rail sits beside the chat from this panel width; below it the list is an overlay.
 const RAIL_MIN = 680;
 
-export function Chat({ inputRef, onRetry }: { inputRef: RefObject<HTMLTextAreaElement | null>; onRetry: () => void }) {
+export function Chat({ inputRef, onRetry, docked }: { inputRef: RefObject<HTMLTextAreaElement | null>; onRetry: () => void; docked: boolean }) {
   const s = useStore(chat);
   const rootRef = useRef<HTMLDivElement>(null), logRef = useRef<HTMLDivElement>(null), fileRef = useRef<HTMLInputElement>(null);
   const [stick, setStick] = useState(true), [menuSel, setMenuSel] = useState(0), [menuOpen, setMenuOpen] = useState(true), [drag, setDrag] = useState(false);
@@ -343,11 +343,11 @@ export function Chat({ inputRef, onRetry }: { inputRef: RefObject<HTMLTextAreaEl
   useEffect(() => window.FinSight.store.subscribe(() => tick((n) => n + 1)), []);
   useLayoutEffect(() => {
     const el = rootRef.current; if (!el) return;
-    const measure = () => { if (el.clientWidth) setNarrow(el.clientWidth < RAIL_MIN); };
+    const measure = () => { if (el.clientWidth) setNarrow(!docked && el.clientWidth < RAIL_MIN); };
     measure();
     const ro = new ResizeObserver(measure); ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [docked]);
   const lastTop = useRef(0);
   // A blur closes the slash menu shortly after (so a click on it still lands); refocusing cancels that.
   const blurTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);

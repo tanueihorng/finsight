@@ -216,6 +216,7 @@ test('dock mode: collapse persists across reload, height keys, the dock is a dra
   const dock = page.locator('#agent-dock');
   await expect(dock).toBeVisible();
   await expect(dock).toHaveAttribute('data-pid', 'kestrel');
+  await expect(dock.locator('.kx-rail')).toBeVisible();
   await expect(dock.locator('.panel-head .drag-grip')).toHaveCount(1);
   await expect(page.locator('body')).not.toHaveClass(/\bagent-open\b/);
   await dock.locator('.agent-icon-btn[title="Collapse"]').click();

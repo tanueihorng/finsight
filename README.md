@@ -92,7 +92,7 @@ cd finsight
 node server.ts
 ```
 
-Then open **http://localhost:8000**. On a Mac you can also just double-click **`start.command`**.
+Then open **http://localhost:8000**. On a Mac, double-clicking **`start.command`** starts a separate standalone instance at **http://localhost:8002**, using `~/FinSightStandalone` and its own agent on port 8102. Existing repository `data/` is not migrated or erased.
 
 Want to look around first? `npm run demo` opens FinSight + Kestrel on a **made-up portfolio** (PIN `2468`) without touching any real data.
 

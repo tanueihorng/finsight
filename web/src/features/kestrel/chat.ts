@@ -206,7 +206,11 @@ export async function boot(): Promise<'ok' | 'locked'> {
     showWelcome(); afterTurn();
   } catch (e) {
     const err = e as AgentError;
-    if (err.status === 401) return 'locked'; // FinSight still locked: boot again after unlock
+    if (err.status === 401 && window.FinSight?.auth?.unlocked === false) return 'locked'; // boot again after unlock
+    if (err.status === 401) {
+      set({ view: 'offline', offline: { starting: false, why: ['Kestrel could not authenticate with this FinSight instance.', 'Check that the terminal and agent use the same data directory, then restart them.'] } });
+      return 'ok';
+    }
     if (err.code === 'AGENT_OFFLINE' || err.status === 503 || err.status === 502) { await showOffline(); return 'ok'; }
     if (get().view === 'idle') set({ view: 'log' });
     notice(`Could not reach the agent: ${err.message}`, 'error');

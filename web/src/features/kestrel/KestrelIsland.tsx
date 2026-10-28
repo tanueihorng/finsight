@@ -18,7 +18,7 @@ const resizeEvent = () => window.dispatchEvent(new Event('resize'));
 const cssWidth = () => parseInt(getComputedStyle(document.documentElement).getPropertyValue('--agent-w'), 10) || DEFAULT_W;
 
 export default function KestrelIsland() {
-  const name = useStore(chat, (s) => s.name), named = useStore(chat, (s) => s.named), rail = useStore(chat, railShown);
+  const name = useStore(chat, (s) => s.name), rail = useStore(chat, railShown);
   // The list has the title the agent set from the first message; the open thread object keeps its creation title.
   const activeThread = useStore(chat, (s) => s.thread);
   const chatTitle = useStore(chat, (s) => (s.view === 'welcome' ? 'New chat' : s.threads?.find((x) => x.id === s.thread?.id)?.title || s.thread?.title || ''));
@@ -134,13 +134,13 @@ export default function KestrelIsland() {
       <button className="agent-icon-btn" title="Close (Esc)" aria-label="Close chat" onClick={() => toggle(false)}><Icon name="close" /></button>
     </span>
   );
-  const body = <Chat inputRef={inputRef} onRetry={() => { booted.current = true; void boot(); }} />;
+  const body = <Chat inputRef={inputRef} docked={mode === 'dock'} onRetry={() => { booted.current = true; void boot(); }} />;
   return (
     <>
       {slot && createPortal(
-        <button id="agent-toggle" className={'topbar-btn agent-toggle' + (open ? ' active' : '')} title="Ask the agent (⌘/)"
+        <button id="agent-toggle" className={'topbar-btn agent-toggle' + (open ? ' active' : '')} title="Open Kestrel (⌘/)"
           aria-controls={mode === 'dock' ? 'agent-dock' : 'agent-panel'} aria-expanded={open} onClick={() => toggle()}>
-          <span className="mark">↗</span> <span className="tname">{named ? name.toUpperCase() : 'ASK'}</span><span className="kbd">⌘/</span>
+          <span className="mark">↗</span> <span className="tname">{name.toUpperCase()}</span><span className="kbd">⌘/</span>
         </button>, slot)}
       <aside className="agent-panel" id="agent-panel" role="complementary" aria-label="Agent chat">
         <div className="agent-resize" role="separator" aria-orientation="vertical" aria-label="Resize chat panel" aria-valuenow={width} tabIndex={0}

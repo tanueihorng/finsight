@@ -5,6 +5,8 @@ The earlier draft with unverified release numbers is preserved in `docs/archive/
 
 ## Unreleased
 
+- Isolate the standalone and demo launchers in separate data directories and agent ports, and reject agent configurations that redirect them to another data directory. Show Kestrel's name and connection errors, and keep its chat rail available in the dock. These changes do not migrate existing data.
+
 - `UIUPGRADE-001` (`dc8a7c9`): natural view-selection guidance, source-bound exposure charts, snapshot chart range and pointer controls, and user-invoked navigation or unsaved alert drafts. Live model qualification remains limited to the recorded synthetic sample.
 - `DEMOPARITY-001` (`dc8a7c9`): demo defaults supported Intelligent UI on, respecting explicit overrides and model capability gates; the demo data guard also resolves symlinked paths before any reset.
 

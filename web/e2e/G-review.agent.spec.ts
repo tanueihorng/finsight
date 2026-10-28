@@ -157,6 +157,21 @@ test('offline: retry reconnects once the agent is back', async ({ page }) => {
   await expect(lastTurn(page).locator('.agent-text')).toHaveText('Echo: back online');
 });
 
+test('an agent authentication mismatch is visible and can be retried', async ({ page }) => {
+  await seeded(page);
+  await page.evaluate(() => { localStorage.setItem('finsight-agent-mode', 'side'); localStorage.setItem('finsight-agent-open', '0'); });
+  await page.route('**/api/agent/**', (r) => r.fulfill({ status: 401, json: { error: { code: 'UNAUTHORIZED', message: 'Missing or bad proxy secret' } } }));
+  await page.reload();
+  await expect(page.locator('#agent-toggle')).toContainText('KESTREL');
+  await page.click('#agent-toggle');
+  const offline = page.locator('.agent-offline:visible');
+  await expect(offline).toContainText('could not authenticate');
+  await expect(offline).toContainText('same data directory');
+  await page.unroute('**/api/agent/**');
+  await offline.getByRole('button', { name: 'retry' }).click();
+  await expect(page.locator('.kx-start:visible')).toBeVisible();
+});
+
 test('lock and unlock with the chat open: the conversation stays and replies still stream', async ({ page }) => {
   await open(page);
   await send(page, 'before the lock');
