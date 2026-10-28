@@ -1,5 +1,5 @@
 import { LENSES } from '../../../../shared/council-lenses.ts';
-import { CouncilActivity } from './CouncilActivity.tsx';
+import { CouncilBoard, CouncilConclusion } from './CouncilBoard.tsx';
 import { lazy, Suspense, memo, useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
 import { useStore } from 'zustand';
 import { useCalendar, useEvents, useIntraday, usePortfolio } from '../../api/queries.ts';
@@ -100,7 +100,8 @@ function ToolGroup({ tools }: { tools: ToolPart[] }) {
 async function copyAnswer(t: Turn): Promise<boolean> {
   // Ordinary answers keep their existing cheap path, even with the feature off.
   let text = t.allText;
-  if (t.parts.some((p) => p.kind === 'ui')) {
+  if (t.parts.some((p) => p.kind === 'council') && !window.FinSight.store.getState().peek) text = '[Council findings hidden by UNPEEK]';
+  else if (t.parts.some((p) => p.kind === 'ui')) {
     const { answerText } = await import('./ui/UiView.tsx');
     text = answerText(t, window.FinSight.store.getState().peek);
   }
@@ -111,6 +112,8 @@ async function copyAnswer(t: Turn): Promise<boolean> {
 
 function TurnView({ t }: { t: Turn }) {
   const [copied, setCopied] = useState(false), [trace, setTrace] = useState(false);
+  const councilRuns = t.parts.filter((p) => p.kind === 'council');
+  let councilShown = false;
   const blocks: ReactNode[] = [];
   for (let i = 0; i < t.parts.length; i++) {
     const p = t.parts[i]!;
@@ -118,8 +121,9 @@ function TurnView({ t }: { t: Turn }) {
       const tools: ToolPart[] = [];
       while (i < t.parts.length && t.parts[i]!.kind === 'tool') tools.push(t.parts[i++] as ToolPart);
       i--; blocks.push(<ToolGroup key={'g' + tools[0]!.key} tools={tools} />);
-    } else if (p.kind === 'text') blocks.push(<TextPart key={i} text={p.text} />);
-    else if (p.kind === 'council') blocks.push(<CouncilActivity key={p.key} run={p} />);
+    } else if (p.kind === 'text') blocks.push(councilRuns.length ? <CouncilConclusion key={i} runs={councilRuns}><TextPart text={p.text} /></CouncilConclusion> : <TextPart key={i} text={p.text} />);
+    else if (p.kind === 'council' && !councilShown) { councilShown = true; blocks.push(<CouncilBoard key="council" runs={councilRuns} finished={t.meta !== null} />); }
+    else if (p.kind === 'council') continue;
     else if (p.kind === 'ui') blocks.push(<Suspense key={p.key} fallback={<div className="agent-notice">Loading snapshot…</div>}><IslandBoundary><UiView view={p.view} /></IslandBoundary></Suspense>);
     else blocks.push(<div key={i} className={'agent-notice ' + p.cls}>{p.text}</div>);
   }

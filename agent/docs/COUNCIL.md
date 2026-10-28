@@ -109,3 +109,23 @@ A separate Playwright configuration exercises the real API, ChatEngine and
 SQLite store with a deterministic brain and disposable FinSight data. It covers
 captured quote evidence, reload/replay, cancellation and failed-specialist partial
 synthesis. It never uses the personal data directory or calls a provider.
+
+## Council chat presentation — 2026-10-29
+
+CouncilBoard groups all actual specialist phases within one conversation panel.
+Active roles have distinct kinetic forms; connection traces and the chair's
+synthesis state are driven by run events. Completed/queued roles do not loop
+activity motion. Failed or missing phases remain explicit rather than acquiring
+completion checkmarks. Motion pauses outside the viewport or in a hidden tab;
+reduced-motion keeps the same readable states without animation.
+
+The chair result presents validated claims, uncertainty, evidence gaps and
+invalidation, with the complete original report/source references available in a
+disclosure. UNPEEK removes findings from the DOM and copies a privacy placeholder
+instead of the underlying report. Keyboard controls, narrow stacking and
+WCAG2A/AA checks are exercised against the real API/engine with a test brain.
+
+`node scripts/build-council-preview.mjs <output.html>` produces a standalone
+synthetic state preview. Its scripted display states and illustrative costs are
+not evidence of live model activity or investment usefulness. The production
+chat consumes actual backend events. The preview is not a production entrypoint.

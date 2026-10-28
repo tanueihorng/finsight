@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { seeded } from './helpers';
-test('council is hidden by default and opt-in lens is captured with the message', async ({ page }) => {
+test('council is hidden by default and opt-in lens is captured with the message', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await seeded(page); await page.click('#agent-toggle');
   await expect(page.getByRole('combobox', { name: 'Analytical lens' })).toHaveCount(0);
   await page.route('**/api/agent/info', async (route) => {
@@ -27,12 +28,16 @@ test('council is hidden by default and opt-in lens is captured with the message'
   });
   await page.locator('.agent-icon-btn[title="New chat (/new)"]:visible').click();
   await page.locator('.kx-jump-row', { hasText: '/committee synthetic company' }).first().click();
+  await page.getByRole('button', { name: 'Inspect Business & Growth', exact: true }).click();
   const summary = page.locator('summary', { hasText: 'Business & Growth' });
   await expect(summary).toHaveCount(1); await summary.click();
-  await expect(page.getByText('Synthetic private finding', { exact: false })).toBeVisible();
+  await expect(page.getByLabel('Specialist findings').getByText('Synthetic private finding', { exact: false })).toBeVisible();
   await page.evaluate(() => window.FinSight.store.setState({ peek: false }));
-  await expect(page.getByText('Findings hidden by UNPEEK.')).toBeVisible();
+  await expect(page.getByText('Findings hidden by UNPEEK.', {exact:true})).toBeVisible();
+  await expect(page.locator('[data-council-board]')).toHaveCount(1);
   await expect(page.getByText('Synthetic private finding', { exact: false })).toHaveCount(0);
+  await page.getByTitle('Copy answer', { exact: true }).last().click();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('[Council findings hidden by UNPEEK]');
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(summary).toBeVisible();
 });
