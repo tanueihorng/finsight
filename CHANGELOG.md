@@ -3,6 +3,10 @@
 This records integrated changes with actual Git references. A merge does not certify deployment.
 The earlier draft with unverified release numbers is preserved in `docs/archive/20261027-CHANGELOG-draft.md`.
 
+## Council research handoff correction — 2026-10-29
+
+- Handle an oversized batch of allowed research requests without discarding an entire specialist assessment. Execute at most two tools, return explicit not-executed results for excess calls, and preserve gaps in the final assessment. Validate the whole batch against role permissions before executing any tool. Fixed provider-call and spending limits remain unchanged.
+
 ## Council personal release — 2026-10-29
 
 - Investment council and lenses (`c387f52`): independent Business & Growth, Macro & Valuation and Portfolio Risk assessments, a challenge round and Kestrel chair. Read-only tools, durable cost reservations, cancellation, partial results and persisted replay.

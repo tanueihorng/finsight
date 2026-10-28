@@ -167,3 +167,15 @@ Personal PIN and financial files and chat record counts were preserved. No new
 paid provider call or personal synthetic conversation was created for activation.
 Enter the existing PIN, open Kestrel, choose DeepSeek Flash with thinking off,
 and use Council or /committee. The localhost8866 HTML remains a synthetic preview.
+
+## Research batch handling correction — 2026-10-29
+
+A user-requested live Chrome smoke exposed initial specialists failing when a
+provider returned more than the permitted two tool calls in one batch. The
+runtime now tells each role its one-batch/two-call budget, validates every
+requested tool against the role allowlist before execution, executes at most
+two calls, and returns explicit not-executed errors for excess allowed calls.
+Every requested tool-call ID receives a protocol result. Skipped calls add no
+evidence. The existing final assessment call must disclose missing research;
+step, output, time and spending limits are unchanged. Forbidden calls still
+fail the role, including forbidden calls beyond the execution cap.

@@ -1,11 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { CouncilBudget, runCouncil } from '../src/chat/council.ts';
+import type { CouncilEvidence } from '../src/chat/council.ts';
 import type { ApiBrain, StepRequest } from '../src/brains/types.ts';
 import { BrainManifest } from '../src/brains/types.ts';
 const finding = { findings: [{ claim: 'Insufficient evidence', evidenceIds: ['e1'], assumptions: [], uncertainty: 'Policy missing', counterevidence: [], invalidation: 'New filing', missingEvidence: ['Policy'] }], unresolvedQuestions: ['Suitability unknown'] };
 const manifest = BrainManifest.parse({ apiVersion: 1, kind: 'brain', id: 'test-brain', label: 'Test', transport: 'mock', model: 'test', pricing: { inputPerM: 0.1, outputPerM: 0.1, version: '1' }, capabilities: { tools: true, streaming: false, contextTokens: 100000 }, costTier: '$', maxOutputTokens: 100 });
-const setup = (step: ApiBrain['step']) => ({ question: 'Review synthetic company', evidence: [{ id: 'e1', source: 'Synthetic filing', observedAt: '2026-10-01', retrievedAt: '2026-10-28', content: 'Test evidence' }], brain: { kind: 'api' as const, manifest, step }, system: 'Core rules', signal: new AbortController().signal, capUsd: 1, dayBudget: new CouncilBudget(1), emit: () => {}, account: () => {}, execute: async () => { throw Error('Must not execute'); }, tools: [] });
+const setup = (step: ApiBrain['step']) => ({ question: 'Review synthetic company', evidence: [{ id: 'e1', source: 'Synthetic filing', observedAt: '2026-10-01', retrievedAt: '2026-10-28', content: 'Test evidence' }], brain: { kind: 'api' as const, manifest, step }, system: 'Core rules', signal: new AbortController().signal, capUsd: 1, dayBudget: new CouncilBudget(1), emit: () => {}, account: () => {}, execute: async (_role: string, _name: string, _args: unknown, _signal: AbortSignal): Promise<CouncilEvidence> => { throw Error('Must not execute'); }, tools: [] });
 const result = () => ({ blocks: [{ type: 'text' as const, text: JSON.stringify(finding) }], usage: { inputTokens: 100, outputTokens: 100 }, stopReason: 'end' as const });
 
 test('reservations stop concurrent overspend; settlement cannot release twice; unknown usage retains reserve', () => {
@@ -56,4 +57,37 @@ test('invalid cost settlement retains reservation instead of poisoning the cap',
  const budget = new CouncilBudget(1); const settle = budget.reserve(0.8);
  assert.throws(() => settle(Number.NaN));
  assert.throws(() => budget.reserve(0.3));
+});
+
+test('oversized research batches execute only two calls and acknowledge every skipped call before synthesis', async () => {
+ const executed: string[] = [];
+ let checkedFollowup = false;
+ const o = setup(async (req) => {
+  if (!req.system.includes('Council role: growth') || req.system.includes('This phase has no research tools.')) return result();
+  if (req.messages.length === 1) return { ...result(), blocks: ['get_quote', 'get_history', 'edgar_filings'].map((name, i) => ({ type: 'tool_call' as const, id: 'call' + i, name, args: {} })), stopReason: 'tool_use' };
+  const replies = req.messages.filter((m) => m.role === 'tool').flatMap((m) => m.blocks);
+  assert.equal(replies.length, 3);
+  assert.deepEqual(replies.map((b) => b.type === 'tool_result' && [b.callId, b.ok]), [['call0', true], ['call1', true], ['call2', false]]);
+  const skipped = replies[2]!;
+  assert.ok(skipped.type === 'tool_result' && /not executed.*research.*limit/i.test(skipped.content));
+  assert.equal(req.tools.length, 0);
+  checkedFollowup = true;
+  return result();
+ });
+ o.execute = async (_role, name) => { executed.push(name); return { id: 'research' + executed.length, source: 'Synthetic ' + name, observedAt: '2026-10-01', retrievedAt: '2026-10-29', content: 'Synthetic result' }; };
+ const out = await runCouncil(o);
+ assert.deepEqual(executed, ['get_quote', 'get_history']);
+ assert.ok(checkedFollowup);
+ assert.equal(out.steps, 8);
+ assert.ok(out.runs.every((r) => r.status === 'completed'));
+});
+
+test('a forbidden call in an oversized batch is rejected before any tool execution', async () => {
+ let executed = false;
+ const o = setup(async (req) => req.system.includes('Council role: growth') ? { ...result(), blocks: ['get_quote', 'get_history', 'propose_record_update'].map((name, i) => ({ type: 'tool_call' as const, id: 'call' + i, name, args: {} })), stopReason: 'tool_use' } : result());
+ o.execute = async () => { executed = true; throw Error('Unexpected'); };
+ const out = await runCouncil(o);
+ assert.equal(executed, false);
+ assert.match(out.runs.find((r) => r.role === 'growth' && r.phase === 'assessment')!.error!, /Council tool denied/);
+ assert.match(out.text, /Partial council review/);
 });
