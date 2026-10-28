@@ -1,7 +1,7 @@
 # FEAT-002: Investment Lenses & Council Mode
 
 - **ID:** FEAT-002
-- **Status:** Selected 2026-10-28; experimental implementation on feature/investment-council, default off
+- **Status:** Implemented and verified; personal activation authorized 2026-10-29; generic default off
 - **Priority:** High
 - **Related Tasks:** `MULTIAGENT-001`
 
@@ -51,3 +51,14 @@ The earlier draft is retained above; this dated scope refines it. No forced bull
 case, no automatic invocation and no claim of independent source confirmation.
 Live comparative evaluation, model usefulness and production activation remain
 unverified. No paid trials have been run for this implementation.
+
+## Release decision — 2026-10-29
+
+User authorized release into personal FinSight after review of the actual-event
+chat integration and synthetic motion preview. Implemented in c387f52 and
+84c6c0c; personal activation is tracked separately in the workspace release
+packet. The earlier evaluation-pending statements above are historical. Live
+reliability rerun completed 6/6 synthetic cases; the original 5/6 pilot and no
+demonstrated superiority to Balanced remain limitations. DeepSeek Flash with
+thinking off is the qualified council configuration. No automatic invocation,
+trade authority or investment-performance claim is added.

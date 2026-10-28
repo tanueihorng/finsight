@@ -3,6 +3,12 @@
 This records integrated changes with actual Git references. A merge does not certify deployment.
 The earlier draft with unverified release numbers is preserved in `docs/archive/20261027-CHANGELOG-draft.md`.
 
+## Council personal release — 2026-10-29
+
+- Investment council and lenses (`c387f52`): independent Business & Growth, Macro & Valuation and Portfolio Risk assessments, a challenge round and Kestrel chair. Read-only tools, durable cost reservations, cancellation, partial results and persisted replay.
+- Chat presentation (`84c6c0c`): one council board with actual-event specialist/chair motion and a distinct synthesis, responsive layout, reduced-motion support and UNPEEK privacy. Standalone synthetic preview is separate.
+- User authorized local merge and personal activation. Generic installations remain default off. Council qualification covers DeepSeek Flash with thinking off; the small synthetic evaluation did not establish superiority over Balanced or investment efficacy.
+
 ## Unreleased
 
 - Isolate the standalone and demo launchers in separate data directories and agent ports, and reject agent configurations that redirect them to another data directory. Show Kestrel's name and connection errors, and keep its chat rail available in the dock. These changes do not migrate existing data.

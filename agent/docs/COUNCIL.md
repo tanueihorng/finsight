@@ -1,8 +1,11 @@
 # Investment council: implementation and rollout
 
-Selected by the user 2026-10-28. Implementation branch: feature/investment-council.
-This is an experimental foreground workflow. It remains default off, with no
-live evaluation, production activation or performance qualification implied.
+Selected by the user 2026-10-28; personal production activation authorized
+2026-10-29 after review of the local implementation and synthetic pilot.
+This is an explicit foreground workflow. Generic installations remain default
+off; personal activation uses council=true. Qualification covers DeepSeek Flash
+with thinking off. No investment-performance advantage has been established.
+See the dated rollout record below; earlier proposal sections are historical.
 
 ## Modules
 
@@ -129,3 +132,24 @@ WCAG2A/AA checks are exercised against the real API/engine with a test brain.
 synthetic state preview. Its scripted display states and illustrative costs are
 not evidence of live model activity or investment usefulness. The production
 chat consumes actual backend events. The preview is not a production entrypoint.
+
+## Personal release decision — 2026-10-29
+
+User requested the integrated council in their live personal FinSight app after
+reviewing the motion preview and being told that the feature branch was not yet
+merged or activated. Local merge, rebuild and personal enablement are authorized.
+Source implementation: c387f52; motion/chat integration: 84c6c0c. The chat uses
+real persisted activity events; the standalone preview remains synthetic.
+
+The six-case reliability rerun completed 6/6. The earlier pilot completed 5/6
+and did not demonstrate superiority to Balanced, which caught all six planted
+gaps faster and more cheaply. Total prior manifest-priced synthetic evaluation
+cost was US$0.108869796, with zero unknown usage reservations. These small,
+same-author tests establish limited reliability evidence, not investment efficacy.
+
+Council remains user-invoked via the Council button, /committee or /debate;
+there is no automatic routing. Select DeepSeek Flash and thinking off. Existing
+turn/day limits apply, and every provider call reserves its maximum estimated
+cost before dispatch. Replies can take longer and cost more than a single reply.
+Disable new runs by setting council=false and restarting the personal agent;
+historical conversations remain readable.
