@@ -39,8 +39,12 @@ export function planEvidence(subjects: Subject[], now = Date.now()): { items: Pl
     } else if (kind === 'equity' || kind === 'other') {
       if (secTicker(sym)) {
         add({ key: `financials:${sym}`, purpose: 'Reported revenue, operating income, net income and diluted EPS (SEC XBRL)', tool: 'edgar_financials', args: { ticker: sym }, roles: ['growth', 'macro'], subject: sym });
-        add({ key: `filings:${sym}`, purpose: 'Recent 10-K, 10-Q and 8-K filings with dates', tool: 'edgar_filings', args: { ticker: sym, forms: ['10-K', '10-Q', '8-K'], limit: 6 }, roles: ['growth', 'macro'], subject: sym });
-      } else coverage.push({ key: `financials:${sym}`, purpose: 'Reported financials', tool: 'edgar_financials', roles: ['growth', 'macro'], subject: sym, status: 'not_applicable', reason: 'Not a US SEC registrant ticker; no approved primary filings source for this listing' });
+        add({ key: `valuation:${sym}`, purpose: 'Trailing P/E, earnings yield, price-to-sales and market cap computed from SEC data and the live price', tool: 'valuation_metrics', args: { ticker: sym }, roles: ['growth', 'macro', 'risk'], subject: sym });
+        add({ key: `8k:${sym}`, purpose: 'Text of the two most recent 8-K reports (earnings exhibit when present)', tool: 'edgar_recent_8k', args: { ticker: sym, limit: 2 }, roles: ['growth', 'macro'], subject: sym });
+      } else {
+        coverage.push({ key: `financials:${sym}`, purpose: 'Reported financials', tool: 'edgar_financials', roles: ['growth', 'macro'], subject: sym, status: 'not_applicable', reason: 'Not a US SEC registrant ticker; no approved primary filings source for this listing' });
+        coverage.push({ key: `valuation:${sym}`, purpose: 'Trailing valuation multiples', tool: 'valuation_metrics', roles: ['growth', 'macro', 'risk'], subject: sym, status: 'unavailable', reason: 'Valuation is computed from SEC filings; no approved source for this listing' });
+      }
     }
   }
   if (kept.length) {

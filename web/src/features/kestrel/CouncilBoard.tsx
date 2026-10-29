@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useStore } from 'zustand';
 import { Assessment } from '../../../../agent/src/chat/council-contract.ts';
-import type { Part } from './turns.ts';
+import type { Part, Readiness } from './turns.ts';
 import { CouncilActivity } from './CouncilActivity.tsx';
 import { Icon } from './icons.tsx';
 import styles from './Council.module.css';
@@ -95,7 +95,18 @@ export function CouncilBoard({ runs, finished }: { runs: CouncilPart[]; finished
   </section>;
 }
 
-export function CouncilConclusion({ children, runs = [] }: { children: ReactNode; runs?: CouncilPart[] }) {
+const READINESS_LABEL = { ready: 'Research ready', partial: 'Research partial', insufficient: 'Research insufficient' } as const;
+// Counts only, so it stays visible under UNPEEK.
+export function ReadinessNote({ readiness: r }: { readiness: Readiness }) {
+  const e = r.evidence;
+  const gaps = [e.failed && `${e.failed} failed`, e.unavailable && `${e.unavailable} unavailable`, e.not_applicable && `${e.not_applicable} not applicable`, e.skipped_limit && `${e.skipped_limit} skipped`].filter(Boolean).join(' · ');
+  return <div className={styles.readiness} data-readiness={r.level} role="note">
+    <strong>{READINESS_LABEL[r.level]}</strong>
+    <span>Stages {r.stages.completed}/{r.stages.expected} · evidence {e.retrieved} retrieved{gaps ? ' · ' + gaps : ''}{r.unverifiedFigures ? ` · ${r.unverifiedFigures} unverified figure${r.unverifiedFigures === 1 ? '' : 's'}` : ''}</span>
+  </div>;
+}
+
+export function CouncilConclusion({ children, runs = [], readiness }: { children: ReactNode; runs?: CouncilPart[]; readiness?: Readiness }) {
   const peek = useStore(window.FinSight.store, (s) => s.peek);
   const chair = [...runs].reverse().find((run) => run.role === 'chair' && run.status === 'completed');
   let assessment: ReturnType<typeof Assessment.parse> | null = null;
@@ -107,6 +118,7 @@ export function CouncilConclusion({ children, runs = [] }: { children: ReactNode
   const changes = [...new Set(assessment?.findings.map((finding) => finding.invalidation) || [])];
   return <section className={styles.conclusion} data-council-result>
     <div className={styles.resultLabel}><Icon name="spark" size={14} /> {partial ? 'Partial chair synthesis' : 'Chair synthesis'}</div>
+    {readiness && <ReadinessNote readiness={readiness} />}
     {!!flags.length && <div className={styles.figureCheck} role="note" data-figure-check><strong>Figure check: {flags.length} unverified</strong>{peek ? <ul>{flags.map((f) => <li key={f}>{f}</li>)}</ul> : <span> Details hidden by UNPEEK.</span>}</div>}
     {!peek ? <p className={styles.resultMuted}>Council findings hidden by UNPEEK.</p> : assessment?.findings.length ? <>
       {assessment.findings.map((finding, index) => <div key={index} className={styles.resultFinding}><p className={index === 0 ? styles.resultLead : styles.resultClaim}>{finding.claim}</p><p className={styles.resultMuted}>{finding.uncertainty}</p></div>)}

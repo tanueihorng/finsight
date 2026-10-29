@@ -322,8 +322,11 @@ export interface FundProfile {
   expenseRatioPct: number | null; totalAssets: number | null; currency: string | null;
   assetMix: { stocksPct: number | null; bondsPct: number | null; cashPct: number | null; otherPct: number | null };
   topHoldings: { symbol: string | null; name: string; weightPct: number }[]; topHoldingsPct: number | null;
+  // Aggregator's holdings-weighted equity multiples; undated.
+  equityValuation: { priceToEarnings: number | null; priceToBook: number | null; priceToSales: number | null };
   sectorWeights: { sector: string; weightPct: number }[];
 }
+const num = (v: unknown) => { const n = pickRaw(v); return Number.isFinite(n) ? Math.round(n * 100) / 100 : null; };
 const pct100 = (v: unknown) => { const n = pickRaw(v); return Number.isFinite(n) ? Math.round(n * 10000) / 100 : null; };
 export function getFundProfile(symbol: string): Promise<FundProfile> {
   symbol = symbol.toUpperCase();
@@ -344,6 +347,7 @@ export function getFundProfile(symbol: string): Promise<FundProfile> {
           expenseRatioPct: pct100(fp.feesExpensesInvestment?.annualReportExpenseRatio), totalAssets: pickRaw(sd.totalAssets) ?? null, currency: sd.currency || null,
           assetMix: { stocksPct: pct100(th.stockPosition), bondsPct: pct100(th.bondPosition), cashPct: pct100(th.cashPosition), otherPct: pct100(th.otherPosition) },
           topHoldings, topHoldingsPct: topHoldings.length ? Math.round(sum * 100) / 100 : null, sectorWeights,
+          equityValuation: { priceToEarnings: num(th.equityHoldings?.priceToEarnings), priceToBook: num(th.equityHoldings?.priceToBook), priceToSales: num(th.equityHoldings?.priceToSales) },
         };
       } catch (e) { lastErr = e; if ((e as HttpError).status !== 401 && (e as HttpError).status !== 403) break; }
     }

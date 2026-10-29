@@ -11,6 +11,7 @@ import { resolveSubjects, type ResearchSubject, type SubjectResolution } from '.
 import { audit, auditContext } from '../obs/audit.ts';
 import { randomUUID } from 'node:crypto';
 import { collectEvidence, planEvidence, type Coverage } from './council-evidence.ts';
+import { councilReadiness, readinessLine } from './council-readiness.ts';
 export async function runStoredCouncil(o: { db: DB; bus: EventBus; tools: ToolRegistry; ctx: ToolCtx; brain: ApiBrain; system: string; question: string; usageTotal: Usage; effort?: Effort; scope?: PageContext }) {
   const { db, bus, tools, ctx, brain, system, question, usageTotal } = o;
   const { cfg } = ctx;
@@ -39,6 +40,7 @@ export async function runStoredCouncil(o: { db: DB; bus: EventBus; tools: ToolRe
     try { const saved = JSON.parse(notice.text); if (saved.version === 1 && ['ready', 'unavailable', 'needs-clarification', 'general'].includes(saved.status) && Array.isArray(saved.subjects)) { previous = saved.subjects.filter((s: ResearchSubject) => typeof s.symbol === 'string' && typeof s.mention === 'string' && typeof s.name === 'string').slice(0, 3); break; } } catch { /* ignore malformed legacy metadata */ }
   }
   const persistScope = (resolution: SubjectResolution & { coverage?: Coverage[] }) => { ctx.signal.throwIfAborted(); store.appendMessage(db, threadId, 'user', [{ type: 'notice', kind: 'research_scope', text: JSON.stringify(resolution) }], { turnId }); };
+  let planCoverage: Coverage[] = [];
   const result = await runCouncil({ question, evidence: [], brain, system, signal: ctx.signal,
     prepare: async (call) => {
       const resolution = await resolveSubjects({ question, panel: o.scope, previous, call, search: (q) => ctx.finsight.get('/api/search', { q }, ctx.signal), signal: ctx.signal });
@@ -69,7 +71,7 @@ export async function runStoredCouncil(o: { db: DB; bus: EventBus; tools: ToolRe
         const plan = planEvidence(resolution.subjects.map((s) => ({ symbol: s.symbol, type: types[s.symbol] })));
         const collected = await collectEvidence(plan, (name, args) => auditContext.run({ ...(auditContext.getStore() ?? {}), councilRole: 'shared', councilPhase: 'prefetch', callId: randomUUID() }, () => execute('shared', name, args, ctx.signal)), ctx.signal);
         evidence.push(...collected.evidence);
-        coverage = collected.coverage;
+        coverage = collected.coverage; planCoverage = coverage;
         audit('council.evidence.plan', { items: coverage.map(({ key, tool, status, evidenceId, reason }) => ({ key, tool, status, evidenceId, reason })) });
       }
       resolution.evidenceIds = evidence.map((e) => e.id);
@@ -95,5 +97,9 @@ export async function runStoredCouncil(o: { db: DB; bus: EventBus; tools: ToolRe
     execute,
   });
 
-  return result;
+  // A stopped-early council (clarification or unavailable subject) has no readiness to report.
+  if (!result.runs.length) return { ...result, readiness: null };
+  const readiness = councilReadiness(result.runs, planCoverage);
+  progress(JSON.stringify(readiness));
+  return { ...result, text: readinessLine(readiness) + '\n\n' + result.text, readiness };
 }

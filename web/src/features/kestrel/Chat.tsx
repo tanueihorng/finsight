@@ -127,7 +127,7 @@ function TurnView({ t }: { t: Turn }) {
       const tools: ToolPart[] = [];
       while (i < t.parts.length && t.parts[i]!.kind === 'tool') tools.push(t.parts[i++] as ToolPart);
       i--; blocks.push(<ToolGroup key={'g' + tools[0]!.key} tools={tools} />);
-    } else if (p.kind === 'text') blocks.push(councilRuns.length ? <CouncilConclusion key={i} runs={councilRuns}><TextPart text={p.text} /></CouncilConclusion> : <TextPart key={i} text={p.text} />);
+    } else if (p.kind === 'text') blocks.push(councilRuns.length ? <CouncilConclusion key={i} runs={councilRuns} readiness={t.readiness}><TextPart text={p.text} /></CouncilConclusion> : <TextPart key={i} text={p.text} />);
     else if (p.kind === 'council' && !councilShown) { councilShown = true; blocks.push(<CouncilBoard key="council" runs={councilRuns} finished={t.meta !== null} />); }
     else if (p.kind === 'council') continue;
     else if (p.kind === 'ui') blocks.push(<Suspense key={p.key} fallback={<div className="agent-notice">Loading snapshot…</div>}><IslandBoundary><UiView view={p.view} /></IslandBoundary></Suspense>);

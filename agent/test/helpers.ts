@@ -28,8 +28,18 @@ globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) =>
   SEC_CALLS.push(url.pathname);
   const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
   if (url.pathname === '/files/company_tickers.json') return json(200, { 0: { cik_str: 2488, ticker: 'AMD', title: 'Synthetic Micro Devices' } });
-  if (url.pathname === '/submissions/CIK0000002488.json') return json(200, { filings: { recent: { form: ['10-Q'], accessionNumber: ['0000002488-26-000001'], filingDate: ['2026-08-01'], reportDate: ['2026-06-30'], primaryDocument: ['q2.htm'], primaryDocDescription: ['10-Q'] } } });
-  if (url.pathname === '/api/xbrl/companyfacts/CIK0000002488.json') return json(200, { facts: { 'us-gaap': { Revenues: { label: 'Revenues', units: { USD: [{ form: '10-K', fp: 'FY', fy: 2025, end: '2025-12-31', val: 1000, filed: '2026-02-01' }] } } } } });
+  if (url.pathname === '/submissions/CIK0000002488.json') return json(200, { filings: { recent: { form: ['8-K', '10-Q', '8-K'], accessionNumber: ['0000002488-26-000003', '0000002488-26-000001', '0000002488-26-000002'], filingDate: ['2026-09-28', '2026-08-01', '2026-08-04'], reportDate: ['', '2026-06-30', ''], primaryDocument: ['k3.htm', 'q2.htm', 'k2.htm'], primaryDocDescription: ['8-K', '10-Q', '8-K'], items: ['8.01', '', '2.02,9.01'] } } });
+  if (url.pathname === '/api/xbrl/companyfacts/CIK0000002488.json') return json(200, { facts: {
+    dei: { EntityCommonStockSharesOutstanding: { units: { shares: [{ end: '2026-07-25', val: 1000, filed: '2026-08-01' }] } } },
+    'us-gaap': {
+      Revenues: { label: 'Revenues', units: { USD: [{ form: '10-K', fp: 'FY', fy: 2025, start: '2025-01-01', end: '2025-12-31', val: 1000, filed: '2026-02-01' }] } },
+      // Four discrete quarters: TTM diluted EPS 0.5 + 0.5 + 0.25 + 0.25 = 1.5.
+      EarningsPerShareDiluted: { label: 'EPS', units: { 'USD/shares': [['2025-07-01', '2025-09-30', 0.5], ['2025-10-01', '2025-12-31', 0.5], ['2026-01-01', '2026-03-31', 0.25], ['2026-04-01', '2026-06-30', 0.25]].map(([start, end, val]) => ({ form: '10-Q', start, end, val, filed: '2026-08-01' })) } },
+    } } });
+  if (url.pathname === '/Archives/edgar/data/2488/000000248826000003/index.json') return json(200, { directory: { item: [{ name: 'k3.htm' }] } });
+  if (url.pathname === '/Archives/edgar/data/2488/000000248826000002/index.json') return json(200, { directory: { item: [{ name: 'k2.htm' }, { name: 'ex99-1.htm' }] } });
+  if (url.pathname === '/Archives/edgar/data/2488/000000248826000003/k3.htm') return new Response('<html><body><p>Synthetic other event.</p></body></html>', { status: 200 });
+  if (url.pathname === '/Archives/edgar/data/2488/000000248826000002/ex99-1.htm') return new Response('<html><body><p>Synthetic quarterly results: revenue rose.</p></body></html>', { status: 200 });
   return json(404, {});
 }) as typeof fetch;
 

@@ -78,3 +78,9 @@ test('a direction stated in words matches a signed tool value', () => {
   assert.deepEqual(metricIssues(f('It sits 12.16% below its high after a 27.76% drawdown.'), hist), []);
   assert.match(metricIssues(f('It sits 13% below its high.'), hist).join(), /13% is not in its cited evidence/);
 });
+
+test('counterevidence must name a supplied evidence ID; opinion does not count', () => {
+  const f = (counter: string[]) => ({ findings: [{ claim: 'No figures.', evidenceIds: ['p'], assumptions: [], uncertainty: 'u', counterevidence: counter, invalidation: 'i', missingEvidence: [] }], unresolvedQuestions: [] });
+  assert.deepEqual(metricIssues(f(['The cash weight is high (p)']), evidence), []);
+  assert.deepEqual(metricIssues(f(["The 'Large Blend' label sits uneasily with its tech weight."]), evidence), ['finding 1: counterevidence 1 cites no supplied evidence ID; name its source ID or move it to assumptions']);
+});

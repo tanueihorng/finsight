@@ -204,3 +204,23 @@ test('get_macro_series summarises in code instead of returning every daily point
   assert.equal(r.json.points, undefined);
   assert.equal((await run('get_macro_series', { series: 'DGS10', start: '2026-01-01', full: true })).json.points.length, 30);
 });
+
+test('valuation_metrics derives trailing EPS, P/E, earnings yield and market cap in code from SEC data and the live quote', async () => {
+  const r = await run('valuation_metrics', { ticker: 'AMD' });
+  assert.equal(r.ok, true, JSON.stringify(r.json));
+  assert.equal(r.json.ttm.epsDiluted.value, 1.5);
+  assert.equal(r.json.ttm.epsDiluted.method, 'sum of last four discrete quarters');
+  assert.equal(r.json.price.value, 10);
+  assert.equal(r.json.peTrailing, 6.67); assert.equal(r.json.earningsYieldPct, 15);
+  assert.equal(r.json.marketCap, 10000); assert.equal(r.json.psTrailing, 10);
+  assert.deepEqual(r.json.sharesOutstanding, { value: 1000, asOf: '2026-07-25', filed: '2026-08-01' });
+});
+
+test('edgar_recent_8k reads the earnings exhibit when present, bounded and marked untrusted', async () => {
+  const r = await run('edgar_recent_8k', { ticker: 'AMD', limit: 2 });
+  assert.equal(r.ok, true, JSON.stringify(r.json));
+  assert.match(r.json.notice, /UNTRUSTED/);
+  assert.deepEqual(r.json.reports.map((x: any) => [x.filed, x.items, x.exhibit]), [['2026-09-28', '8.01', false], ['2026-08-04', '2.02,9.01', true]]);
+  assert.match(r.json.reports[1].text, /Synthetic quarterly results/);
+  assert.ok(r.json.reports.every((x: any) => x.text.length <= 3000 && x.url.startsWith('https://www.sec.gov/Archives/edgar/data/2488/')));
+});

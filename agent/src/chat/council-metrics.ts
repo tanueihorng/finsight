@@ -96,6 +96,9 @@ export function metricIssues(assessment: Assessment, evidence: readonly { id: st
     const cited = finding.evidenceIds.map((id) => facts.get(id)).filter((f): f is Facts => !!f);
     const numbers = cited.flatMap((f) => f.numbers), labelled = cited.flatMap((f) => f.labelled), groupings = cited.flatMap((f) => f.groupings);
     for (const text of [finding.claim, ...finding.counterevidence]) for (const m of membershipIssues(text, groupings)) issues.push(`finding ${i + 1}: ${m}`);
+    // Counterevidence is opposing evidence from the packet, not opinion: each
+    // entry must name the supplied evidence it comes from.
+    finding.counterevidence.forEach((c, k) => { if (!evidence.some((e) => new RegExp(`(?<![\\w-])${escape(e.id)}(?![\\w-])`).test(c))) issues.push(`finding ${i + 1}: counterevidence ${k + 1} cites no supplied evidence ID; name its source ID or move it to assumptions`); });
     const bases = new Map<Basis, string[]>();
     for (const fig of figures(finding.claim)) {
       if (fig.percent && !numbers.some((v) => near(fig, v) || near(fig, v * 100) || near(fig, -v) || near(fig, -v * 100))) issues.push(`finding ${i + 1}: ${fig.text}% is not in its cited evidence`);

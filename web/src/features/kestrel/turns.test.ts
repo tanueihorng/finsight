@@ -65,3 +65,10 @@ test('council figure-check flags survive replay as bounded strings only', () => 
   const plain = addCouncil(newTurn('p'), JSON.stringify(r)).parts[0] as typeof part;
   assert.deepEqual(plain.flags, []);
 });
+
+test('council readiness is kept on the turn as bounded counts and never becomes a run', () => {
+  const t = addCouncil(newTurn('p'), JSON.stringify({ kind: 'readiness', version: 1, level: 'partial', stages: { completed: 5, expected: 7 }, evidence: { retrieved: 7, failed: -1, unavailable: 'x' }, unverifiedFigures: 0, reasons: ['5 of 7 stages completed', 3] }));
+  assert.equal(t.parts.length, 0);
+  assert.deepEqual(t.readiness, { level: 'partial', stages: { completed: 5, expected: 7 }, evidence: { retrieved: 7, failed: 0, not_applicable: 0, unavailable: 0, skipped_limit: 0 }, unverifiedFigures: 0, reasons: ['5 of 7 stages completed'] });
+  assert.equal(addCouncil(newTurn('p'), JSON.stringify({ kind: 'readiness', level: 'great' })).readiness, undefined);
+});

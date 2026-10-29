@@ -178,7 +178,7 @@ function fundSummary(sym: string): Reply {
     summaryDetail: { totalAssets: raw(1e10), currency: s.currency },
     topHoldings: { stockPosition: raw(0.99), bondPosition: raw(0), cashPosition: raw(0.01), otherPosition: raw(0),
       holdings: [{ symbol: 'SYNA', holdingName: 'Synthetic A', holdingPercent: raw(0.07) }, { symbol: 'SYNB', holdingName: 'Synthetic B', holdingPercent: raw(0.05) }],
-      sectorWeightings: [{ technology: raw(0.3) }, { healthcare: raw(0.12) }] },
+      sectorWeightings: [{ technology: raw(0.3) }, { healthcare: raw(0.12) }], equityHoldings: { priceToEarnings: raw(24.5), priceToBook: raw(4.8), priceToSales: raw(3.1) } },
   }] } }];
 }
 

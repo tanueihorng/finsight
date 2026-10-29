@@ -6,9 +6,9 @@ import { collectEvidence, planEvidence, PLAN_LIMITS, secTicker, subjectKind } fr
 
 const keys = (p: ReturnType<typeof planEvidence>) => p.items.map((i) => i.key);
 
-test('equities get filings, financials and price path; portfolio, policy and macro context are planned once', () => {
+test('equities get financials, valuation, 8-K text and price path; portfolio, policy and macro context are planned once', () => {
   const p = planEvidence([{ symbol: 'AMD', type: 'EQUITY' }], Date.UTC(2026, 9, 29));
-  assert.deepEqual(keys(p), ['history:AMD', 'financials:AMD', 'filings:AMD', 'portfolio:weights', 'portfolio:sectors', 'portfolio:policy', 'macro:DGS10']);
+  assert.deepEqual(keys(p), ['history:AMD', 'financials:AMD', 'valuation:AMD', '8k:AMD', 'portfolio:weights', 'portfolio:sectors', 'portfolio:policy', 'macro:DGS10']);
   assert.deepEqual(p.items.find((i) => i.key === 'portfolio:weights')!.args, { symbols: ['AMD'] });
   assert.equal(p.items.find((i) => i.key === 'macro:DGS10')!.args.start, '2025-10-28');
   assert.deepEqual(p.coverage, []);
@@ -26,6 +26,7 @@ test('non-US listings are not sent to SEC EDGAR; extra subjects are bounded and 
   assert.equal(subjectKind('Mutual Fund'), 'fund'); assert.equal(subjectKind('Equity'), 'equity'); assert.equal(subjectKind(undefined), 'other');
   const p = planEvidence([{ symbol: 'D05.SI', type: 'EQUITY' }, { symbol: 'A' }, { symbol: 'B' }, { symbol: 'C' }]);
   assert.ok(p.coverage.some((c) => c.key === 'financials:D05.SI' && c.status === 'not_applicable'));
+  assert.ok(p.coverage.some((c) => c.key === 'valuation:D05.SI' && c.status === 'unavailable'));
   assert.ok(p.coverage.some((c) => c.subject === 'C' && c.status === 'skipped_limit'));
   // Three subjects at most three items each, plus four shared items, fit the item cap.
   assert.ok(p.items.length <= PLAN_LIMITS.items);
@@ -49,4 +50,13 @@ test('collection keeps order, records failures with reasons and honours the conc
 test('cancellation propagates instead of being recorded as a source failure', async () => {
   const ac = new AbortController();
   await assert.rejects(collectEvidence(planEvidence([{ symbol: 'AMD', type: 'EQUITY' }]), async () => { ac.abort(); throw Error('aborted'); }, ac.signal));
+});
+
+test('trailing twelve months falls back from quarters to fiscal year plus year-to-date, then fiscal year', async () => {
+  const { ttm } = await import('../src/tools/web.ts');
+  const fy = { start: '2025-01-01', end: '2025-12-31', val: 100, form: '10-K' };
+  const ytd = { start: '2026-01-01', end: '2026-06-30', val: 60, form: '10-Q' }, prior = { start: '2025-01-01', end: '2025-06-30', val: 40, form: '10-Q' };
+  assert.deepEqual([ttm([fy, ytd, prior])!.value, ttm([fy, ytd, prior])!.method], [120, 'fiscal year + current year-to-date - prior year-to-date']);
+  assert.equal(ttm([fy])!.method, 'latest fiscal year (no comparable year-to-date)');
+  assert.equal(ttm([{ end: '2026-06-30', val: 5 }]), null); // instants are not flows
 });

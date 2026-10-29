@@ -60,3 +60,5 @@
 /* Deterministic figure-check flags (COUNCILQUALITY-001): a finding's figure was not supported by its cited evidence. */
 .cardFoot>.figureFlag { color:var(--down); font-weight:600; letter-spacing:.3px; }
 .figureCheck { margin:0 0 12px; padding:10px 12px; border:1px solid var(--down); border-radius:10px; font-size:12px; line-height:1.55; }.figureCheck strong { color:var(--down); font-weight:600; }.figureCheck ul { margin:6px 0 0; padding-left:18px; }
+/* Research readiness (COUNCILQUALITY-001 item 7): execution success is not research completeness. */
+.readiness { display:flex; flex-wrap:wrap; gap:4px 10px; align-items:baseline; margin:0 0 12px; padding:9px 12px; border:1px solid var(--border-2); border-radius:10px; font-size:12px; line-height:1.5; color:var(--dim); }.readiness strong { font-weight:600; color:var(--up); }.readiness[data-readiness="partial"] strong { color:var(--amber-2); }.readiness[data-readiness="insufficient"] { border-color:var(--down); }.readiness[data-readiness="insufficient"] strong { color:var(--down); }

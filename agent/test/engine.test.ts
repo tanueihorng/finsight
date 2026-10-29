@@ -168,7 +168,8 @@ test('council gate rejects before mutation; enabled runs persist real activity a
   const sent = engine.send({ threadId: t.id, content: '/committee review this stock', lens: 'growth', pageContext: { symbol: 'NVDA', account: 'main', base: 'SGD' } });
   assert.equal(await waitTurn(db, sent.turnId), 'succeeded');
   const events = store.eventsAfter(db, t.id, 0).filter((e) => e.type === 'council.progress');
-  assert.equal(events.length, 14);
+  assert.equal(events.length, 15); // seven stages, each running then done, then research readiness
+  assert.equal(JSON.parse(String((events.at(-1)!.payload as { text: string }).text)).kind, 'readiness');
   assert.ok(store.listMessages(db, t.id).some((m) => m.blocks.some((b) => b.type === 'notice' && b.kind === 'council_evidence' && b.text.includes('get_quote'))));
   assert.ok(store.listMessages(db, t.id).some((m) => m.blocks.some((b) => b.type === 'notice' && b.kind === 'lens' && b.text === 'growth:1')));
   assert.equal(store.getTrace(db, sent.turnId).length, 8);

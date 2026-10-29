@@ -134,7 +134,7 @@ export class ChatEngine {
     const citations: CitationBlock[] = [];
     const ctx: ToolCtx = { cfg, db: this.db, finsight: this.finsight, signal: ctrl.signal, turnId, threadId,
       budget: { searches: this.cfg.limits.searchesPerTurn, fetches: this.cfg.limits.fetchesPerTurn }, citations };
-    let streamed = '', step = 0, costUsd = 0, councilUnknown = false;
+    let streamed = '', step = 0, costUsd = 0, councilUnknown = false, councilReadiness: string | null = null;
     const usageTotal: Usage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0 };
     const onText = (d: string) => { streamed += d; this.bus.delta(threadId, turnId, d); };
     try {
@@ -144,7 +144,7 @@ export class ChatEngine {
         const result = await runStoredCouncil({ db: this.db, bus: this.bus, tools: this.tools, ctx, brain, system: this.system(), question: question.text.replace(/^\/(committee|debate)\s*/, ''), usageTotal, effort, scope: scopeNotice?.type === 'notice' ? JSON.parse(scopeNotice.text) : undefined });
         step = result.steps;
         ctrl.signal.throwIfAborted();
-        onText(result.text); councilUnknown = result.costUsd === null; costUsd = result.costUsd ?? 0;
+        onText(result.text); councilReadiness = result.readiness?.level ?? null; councilUnknown = result.costUsd === null; costUsd = result.costUsd ?? 0;
         store.appendMessage(this.db, threadId, 'assistant', [{ type: 'text', text: result.text }], { brain: brain.manifest.id, turnId });
       } else {
         await this.attachContextPack(threadId, ctx);
@@ -155,8 +155,9 @@ export class ChatEngine {
         }
       }
       this.emitCitations(threadId, turnId, citations);
-      store.finishTurn(this.db, turnId, 'succeeded', 'end');
-      audit('turn.end', { turnId, threadId, status: 'succeeded', steps: step, costUsd: councilUnknown ? null : round6(costUsd), usage: usageTotal, ms: Date.now() - t0 });
+      // Execution succeeded; a council's research readiness is recorded separately.
+      store.finishTurn(this.db, turnId, 'succeeded', councilReadiness && councilReadiness !== 'ready' ? 'council_' + councilReadiness : 'end');
+      audit('turn.end', { turnId, threadId, status: 'succeeded', researchReadiness: councilReadiness, steps: step, costUsd: councilUnknown ? null : round6(costUsd), usage: usageTotal, ms: Date.now() - t0 });
       this.bus.emit(threadId, 'turn.finished', { turnId, usage: usageTotal, costUsd: councilUnknown ? null : round6(costUsd), steps: step, ms: Date.now() - t0 });
     } catch (e) {
       const aborted = ctrl.signal.aborted;

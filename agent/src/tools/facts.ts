@@ -288,7 +288,7 @@ const portfolioWeights: ToolDef = {
 
 const getFundProfile: ToolDef = {
   name: 'get_fund_profile',
-  description: 'ETF or mutual fund profile from FinSight: family, category, expense ratio, asset mix, top holdings (with their combined share) and sector weights. Source is a market-data aggregator, not the issuer; holdings cover only the listed top positions.',
+  description: 'ETF or mutual fund profile from FinSight: family, category, expense ratio, asset mix, top holdings (with their combined share), sector weights and holdings-weighted equity P/E, P/B and P/S. Source is a market-data aggregator, not the issuer; holdings cover only the listed top positions.',
   input: z.object({ symbol: z.string().min(1).max(24) }),
   async handler({ symbol }, ctx) {
     const d = await ctx.finsight.get('/api/fund', { symbol }, ctx.signal);
