@@ -84,7 +84,8 @@ export async function runCouncil(o: {
   const evidence = o.evidence.map((e) => ({ ...Evidence.parse({ id: e.id, source: e.source, observedAt: e.observedAt, retrievedAt: e.retrievedAt }), content: e.content, roles: e.roles }));
   const parentId = randomUUID(), runs: CouncilRun[] = [];
   let question = o.question;
-  const outputTokens = Math.min(1200, o.brain.manifest.maxOutputTokens);
+  // Evidence-rich assessments run 800–1,100 tokens; 1,200 truncated live runs.
+  const outputTokens = Math.min(2000, o.brain.manifest.maxOutputTokens);
   const budget = new CouncilBudget(o.capUsd);
   const releaseChair = budget.reserve(o.capUsd / 4, true);
   let total: number | null = 0, steps = 0;
