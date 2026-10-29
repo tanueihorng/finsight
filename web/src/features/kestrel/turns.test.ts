@@ -56,3 +56,12 @@ test('council replay replaces status by stable child ID and rejects unknown role
   assert.equal(t.parts[0]?.kind, 'council');
   assert.deepEqual(addCouncil(t, JSON.stringify({ ...r, role: 'injected' })), t);
 });
+
+test('council figure-check flags survive replay as bounded strings only', () => {
+  const r = { id: 'chair1', role: 'chair', phase: 'synthesis', status: 'completed', model: 'mock', costUsd: null, ms: 1, findings: { findings: [], unresolvedQuestions: [] } };
+  const t = addCouncil(newTurn('p'), JSON.stringify({ ...r, metricIssues: ['finding 1: 15.28% is not in its cited evidence', 7, '', 'x'.repeat(400)] }));
+  const part = t.parts[0] as Extract<(typeof t.parts)[number], { kind: 'council' }>;
+  assert.deepEqual(part.flags.map((f) => f.length), [46, 300]);
+  const plain = addCouncil(newTurn('p'), JSON.stringify(r)).parts[0] as typeof part;
+  assert.deepEqual(plain.flags, []);
+});

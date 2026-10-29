@@ -77,11 +77,12 @@ export function CouncilBoard({ runs, finished }: { runs: CouncilPart[]; finished
         const state = councilState(ownRuns, finished);
         const challenged = ownRuns.some((r) => r.phase === 'challenge');
         const claim = peek ? firstClaim(ownRuns) : '';
+        const flagged = ownRuns.some((r) => r.flags.length);
         return <button type="button" key={role.id} data-role={role.id} data-state={state} className={styles.card + (selected === role.id ? ' ' + styles.selected : '')} aria-label={'Inspect ' + role.label} aria-expanded={selected === role.id} disabled={!ownRuns.length} onClick={() => setSelected(selected === role.id ? null : role.id)}>
           <span className={styles.cardTop}><CouncilOrb role={role.id} active={state === 'running'} /><span className={styles.state}><i />{statusLabel[state]}{state === 'running' && ownRuns.some((r) => r.status === 'failed') ? ' · gap' : ''}</span></span>
           <span className={styles.cardName}><strong>{role.short}</strong><span>{role.focus}</span></span>
           <span className={styles.excerpt}>{claim || (!peek && ownRuns.length ? 'Findings hidden' : state === 'queued' ? 'Waiting for a research slot' : state === 'running' ? challenged ? 'Testing the other assessments' : 'Forming an independent assessment' : state === 'failed' ? 'Inspect the missing assessment' : state === 'stopped' ? 'Review interrupted' : 'Assessment available')}</span>
-          <span className={styles.cardFoot}>{challenged ? 'Challenge round' : 'Independent assessment'}<span aria-hidden="true">↗</span></span>
+          <span className={styles.cardFoot}>{flagged ? <span className={styles.figureFlag} data-figure-flag>Figures unverified</span> : challenged ? 'Challenge round' : 'Independent assessment'}<span aria-hidden="true">↗</span></span>
         </button>;
       })}</div>
       <CouncilFlow runs={runs} chairActive={chairState === 'running'} />
@@ -100,10 +101,13 @@ export function CouncilConclusion({ children, runs = [] }: { children: ReactNode
   let assessment: ReturnType<typeof Assessment.parse> | null = null;
   if (chair && peek) try { const parsed = Assessment.safeParse(JSON.parse(chair.detail)); if (parsed.success) assessment = parsed.data; } catch { /* legacy or incomplete result */ }
   const partial = runs.some((run) => run.status === 'failed' || run.status === 'stopped');
+  // The chair's own unresolved figure checks; specialists' show on their cards.
+  const flags = chair?.flags ?? [];
   const gaps = [...new Set(assessment?.findings.flatMap((finding) => finding.missingEvidence) || [])];
   const changes = [...new Set(assessment?.findings.map((finding) => finding.invalidation) || [])];
   return <section className={styles.conclusion} data-council-result>
     <div className={styles.resultLabel}><Icon name="spark" size={14} /> {partial ? 'Partial chair synthesis' : 'Chair synthesis'}</div>
+    {!!flags.length && <div className={styles.figureCheck} role="note" data-figure-check><strong>Figure check: {flags.length} unverified</strong>{peek ? <ul>{flags.map((f) => <li key={f}>{f}</li>)}</ul> : <span> Details hidden by UNPEEK.</span>}</div>}
     {!peek ? <p className={styles.resultMuted}>Council findings hidden by UNPEEK.</p> : assessment?.findings.length ? <>
       {assessment.findings.map((finding, index) => <div key={index} className={styles.resultFinding}><p className={index === 0 ? styles.resultLead : styles.resultClaim}>{finding.claim}</p><p className={styles.resultMuted}>{finding.uncertainty}</p></div>)}
       <div className={styles.resultColumns}>{gaps.length > 0 && <div><h4>Still needed</h4><ul>{gaps.map((gap) => <li key={gap}>{gap}</li>)}</ul></div>}{changes.length > 0 && <div><h4>What changes the view</h4><ul>{changes.map((change) => <li key={change}>{change}</li>)}</ul></div>}</div>

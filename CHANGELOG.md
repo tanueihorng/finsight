@@ -15,6 +15,8 @@ The earlier draft with unverified release numbers is preserved in `docs/archive/
 
 ## Unreleased
 
+- Council review fixes: resolve and verify requested subjects before research; carry the selected lens and bounded conversation context; label portfolio weight bases and flag unresolved figure checks in the report and UI. Subject resolution adds a model call; Council requires at least 11 turn steps. Figure checks do not establish source entailment or full investment research readiness.
+
 - Isolate the standalone and demo launchers in separate data directories and agent ports, and reject agent configurations that redirect them to another data directory. Show Kestrel's name and connection errors, and keep its chat rail available in the dock. These changes do not migrate existing data.
 
 - `UIUPGRADE-001` (`dc8a7c9`): natural view-selection guidance, source-bound exposure charts, snapshot chart range and pointer controls, and user-invoked navigation or unsaved alert drafts. Live model qualification remains limited to the recorded synthetic sample.

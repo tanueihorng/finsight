@@ -57,3 +57,6 @@
 .mobileFlow { display:none; fill:none; stroke:var(--border-2); stroke-width:1; }
 @container (max-width:440px) { .flow g { display:none; }.mobileFlow { display:block; }.flow[data-active="true"] .mobileFlow { stroke:var(--amber); stroke-dasharray:12 22; animation:trace-signal 2.3s linear infinite; } }
 @media(prefers-reduced-motion:reduce) { .mobileFlow { stroke-dasharray:none!important; } }
+/* Deterministic figure-check flags (COUNCILQUALITY-001): a finding's figure was not supported by its cited evidence. */
+.cardFoot>.figureFlag { color:var(--down); font-weight:600; letter-spacing:.3px; }
+.figureCheck { margin:0 0 12px; padding:10px 12px; border:1px solid var(--down); border-radius:10px; font-size:12px; line-height:1.55; }.figureCheck strong { color:var(--down); font-weight:600; }.figureCheck ul { margin:6px 0 0; padding-left:18px; }

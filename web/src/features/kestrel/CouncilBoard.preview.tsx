@@ -6,7 +6,7 @@ import { CouncilBoard, CouncilConclusion, type CouncilPart } from './CouncilBoar
 Object.assign(window, { FinSight: { store: createStore(() => ({ peek: true })) } });
 const findings = { growth: 'The growth case depends on durable demand, not the headline alone.', macro: 'Current valuation inputs are missing; a price target is not supported.', risk: 'Overlap with existing exposure needs a closer look before adding.', chair: 'Wait for the missing evidence before making an allocation decision.' };
 function run(role: keyof typeof findings, phase: string, status: string): CouncilPart {
- return { kind: 'council', key: role + phase, role, phase, status, model: 'deepseek-flash / DeepSeek Flash', costUsd: status === 'completed' ? 0.0012 : null, ms: status === 'completed' ? 2340 : 0,
+ return { kind: 'council', flags: [], key: role + phase, role, phase, status, model: 'deepseek-flash / DeepSeek Flash', costUsd: status === 'completed' ? 0.0012 : null, ms: status === 'completed' ? 2340 : 0,
  detail: status === 'completed' ? JSON.stringify({ findings: [{ claim: findings[role], evidenceIds: ['e1'], assumptions: [], uncertainty: 'Evidence is incomplete', counterevidence: [], invalidation: 'New primary evidence', missingEvidence: ['Current valuation inputs'] }], unresolvedQuestions: ['What would change the decision?'] }) : status === 'failed' ? 'Synthetic unavailable-source example.' : '' };
 }
 export default function CouncilPreview() {

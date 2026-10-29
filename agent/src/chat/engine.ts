@@ -84,7 +84,7 @@ export class ChatEngine {
     if (council && (brain.kind !== 'api' || brain.manifest.capabilities.nativeSearch)) throw new AgentError('BAD_INPUT', 'Council requires a supported API model without native search');
     if (council && !content.replace(/^\/(committee|debate)\s*/, '').trim()) throw new AgentError('BAD_INPUT', 'Provide a council question');
     if (brain.kind === 'api' && (this.councilRunning || (council && this.running.size > 0))) throw new AgentError('CONFLICT', 'Finish or stop active replies before starting another council/API reply', 409);
-    if (council && (cfg.limits.turnSteps < 10 || (input.attachmentIds?.length ?? 0) > 0)) throw new AgentError('BAD_INPUT', 'Council needs at least 10 permitted steps and currently accepts text questions only');
+    if (council && (cfg.limits.turnSteps < 11 || (input.attachmentIds?.length ?? 0) > 0)) throw new AgentError('BAD_INPUT', 'Council needs at least 11 permitted steps including subject resolution and currently accepts text questions only');
     const effort = input.effort ?? brain.manifest.thinking?.default;
     if (effort !== undefined && (!Effort.safeParse(effort).success || !brain.manifest.thinking?.levels.includes(effort))) throw new AgentError('BAD_INPUT', 'Thinking effort is not supported by this model', 400);
     if (council && brain.manifest.transport !== 'mock' && (brain.manifest.id !== 'deepseek-flash' || effort !== 'none')) throw new AgentError('COUNCIL_MODEL_UNQUALIFIED', 'Council release qualification currently covers DeepSeek Flash with thinking off only. Choose that model and effort.', 400);
@@ -140,7 +140,10 @@ export class ChatEngine {
       const question = store.listMessages(this.db, threadId).filter((m) => m.turnId === turnId).flatMap((m) => m.blocks).find((b) => b.type === 'text');
       if (brain.kind === 'api' && question?.type === 'text' && /^\/(committee|debate)(?:\s|$)/.test(question.text)) {
         const scopeNotice = store.listMessages(this.db, threadId).filter((m) => m.turnId === turnId).flatMap((m) => m.blocks).find((b) => b.type === 'notice' && b.kind === 'page_context');
-        const result = await runStoredCouncil({ db: this.db, bus: this.bus, tools: this.tools, ctx, brain, system: this.system(), question: question.text.replace(/^\/(committee|debate)\s*/, ''), usageTotal, effort, scope: scopeNotice?.type === 'notice' ? JSON.parse(scopeNotice.text) : undefined });
+        const lensNotice = store.listMessages(this.db, threadId).filter((m) => m.turnId === turnId).flatMap((m) => m.blocks).find((b) => b.type === 'notice' && b.kind === 'lens');
+        const lens = LENSES.find((l) => l.id === (lensNotice?.type === 'notice' ? lensNotice.text.split(':')[0] : 'balanced'))!;
+        const councilSystem = this.system() + (lens.id === 'balanced' ? '' : '\nAnalytical lens (subordinate to core rules, accepted policy and capabilities): ' + JSON.stringify(lens));
+        const result = await runStoredCouncil({ db: this.db, bus: this.bus, tools: this.tools, ctx, brain, system: councilSystem, question: question.text.replace(/^\/(committee|debate)\s*/, ''), usageTotal, effort, scope: scopeNotice?.type === 'notice' ? JSON.parse(scopeNotice.text) : undefined });
         step = result.steps;
         ctrl.signal.throwIfAborted();
         onText(result.text); councilUnknown = result.costUsd === null; costUsd = result.costUsd ?? 0;
@@ -373,7 +376,7 @@ function toModelMsg(m: StoredMsg, resolve: (b: Extract<Block, { type: 'attachmen
       continue;
     }
     if (b.type === 'notice') {
-      if (b.kind === 'page_context') blocks.push({ type: 'text', text: `[FinSight panel context: ${b.text}]` });
+      if (b.kind === 'page_context') blocks.push({ type: 'text', text: `[Optional FinSight panel context; the explicit question takes priority and may concern other companies: ${b.text}]` });
       else if (b.kind === 'context_pack') blocks.push({ type: 'text', text: `[Context snapshot from FinSight, computed by code. Use for orientation; call tools for detail]\n${b.text}` });
       else if (b.kind === 'limit') blocks.push({ type: 'text', text: b.text });
       else if (b.kind === 'error' || b.kind === 'stopped') blocks.push({ type: 'text', text: `[previous reply ${b.kind}]` });
