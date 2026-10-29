@@ -213,6 +213,7 @@ test('valuation_metrics derives trailing EPS, P/E, earnings yield and market cap
   assert.equal(r.json.price.value, 10);
   assert.equal(r.json.peTrailing, 6.67); assert.equal(r.json.earningsYieldPct, 15);
   assert.equal(r.json.marketCap, 10000); assert.equal(r.json.psTrailing, 10);
+  assert.equal(r.json.ttm.revenue.concept, 'RevenueFromContractWithCustomerExcludingAssessedTax');
   assert.deepEqual(r.json.sharesOutstanding, { value: 1000, asOf: '2026-07-25', filed: '2026-08-01' });
 });
 

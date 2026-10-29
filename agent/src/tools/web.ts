@@ -334,14 +334,22 @@ export function createWebTools(fetchImpl: typeof fetch = fetch, fetchPage = guar
       const { cik, title } = await cikFor(ctx, t);
       const facts = await secJson(ctx, `https://data.sec.gov/api/xbrl/companyfacts/CIK${cik}.json`, 12 * 3600e3);
       const gaap = facts.facts?.['us-gaap'] || {};
-      const series = (...names: string[]) => { for (const n of names) { const u = gaap[n]?.units; const vals = u && (u.USD || u['USD/shares'] || Object.values(u)[0]); if (Array.isArray(vals) && vals.length) return { concept: n, vals: vals as Fact[] }; } return null; };
+      // Filers switch concepts over time (AMD's Revenues stops in 2017), so take
+      // the concept with the latest trailing period and drop stale ones.
+      const series = (...names: string[]) => {
+        const found = names.flatMap((n) => { const u = gaap[n]?.units; const vals = u && (u.USD || u['USD/shares'] || Object.values(u)[0]); const t = Array.isArray(vals) && vals.length ? ttm(vals as Fact[]) : null; return t ? [{ concept: n, ttm: t }] : []; });
+        return found.sort((a, b) => b.ttm.periodEnd.localeCompare(a.ttm.periodEnd))[0] ?? null;
+      };
       const eps = series('EarningsPerShareDiluted'), rev = series('Revenues', 'RevenueFromContractWithCustomerExcludingAssessedTax', 'SalesRevenueNet'), ni = series('NetIncomeLoss');
       const sharesFacts: Fact[] = facts.facts?.dei?.EntityCommonStockSharesOutstanding?.units?.shares || [];
       const shares = [...sharesFacts].sort((a, b) => a.end.localeCompare(b.end)).at(-1) ?? null;
       const q = (await ctx.finsight.get<{ quotes?: { symbol: string; price?: number; currency?: string; marketTime?: number | null }[] }>('/api/quote', { symbols: t.toUpperCase() }, ctx.signal)).quotes?.find((x) => x.symbol === t.toUpperCase());
       const price = typeof q?.price === 'number' && q.price > 0 ? q.price : null;
       const usd = q?.currency === 'USD';
-      const T = { eps: eps && ttm(eps.vals), revenue: rev && ttm(rev.vals), netIncome: ni && ttm(ni.vals) };
+      // A series that lags the freshest one by over ~two quarters is stale, not trailing.
+      const newest = [eps, rev, ni].map((x) => x?.ttm.periodEnd ?? '').sort().at(-1)!;
+      const fresh = (x: typeof eps) => (x && days(x.ttm.periodEnd, newest) <= 200 ? x.ttm : null);
+      const T = { eps: fresh(eps), revenue: fresh(rev), netIncome: fresh(ni) };
       const r = (n: number | null, d = 2) => (n === null || !Number.isFinite(n) ? null : Math.round(n * 10 ** d) / 10 ** d);
       const marketCap = price && shares && usd ? price * shares.val : null;
       const epsV = T.eps?.value ?? null;

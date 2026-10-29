@@ -32,7 +32,9 @@ globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) =>
   if (url.pathname === '/api/xbrl/companyfacts/CIK0000002488.json') return json(200, { facts: {
     dei: { EntityCommonStockSharesOutstanding: { units: { shares: [{ end: '2026-07-25', val: 1000, filed: '2026-08-01' }] } } },
     'us-gaap': {
-      Revenues: { label: 'Revenues', units: { USD: [{ form: '10-K', fp: 'FY', fy: 2025, start: '2025-01-01', end: '2025-12-31', val: 1000, filed: '2026-02-01' }] } },
+      // Like AMD: an abandoned concept listed first must not shadow the current one.
+      Revenues: { label: 'Revenues', units: { USD: [{ form: '10-K', fp: 'FY', fy: 2017, start: '2017-01-01', end: '2017-12-31', val: 999999, filed: '2018-02-01' }] } },
+      RevenueFromContractWithCustomerExcludingAssessedTax: { label: 'Revenue', units: { USD: [{ form: '10-K', fp: 'FY', fy: 2025, start: '2025-01-01', end: '2025-12-31', val: 1000, filed: '2026-02-01' }] } },
       // Four discrete quarters: TTM diluted EPS 0.5 + 0.5 + 0.25 + 0.25 = 1.5.
       EarningsPerShareDiluted: { label: 'EPS', units: { 'USD/shares': [['2025-07-01', '2025-09-30', 0.5], ['2025-10-01', '2025-12-31', 0.5], ['2026-01-01', '2026-03-31', 0.25], ['2026-04-01', '2026-06-30', 0.25]].map(([start, end, val]) => ({ form: '10-Q', start, end, val, filed: '2026-08-01' })) } },
     } } });
