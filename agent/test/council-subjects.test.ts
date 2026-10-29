@@ -82,11 +82,16 @@ test('the council service retrieves planned evidence before specialists and pers
   const first = JSON.parse((s.requests[1]!.messages[0]!.blocks[0] as { text: string }).text);
   const plan = JSON.parse(first.question).evidencePlan as { key: string; status: string; evidenceId?: string; reason?: string }[];
   const status = Object.fromEntries(plan.map((c) => [c.key, c.status]));
-  assert.deepEqual(status, { 'history:AMD': 'retrieved', 'financials:AMD': 'retrieved', 'filings:AMD': 'retrieved', 'portfolio:weights': 'retrieved', 'portfolio:sectors': 'retrieved', 'portfolio:policy': 'retrieved', 'macro:DGS10': 'failed' });
-  assert.match(plan.find((c) => c.key === 'macro:DGS10')!.reason!, /get_macro_series/);
-  // Every retrieved item is in the packet the specialist received.
-  const ids = new Set(first.evidence.map((e: { id: string }) => e.id));
-  for (const c of plan.filter((c) => c.status === 'retrieved')) assert.ok(ids.has(c.evidenceId!), c.key);
+  assert.deepEqual(status, { 'history:AMD': 'retrieved', 'financials:AMD': 'retrieved', 'filings:AMD': 'retrieved', 'portfolio:weights': 'retrieved', 'portfolio:sectors': 'retrieved', 'portfolio:policy': 'retrieved', 'macro:DGS10': 'retrieved' });
+  // Each specialist receives the retrieved items planned for its role, and only those plus the shared quote.
+  const packets = new Map(s.requests.slice(1).map((r) => { const d = JSON.parse((r.messages[0]!.blocks[0] as { text: string }).text); return [/Council role: (\w+)\. /.exec(r.system)![1]! + ':' + (d.data ? 'later' : 'first'), new Set(d.evidence.map((e: { id: string }) => e.id))] as const; }));
+  const planned = (role: string) => plan.filter((c) => c.status === 'retrieved' && (c as { roles?: string[] }).roles!.includes(role)).map((c) => c.evidenceId!);
+  for (const role of ['growth', 'macro', 'risk']) {
+    const got = packets.get(role + ':first')!;
+    for (const id of planned(role)) assert.ok(got.has(id), role + ' missing ' + id);
+    assert.equal(got.size, planned(role).length + 1, role);
+  }
+  assert.ok(!packets.get('growth:first')!.has(plan.find((c) => c.key === 'portfolio:policy')!.evidenceId!));
   assert.ok(SEC_CALLS.includes('/api/xbrl/companyfacts/CIK0000002488.json'));
   const scope = store.listMessages(s.db, s.ctx.threadId!).flatMap((m) => m.blocks).find((b) => b.type === 'notice' && b.kind === 'research_scope');
   assert.equal(JSON.parse((scope as { text: string }).text).coverage.length, plan.length);

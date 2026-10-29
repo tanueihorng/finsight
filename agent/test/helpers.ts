@@ -81,6 +81,7 @@ export async function fakeFinsight(options: { scopedAccounts?: boolean; naturalH
       case '/api/fund': return u.searchParams.get('symbol') === 'VOO'
         ? j(200, { symbol: 'VOO', family: 'Synthetic Funds', category: 'Large Blend', legalType: 'Exchange Traded Fund', expenseRatioPct: 0.03, totalAssets: 1e11, currency: 'USD', assetMix: { stocksPct: 99.5, bondsPct: 0, cashPct: 0.5, otherPct: 0 }, topHoldings: [{ symbol: 'NVDA', name: 'NVIDIA', weightPct: 7.5 }, { symbol: 'SYNB', name: 'Synthetic B', weightPct: 6 }], topHoldingsPct: 13.5, sectorWeights: [{ sector: 'technology', weightPct: 33 }] })
         : j(404, { error: 'No fund profile' });
+      case '/api/fred': return j(200, { series: u.searchParams.get('series'), transform: 'lin', points: Array.from({ length: 30 }, (_, i) => ({ date: new Date(Date.UTC(2026, 0, 1) + i * 7 * 864e5).toISOString().slice(0, 10), value: 4 + (i % 7) / 10 })) });
       case '/api/search': {
         const instruments = [{symbol:'AMD',name:'Advanced Micro Devices, Inc.'},{symbol:'NVDA',name:'NVIDIA Corporation'},{symbol:'TSM',name:'Taiwan Semiconductor Manufacturing Company Limited'},{symbol:'VOO',name:'Vanguard S&P 500 ETF'}];
         const q = (u.searchParams.get('q') || '').toLowerCase();

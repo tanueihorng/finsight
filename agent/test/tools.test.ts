@@ -193,3 +193,14 @@ test('get_history labels price return and derives range distances in code', asyn
   assert.equal(r.json.lastVsHighPct, Math.round((r.json.lastClose / r.json.high - 1) * 10000) / 100);
   assert.ok(r.json.lastVsLowPct >= 0 && r.json.lastVsHighPct <= 0);
 });
+
+test('get_macro_series summarises in code instead of returning every daily point', async () => {
+  const r = await run('get_macro_series', { series: 'DGS10', start: '2026-01-01' });
+  assert.equal(r.json.observations, 30);
+  assert.deepEqual([r.json.first.date, r.json.last.date], ['2026-01-01', '2026-07-23']);
+  assert.equal(r.json.high.value, 4.6); assert.equal(r.json.low.value, 4);
+  assert.equal(r.json.changeFromFirst, Math.round((r.json.last.value - r.json.first.value) * 100) / 100);
+  assert.equal(r.json.recent.length, 10); assert.equal(r.json.monthEnd.length, 7);
+  assert.equal(r.json.points, undefined);
+  assert.equal((await run('get_macro_series', { series: 'DGS10', start: '2026-01-01', full: true })).json.points.length, 30);
+});

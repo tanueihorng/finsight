@@ -98,7 +98,7 @@ export function metricIssues(assessment: Assessment, evidence: readonly { id: st
     for (const text of [finding.claim, ...finding.counterevidence]) for (const m of membershipIssues(text, groupings)) issues.push(`finding ${i + 1}: ${m}`);
     const bases = new Map<Basis, string[]>();
     for (const fig of figures(finding.claim)) {
-      if (fig.percent && !numbers.some((v) => near(fig, v) || near(fig, v * 100))) issues.push(`finding ${i + 1}: ${fig.text}% is not in its cited evidence`);
+      if (fig.percent && !numbers.some((v) => near(fig, v) || near(fig, v * 100) || near(fig, -v) || near(fig, -v * 100))) issues.push(`finding ${i + 1}: ${fig.text}% is not in its cited evidence`);
       // Large plain amounts can only be denominators; small ones are too ambiguous to label.
       const hits = labelled.filter((l) => (fig.percent ? l.kind === 'weight' : l.kind === 'denominator' && Math.abs(l.value) >= 100) && near(fig, l.value));
       const found = new Set(hits.map((h) => h.basis).filter(isBasis));

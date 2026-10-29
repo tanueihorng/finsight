@@ -249,6 +249,25 @@ const simple = (name: string, description: string, pathname: string, input: z.Zo
   async handler(i, ctx) { return { source: `FinSight ${pathname}`, asOf: new Date().toISOString(), data: await ctx.finsight.get(pathname, params(i), ctx.signal) }; },
 });
 
+// A daily series for a year is ~250 points; the summary and a month-end sample
+// carry the same decisions at a fraction of the size (FR-3.10).
+const getMacroSeries: ToolDef = {
+  name: 'get_macro_series',
+  description: 'FRED macro time series via FinSight (e.g. DGS10 10-year Treasury, CPIAUCSL CPI, FEDFUNDS): first, last, high and low observations with dates, change over the window, month-end values and the last 10 observations. Set full:true for every point.',
+  input: z.object({ series: z.string().regex(/^[A-Z0-9_]{2,30}$/), start: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).default('2020-01-01'), full: z.boolean().default(false) }),
+  async handler({ series, start, full }, ctx) {
+    const d = await ctx.finsight.get<{ series?: string; transform?: string; points?: { date: string; value: number }[] }>('/api/fred', { series, start }, ctx.signal);
+    const pts = (d.points || []).filter((p) => typeof p?.value === 'number' && Number.isFinite(p.value) && typeof p.date === 'string');
+    const base = { source: 'FinSight /api/fred (FRED)', asOf: new Date().toISOString(), asOfMeaning: 'Tool retrieval time; observation dates are in the points.', series: d.series ?? series, transform: d.transform ?? null, observations: pts.length };
+    if (!pts.length) return { ...base, error: 'no data' };
+    if (full) return { ...base, points: pts };
+    const first = pts[0]!, last = pts[pts.length - 1]!;
+    const hi = pts.reduce((a, p) => (p.value > a.value ? p : a)), lo = pts.reduce((a, p) => (p.value < a.value ? p : a));
+    const monthEnd = [...new Map(pts.map((p) => [p.date.slice(0, 7), p])).values()];
+    return { ...base, first, last, high: hi, low: lo, changeFromFirst: r2(last.value - first.value), changeUnit: 'same units as the series (percentage points for yields)', monthEnd, recent: pts.slice(-10) };
+  },
+};
+
 const portfolioWeights: ToolDef = {
   name: 'portfolio_weights',
   description: 'Weights of named holdings (alone and combined) on both bases from one snapshot, computed in code: securitiesPct (share of securities only) and weightInclCashPct (share of securities plus cash). Returns both denominators. Use this for any position-weight or concentration figure; quote the basis with the number.',
@@ -295,7 +314,6 @@ export const factsTools: ToolDef[] = [
   simple('get_watchlist', 'Watchlist with quotes.', '/api/watchlist', z.object({})),
   simple('get_alerts', 'Price/indicator alerts and whether they are triggered.', '/api/alerts', z.object({})),
   simple('get_news', 'Recent news headlines for a symbol (Yahoo). Headlines are leads, not proof.', '/api/news', z.object({ symbol: z.string().min(1).max(24) })),
-  simple('get_macro_series', 'FRED macro time series via FinSight (e.g. DGS10 10-year Treasury, CPIAUCSL CPI, FEDFUNDS).', '/api/fred',
-    z.object({ series: z.string().regex(/^[A-Z0-9_]{2,30}$/), start: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).default('2020-01-01') })),
+  getMacroSeries,
   simple('get_journal', 'Trade journal entries (setups, R results, notes).', '/api/journal', z.object({})),
 ];

@@ -62,7 +62,7 @@ export async function collectEvidence(plan: { items: PlanItem[]; coverage: Cover
     while (next < plan.items.length) {
       const i = next++, item = plan.items[i]!;
       signal.throwIfAborted();
-      try { const e = await execute(item.tool, item.args); evidence[i] = e; done[i] = { ...strip(item), status: 'retrieved', evidenceId: e.id }; }
+      try { const e = await execute(item.tool, item.args); evidence[i] = { ...e, roles: item.roles }; done[i] = { ...strip(item), status: 'retrieved', evidenceId: e.id }; }
       catch (err) { if (signal.aborted) throw err; done[i] = { ...strip(item), status: 'failed', reason: String((err as Error).message || err).slice(0, 200) }; }
     }
   };

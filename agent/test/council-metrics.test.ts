@@ -71,3 +71,10 @@ test('basisNote names weight bases, classification gaps and untracked liabilitie
   assert.equal(basisNote('not json'), '');
   assert.equal(basisNote(JSON.stringify({ quotes: [] })), '');
 });
+
+test('a direction stated in words matches a signed tool value', () => {
+  const hist = [{ id: 'h', content: JSON.stringify({ lastVsHighPct: -12.16, maxDrawdownPct: -27.76 }) }];
+  const f = (claim: string) => ({ findings: [{ claim, evidenceIds: ['h'], assumptions: [], uncertainty: 'u', counterevidence: [], invalidation: 'i', missingEvidence: [] }], unresolvedQuestions: [] });
+  assert.deepEqual(metricIssues(f('It sits 12.16% below its high after a 27.76% drawdown.'), hist), []);
+  assert.match(metricIssues(f('It sits 13% below its high.'), hist).join(), /13% is not in its cited evidence/);
+});

@@ -138,3 +138,20 @@ test('a figure absent from cited evidence gets one repair; an unresolved one is 
   assert.match(flagged[0]!.metricIssues!.join(), /15\.28% is not in its cited evidence/);
   assert.match(stuck.text, /Figure check \(unresolved[\s\S]*chair synthesis: finding 1: 15\.28%/);
 });
+
+test('each role sees its planned evidence; the chair sees unscoped and cited evidence only', async () => {
+  const seen: Record<string, string[]> = {};
+  const ev = (id: string, roles?: string[]) => ({ id, source: 'Synthetic ' + id, observedAt: '2026-10-01', retrievedAt: '2026-10-28', content: '{}', roles });
+  const step = async (req: StepRequest) => {
+    const role = /Council role: (\w+)\./.exec(req.system)![1]!, data = JSON.parse((req.messages[0]!.blocks[0] as { text: string }).text);
+    seen[role + (data.data ? ':later' : '')] = data.evidence.map((e: { id: string }) => e.id).sort();
+    const cite = role === 'risk' ? 'risk1' : 'q';
+    return { ...result(), blocks: [{ type: 'text' as const, text: JSON.stringify({ findings: [{ ...finding.findings[0]!, evidenceIds: [cite] }], unresolvedQuestions: [] }) }] };
+  };
+  const out = await runCouncil({ ...setup(step), evidence: [ev('q'), ev('growth1', ['growth', 'macro']), ev('risk1', ['risk'])] });
+  assert.ok(out.runs.every((r) => r.status === 'completed'));
+  assert.deepEqual(seen.growth, ['growth1', 'q']);
+  assert.deepEqual(seen.risk, ['q', 'risk1']);
+  assert.deepEqual(seen['growth:later'], ['growth1', 'q', 'risk1']); // a peer cited risk1
+  assert.deepEqual(seen['chair:later'], ['q', 'risk1']);
+});
