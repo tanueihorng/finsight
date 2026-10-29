@@ -155,3 +155,18 @@ test('each role sees its planned evidence; the chair sees unscoped and cited evi
   assert.deepEqual(seen['growth:later'], ['growth1', 'q', 'risk1']); // a peer cited risk1
   assert.deepEqual(seen['chair:later'], ['q', 'risk1']);
 });
+
+test('a call that does not fit waits for in-flight reservations to settle; it is refused only when nothing is in flight', async () => {
+  const b = new CouncilBudget(1), stop = new AbortController();
+  const hold = b.reserve(0.25, true), first = b.reserve(0.5);
+  const waiting = b.reserveWhenSettled(0.5, stop.signal);
+  let got = false; void waiting.then(() => { got = true; });
+  await new Promise((r) => setTimeout(r, 0)); assert.equal(got, false);
+  first(0.1); const second = await waiting; // 0.25 held + 0.1 charged + 0.5 fits
+  const third = b.reserveWhenSettled(0.5, stop.signal); // `second` is in flight, so this waits
+  second(0.5); // 0.25 held + 0.6 charged: 0.5 cannot fit and nothing else is in flight
+  await assert.rejects(third, /cannot cover/);
+  hold(0); await assert.rejects(b.reserveWhenSettled(0.5, stop.signal), /cannot cover/);
+  const c = new CouncilBudget(1), busy = c.reserve(0.9), gone = c.reserveWhenSettled(0.5, stop.signal);
+  stop.abort(); await assert.rejects(gone); busy(0);
+});

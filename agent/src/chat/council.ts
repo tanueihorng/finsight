@@ -23,23 +23,40 @@ const RESEARCH_CALL_LIMIT = 2;
 export class CouncilBudget {
   private reserved = 0;
   private charged = 0;
+  // Call reservations not yet settled, and callers waiting for one to settle.
+  private open = 0; private waiters: (() => void)[] = [];
   private cap: number; private externalSpent: () => number;
   constructor(cap: number, externalSpent: () => number = () => 0) {
     this.cap = cap; this.externalSpent = externalSpent;
     if (!Number.isFinite(cap) || cap <= 0) throw Error('Invalid council budget');
   }
-  reserve(max: number): (actual: number | null) => void {
+  /** A `hold` (the chair's allowance) is not an in-flight call, so nothing waits on it. */
+  reserve(max: number, hold = false): (actual: number | null) => void {
     if (!Number.isFinite(max) || max < 0 || this.externalSpent() + this.charged + this.reserved + max > this.cap) throw Error('Council budget cannot cover next call');
     this.reserved += max;
+    if (!hold) this.open++;
     let settled = false;
     return (actual) => {
       if (settled) throw Error('Reservation already settled');
       settled = true; this.reserved -= max;
+      if (!hold) this.open--;
+      for (const wake of this.waiters.splice(0)) wake();
       // Unknown usage or transport failure keeps the conservative maximum charged.
       const valid = actual === null || (Number.isFinite(actual) && actual >= 0);
       this.charged += actual === null || !valid ? max : actual;
       if (!valid) throw Error('Invalid council cost settlement');
     };
+  }
+  /** Worst-case reservations of concurrent calls usually settle far lower, so a
+   * call that does not fit waits for in-flight calls before it is refused. The
+   * cap is never exceeded; refusal is final once nothing else is in flight. */
+  async reserveWhenSettled(max: number, signal: AbortSignal): Promise<(actual: number | null) => void> {
+    for (;;) {
+      try { return this.reserve(max); } catch (err) {
+        if (!this.open) throw err;
+        await abortable(new Promise<void>((resolve) => this.waiters.push(resolve)), signal);
+      }
+    }
   }
 }
 
@@ -69,7 +86,7 @@ export async function runCouncil(o: {
   let question = o.question;
   const outputTokens = Math.min(1200, o.brain.manifest.maxOutputTokens);
   const budget = new CouncilBudget(o.capUsd);
-  const releaseChair = budget.reserve(o.capUsd / 4);
+  const releaseChair = budget.reserve(o.capUsd / 4, true);
   let total: number | null = 0, steps = 0;
   const roleTools = new Set(['get_quote', 'get_history', 'get_exposures', 'query_positions', 'portfolio_weights', 'get_cash', 'get_policy', 'edgar_filings', 'edgar_financials', 'valuation_metrics', 'edgar_recent_8k']);
   const tools = o.tools.filter((t) => roleTools.has(t.name));
@@ -88,7 +105,7 @@ export async function runCouncil(o: {
     let settleDay: (actual: number | null) => void;
     try { settleDay = o.dayBudget.reserve(reserve); } catch { return reject('Council daily budget cannot cover next call'); }
     let settleTurn: ((actual: number | null) => void);
-    try { settleTurn = budget.reserve(reserve); } catch { settleDay(0); return reject('Council turn budget cannot cover next call'); }
+    try { settleTurn = await budget.reserveWhenSettled(reserve, o.signal); } catch { settleDay(0); if (o.signal.aborted) return reject('Council stopped before model call'); return reject('Council turn budget cannot cover next call'); }
     let settleLedger: ((actual: number | null) => void) | undefined;
     let measured: number | null = null, dispatched = false;
     try {
