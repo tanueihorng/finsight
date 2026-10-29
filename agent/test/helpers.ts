@@ -17,6 +17,22 @@ export const logs: string[] = [];
 setLogSink((l) => logs.push(l));
 process.env.AGENT_NO_KEYCHAIN = '1';
 
+// SEC EDGAR is never reached from tests: sec.gov requests get synthetic data
+// (AMD is the only registrant) and every other host goes to the real fetch,
+// which tests point only at loopback fakes.
+export const SEC_CALLS: string[] = [];
+const realFetch = globalThis.fetch;
+globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+  const url = new URL(typeof input === 'string' || input instanceof URL ? input : input.url);
+  if (!/(^|\.)sec\.gov$/.test(url.hostname)) return realFetch(input, init);
+  SEC_CALLS.push(url.pathname);
+  const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+  if (url.pathname === '/files/company_tickers.json') return json(200, { 0: { cik_str: 2488, ticker: 'AMD', title: 'Synthetic Micro Devices' } });
+  if (url.pathname === '/submissions/CIK0000002488.json') return json(200, { filings: { recent: { form: ['10-Q'], accessionNumber: ['0000002488-26-000001'], filingDate: ['2026-08-01'], reportDate: ['2026-06-30'], primaryDocument: ['q2.htm'], primaryDocDescription: ['10-Q'] } } });
+  if (url.pathname === '/api/xbrl/companyfacts/CIK0000002488.json') return json(200, { facts: { 'us-gaap': { Revenues: { label: 'Revenues', units: { USD: [{ form: '10-K', fp: 'FY', fy: 2025, end: '2025-12-31', val: 1000, filed: '2026-02-01' }] } } } } });
+  return json(404, {});
+}) as typeof fetch;
+
 export const TOKEN = 'test-token-0123456789abcdef0123456789abcdef';
 export const PROXY_SECRET = 'test-proxy-secret-0123456789abcdef01234567';
 
@@ -62,6 +78,9 @@ export async function fakeFinsight(options: { scopedAccounts?: boolean; naturalH
       case '/api/accounts': return j(200, { accounts: [{ id: 'a1', name: 'IBKR', type: 'Brokerage', count: 2 }, { id: 'a2', name: 'DBS', type: 'Bank', count: 1 }], activeId: 'a1' });
       case '/api/categories': return j(200, { NVDA: { symbol: 'NVDA', sector: 'Technology', type: 'EQUITY', category: 'Technology' }, VOO: { symbol: 'VOO', sector: null, type: 'ETF', category: 'ETF / Fund' }, 'D05.SI': { symbol: 'D05.SI', category: 'Other' } });
       case '/api/events': return j(200, { events: [{ symbol: 'NVDA', type: 'Earnings', time: Date.now() + 5 * 864e5 }] });
+      case '/api/fund': return u.searchParams.get('symbol') === 'VOO'
+        ? j(200, { symbol: 'VOO', family: 'Synthetic Funds', category: 'Large Blend', legalType: 'Exchange Traded Fund', expenseRatioPct: 0.03, totalAssets: 1e11, currency: 'USD', assetMix: { stocksPct: 99.5, bondsPct: 0, cashPct: 0.5, otherPct: 0 }, topHoldings: [{ symbol: 'NVDA', name: 'NVIDIA', weightPct: 7.5 }, { symbol: 'SYNB', name: 'Synthetic B', weightPct: 6 }], topHoldingsPct: 13.5, sectorWeights: [{ sector: 'technology', weightPct: 33 }] })
+        : j(404, { error: 'No fund profile' });
       case '/api/search': {
         const instruments = [{symbol:'AMD',name:'Advanced Micro Devices, Inc.'},{symbol:'NVDA',name:'NVIDIA Corporation'},{symbol:'TSM',name:'Taiwan Semiconductor Manufacturing Company Limited'},{symbol:'VOO',name:'Vanguard S&P 500 ETF'}];
         const q = (u.searchParams.get('q') || '').toLowerCase();
@@ -69,7 +88,7 @@ export async function fakeFinsight(options: { scopedAccounts?: boolean; naturalH
       }
       case '/api/quote': return j(200, { quotes: (u.searchParams.get('symbols') || '').split(',').map((symbol) => {
         const p = PORTFOLIO.positions.find((p) => p.symbol === symbol);
-        return { symbol, name: p?.name || symbol, price: p?.last ?? 10, currency: p?.currency || 'USD', change: 1, changePct: 1 };
+        return { symbol, name: p?.name || symbol, type: symbol === 'VOO' ? 'ETF' : 'EQUITY', price: p?.last ?? 10, currency: p?.currency || 'USD', change: 1, changePct: 1 };
       }) });
       case '/api/history': {
         if (options.naturalHistory) {

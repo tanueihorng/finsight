@@ -1,6 +1,6 @@
 import {test,before,after} from 'node:test';
 import assert from 'node:assert/strict';
-import {fakeFinsight,testConfig,testCtx} from './helpers.ts';
+import {fakeFinsight,testConfig,testCtx,SEC_CALLS} from './helpers.ts';
 import type {Fake} from './helpers.ts';
 import {openDb} from '../src/store/db.ts';
 import * as store from '../src/store/db.ts';
@@ -73,4 +73,24 @@ test('conversation references use the latest saved scope and do not resurrect a 
     } else { assert.equal(out.runs.length,0); assert.match(out.text,/Which company or ticker/); }
     s.db.close();
   }
+});
+
+test('the council service retrieves planned evidence before specialists and persists each outcome', async () => {
+  const s = setup(); SEC_CALLS.length = 0;
+  const out = await runStoredCouncil(s.args);
+  assert.ok(out.runs.every((r) => r.status === 'completed'));
+  const first = JSON.parse((s.requests[1]!.messages[0]!.blocks[0] as { text: string }).text);
+  const plan = JSON.parse(first.question).evidencePlan as { key: string; status: string; evidenceId?: string; reason?: string }[];
+  const status = Object.fromEntries(plan.map((c) => [c.key, c.status]));
+  assert.deepEqual(status, { 'history:AMD': 'retrieved', 'financials:AMD': 'retrieved', 'filings:AMD': 'retrieved', 'portfolio:weights': 'retrieved', 'portfolio:sectors': 'retrieved', 'portfolio:policy': 'retrieved', 'macro:DGS10': 'failed' });
+  assert.match(plan.find((c) => c.key === 'macro:DGS10')!.reason!, /get_macro_series/);
+  // Every retrieved item is in the packet the specialist received.
+  const ids = new Set(first.evidence.map((e: { id: string }) => e.id));
+  for (const c of plan.filter((c) => c.status === 'retrieved')) assert.ok(ids.has(c.evidenceId!), c.key);
+  assert.ok(SEC_CALLS.includes('/api/xbrl/companyfacts/CIK0000002488.json'));
+  const scope = store.listMessages(s.db, s.ctx.threadId!).flatMap((m) => m.blocks).find((b) => b.type === 'notice' && b.kind === 'research_scope');
+  assert.equal(JSON.parse((scope as { text: string }).text).coverage.length, plan.length);
+  // Prefetch adds tool calls, not model calls.
+  assert.equal(s.requests.length, 8);
+  s.db.close();
 });

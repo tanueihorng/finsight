@@ -10,6 +10,7 @@ import type { Usage, PageContext } from '../types.ts';
 import { resolveSubjects, type ResearchSubject, type SubjectResolution } from './research-subjects.ts';
 import { audit, auditContext } from '../obs/audit.ts';
 import { randomUUID } from 'node:crypto';
+import { collectEvidence, planEvidence, type Coverage } from './council-evidence.ts';
 export async function runStoredCouncil(o: { db: DB; bus: EventBus; tools: ToolRegistry; ctx: ToolCtx; brain: ApiBrain; system: string; question: string; usageTotal: Usage; effort?: Effort; scope?: PageContext }) {
   const { db, bus, tools, ctx, brain, system, question, usageTotal } = o;
   const { cfg } = ctx;
@@ -23,7 +24,7 @@ export async function runStoredCouncil(o: { db: DB; bus: EventBus; tools: ToolRe
   const execute = async (_role: string, name: string, args: unknown, signal: AbortSignal) => {
       signal.throwIfAborted();
       const r = await tools.execute(name, args, { ...ctx, signal, callId: auditContext.getStore()?.callId });
-      if (!r.ok) throw Error('Research tool failed: ' + name);
+      if (!r.ok) { let why = ''; try { const j = JSON.parse(r.content); why = [j.error?.code, j.error?.message].filter(Boolean).join(': '); } catch { /* not JSON */ } throw Error('Research tool failed: ' + name + (why ? ' (' + why.slice(0, 160) + ')' : '')); }
       const data = JSON.parse(r.content);
       const evidence = { id: store.newId('e'), source: 'FinSight tool ' + name, observedAt: data.asOfMeaning ? 'See marketTime or bar dates and cache status in tool result' : typeof data.asOf === 'string' ? data.asOf : 'Observation date unavailable; see tool result', retrievedAt: new Date().toISOString(), content: r.content };
       audit('council.evidence', { evidenceId: evidence.id, tool: name, observedAt: evidence.observedAt, retrievedAt: evidence.retrievedAt });
@@ -37,12 +38,14 @@ export async function runStoredCouncil(o: { db: DB; bus: EventBus; tools: ToolRe
     if (notice.type !== 'notice') continue;
     try { const saved = JSON.parse(notice.text); if (saved.version === 1 && ['ready', 'unavailable', 'needs-clarification', 'general'].includes(saved.status) && Array.isArray(saved.subjects)) { previous = saved.subjects.filter((s: ResearchSubject) => typeof s.symbol === 'string' && typeof s.mention === 'string' && typeof s.name === 'string').slice(0, 3); break; } } catch { /* ignore malformed legacy metadata */ }
   }
-  const persistScope = (resolution: SubjectResolution) => { ctx.signal.throwIfAborted(); store.appendMessage(db, threadId, 'user', [{ type: 'notice', kind: 'research_scope', text: JSON.stringify(resolution) }], { turnId }); };
+  const persistScope = (resolution: SubjectResolution & { coverage?: Coverage[] }) => { ctx.signal.throwIfAborted(); store.appendMessage(db, threadId, 'user', [{ type: 'notice', kind: 'research_scope', text: JSON.stringify(resolution) }], { turnId }); };
   const result = await runCouncil({ question, evidence: [], brain, system, signal: ctx.signal,
     prepare: async (call) => {
       const resolution = await resolveSubjects({ question, panel: o.scope, previous, call, search: (q) => ctx.finsight.get('/api/search', { q }, ctx.signal), signal: ctx.signal });
       if (resolution.status === 'needs-clarification' || resolution.status === 'unavailable') { persistScope(resolution); return { question, evidence: [], stop: resolution.note }; }
       const evidence: CouncilEvidence[] = [];
+      let coverage: Coverage[] | undefined;
+      let types: Record<string, string> = {};
       if (resolution.status === 'ready') {
         try {
           const symbols = resolution.subjects.map((s) => s.symbol);
@@ -53,6 +56,7 @@ export async function runStoredCouncil(o: { db: DB; bus: EventBus; tools: ToolRe
           if (missing.length) throw Error('Missing matching quotes for ' + missing.join(', '));
           quote.content = JSON.stringify({ ...data, quotes: matched });
           evidence.push(quote);
+          types = Object.fromEntries(matched.map((q: { symbol: string; type?: string }) => [q.symbol, String(q.type || '')]));
           resolution.subjects = resolution.subjects.map((s) => ({ ...s, name: matched.find((q: {symbol: string}) => q.symbol === s.symbol)?.name || s.name }));
         } catch {
           ctx.signal.throwIfAborted();
@@ -60,9 +64,17 @@ export async function runStoredCouncil(o: { db: DB; bus: EventBus; tools: ToolRe
           persistScope(resolution); return { question, evidence: [], stop: resolution.note };
         }
       }
+      if (resolution.status === 'ready') {
+        // Planned before any specialist call; each item keeps its real outcome.
+        const plan = planEvidence(resolution.subjects.map((s) => ({ symbol: s.symbol, type: types[s.symbol] })));
+        const collected = await collectEvidence(plan, (name, args) => auditContext.run({ ...(auditContext.getStore() ?? {}), councilRole: 'shared', councilPhase: 'prefetch', callId: randomUUID() }, () => execute('shared', name, args, ctx.signal)), ctx.signal);
+        evidence.push(...collected.evidence);
+        coverage = collected.coverage;
+        audit('council.evidence.plan', { items: coverage.map(({ key, tool, status, evidenceId, reason }) => ({ key, tool, status, evidenceId, reason })) });
+      }
       resolution.evidenceIds = evidence.map((e) => e.id);
-      persistScope(resolution);
-      const scopedQuestion = JSON.stringify({ question, researchSubjects: resolution.subjects, subjectResolution: resolution.note, panelContext: o.scope, note: 'The research subjects come from the current question or its resolved reference. Panel context is optional background and must never restrict research. Investigate the requested subjects using your available tools; missing company evidence is a research gap, not a reason to substitute the chart or conclude that cash is deployable.' });
+      persistScope({ ...resolution, coverage });
+      const scopedQuestion = JSON.stringify({ question, researchSubjects: resolution.subjects, subjectResolution: resolution.note, panelContext: o.scope, note: 'The research subjects come from the current question or its resolved reference. Panel context is optional background and must never restrict research. Investigate the requested subjects using your available tools; missing company evidence is a research gap, not a reason to substitute the chart or conclude that cash is deployable.', evidencePlan: coverage, evidencePlanNote: coverage ? 'Code retrieved this evidence before your turn. Use the retrieved items for your role first. Report each gap with its status: failed (with reason), not_applicable, unavailable (no approved source) or skipped_limit. Do not ask the user for evidence a listed tool can retrieve, and do not describe a retrieved item as missing.' : undefined });
       return { question: scopedQuestion, evidence };
     },
     maxSteps: cfg.limits.turnSteps, effort: o.effort, capUsd: cfg.limits.turnUsd, dayBudget: new CouncilBudget(Math.max(0.000001, cfg.limits.dayUsd - store.spendSince(db, store.startOfToday()))),

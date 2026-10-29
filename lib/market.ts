@@ -314,6 +314,43 @@ export function getQuoteDetails(symbols: string[]): Promise<Record<string, Quote
     throw lastErr;
   }, { stale: 3 * 24 * 60 * 60000, persist: true });
 }
+// Fund profile and top holdings (cached 24h). Yahoo aggregates these; it is not
+// the issuer, so callers must label it and keep the issuer factsheet as a gap.
+// Holdings cover only the listed top positions; their sum is reported, not 100%.
+export interface FundProfile {
+  symbol: string; family: string | null; category: string | null; legalType: string | null;
+  expenseRatioPct: number | null; totalAssets: number | null; currency: string | null;
+  assetMix: { stocksPct: number | null; bondsPct: number | null; cashPct: number | null; otherPct: number | null };
+  topHoldings: { symbol: string | null; name: string; weightPct: number }[]; topHoldingsPct: number | null;
+  sectorWeights: { sector: string; weightPct: number }[];
+}
+const pct100 = (v: unknown) => { const n = pickRaw(v); return Number.isFinite(n) ? Math.round(n * 10000) / 100 : null; };
+export function getFundProfile(symbol: string): Promise<FundProfile> {
+  symbol = symbol.toUpperCase();
+  return cached(`fund:${symbol}`, 24 * 60 * 60000, async () => {
+    let lastErr: unknown;
+    for (const force of [false, true]) {
+      try {
+        const { cookie, crumb } = await yahooCrumb(force);
+        const data = await fetchJson<{ quoteSummary?: { result?: any[] } }>(`https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=topHoldings,fundProfile,summaryDetail&crumb=${encodeURIComponent(crumb)}`, { headers: { Cookie: cookie } });
+        const r = data?.quoteSummary?.result?.[0];
+        if (!r?.topHoldings && !r?.fundProfile) throw new Error(`No fund profile for ${symbol}`);
+        const th = r.topHoldings || {}, fp = r.fundProfile || {}, sd = r.summaryDetail || {};
+        const topHoldings = (th.holdings || []).map((h: any) => ({ symbol: h.symbol || null, name: String(h.holdingName || h.symbol || ''), weightPct: pct100(h.holdingPercent) })).filter((h: any) => h.name && h.weightPct !== null);
+        const sectorWeights = (th.sectorWeightings || []).flatMap((o: any) => Object.entries(o).map(([sector, v]) => ({ sector, weightPct: pct100(v) }))).filter((x: any) => x.weightPct !== null);
+        const sum = topHoldings.reduce((s: number, h: any) => s + h.weightPct, 0);
+        return {
+          symbol, family: fp.family || null, category: fp.categoryName || null, legalType: fp.legalType || null,
+          expenseRatioPct: pct100(fp.feesExpensesInvestment?.annualReportExpenseRatio), totalAssets: pickRaw(sd.totalAssets) ?? null, currency: sd.currency || null,
+          assetMix: { stocksPct: pct100(th.stockPosition), bondsPct: pct100(th.bondPosition), cashPct: pct100(th.cashPosition), otherPct: pct100(th.otherPosition) },
+          topHoldings, topHoldingsPct: topHoldings.length ? Math.round(sum * 100) / 100 : null, sectorWeights,
+        };
+      } catch (e) { lastErr = e; if ((e as HttpError).status !== 401 && (e as HttpError).status !== 403) break; }
+    }
+    throw lastErr;
+  }, { stale: 7 * 24 * 60 * 60000, persist: true });
+}
+
 // Dividend payments per share over ~5 years: [{ t (ex-date ms), amount }].
 export function getDividendHistory(symbol: string): Promise<DividendPayment[]> {
   return cached(`dh:${symbol}`, 12 * 60 * 60000, async () => {

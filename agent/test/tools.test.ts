@@ -176,3 +176,20 @@ test('sector exposure lists members, separates sector from instrument type and n
   assert.equal(r.json.coverage.fundLookThrough, 'unknown');
   assert.equal(r.json.lookThrough, false);
 });
+
+test('get_fund_profile labels an aggregator source and partial look-through; non-funds fail plainly', async () => {
+  const r = await run('get_fund_profile', { symbol: 'VOO' });
+  assert.equal(r.ok, true);
+  assert.equal(r.json.sourceClass, 'aggregator');
+  assert.equal(r.json.lookThrough.coveragePct, 13.5);
+  assert.equal(r.json.expenseRatioPct, 0.03);
+  const miss = await run('get_fund_profile', { symbol: 'NVDA' });
+  assert.equal(miss.ok, false);
+});
+
+test('get_history labels price return and derives range distances in code', async () => {
+  const r = await run('get_history', { symbol: 'NVDA', range: '1y' });
+  assert.equal(r.json.returnKind, 'price');
+  assert.equal(r.json.lastVsHighPct, Math.round((r.json.lastClose / r.json.high - 1) * 10000) / 100);
+  assert.ok(r.json.lastVsLowPct >= 0 && r.json.lastVsHighPct <= 0);
+});

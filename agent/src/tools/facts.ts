@@ -229,11 +229,15 @@ const getHistory: ToolDef = {
     let peak = -Infinity, mdd = 0;
     for (const p of pts) { peak = Math.max(peak, p.c); mdd = Math.min(mdd, p.c / peak - 1); }
     const first = pts[0]!, last = pts[pts.length - 1]!;
+    const high = Math.max(...pts.map((p) => p.h ?? p.c)), low = Math.min(...pts.map((p) => p.l ?? p.c));
     return {
       source: 'FinSight /api/history (Yahoo)', asOf: new Date().toISOString(), asOfMeaning: 'Tool retrieval time; bar dates are observation times.', cache: d.cache ?? null, symbol, range, interval, currency: d.meta?.currency ?? null, bars: pts.length,
       from: new Date(first.t).toISOString().slice(0, 10), to: new Date(last.t).toISOString().slice(0, 10),
       firstClose: r2(first.c), lastClose: r2(last.c), returnPct: r2((last.c / first.c - 1) * 100),
-      high: r2(Math.max(...pts.map((p) => p.h ?? p.c))), low: r2(Math.min(...pts.map((p) => p.l ?? p.c))), maxDrawdownPct: r2(mdd * 100),
+      returnKind: 'price', returnMeaning: 'Price return between the first and last closes; excludes dividends (not total return). The last bar may be an incomplete intraday bar; check its date.',
+      high: r2(high), low: r2(low), maxDrawdownPct: r2(mdd * 100),
+      // Derived in code so a reader never computes distances from a range in prose.
+      lastVsHighPct: r2((last.c / high - 1) * 100), lastVsLowPct: r2((last.c / low - 1) * 100),
       lastCloses: pts.slice(-15).map((p) => ({ date: new Date(p.t).toISOString().slice(0, 10), c: r2(p.c) })),
       ohlcv: includeBars ? (chartOnly && pts.length > 150 ? Array.from({ length: 150 }, (_, i) => pts[Math.floor(i * (pts.length - 1) / 149)]!) : chartOnly ? pts : pts.slice(-300)).map((p) => chartOnly ? { t: p.t, c: p.c } : { t: p.t, o: p.o, h: p.h, l: p.l, c: p.c, v: p.v }) : undefined,
     };
@@ -263,11 +267,23 @@ const portfolioWeights: ToolDef = {
   },
 };
 
+const getFundProfile: ToolDef = {
+  name: 'get_fund_profile',
+  description: 'ETF or mutual fund profile from FinSight: family, category, expense ratio, asset mix, top holdings (with their combined share) and sector weights. Source is a market-data aggregator, not the issuer; holdings cover only the listed top positions.',
+  input: z.object({ symbol: z.string().min(1).max(24) }),
+  async handler({ symbol }, ctx) {
+    const d = await ctx.finsight.get('/api/fund', { symbol }, ctx.signal);
+    return { source: 'FinSight /api/fund (Yahoo quoteSummary)', sourceClass: 'aggregator', asOf: new Date().toISOString(),
+      asOfMeaning: 'Tool retrieval time. The aggregator gives no holdings report date; treat holdings as undated and check the issuer factsheet for the as-of date.', ...d,
+      lookThrough: { coveragePct: d.topHoldingsPct ?? null, note: 'Only the listed top holdings are known; the rest of the fund is unknown here.' } };
+  },
+};
+
 const acctBase = z.object({ account: Account, base: Base });
 const withAll = (i: any) => ({ ...i, account: i.account || 'ALL' });
 
 export const factsTools: ToolDef[] = [
-  getPortfolio, queryPositions, getExposures, portfolioWeights, getCash, getAccounts, getQuote, getHistory,
+  getPortfolio, queryPositions, getExposures, portfolioWeights, getFundProfile, getCash, getAccounts, getQuote, getHistory,
   simple('search_instruments', 'Resolve a company name or ticker to market-data instruments. Use the explicit question before optional chart context; ask about materially ambiguous listings rather than silently substituting the chart.', '/api/search', z.object({ query: z.string().trim().min(1).max(120) }), (i) => ({ q: i.query })),
   simple('get_events', 'Upcoming earnings, dividends and ex-dates for holdings and watchlist.', '/api/events', z.object({ account: Account }), withAll),
   simple('get_dividends', 'Dividend income report (received, expected, withholding).', '/api/dividends', acctBase, withAll),

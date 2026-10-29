@@ -264,3 +264,16 @@ test('a restart keeps the PIN, holdings and persisted quotes but not sessions; S
   const q = (await r.req('GET', '/api/quote?symbols=AAPL', json(c2))).json.quotes[0];
   assert.equal(q.price, live.price);
 });
+
+test('fund profile: synthetic ETF holdings with their combined share; equities and bad symbols are refused', async (t) => {
+  const s = await startServer(); t.after(() => s.stop());
+  const c = await setup(s);
+  const r = await s.req('GET', '/api/fund?symbol=VOO', json(c));
+  assert.equal(r.status, 200);
+  assert.equal(r.json.expenseRatioPct, 0.05);
+  assert.deepEqual(r.json.topHoldings.map((h: { symbol: string; weightPct: number }) => [h.symbol, h.weightPct]), [['SYNA', 7], ['SYNB', 5]]);
+  assert.equal(r.json.topHoldingsPct, 12);
+  assert.deepEqual(r.json.assetMix, { stocksPct: 99, bondsPct: 0, cashPct: 1, otherPct: 0 });
+  assert.equal((await s.req('GET', '/api/fund?symbol=NVDA', json(c))).status, 404);
+  assert.equal((await s.req('GET', '/api/fund?symbol=' + encodeURIComponent('../x'), json(c))).status, 400);
+});

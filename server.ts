@@ -21,7 +21,7 @@ import { URL } from 'node:url';
 
 import { PORT, HOST, PUBLIC_DIR, PORTFOLIO_FILE } from './lib/config.ts';
 import { persistNow } from './lib/cache.ts';
-import { getQuotes, getHistory, search, getMarkets, getNews, getCategories } from './lib/market.ts';
+import { getQuotes, getHistory, search, getMarkets, getNews, getCategories, getFundProfile } from './lib/market.ts';
 import { worldBank, getFred, getCalendar } from './lib/macro.ts';
 import {
   buy, sell, del, listAccounts, accountAdd, accountRename, accountRemove, portfolioWithQuotes, fxRisk, setCash,
@@ -211,6 +211,12 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
       }
     }
 
+    if (p === '/api/fund') {
+      const symbol = (u.searchParams.get('symbol') || '').trim();
+      if (!/^[A-Za-z0-9.^=-]{1,24}$/.test(symbol)) return sendJson(res, 400, { error: 'symbol required' });
+      try { return sendJson(res, 200, await getFundProfile(symbol)); }
+      catch (e) { return sendJson(res, 404, { error: String((e as Error).message || e).slice(0, 200) }); }
+    }
     if (p === '/api/quote') {
       const symbols = (u.searchParams.get('symbols') || '').split(',').map((s) => s.trim()).filter(Boolean);
       if (!symbols.length) return sendJson(res, 400, { error: 'symbols required' });
