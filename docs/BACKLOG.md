@@ -35,6 +35,10 @@ The Kestrel panel redesign and search-provider picker (`KESTRELUI-001` / `SEARCH
 
 [FEAT-002](features/FEAT-002-investment-council-lenses.md) / `MULTIAGENT-001`: merged locally in `d06cabf` and activated in personal FinSight. The actual agent advertises council enabled, DeepSeek Flash is available, and all30 manifest assets match the rebuilt checkout. Current verification:262 browser checks and3 real-backend council checks passed; one existing live-fixture check skipped. Also216 unit,130 agent plus secret scan, typechecks and build consistency passed. Generic installations remain default off. Council uses DeepSeek Flash with thinking off; no investment-performance advantage is established. No remote push in this release.
 
+## Context routing enhancement — 2026-10-29
+
+`CONTEXT-001` / [FEAT-002](features/FEAT-002-investment-council-lenses.md): implemented locally in `4e1aa3b`; isolated PR1 preview uses its backend fix. Explicit question subjects drive verified instrument/quote retrieval before specialists. Chart context stays optional, references and comparisons are supported, and ambiguity/outages cannot silently substitute another company. Verified145 agent + secret scan,216 app unit tests, typechecks and4 real-backend browser tests. PR1 remains unmerged; broader `COUNCILQUALITY-001` stays open.
+
 ## Deferred proposals
 
 | Spec | Proposal | Execution relationship | Gate |

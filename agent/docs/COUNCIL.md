@@ -20,8 +20,8 @@ See the dated rollout record below; earlier proposal sections are historical.
 API brains only; native paid search and CLI brains are rejected. Three initial
 analysts (Business & Growth, Macro & Valuation, Portfolio Risk), concurrency two,
 one challenge call per analyst and one separate chair. Up to two tool requests
-and one follow-up model call per initial analyst: at most ten model calls total.
-A turn must permit at least ten steps. No recursive delegation, automatic council
+and one follow-up model call per initial analyst: at most ten role calls, plus
+one subject-resolution call. A turn must permit at least eleven steps. No recursive delegation, automatic council
 routing, retries, attachments or restart/resume. Text questions must state their
 scope. Simple questions keep the normal single-agent route.
 
@@ -179,3 +179,37 @@ Every requested tool-call ID receives a protocol result. Skipped calls add no
 evidence. The existing final assessment call must disclose missing research;
 step, output, time and spending limits are unchanged. Forbidden calls still
 fail the role, including forbidden calls beyond the execution cap.
+
+
+## Question subjects and optional chart context — 2026-10-29
+
+Implementation `4e1aa3b` adds a bounded subject-resolution step before council
+specialists. The current question defines its subjects; an attached chart is
+supplementary context and never a whitelist. Company names and lowercase tickers
+are checked through FinSight instrument search. Up to three explicit subjects
+can be compared. A matching positive-price quote for every requested symbol is
+required before specialists start; lookup failures or ambiguous listings return
+an explicit gap or clarification, without substituting the chart.
+
+“This stock” uses the selected chart when available. “Its risks” uses the latest
+saved research scope; multiple prior subjects require clarification for a singular
+reference. A superseding unresolved topic prevents resurrection of an older one.
+General portfolio questions do not inherit a chart subject. Older conversations
+without subject metadata may require clarification. Resolved subjects, quote
+coverage IDs, status and optional panel symbol persist for replay. The displayed
+chart does not change. Normal chat receives the same precedence instruction and
+a read-only `search_instruments` tool, rather than the council's admission step.
+
+The planning call uses existing cost reservations, traces, output/deadline/stop
+controls and the global twelve-call ceiling, reducing repair headroom by one.
+At most three instrument searches and one batched quote run before specialists.
+No paid web search, extra model qualification or financial-write authority is
+added. Conservative identity matching can ask for a ticker for aliases it cannot
+verify; the model's interpretation of arbitrary prose is not guaranteed.
+
+Verification:145 agent tests plus secret scan,216 app unit tests, typechecks and
+four real-API/engine/store browser tests. A baseline regression demonstrates AMD
+receiving TSM evidence before the fix. These checks establish routing behavior,
+not full investment research or source entailment. Broader council research
+quality remains open under COUNCILQUALITY-001. Preview deployment uses the PR1
+UI at9cd2414 plus this backend fix; PR1 is not merged by this change.

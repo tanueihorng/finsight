@@ -67,3 +67,16 @@ Personal activation verified after local merge d06cabf: live council feature
 flag and DeepSeek Flash availability checked, with30 served manifest assets
 matching the canonical build.262 ordinary browser checks and3 real-backend
 council checks passed (one existing live-fixture skip). See COUNCIL.md for scope.
+
+
+### Context routing follow-up — 2026-10-29
+
+`CONTEXT-001`, implementation `4e1aa3b`: a bounded, accounted intent step resolves
+explicit company names/tickers and comparisons through market instrument search;
+matching quotes are required before specialists. Chart context is optional.
+Persisted scope supports clear follow-ups and replay; uncertain identity or
+unavailable data produces clarification/gaps rather than chart substitution.
+Verified145 agent checks,216 app unit checks, typechecks and4 real-backend browser
+checks. Isolated PR1 preview receives the fix; no PR merge or personal deployment
+is implied. Full financial consistency, mandatory primary research and source
+entailment remain in COUNCILQUALITY-001.

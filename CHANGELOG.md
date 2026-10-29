@@ -70,3 +70,9 @@ Setup and other application dialogs now stay above Kestrel and expanded charts w
 - Preserve dependency symlink identities in esbuild so canonical and worktree builds produce the same chunk hashes and source maps. Both checkout checks pass60 files;61 artifacts including index are byte-identical.
 - Shellv52 isolates the normalized bundle. The corrected bundle passes213 unit,111 agent + secret scan,253 browser checks, with1 existing live-fixture skip.
 - Corrects the post-merge build mismatch in the first publication; no application/backend behavior or financial records changed by this build correction.
+
+
+### Council subject routing — 2026-10-29 (local preview)
+
+- `4e1aa3b`: explicit companies in the question determine council research; names/tickers are verified through instrument lookup and matching quotes before specialists. Attached charts are optional context. Comparisons and saved subject references are supported; ambiguity and outages cannot substitute an unrelated chart.
+-145 agent tests plus secret scan,216 app unit tests, typechecks and4 real-backend browser checks pass. Deployed to the isolated PR1 preview (UI9cd2414 + backend4e1aa3b); PR1 is unmerged and personal services are unchanged. Comprehensive council research quality remains open.
