@@ -93,7 +93,7 @@ function roleView(role: (typeof ROLES)[number], index: number, all: CouncilPart[
     counter: peek ? uniq(findings.flatMap((f) => f.counterevidence)) : [],
     missing: peek ? uniq(findings.flatMap((f) => f.missingEvidence)) : [],
     challengeClaim: peek ? challenge?.findings[0]?.claim ?? '' : '',
-    flags: peek ? runs.flatMap((r) => r.flags ?? []) : [], flagCount: runs.reduce((n, r) => n + (r.flags?.length ?? 0), 0),
+    flags: peek ? uniq(runs.flatMap((r) => r.flags ?? [])) : [], flagCount: uniq(runs.flatMap((r) => r.flags ?? [])).length,
     steps, ms: runs.reduce((s, r) => s + (r.ms || 0), 0), runs,
   };
 }
@@ -137,7 +137,7 @@ export function councilModel(runs: CouncilPart[], finished: boolean, peek: boole
       state: chairState, lead: findings[0]?.claim ?? '', findings,
       missing: uniq(findings.flatMap((f) => f.missingEvidence)), changes: uniq(findings.map((f) => f.invalidation)),
       questions: peek ? synthesis?.unresolvedQuestions ?? [] : [], evidence: uniq(findings.flatMap((f) => f.evidenceIds)),
-      waiting, runs: chairRuns, error: chairError(chairRuns, chairState, peek), flags: peek ? chairRuns.flatMap((r) => r.flags ?? []) : [], flagCount: chairRuns.reduce((n, r) => n + (r.flags?.length ?? 0), 0),
+      waiting, runs: chairRuns, error: chairError(chairRuns, chairState, peek), flags: peek ? uniq(chairRuns.flatMap((r) => r.flags ?? [])) : [], flagCount: uniq(chairRuns.flatMap((r) => r.flags ?? [])).length,
     },
     cost, done: runs.filter((r) => r.status === 'completed').length, total: EXPECTED_RUNS,
     activeLabel: active ? `${STAGES[stage]} · ${active}` : STAGES[stage],

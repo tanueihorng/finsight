@@ -52,7 +52,7 @@ function abortable<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
 
 export async function runCouncil(o: {
   question: string; evidence: CouncilEvidence[]; brain: ApiBrain; system: string; signal: AbortSignal;
-  maxSteps?: number; effort?: Effort; capUsd: number; dayBudget: CouncilBudget;
+  effort?: Effort; capUsd: number; dayBudget: CouncilBudget;
   emit: (run: CouncilRun) => void; account: (result: StepResult, cost: number | null) => void;
   execute: (role: string, name: string, args: unknown, signal: AbortSignal) => Promise<CouncilEvidence>;
   tools: StepRequest['tools'];
@@ -73,7 +73,6 @@ export async function runCouncil(o: {
   const tools = o.tools.filter((t) => roleTools.has(t.name));
   const call = async (system: string, messages: Msg[], withTools: boolean, onCost: (cost: number | null) => void, allowedTools = tools): Promise<StepResult> => {
     o.signal.throwIfAborted();
-    if (steps >= Math.min(o.maxSteps ?? 12, 12)) throw Error('Council model-call limit reached');
     const req = { system, messages, tools: withTools ? allowedTools : [] };
     const bytes = Buffer.byteLength(JSON.stringify(req));
     if (bytes > 60000) throw Error('Council context too large; narrow the evidence packet');

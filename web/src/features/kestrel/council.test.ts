@@ -68,7 +68,7 @@ test('a failed chair reports the failure, with its error only under PEEK', () =>
 
 
 test('figure warnings remain available in both views and hide details under UNPEEK', () => {
-  const runs = [{ ...run('growth', 'assessment', 'completed'), flags: ['private growth detail'] }, { ...run('chair', 'synthesis', 'completed'), flags: ['private chair detail'] }];
+  const runs = [{ ...run('growth', 'assessment', 'completed'), flags: ['private growth detail'] }, { ...run('growth', 'challenge', 'completed'), flags: ['private growth detail'] }, { ...run('chair', 'synthesis', 'completed'), flags: ['private chair detail'] }];
   const visible = councilModel(runs, true, true), hidden = councilModel(runs, true, false);
   assert.deepEqual(visible.roles[0]!.flags, ['private growth detail']);
   assert.deepEqual(visible.chair.flags, ['private chair detail']);

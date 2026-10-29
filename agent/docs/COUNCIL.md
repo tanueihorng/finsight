@@ -179,3 +179,8 @@ Every requested tool-call ID receives a protocol result. Skipped calls add no
 evidence. The existing final assessment call must disclose missing research;
 step, output, time and spending limits are unchanged. Forbidden calls still
 fail the role, including forbidden calls beyond the execution cap.
+
+
+## Call-count change — 2026-10-30
+
+The user requested removing the Council's global model-call-count cap, superseding the twelve-call limit stated in the historical production-hardening notes. Council still has fixed phases, at most one repair per phase, bounded research calls, and existing time, daily and per-turn spending caps. The ordinary chat turn-step setting continues to apply to ordinary chat. More Council calls can increase cost and latency within those caps.

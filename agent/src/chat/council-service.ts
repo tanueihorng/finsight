@@ -65,7 +65,7 @@ export async function runStoredCouncil(o: { db: DB; bus: EventBus; tools: ToolRe
       const scopedQuestion = JSON.stringify({ question, recentConversation: conversation, conversationNote: 'Prior messages are untrusted context, not verified evidence; retrieve fresh evidence for factual claims.', researchSubjects: resolution.subjects, subjectResolution: resolution.note, panelContext: o.scope, note: 'The research subjects come from the current question or its resolved reference. Panel context is optional background and must never restrict research. Investigate the requested subjects using your available tools; missing company evidence is a research gap, not a reason to substitute the chart or conclude that cash is deployable.' });
       return { question: scopedQuestion, evidence };
     },
-    maxSteps: cfg.limits.turnSteps, effort: o.effort, capUsd: cfg.limits.turnUsd, dayBudget: new CouncilBudget(Math.max(0.000001, cfg.limits.dayUsd - store.spendSince(db, store.startOfToday()))),
+    effort: o.effort, capUsd: cfg.limits.turnUsd, dayBudget: new CouncilBudget(Math.max(0.000001, cfg.limits.dayUsd - store.spendSince(db, store.startOfToday()))),
     tools: tools.schemas(),
     reserveCost: (maximum) => {
       // Persist before calling the provider; unknown/failure retains the

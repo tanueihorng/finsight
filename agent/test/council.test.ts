@@ -34,14 +34,14 @@ test('stop aborts non-cooperative provider without accepting late completion', a
  const pending = runCouncil(o); ctrl.abort(); await assert.rejects(pending); release(result()); await new Promise((r) => setTimeout(r, 0)); assert.ok(!events.includes('completed'));
 });
 
-test('malformed completed output gets one accounted repair and a hard global call ceiling', async () => {
+test('malformed output gets at most one accounted repair per stage', async () => {
  let n = 0;
  const o = setup(async () => ++n === 1 ? { ...result(), blocks: [{ type: 'text', text: 'not JSON' }] } : result());
  const out = await runCouncil(o);
  assert.equal(out.steps, 8); assert.equal(out.runs.filter((r) => r.status === 'completed').length, 7);
  let dispatched = 0;
- const broken = await runCouncil({ ...setup(async () => { dispatched++; return { ...result(), blocks: [{ type: 'text', text: 'not JSON' }] }; }), maxSteps: 9 });
- assert.equal(dispatched, 9); assert.equal(broken.steps, 9); assert.match(broken.text, /Partial/);
+ const broken = await runCouncil(setup(async () => { dispatched++; return { ...result(), blocks: [{ type: 'text', text: 'not JSON' }] }; }));
+ assert.equal(dispatched, 14); assert.equal(broken.steps, 14); assert.match(broken.text, /Partial/);
 });
 
 test('per-call output limits do not mutate model defaults and reject invalid bounds', async () => {
@@ -110,4 +110,15 @@ test('a figure absent from cited evidence gets one repair; an unresolved one is 
   assert.equal(flagged[0]!.status, 'completed');
   assert.match(flagged[0]!.metricIssues!.join(), /15\.28% is not in its cited evidence/);
   assert.match(stuck.text, /Figure check \(unresolved[\s\S]*chair synthesis: finding 1: 15\.28%/);
+});
+
+
+test('repeated unresolved figures reach the chair and remain flagged without a global step cap', async () => {
+ const assessment = { ...finding, findings: [{ ...finding.findings[0]!, claim: 'Holding is 99.99% of assets' }] };
+ let calls = 0;
+ const o = setup(async () => { calls++; return { ...result(), blocks: [{ type: 'text' as const, text: JSON.stringify(assessment) }] }; });
+ const out = await runCouncil({ ...o, prepare: async (call) => { await call('subject resolution', [{ role:'user', blocks:[{type:'text',text:'subject'}] }]); return { question:o.question, evidence:[] }; } });
+ assert.equal(calls, 15); assert.equal(out.steps, 15);
+ assert.equal(out.runs.length, 7); assert.ok(out.runs.every((r) => r.status === 'completed' && r.metricIssues?.length));
+ assert.match(out.text, /chair synthesis: finding 1: 99\.99%/);
 });
