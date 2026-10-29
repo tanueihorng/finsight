@@ -137,3 +137,7 @@ button.laneHead { cursor:pointer; }button.laneHead:focus-visible { outline:2px s
 .foot { flex-wrap:wrap; }
 .chairError { margin:0; font-size:12px; line-height:1.5; color:var(--down); }
 .lane[data-role="chair"][data-state="failed"],.lane[data-role="chair"][data-state="stopped"] { border-color:color-mix(in srgb,var(--down) 70%,transparent); }
+
+/* Deterministic figure-check flags (COUNCILQUALITY-001): a finding's figure was not supported by its cited evidence. */
+.cardFoot>.figureFlag { color:var(--down); font-weight:600; letter-spacing:.3px; }
+.figureCheck { margin:0 0 12px; padding:10px 12px; border:1px solid var(--down); border-radius:10px; font-size:12px; line-height:1.55; }.figureCheck strong { color:var(--down); font-weight:600; }.figureCheck ul { margin:6px 0 0; padding-left:18px; }

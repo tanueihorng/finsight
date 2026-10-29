@@ -65,3 +65,13 @@ test('a failed chair reports the failure, with its error only under PEEK', () =>
   const stopped = councilModel([run('chair', 'synthesis', 'stopped')], true, true);
   assert.equal(stopped.chair.error, 'Synthesis interrupted.');
 });
+
+
+test('figure warnings remain available in both views and hide details under UNPEEK', () => {
+  const runs = [{ ...run('growth', 'assessment', 'completed'), flags: ['private growth detail'] }, { ...run('chair', 'synthesis', 'completed'), flags: ['private chair detail'] }];
+  const visible = councilModel(runs, true, true), hidden = councilModel(runs, true, false);
+  assert.deepEqual(visible.roles[0]!.flags, ['private growth detail']);
+  assert.deepEqual(visible.chair.flags, ['private chair detail']);
+  assert.equal(hidden.roles[0]!.flagCount, 1); assert.deepEqual(hidden.roles[0]!.flags, []);
+  assert.equal(hidden.chair.flagCount, 1); assert.deepEqual(hidden.chair.flags, []);
+});

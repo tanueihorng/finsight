@@ -17,6 +17,7 @@ function Lane({ r, focused, dim, onFocus, cited }: { r: RoleView; focused: boole
         <span className={styles.laneLive} aria-hidden="true">{r.state === 'running' ? <i className="kx-spin" /> : r.state === 'completed' ? '✓' : r.state === 'failed' || r.state === 'stopped' ? '✕' : '○'}</span>
         <span className={styles.laneStatus}>{status}</span>
       </button>
+      {r.flagCount > 0 && <div className={styles.figureCheck} data-figure-check><strong>Figure check: {r.flagCount} unverified</strong>{r.flags.length > 0 && <ul>{r.flags.map((f, i) => <li key={i}>{f}</li>)}</ul>}</div>}
       <ol className={styles.laneSteps}>
         {hidden > 0 && <li className={styles.laneMore}>{`+ ${hidden} earlier step${hidden === 1 ? '' : 's'}`}</li>}
         {steps.map((s) => {
@@ -49,6 +50,7 @@ export function CouncilChain({ v, onAsk }: { v: CouncilView; onAsk?: (q: string)
           <div className={styles.laneHead}><i className={styles.laneDot} aria-hidden="true" /><strong>Kestrel Chair</strong>
             <span className={styles.laneLive} aria-hidden="true">{v.chair.state === 'running' ? <i className="kx-spin" /> : v.chair.state === 'completed' ? '✓' : v.chair.state === 'failed' || v.chair.state === 'stopped' ? '✕' : '○'}</span>
             <span className={styles.laneStatus}>{v.chair.waiting}</span></div>
+          {v.chair.flagCount > 0 && <div className={styles.figureCheck} data-figure-check><strong>Figure check: {v.chair.flagCount} unverified</strong>{v.chair.flags.length > 0 && <ul>{v.chair.flags.map((f, i) => <li key={i}>{f}</li>)}</ul>}</div>}
           <div className={styles.chairBlock}><h4>Ledger</h4>
             {ledger.length ? <ul className={styles.ledger}>{ledger.map((l) => <li key={l.key} data-role={l.role}><i aria-hidden="true" />{l.text}</li>)}</ul>
               : <p className={styles.muted}>{v.hidden ? 'Findings hidden by UNPEEK.' : 'Challenge-round claims collect here.'}</p>}</div>

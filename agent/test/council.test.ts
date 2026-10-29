@@ -91,3 +91,23 @@ test('a forbidden call in an oversized batch is rejected before any tool executi
  assert.match(out.runs.find((r) => r.role === 'growth' && r.phase === 'assessment')!.error!, /Council tool denied/);
  assert.match(out.text, /Partial council review/);
 });
+
+test('a figure absent from cited evidence gets one repair; an unresolved one is flagged, not hidden', async () => {
+  const figure = { ...finding, findings: [{ ...finding.findings[0]!, claim: 'Holding is 15.28% of the portfolio' }] };
+  const asText = (a: unknown) => ({ ...result(), blocks: [{ type: 'text' as const, text: JSON.stringify(a) }] });
+  const chair = (req: StepRequest) => /Council role: chair/.test(req.system);
+  let n = 0;
+  const fixed = await runCouncil(setup(async (req: StepRequest) => {
+    n++;
+    return chair(req) && !/Figure check failed/.test(JSON.stringify(req.messages.at(-1))) ? asText(figure) : result();
+  }));
+  assert.equal(n, 8); // six specialist calls, the chair, and one chair repair
+  assert.ok(fixed.runs.every((r) => r.status === 'completed' && !r.metricIssues));
+  assert.doesNotMatch(fixed.text, /Figure check/);
+  const stuck = await runCouncil(setup(async (req: StepRequest) => (chair(req) ? asText(figure) : result())));
+  const flagged = stuck.runs.filter((r) => r.metricIssues);
+  assert.deepEqual(flagged.map((r) => r.role), ['chair']);
+  assert.equal(flagged[0]!.status, 'completed');
+  assert.match(flagged[0]!.metricIssues!.join(), /15\.28% is not in its cited evidence/);
+  assert.match(stuck.text, /Figure check \(unresolved[\s\S]*chair synthesis: finding 1: 15\.28%/);
+});

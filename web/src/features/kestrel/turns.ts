@@ -7,7 +7,7 @@ export type Part =
   | { kind: 'text'; text: string; open: boolean }
   | { kind: 'tool'; key: string; name: string; args: string; state: 'running' | 'ok' | 'err'; res: string; detail: string }
   | { kind: 'ui'; key: string; view: unknown }
-  | { kind: 'council'; key: string; role: string; phase: string; status: string; model: string; costUsd: number | null; ms: number; detail: string }
+  | { kind: 'council'; key: string; role: string; phase: string; status: string; model: string; costUsd: number | null; ms: number; detail: string; flags: string[] }
   | { kind: 'notice'; text: string; cls: string };
 export interface Meta { label?: string; costUsd?: number | null; ms?: number | null }
 export interface Turn { id: string; label: string; search?: string; parts: Part[]; cites: Citation[]; meta: Meta | null; allText: string }
@@ -51,12 +51,15 @@ export function addUi(t: Turn, callId: string, view: unknown): Turn {
   return { ...t, parts: i < 0 ? [...closeText(t.parts), part] : t.parts.map((p, j) => j === i ? part : p) };
 }
 
+// Unresolved figure-check issues from the council's deterministic check.
+const figureFlags = (x: unknown): string[] => Array.isArray(x) ? x.filter((f): f is string => typeof f === 'string' && !!f).slice(0, 20).map((f) => f.slice(0, 300)) : [];
+
 // Parse persisted public run summaries; never expose model scratch reasoning.
 export function addCouncil(t: Turn, raw: string): Turn {
   try {
     const r = JSON.parse(raw);
     if (typeof r.id !== 'string' || !['growth','macro','risk','chair'].includes(r.role) || !['assessment','challenge','synthesis'].includes(r.phase) || !['running','completed','failed','stopped'].includes(r.status)) return t;
-    const part: Extract<Part, {kind: 'council'}> = { kind: 'council', key: r.id, role: r.role, phase: r.phase, status: r.status, model: String(r.model), costUsd: typeof r.costUsd === 'number' && Number.isFinite(r.costUsd) ? r.costUsd : null, ms: typeof r.ms === 'number' ? r.ms : 0, detail: r.findings ? JSON.stringify(r.findings, null, 2) : String(r.error || '') };
+    const part: Extract<Part, {kind: 'council'}> = { kind: 'council', key: r.id, role: r.role, phase: r.phase, status: r.status, model: String(r.model), costUsd: typeof r.costUsd === 'number' && Number.isFinite(r.costUsd) ? r.costUsd : null, ms: typeof r.ms === 'number' ? r.ms : 0, detail: r.findings ? JSON.stringify(r.findings, null, 2) : String(r.error || ''), flags: figureFlags(r.metricIssues) };
     const i = t.parts.findIndex((p) => p.kind === 'council' && p.key === part.key);
     return { ...t, parts: i < 0 ? [...closeText(t.parts), part] : t.parts.map((p,j) => j === i ? part : p) };
   } catch { return t; }

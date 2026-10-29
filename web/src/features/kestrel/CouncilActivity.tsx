@@ -13,6 +13,7 @@ export function CouncilActivity({ run }: { run: Extract<Part, { kind: 'council' 
   return <details className="agent-notice">
     <summary>{labels[run.role]} · {run.phase} · {run.status}</summary>
     <div>{run.model} · {run.ms}ms · {run.costUsd === null ? 'Cost unavailable' : '$' + run.costUsd.toFixed(6)}</div>
+    {!!run.flags.length && <p data-figure-flags>{peek ? <>Figure check, unverified: {run.flags.join('; ')}</> : `Figure check: ${run.flags.length} unverified figure${run.flags.length === 1 ? '' : 's'}`}</p>}
     {!peek ? <p>Findings hidden by UNPEEK.</p> : assessment ? <>
       {assessment.findings.map((finding, index) => <section key={index}>
         <p><strong>{finding.claim}</strong></p>

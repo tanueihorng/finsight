@@ -85,7 +85,7 @@ test('full page council switches between Cards and Chain of thought, remembers i
     const turnId = data.messages.find((m: { role: string }) => m.role === 'assistant')?.turnId;
     const findings = (claim: string) => ({ findings: [{ claim, evidenceIds: ['e1'], assumptions: [], uncertainty: 'Synthetic uncertainty', counterevidence: [], invalidation: 'New evidence', missingEvidence: [] }], unresolvedQuestions: ['Synthetic open question?'] });
     const runs = [['growth', 'assessment', 'Synthetic lane claim'], ['chair', 'synthesis', 'Synthetic chair ruling']].map(([role, phase, claim], i) =>
-      ({ id: 'run-' + i, role: 'assistant', turnId, blocks: [{ type: 'notice', kind: 'council', text: JSON.stringify({ id: 'c' + i, parentId: 'p', role, phase, model: 'fixture', version: 1, ms: 10, costUsd: null, status: 'completed', findings: findings(claim!) }) }] }));
+      ({ id: 'run-' + i, role: 'assistant', turnId, blocks: [{ type: 'notice', kind: 'council', text: JSON.stringify({ id: 'c' + i, parentId: 'p', role, phase, model: 'fixture', version: 1, ms: 10, costUsd: null, status: 'completed', metricIssues: [role === 'growth' ? 'Synthetic growth figure warning' : 'Synthetic chair figure warning'], findings: findings(claim!) }) }] }));
     data.messages.push(...runs);
     await route.fulfill({ response, json: data });
   });
@@ -95,12 +95,16 @@ test('full page council switches between Cards and Chain of thought, remembers i
   await expect(board).toHaveAttribute('data-view', 'cards');
   await expect(board.getByRole('button', { name: '≡ Chain of thought' })).toHaveCount(0); // the switch is a full-page control
   await page.getByRole('button', { name: 'Open full page' }).click();
+  await expect(board.getByText('Figures unverified (1)')).toHaveCount(2);
   await board.getByRole('button', { name: '≡ Chain of thought' }).click();
   await expect(board).toHaveAttribute('data-view', 'chain');
+  await expect(board.getByLabel('Business & Growth lane')).toContainText('Synthetic growth figure warning');
+  await expect(board.getByLabel('Kestrel Chair lane')).toContainText('Synthetic chair figure warning');
   await expect(board.getByLabel('Business & Growth lane')).toContainText('Synthetic lane claim');
   await expect(board.getByLabel('Kestrel Chair lane')).toContainText('Synthetic chair ruling');
+  await page.locator('#agent-panel .agent-input').fill('Unsent draft');
   await board.getByRole('button', { name: 'Answer in the composer' }).click();
-  await expect(page.locator('#agent-panel .agent-input')).toHaveValue('Synthetic open question?');
+  await expect(page.locator('#agent-panel .agent-input')).toHaveValue('Unsent draft\n\nSynthetic open question?');
   await page.locator('#agent-panel .agent-input').fill('');
   await page.keyboard.press('ControlOrMeta+Period');
   await expect(board).toHaveAttribute('data-view', 'cards');
@@ -111,6 +115,9 @@ test('full page council switches between Cards and Chain of thought, remembers i
   await expect(board.getByText('Synthetic lane claim')).toHaveCount(0);
   await expect(board.getByText('Synthetic chair ruling')).toHaveCount(0);
   await expect(board.getByText('Synthetic open question?')).toHaveCount(0);
+  await expect(board.getByText('Synthetic growth figure warning')).toHaveCount(0);
+  await expect(board.getByText('Synthetic chair figure warning')).toHaveCount(0);
+  await expect(board.locator('[data-figure-check]')).toHaveCount(2);
 });
 
 test('a failed chair shows its failure in Chain of thought, not a loading placeholder', async ({ page }) => {

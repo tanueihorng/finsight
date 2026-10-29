@@ -16,11 +16,37 @@ type PortfolioSnapshot = Omit<Partial<Portfolio>, 'summary'> & {
 type CashPosition = Portfolio['cash'][number];
 const r2 = (n: unknown): number | null => (typeof n === 'number' && Number.isFinite(n) ? Math.round(n * 100) / 100 : null);
 
-function compactPosition(p: Position) {
+// weightPct keeps FinSight's displayed meaning (share of securities value).
+// weightInclCashPct divides by securities plus cash. Each weight-bearing result
+// names its basis and denominator so the two are never compared silently.
+export const WEIGHT_BASIS = {
+  securities: 'Share of securities market value; cash excluded.',
+  securities_plus_cash: 'Share of securities plus cash (FinSight net worth). Liabilities are not tracked, so this is not net of debt.',
+} as const;
+export type WeightBasis = keyof typeof WEIGHT_BASIS;
+
+function compactPosition(p: Position, inclCash: number | null) {
   return {
     symbol: p.symbol, name: p.name, currency: p.currency, quantity: p.quantity, avgCost: r2(p.avgCost), last: r2(p.last),
-    marketValue: r2(p.marketValue), weightPct: r2(p.weight), unrealized: r2(p.unrealized), unrealizedPct: r2(p.unrealizedPct),
-    fxPnl: r2(p.fxPnl), dayChange: r2(p.dayChange), quoted: p.quoted,
+    marketValue: r2(p.marketValue), weightPct: r2(p.weight), weightInclCashPct: pct(p.marketValue, inclCash),
+    unrealized: r2(p.unrealized), unrealizedPct: r2(p.unrealizedPct), fxPnl: r2(p.fxPnl), dayChange: r2(p.dayChange), quoted: p.quoted,
+  };
+}
+const pct = (part: unknown, whole: number | null) => (typeof part === 'number' && Number.isFinite(part) && whole ? r2((part / whole) * 100) : null);
+const finite = (n: unknown) => (typeof n === 'number' && Number.isFinite(n) ? n : 0);
+
+/** Both weight denominators from one snapshot. Unknown liabilities stay unknown, never zero. */
+export function denominators(d: PortfolioSnapshot, base: string, asOf: string) {
+  const positions = d.positions || [], cash = d.cash || [];
+  const securities = d.summary?.totalValue ?? positions.reduce((s, p) => s + finite(p.marketValue), 0);
+  const cashBase = d.summary?.cashBase ?? cash.reduce((s, c) => s + finite(c.base), 0);
+  const inclCash = d.summary?.netWorth ?? securities + cashBase;
+  const complete = !(d.fxMissing || []).length && positions.every((p) => p.quoted !== false);
+  const one = (scope: WeightBasis, value: number, constituents: string[]) => ({ scope, value: r2(value), currency: base, asOf, constituents: constituents.length, meaning: WEIGHT_BASIS[scope], complete });
+  return {
+    securities: one('securities', securities, positions.map((p) => p.symbol)),
+    securities_plus_cash: one('securities_plus_cash', inclCash, [...positions.map((p) => p.symbol), ...cash.map((c) => `${c.ccy} cash`)]),
+    liabilities: 'not tracked' as const,
   };
 }
 
@@ -43,11 +69,13 @@ export function summarise(d: PortfolioSnapshot, base: string) {
 
 const getPortfolio: ToolDef = {
   name: 'get_portfolio',
-  description: 'Current holdings with live prices from FinSight: summary (net worth, securities value, cash, cost, P/L) and every position (quantity, avg cost, last price, market value, weight %, unrealized P/L, FX P/L). Values in the base currency. Use this before answering anything about holdings.',
+  description: 'Current holdings with live prices from FinSight: summary (net worth, securities value, cash, cost, P/L) and every position (quantity, avg cost, last price, market value, weight %, unrealized P/L, FX P/L). weightPct is a share of securities only; weightInclCashPct is a share of securities plus cash. Never compare a weight with a total of the other basis. Values in the base currency. Use this before answering anything about holdings.',
   input: z.object({ account: Account, base: Base }),
   async handler({ account, base = 'SGD' }, ctx) {
     const { d, asOf } = await fetchPortfolio(ctx, account, base);
-    return { source: 'FinSight /api/portfolio', asOf, summary: summarise(d, base), positions: (d.positions || []).map(compactPosition), cash: d.cash };
+    const den = denominators(d, base, asOf);
+    return { source: 'FinSight /api/portfolio', asOf, summary: summarise(d, base), weightBasis: 'securities', denominators: den,
+      positions: (d.positions || []).map((p) => compactPosition(p, den.securities_plus_cash.value)), cash: d.cash };
   },
 };
 
@@ -67,7 +95,8 @@ const queryPositions: ToolDef = {
   async handler(q, ctx) {
     const base = q.base || 'SGD';
     const { d, asOf } = await fetchPortfolio(ctx, q.account, base);
-    let rows = (d.positions || []).map(compactPosition);
+    const den = denominators(d, base, asOf);
+    let rows = (d.positions || []).map((p) => compactPosition(p, den.securities_plus_cash.value));
     let cats: Record<string, Category> = {};
     if (q.sector) {
       cats = await ctx.finsight.get<Record<string, Category>>('/api/categories', { symbols: rows.map((r: CompactPosition) => r.symbol).join(',') }, ctx.signal);
@@ -82,9 +111,9 @@ const queryPositions: ToolDef = {
     rows.sort((a: CompactPosition, b: CompactPosition) => (k === 'symbol' ? String(a.symbol).localeCompare(String(b.symbol)) : ((a[k] ?? -Infinity) - (b[k] ?? -Infinity))) * sign);
     const matched = rows.length;
     rows = rows.slice(0, q.limit);
-    const sum = (f: 'marketValue' | 'weightPct' | 'unrealized') => r2(rows.reduce((s: number, r: CompactPosition) => s + (r[f] ?? 0), 0));
-    return { source: 'FinSight /api/portfolio' + (q.sector ? ' + /api/categories' : ''), asOf, base, matched, returned: rows.length,
-      totals: { marketValue: sum('marketValue'), weightPct: sum('weightPct'), unrealized: sum('unrealized') }, rows };
+    const sum = (f: 'marketValue' | 'weightPct' | 'weightInclCashPct' | 'unrealized') => r2(rows.reduce((s: number, r: CompactPosition) => s + (r[f] ?? 0), 0));
+    return { source: 'FinSight /api/portfolio' + (q.sector ? ' + /api/categories' : ''), asOf, base, matched, returned: rows.length, weightBasis: 'securities', denominators: den,
+      totals: { marketValue: sum('marketValue'), weightPct: sum('weightPct'), weightInclCashPct: sum('weightInclCashPct'), unrealized: sum('unrealized') }, rows };
   },
 };
 
@@ -118,7 +147,9 @@ const getExposures: ToolDef = {
     const total = [...groups.values()].reduce((s, v) => s + v, 0);
     const rows = [...groups.entries()].map(([group, value]) => ({ group, value: r2(value), weightPct: total ? r2((value / total) * 100) : null }))
       .sort((a, b) => (b.value ?? 0) - (a.value ?? 0));
-    return { source: 'FinSight', asOf, base, by, total: r2(total), rows, lookThrough: false,
+    // Every grouping here includes cash, so weights share the securities-plus-cash basis.
+    return { source: 'FinSight', asOf, base, by, total: r2(total), weightBasis: 'securities_plus_cash',
+      denominator: { scope: 'securities_plus_cash', value: r2(total), currency: base, asOf, constituents: groups.size, meaning: WEIGHT_BASIS.securities_plus_cash }, liabilities: 'not tracked', rows, lookThrough: false,
       note: by === 'sector' ? 'ETFs and funds are counted as single lines (no look-through).' : undefined };
   },
 };
@@ -183,11 +214,30 @@ const simple = (name: string, description: string, pathname: string, input: z.Zo
   async handler(i, ctx) { return { source: `FinSight ${pathname}`, asOf: new Date().toISOString(), data: await ctx.finsight.get(pathname, params(i), ctx.signal) }; },
 });
 
+const portfolioWeights: ToolDef = {
+  name: 'portfolio_weights',
+  description: 'Weights of named holdings (alone and combined) on both bases from one snapshot, computed in code: securitiesPct (share of securities only) and weightInclCashPct (share of securities plus cash). Returns both denominators. Use this for any position-weight or concentration figure; quote the basis with the number.',
+  input: z.object({ symbols: Symbols, account: Account, base: Base }),
+  async handler({ symbols, account, base = 'SGD' }, ctx) {
+    const { d, asOf } = await fetchPortfolio(ctx, account, base);
+    const den = denominators(d, base, asOf);
+    const want: string[] = [...new Set<string>(symbols.map((s: string) => s.toUpperCase()))];
+    const held = new Map((d.positions || []).map((p) => [String(p.symbol).toUpperCase(), p]));
+    const row = (symbol: string, value: number) => ({ symbol, marketValue: r2(value), securitiesPct: pct(value, den.securities.value), weightInclCashPct: pct(value, den.securities_plus_cash.value) });
+    const rows = want.filter((s) => held.has(s)).map((s) => row(s, finite(held.get(s)!.marketValue)));
+    const combinedValue = rows.reduce((s, r) => s + (r.marketValue ?? 0), 0);
+    return { source: 'FinSight /api/portfolio', asOf, base, account: account || 'ALL', denominators: den, rows,
+      combined: rows.length > 1 ? row(rows.map((r) => r.symbol).join('+'), combinedValue) : undefined,
+      notHeld: want.filter((s) => !held.has(s)), lookThrough: false };
+  },
+};
+
 const acctBase = z.object({ account: Account, base: Base });
 const withAll = (i: any) => ({ ...i, account: i.account || 'ALL' });
 
 export const factsTools: ToolDef[] = [
-  getPortfolio, queryPositions, getExposures, getCash, getAccounts, getQuote, getHistory,
+  getPortfolio, queryPositions, getExposures, portfolioWeights, getCash, getAccounts, getQuote, getHistory,
+  simple('search_instruments', 'Resolve a company name or ticker to market-data instruments. Use the explicit question before optional chart context; ask about materially ambiguous listings rather than silently substituting the chart.', '/api/search', z.object({ query: z.string().trim().min(1).max(120) }), (i) => ({ q: i.query })),
   simple('get_events', 'Upcoming earnings, dividends and ex-dates for holdings and watchlist.', '/api/events', z.object({ account: Account }), withAll),
   simple('get_dividends', 'Dividend income report (received, expected, withholding).', '/api/dividends', acctBase, withAll),
   simple('get_realized', 'Realized gains report from sells (stock vs FX split).', '/api/realized', acctBase, withAll),

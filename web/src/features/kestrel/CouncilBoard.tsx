@@ -46,7 +46,7 @@ function Card({ r, open, onToggle, hidden }: { r: RoleView; open: boolean; onTog
       {r.challengeClaim && <div className={styles.more}><h5>Challenge round</h5><p>{r.challengeClaim}</p></div>}
       <div className={styles.more}><h5>Runs</h5><ul>{r.runs.map((x) => <li key={x.key}>{`${x.phase} · ${x.status} · ${x.model}${x.ms ? ` · ${(x.ms / 1000).toFixed(1)}s` : ''}${x.costUsd != null ? ` · $${x.costUsd.toFixed(4)}` : ''}`}</li>)}</ul></div>
     </span>}
-    <span className={styles.cardFoot}>{r.invalidation ? <span className={styles.change}>Would change if: {r.invalidation}</span> : r.challenged ? 'Challenge round' : 'Independent assessment'}<span aria-hidden="true">{open ? '▾' : '▸'}</span></span>
+    <span className={styles.cardFoot}>{r.flagCount ? <span className={styles.figureFlag} data-figure-flag>Figures unverified ({r.flagCount})</span> : r.invalidation ? <span className={styles.change}>Would change if: {r.invalidation}</span> : r.challenged ? 'Challenge round' : 'Independent assessment'}<span aria-hidden="true">{open ? '▾' : '▸'}</span></span>
   </button>;
 }
 function Chair({ v, open, onToggle }: { v: CouncilView; open: boolean; onToggle: () => void }) {
@@ -55,6 +55,7 @@ function Chair({ v, open, onToggle }: { v: CouncilView; open: boolean; onToggle:
     <CouncilOrb role="chair" active={c.state === 'running'} />
     <span className={styles.chairCopy}><strong>Kestrel Chair</strong><span>{c.waiting}</span>
       {c.state === 'running' && <span className={styles.shimmer} aria-hidden="true"><i /><i /></span>}
+      {c.flagCount > 0 && <span className={styles.figureFlag} data-figure-flag>Figures unverified ({c.flagCount})</span>}
       {c.lead && <span className={styles.chairLead}>{c.lead}</span>}
       {c.state === 'completed' && !v.hidden && <span className={styles.chairTiles}>
         <span><b>{c.missing.length}</b> still needed</span><span><b>{c.changes.length}</b> would change the view</span><span><b>{c.questions.length}</b> open question{c.questions.length === 1 ? '' : 's'}</span>
@@ -111,10 +112,13 @@ export function CouncilConclusion({ children, runs = [] }: { children: ReactNode
   let assessment: ReturnType<typeof Assessment.parse> | null = null;
   if (chair && peek) try { const parsed = Assessment.safeParse(JSON.parse(chair.detail)); if (parsed.success) assessment = parsed.data; } catch { /* legacy or incomplete result */ }
   const partial = runs.some((run) => run.status === 'failed' || run.status === 'stopped');
+  // The chair's own unresolved figure checks; specialists' show on their cards.
+  const flags = chair?.flags ?? [];
   const gaps = [...new Set(assessment?.findings.flatMap((finding) => finding.missingEvidence) || [])];
   const changes = [...new Set(assessment?.findings.map((finding) => finding.invalidation) || [])];
   return <section className={styles.conclusion} data-council-result>
     <div className={styles.resultLabel}><Icon name="spark" size={14} /> {partial ? 'Partial chair synthesis' : 'Chair synthesis'}</div>
+    {!!flags.length && <div className={styles.figureCheck} role="note" data-figure-check><strong>Figure check: {flags.length} unverified</strong>{peek ? <ul>{flags.map((f) => <li key={f}>{f}</li>)}</ul> : <span> Details hidden by UNPEEK.</span>}</div>}
     {!peek ? <p className={styles.resultMuted}>Council findings hidden by UNPEEK.</p> : assessment?.findings.length ? <>
       {assessment.findings.map((finding, index) => <div key={index} className={styles.resultFinding}><p className={index === 0 ? styles.resultLead : styles.resultClaim}>{finding.claim}</p><p className={styles.resultMuted}>{finding.uncertainty}</p></div>)}
       <div className={styles.resultColumns}>{gaps.length > 0 && <div><h4>Still needed</h4><ul>{gaps.map((gap) => <li key={gap}>{gap}</li>)}</ul></div>}{changes.length > 0 && <div><h4>What changes the view</h4><ul>{changes.map((change) => <li key={change}>{change}</li>)}</ul></div>}</div>

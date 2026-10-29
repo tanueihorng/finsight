@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { seeded } from './helpers';
+import { replySettings, seeded } from './helpers';
 
 async function setup(page: Page, narrow = false) {
   if (narrow) await page.setViewportSize({ width: 390, height: 844 });
@@ -16,10 +16,13 @@ async function setup(page: Page, narrow = false) {
   await expect(page.locator('.agent-input:visible')).toBeVisible();
 }
 const effort = (p: Page) => p.getByRole('combobox', { name: 'Thinking effort', exact: true });
+const menu = replySettings;
 const model = (p: Page) => p.getByRole('combobox', { name: 'Model', exact: true });
 
 test('thinking menu lists the model levels, remembers each model across reloads, submits the choice and hides for unsupported models', async ({ page }) => {
   await setup(page);
+  await expect(page.locator('.kx-model-btn:visible .think')).toHaveText('High');
+  await menu(page);
   await expect(effort(page)).toHaveValue('high');
   await expect(effort(page).locator('option')).toHaveText(['Off', 'Low', 'High', 'Max']);
   await expect(page.locator('.kx-think:visible')).toHaveClass(/\bon\b/);
@@ -37,18 +40,19 @@ test('thinking menu lists the model levels, remembers each model across reloads,
   await model(page).selectOption('deepseek-flash'); await expect(effort(page)).toHaveValue('low');
   await model(page).selectOption('gpt-6-sol'); await expect(effort(page)).toHaveValue('none');
   await model(page).selectOption('gpt-6-luna'); await expect(effort(page)).toHaveValue('xhigh');
-  await page.reload(); await expect(effort(page)).toBeVisible(); await expect(effort(page)).toHaveValue('xhigh');
+  await page.reload(); await menu(page); await expect(effort(page)).toBeVisible(); await expect(effort(page)).toHaveValue('xhigh');
   await model(page).selectOption('fake'); await expect(effort(page)).toHaveCount(0);
 });
 
 test('narrow panel: the thinking menu fits the composer, passes axe and sends DeepSeek off without remapping it', async ({ page }) => {
   await setup(page, true);
+  await menu(page);
   await effort(page).selectOption('none');
   const sent = page.waitForRequest((r) => r.method() === 'POST' && /\/messages$/.test(new URL(r.url()).pathname));
   await page.locator('.agent-input:visible').fill('hello'); await page.locator('.agent-input:visible').press('Enter');
   expect((await sent).postDataJSON().effort).toBe('none');
   await expect(effort(page)).toBeEnabled();
-  const fits = await page.locator('.kx-think:visible').evaluate((el) => { const a = el.getBoundingClientRect(), b = el.closest('.agent-box')!.getBoundingClientRect(); return a.left >= b.left && a.right <= b.right + 1; });
+  const fits = await page.locator('.kx-pop:visible').evaluate((el) => { const a = el.getBoundingClientRect(), b = el.closest('.agent-compose')!.getBoundingClientRect(); return a.left >= b.left && a.right <= b.right + 1; });
   expect(fits).toBe(true);
-  const a11y = await new AxeBuilder({ page }).include('.agent-tools-row').analyze(); expect(a11y.violations).toEqual([]);
+  const a11y = await new AxeBuilder({ page }).include('.agent-compose').analyze(); expect(a11y.violations).toEqual([]);
 });

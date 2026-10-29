@@ -9,14 +9,17 @@ test('council is hidden by default and opt-in lens is captured with the message'
     await route.fulfill({ response, json: { ...data, council: true } });
   });
   await page.reload();
-  const lens = page.getByRole('combobox', { name: 'Analytical lens' });
-  await lens.selectOption('growth');
-  await page.getByRole('button', { name: 'Council', exact: true }).click();
-  await expect(page.locator('.agent-input:visible')).toHaveValue('/committee ');
+  const council = page.getByRole('button', { name: 'Council', exact: true });
+  await expect(council).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.getByRole('combobox', { name: 'Analytical lens' })).toHaveCount(0);
+  await council.click();
+  await expect(council).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('combobox', { name: 'Analytical lens' }).selectOption('growth');
   const request = page.waitForRequest((r) => r.url().endsWith('/messages') && r.method() === 'POST');
-  await page.locator('.agent-input:visible').fill('/committee synthetic company ');
+  await page.locator('.agent-input:visible').fill('synthetic company ');
   await page.locator('.agent-input:visible').press('Enter');
-  expect((await request).postDataJSON().lens).toBe('growth');
+  const body = (await request).postDataJSON();
+  expect(body.lens).toBe('growth'); expect(body.content).toBe('/committee synthetic company');
   await expect(page.locator('.agent-turn:visible').last()).toContainText('Echo: /committee synthetic company');
   await page.route('**/api/agent/threads/*', async (route) => {
     const response = await route.fetch(); const data = await response.json();

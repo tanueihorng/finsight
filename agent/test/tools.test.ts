@@ -136,3 +136,29 @@ test('private strategy plugins: valid one loads; escapes are denied', async () =
   assert.match(JSON.stringify(f.json), /fetch is not a function|error/);
   fs.rmSync(root, { recursive: true, force: true });
 });
+
+test('weights name their basis; both denominators come from one snapshot and liabilities stay unknown', async () => {
+  const p = await run('get_portfolio', {});
+  assert.equal(p.json.weightBasis, 'securities');
+  assert.equal(p.json.denominators.securities.value, 6000);
+  assert.equal(p.json.denominators.securities_plus_cash.value, 10350);
+  assert.equal(p.json.denominators.liabilities, 'not tracked');
+  const voo = p.json.positions.find((x: any) => x.symbol === 'VOO');
+  assert.equal(voo.weightPct, 45); // displayed meaning unchanged
+  assert.equal(voo.weightInclCashPct, 26.09);
+  const q = await run('query_positions', { currency: 'USD' });
+  assert.equal(q.json.weightBasis, 'securities');
+  assert.equal(q.json.totals.weightInclCashPct, 52.18);
+  const e = await run('get_exposures', { by: 'currency' });
+  assert.equal(e.json.weightBasis, 'securities_plus_cash');
+  assert.equal(e.json.denominator.value, e.json.total);
+});
+
+test('portfolio_weights computes single and combined weights on both bases in code', async () => {
+  const r = await run('portfolio_weights', { symbols: ['voo', 'NVDA', 'ZZZZ'] });
+  assert.equal(r.ok, true);
+  assert.deepEqual(r.json.rows.map((x: any) => [x.symbol, x.securitiesPct, x.weightInclCashPct]), [['VOO', 45, 26.09], ['NVDA', 45, 26.09]]);
+  assert.deepEqual([r.json.combined.marketValue, r.json.combined.securitiesPct, r.json.combined.weightInclCashPct], [5400, 90, 52.17]);
+  assert.deepEqual(r.json.notHeld, ['ZZZZ']);
+  assert.equal(r.json.denominators.liabilities, 'not tracked');
+});

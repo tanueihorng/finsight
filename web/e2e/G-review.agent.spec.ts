@@ -53,7 +53,7 @@ test('the welcome keeps the suggestions it opened with; the context button follo
   await expect(first).toHaveText('What do my strategies say about VOO right now?');
   await page.locator('#positions-body tr[data-sym="NVDA"]').click();
   await expect(page.locator('#detail-title')).toHaveText('NVDA · DETAIL');
-  await expect(page.locator('.agent-ctx:visible')).toHaveText('◉ NVDA 1d');
+  await expect(page.locator('.agent-ctx:visible')).toHaveText('NVDA 1d');
   await expect(first).toHaveText('What do my strategies say about VOO right now?');
   // A new chat builds a new welcome from what is selected then.
   await page.locator('.agent-icon-btn[title="New chat (/new)"]:visible').click();
