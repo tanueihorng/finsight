@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { seeded } from './helpers';
+import { replySettings, seeded } from './helpers';
 async function open(p: Page) {
   await seeded(p);
   await p.evaluate(() => { localStorage.setItem('finsight-agent-mode', 'side'); localStorage.removeItem('finsight-agent-thread'); });
@@ -21,6 +21,7 @@ test('nested bold and italic render in a streamed answer and the same saved answ
 test('an enabled model exposes the views label and table starter', async ({ page }) => {
   await page.route('**/api/agent/brains', (r) => r.fulfill({ json: { default: 'fake', brains: [{ id: 'fake', label: 'Fake model', costTier: '$', available: true, ui: true }] } }));
   await open(page);
+  await replySettings(page);
   await expect(page.getByRole('combobox', { name: 'Model', exact: true }).locator('option:checked')).toHaveText('Fake model $ · views');
   const starter = page.getByRole('button', { name: 'Show my holdings as a table', exact: true }); await expect(starter).toBeVisible();
   await starter.click(); await expect(page.locator('.agent-user:visible').last()).toContainText('Show my holdings as a table');

@@ -11,8 +11,8 @@ test('Kestrel labels match legacy agent-panel.js', () => {
   assert.deepEqual([costLabel(0.0123), costLabel(0.005)], ['$0.012', '$0.0050']);
   assert.equal(ctxLabel({ symbol: 'VOO', timeframe: '1d', view: 'terminal' }), '@VOO · 1d');
   assert.equal(ctxLabel('{bad'), '');
-  assert.equal(ctxButton(true, { view: 'terminal' }), '◉ page');
-  assert.equal(ctxButton(false, { symbol: 'X', view: 'terminal' }), '○ no context');
+  assert.equal(ctxButton(true, { view: 'terminal' }), 'This page');
+  assert.equal(ctxButton(false, { symbol: 'X', view: 'terminal' }), 'No context');
   assert.equal(suggestions({ symbol: 'VOO', view: 'terminal' })[0], 'What do my strategies say about VOO right now?');
   assert.equal(suggestions({ view: 'terminal' }).length, 4);
   assert.deepEqual([nextWidth(440, 900), nextWidth(720, 900), nextWidth(440, 500)], [560, 360, 360]);
