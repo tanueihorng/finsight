@@ -1,6 +1,6 @@
 import { LENSES } from '../../../../shared/council-lenses.ts';
 import { CouncilBoard, CouncilConclusion } from './CouncilBoard.tsx';
-import { lazy, Suspense, memo, useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
+import { createContext, lazy, Suspense, memo, useContext, useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
 import { useStore } from 'zustand';
 import { useCalendar, useEvents, useIntraday, usePortfolio } from '../../api/queries.ts';
 import { Money } from '../../ui/Money.tsx';
@@ -22,6 +22,10 @@ const UiView = lazy(() => import('./ui/UiView.tsx'));
 // KESTRELUI-001 layout: the chat list as a rail beside the conversation (an
 // overlay when the panel is narrow), a start screen for new chats, and a
 // composer with context, search-provider and model pickers.
+// FEAT-009 §5: briefing tiles ask their question, tool calls read as a log card,
+// a caret follows a streaming answer, and in full page a turn's views move to a
+// workspace column beside the answer.
+const FullPage = createContext(false);
 export function Candles() {
   return (
     <span className="candles" aria-hidden="true">
@@ -72,9 +76,9 @@ function Trace({ turnId }: { turnId: string }) {
 // A trailing "Evidence register:" (council and research answers) folds into a closed
 // list, so the answer reads first and the raw evidence ids stay one click away.
 const EVIDENCE = /\n[ \t]*(?:#+ *)?\**Evidence register:?\**:?[ \t]*\n/i;
-const TextPart = memo(function TextPart({ text }: { text: string }) {
+const TextPart = memo(function TextPart({ text, live = false }: { text: string; live?: boolean }) {
   const at = text.search(EVIDENCE);
-  if (at < 0) return <div className="agent-text" dangerouslySetInnerHTML={{ __html: md(text) }} />;
+  if (at < 0) return <div className={'agent-text' + (live ? ' live' : '')} dangerouslySetInnerHTML={{ __html: md(text) }} />;
   const rest = text.slice(at).replace(EVIDENCE, '');
   const n = rest.split('\n').filter((l) => l.trim()).length;
   return (
@@ -89,9 +93,9 @@ const TextPart = memo(function TextPart({ text }: { text: string }) {
 });
 
 type ToolPart = Extract<Turn['parts'][number], { kind: 'tool' }>;
-function ToolRow({ p }: { p: ToolPart }) {
+function ToolRow({ p, i }: { p: ToolPart; i: number }) {
   return (
-    <details className={'agent-tool ' + p.state}>
+    <details className={'agent-tool ' + p.state} style={{ '--i': Math.min(i, 8) } as CSSProperties}>
       <summary><span className="st" aria-hidden="true">{p.state === 'running' ? <i className="kx-spin" /> : <Icon name={p.state === 'ok' ? 'check' : 'x'} size={13} />}</span>
         <span className="nm">{p.name}</span><span className="args">{prettyArgs(p.args)}</span></summary>
       <div className="res">{p.res}</div><div className="detail">{p.detail}</div>
@@ -106,8 +110,8 @@ function ToolGroup({ tools }: { tools: ToolPart[] }) {
   return (
     <details className={'agent-steps' + (running ? ' running' : '') + (failed ? ' err' : '')} open={open ?? running}
       onToggle={(e) => { const v = (e.currentTarget as HTMLDetailsElement).open; if (v !== running || open !== null) setOpen(v); }}>
-      <summary><span className="lbl">{label}</span><Icon name="chevron" size={14} /></summary>
-      <div className="agent-steps-list">{tools.map((p) => <ToolRow key={p.key} p={p} />)}</div>
+      <summary>{running ? <i className="kx-spin" aria-hidden="true" /> : <Icon name={failed ? 'x' : 'check'} size={13} />}<span className="lbl">{label}</span><Icon name="chevron" size={14} /></summary>
+      <div className="agent-steps-list">{tools.map((p, i) => <ToolRow key={p.key} p={p} i={i} />)}</div>
     </details>
   );
 }
@@ -125,8 +129,32 @@ async function copyAnswer(t: Turn): Promise<boolean> {
   return true;
 }
 
+type UiPart = Extract<Turn['parts'][number], { kind: 'ui' }>;
+const uiBlock = (p: UiPart) => <Suspense key={p.key} fallback={<div className="agent-notice">Loading snapshot…</div>}><IslandBoundary><UiView view={p.view} /></IslandBoundary></Suspense>;
+// Full page only: the turn's views as tabs, plus its sources.
+function Workspace({ views, cites }: { views: UiPart[]; cites: Turn['cites'] }) {
+  const [tab, setTab] = useState(0);
+  const sources = views.length;
+  const cur = Math.min(tab, sources + (cites.length ? 0 : -1));
+  return (
+    <aside className="kx-work" aria-label="Workspace">
+      <div className="kx-work-tabs" role="tablist">
+        {views.map((v, i) => <button key={v.key} role="tab" aria-selected={cur === i} onClick={() => setTab(i)}>{`View ${i + 1}`}</button>)}
+        {cites.length > 0 && <button role="tab" aria-selected={cur === sources} onClick={() => setTab(sources)}>{`Sources · ${cites.length}`}</button>}
+      </div>
+      {views.map((v, i) => <div key={v.key} role="tabpanel" hidden={cur !== i}>{uiBlock(v)}</div>)}
+      {cites.length > 0 && <div role="tabpanel" hidden={cur !== sources} className="kx-work-sources">
+        {cites.map((c) => <a key={c.url} className={`agent-cite ${c.class || 'unverified'}`} href={c.url} target="_blank" rel="noopener noreferrer">
+          <b>{citeHost(c.url)}</b><span>{c.title || c.url}</span><span className="when">{`retrieved ${String(c.retrievedAt || '').slice(0, 10)} · ${c.class || 'unverified'}`}</span></a>)}
+      </div>}
+    </aside>
+  );
+}
+
 function TurnView({ t }: { t: Turn }) {
   const [copied, setCopied] = useState(false), [trace, setTrace] = useState(false);
+  const full = useContext(FullPage);
+  const views = full ? t.parts.filter((p): p is UiPart => p.kind === 'ui') : [];
   const councilRuns = t.parts.filter((p) => p.kind === 'council');
   let councilShown = false;
   const blocks: ReactNode[] = [];
@@ -136,15 +164,16 @@ function TurnView({ t }: { t: Turn }) {
       const tools: ToolPart[] = [];
       while (i < t.parts.length && t.parts[i]!.kind === 'tool') tools.push(t.parts[i++] as ToolPart);
       i--; blocks.push(<ToolGroup key={'g' + tools[0]!.key} tools={tools} />);
-    } else if (p.kind === 'text') blocks.push(councilRuns.length ? <CouncilConclusion key={i} runs={councilRuns}><TextPart text={p.text} /></CouncilConclusion> : <TextPart key={i} text={p.text} />);
-    else if (p.kind === 'council' && !councilShown) { councilShown = true; blocks.push(<CouncilBoard key="council" runs={councilRuns} finished={t.meta !== null} />); }
+    } else if (p.kind === 'text') blocks.push(councilRuns.length ? <CouncilConclusion key={i} runs={councilRuns}><TextPart text={p.text} live={p.open} /></CouncilConclusion> : <TextPart key={i} text={p.text} live={p.open} />);
+    else if (p.kind === 'council' && !councilShown) { councilShown = true; blocks.push(<CouncilBoard key="council" runs={councilRuns} finished={t.meta !== null} full={full} onAsk={(q) => { setDraft(chat.getState().draft.trim() ? chat.getState().draft + '\n\n' + q : q); document.querySelector<HTMLTextAreaElement>('#agent-panel .agent-input')?.focus(); }} />); }
     else if (p.kind === 'council') continue;
-    else if (p.kind === 'ui') blocks.push(<Suspense key={p.key} fallback={<div className="agent-notice">Loading snapshot…</div>}><IslandBoundary><UiView view={p.view} /></IslandBoundary></Suspense>);
+    else if (p.kind === 'ui') { if (!full) blocks.push(uiBlock(p)); }
     else blocks.push(<div key={i} className={'agent-notice ' + p.cls}>{p.text}</div>);
   }
   const search = t.search ? chat.getState().searchProviders.find((x) => x.id === t.search)?.label || t.search : '';
   return (
-    <div className="agent-turn">
+    <div className={'agent-turn' + (views.length ? ' has-work' : '')}>
+      {views.length > 0 && <Workspace views={views} cites={t.cites} />}
       {blocks}
       <div className="agent-cites">
         {t.cites.map((c) => (
@@ -258,31 +287,31 @@ function Spark({ values, base, dir }: { values: number[]; base: number | null; d
 const effortLabel = (e: string) => (e === 'none' ? 'Off' : e === 'xhigh' ? 'Extra high' : e.charAt(0).toUpperCase() + e.slice(1));
 const WEEK = 7 * 864e5;
 const until = (t: number, now: number) => { const m = Math.round((t - now) / 6e4); return m <= 0 ? 'now' : m < 60 ? `in ${m}m` : m < 1440 ? `in ${Math.round(m / 60)}h` : `in ${Math.round(m / 1440)}d`; };
-function Briefing({ b, now, lines }: { b: Brief; now: number; lines: { portfolio: number[]; mover: number[]; moverBase: number | null } }) {
+function Briefing({ b, now, lines, onAsk }: { b: Brief; now: number; lines: { portfolio: number[]; mover: number[]; moverBase: number | null }; onAsk: (s: string) => void }) {
   const sign = (n: number | null) => (n == null ? '' : n > 0 ? ' up' : n < 0 ? ' down' : '');
   const pLast = lines.portfolio[lines.portfolio.length - 1];
   const pBase = pLast != null && b.dayPct != null ? pLast / (1 + b.dayPct / 100) : lines.portfolio[0] ?? null;
   return (
     <div className="kx-brief" aria-label="Briefing">
-      <div className="kx-tile">
+      <button className="kx-tile" disabled={!b.holdings} title="Ask how the portfolio is doing today" onClick={() => onAsk('How is my portfolio doing today, and what moved it?')}>
         <span className="lbl">Portfolio today</span>
         <span className={'big' + sign(b.dayPct)}>{b.dayPct == null ? '—' : pctText(b.dayPct)}</span>
         <span className="sm">{b.dayPnl == null ? (b.holdings ? 'no quotes yet' : 'no holdings') : <Money value={b.dayPnl} currency={b.base} signed decimals={0} />}</span>
         <Spark values={lines.portfolio} base={pBase} dir={sign(b.dayPct)} />
-      </div>
-      <div className="kx-tile">
+      </button>
+      <button className="kx-tile" disabled={!b.mover} title={b.mover ? `Ask why ${b.mover.symbol} moved` : undefined} onClick={() => b.mover && onAsk(`Why did ${b.mover.symbol} move ${pctText(b.mover.pct)} today?`)}>
         <span className="lbl">Top mover</span>
         <span className="big">{b.mover?.symbol || '—'}</span>
         <span className={'sm' + sign(b.mover?.pct ?? null)}>{b.mover ? pctText(b.mover.pct) : 'nothing moving'}</span>
         <Spark values={lines.mover} base={lines.moverBase} dir={sign(b.mover?.pct ?? null)} />
-      </div>
-      <div className="kx-tile ev">
+      </button>
+      <button className="kx-tile ev" disabled={!b.next} title={b.next ? 'Ask what this event means for the holdings' : undefined} onClick={() => b.next && onAsk(b.next.ask)}>
         <span className="lbl">Next event{b.next && <span className="kx-when">{until(b.next.t, now)}</span>}</span>
         <span className="big ev">{b.next?.label || '—'}</span>
         <span className="sm">{b.next ? eventTime(b.next.t, now, b.next.timed) : 'none this week'}</span>
         {/* how close it is: the bar fills over the final week */}
         <div className="kx-count" aria-hidden="true"><i style={{ width: `${b.next ? Math.round(Math.max(4, Math.min(100, (1 - (b.next.t - now) / WEEK) * 100))) : 0}%` }} /></div>
-      </div>
+      </button>
     </div>
   );
 }
@@ -319,7 +348,7 @@ function Welcome({ onTry, onCommand }: { onTry: (s: string) => void; onCommand: 
         <span className="hi">{greeting(now)}</span>
         <span className={'kx-market' + (market.open ? ' open' : '')} title="NYSE regular hours; exchange holidays are not checked">{market.label}</span>
       </div>
-      <Briefing b={b} now={now} lines={lines} />
+      <Briefing b={b} now={now} lines={lines} onAsk={onTry} />
       <div className="kx-sec">Ask about it</div>
       <div className="agent-try" aria-label="Suggestions">
         {cards.map((c) => (
@@ -339,7 +368,8 @@ function Welcome({ onTry, onCommand }: { onTry: (s: string) => void; onCommand: 
           <Icon name="slash" size={14} /><span className="t">Commands and skills</span><span className="when">/cost · /skills · /strategies</span>
         </button>
       </div>
-      <div className="kx-foot">Answers cite sources and data times. {s.name} never trades.</div>
+      <div className="kx-foot"><span>Answers cite sources and data times. {s.name} never trades.</span>
+        <span className="kx-keys" aria-hidden="true"><kbd>⌘/</kbd> toggle <kbd>⌘⇧/</kbd> full page <kbd>/</kbd> skills</span></div>
     </div>
   );
 }
@@ -411,7 +441,7 @@ function ReplySettings({ brain, searchDefault }: { brain: Brain | undefined; sea
 // The rail sits beside the chat from this panel width; below it the list is an overlay.
 const RAIL_MIN = 680;
 
-export function Chat({ inputRef, onRetry, docked }: { inputRef: RefObject<HTMLTextAreaElement | null>; onRetry: () => void; docked: boolean }) {
+export function Chat({ inputRef, onRetry, docked, full = false }: { inputRef: RefObject<HTMLTextAreaElement | null>; onRetry: () => void; docked: boolean; full?: boolean }) {
   const s = useStore(chat);
   const rootRef = useRef<HTMLDivElement>(null), logRef = useRef<HTMLDivElement>(null), fileRef = useRef<HTMLInputElement>(null);
   const [stick, setStick] = useState(true), [menuSel, setMenuSel] = useState(0), [menuOpen, setMenuOpen] = useState(true), [drag, setDrag] = useState(false);
@@ -446,7 +476,7 @@ export function Chat({ inputRef, onRetry, docked }: { inputRef: RefObject<HTMLTe
   const onNew = () => { newChat(); closeOverlay(); inputRef.current?.focus(); };
   const pc = pageContext();
   const rail = railShown(s);
-  const searchDefault = s.searchProviders.find((p) => p.id === s.searchDefault)?.label || s.searchDefault;
+    const searchDefault = s.searchProviders.find((p) => p.id === s.searchDefault)?.label || s.searchDefault;
 
   let body: ReactNode;
   const items = s.items.map((item) => <ItemView key={item.key} item={item} />);
@@ -456,7 +486,8 @@ export function Chat({ inputRef, onRetry, docked }: { inputRef: RefObject<HTMLTe
   else body = items;
 
   return (
-    <div ref={rootRef} className={'agent-chat' + (s.narrow ? ' narrow' : '') + (rail ? ' rail-on' : '') + (s.view === 'welcome' ? ' fresh' : '')}>
+    <FullPage.Provider value={full}>
+    <div ref={rootRef} className={'agent-chat' + (s.narrow ? ' narrow' : '') + (rail ? ' rail-on' : '') + (s.view === 'welcome' ? ' fresh' : '') + (full ? ' full' : '')}>
       {rail && <Rail onNew={onNew} />}
       {rail && s.narrow && <div className="kx-scrim" onClick={() => toggleThreads(false)} aria-hidden="true" />}
       <section className="kx-main">
@@ -532,6 +563,7 @@ export function Chat({ inputRef, onRetry, docked }: { inputRef: RefObject<HTMLTe
         </div>
       </section>
     </div>
+    </FullPage.Provider>
   );
 }
 function MenuRow({ id, k, v, on, onPick }: { id: string; k: string; v: string; on: boolean; onPick: () => void }) {

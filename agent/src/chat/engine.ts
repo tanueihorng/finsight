@@ -84,7 +84,7 @@ export class ChatEngine {
     if (council && (brain.kind !== 'api' || brain.manifest.capabilities.nativeSearch)) throw new AgentError('BAD_INPUT', 'Council requires a supported API model without native search');
     if (council && !content.replace(/^\/(committee|debate)\s*/, '').trim()) throw new AgentError('BAD_INPUT', 'Provide a council question');
     if (brain.kind === 'api' && (this.councilRunning || (council && this.running.size > 0))) throw new AgentError('CONFLICT', 'Finish or stop active replies before starting another council/API reply', 409);
-    if (council && (cfg.limits.turnSteps < 11 || (input.attachmentIds?.length ?? 0) > 0)) throw new AgentError('BAD_INPUT', 'Council needs at least 11 permitted steps including subject resolution and currently accepts text questions only');
+    if (council && (input.attachmentIds?.length ?? 0) > 0) throw new AgentError('BAD_INPUT', 'Council currently accepts text questions only');
     const effort = input.effort ?? brain.manifest.thinking?.default;
     if (effort !== undefined && (!Effort.safeParse(effort).success || !brain.manifest.thinking?.levels.includes(effort))) throw new AgentError('BAD_INPUT', 'Thinking effort is not supported by this model', 400);
     if (council && brain.manifest.transport !== 'mock' && (brain.manifest.id !== 'deepseek-flash' || effort !== 'none')) throw new AgentError('COUNCIL_MODEL_UNQUALIFIED', 'Council release qualification currently covers DeepSeek Flash with thinking off only. Choose that model and effort.', 400);

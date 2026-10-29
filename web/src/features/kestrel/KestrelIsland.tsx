@@ -4,6 +4,8 @@ import { useStore } from 'zustand';
 import { boot, chat, deleteThread, closeOverlay, closeStream, newChat, railShown, resumeStream, stop, toggleThreads } from './chat.ts';
 import { Icon, type IconName } from './icons.tsx';
 import { Chat } from './Chat.tsx';
+import { Capsule } from './Capsule.tsx';
+import { councilView, setCouncilView } from './council.ts';
 import { kestrelDock } from './dock.ts';
 import { clampHeight, clampWidth, DEFAULT_H, DEFAULT_W, LS, ls, nextWidth } from './labels.ts';
 
@@ -11,9 +13,12 @@ import { clampHeight, clampWidth, DEFAULT_H, DEFAULT_W, LS, ls, nextWidth } from
 // panel (resizable height, collapsible), the ↗ ASK toggle, ⌘/ and Esc. App
 // renders the dock panel (#agent-dock, pid "kestrel") from kestrelDock; this
 // island fills its head, body and resize slot through portals and moves the
-// one chat between the drawer and the dock.
+// one chat between the drawer and the dock. FEAT-009: the drawer can grow to a
+// full page below the top bar (body.agent-full, same element, so the chat never
+// remounts), and a capsule shows a run in progress while the panel is closed.
 type Mode = 'side' | 'dock';
 const dockEl = () => document.getElementById('agent-dock');
+const COVERED = '.cmdbar, [data-island="status"], main.grid, footer.statusbar';
 const resizeEvent = () => window.dispatchEvent(new Event('resize'));
 const cssWidth = () => parseInt(getComputedStyle(document.documentElement).getPropertyValue('--agent-w'), 10) || DEFAULT_W;
 
@@ -26,6 +31,8 @@ export default function KestrelIsland() {
   const [open, setOpen] = useState(false);
   const [collapsed, setCollapsedState] = useState(() => ls.get(LS.collapsed, '0') === '1');
   const [width, setWidthState] = useState(DEFAULT_W);
+  const [full, setFullState] = useState(false);
+  const running = useStore(chat, (s) => !!s.running);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const booted = useRef(false);
   const dock = dockEl(), dockHead = dock?.querySelector('.agent-dock-head') ?? null, dockBody = dock?.querySelector('.agent-dock-body') ?? null, dockSlot = dock?.querySelector('.agent-dock-resize-slot') ?? null;
@@ -55,6 +62,7 @@ export default function KestrelIsland() {
     const next = force ?? !open;
     if (!next && !document.body.classList.contains('locked')) document.getElementById('agent-toggle')?.focus({ preventScroll: true });
     setOpen(next); ls.set(LS.open, next ? '1' : '0');
+    if (!next) setFullState(false);
     if (as === 'dock' && next && !restoring) setCollapsed(false); // a reload keeps it collapsed
     if (next) {
       maybeBoot();
@@ -69,28 +77,55 @@ export default function KestrelIsland() {
     toggle(true, false, m);
   };
 
+  // Full page is a drawer state: a docked chat pops out first. Not persisted.
+  const setFull = (on: boolean) => {
+    if (on && mode === 'dock') { setModeState('side'); ls.set(LS.mode, 'side'); }
+    setFullState(on);
+    if (on && !open) toggle(true, false, 'side'); else setTimeout(() => inputRef.current?.focus({ preventScroll: true }), 30);
+    setTimeout(resizeEvent, 0);
+  };
+
+  const fullRef = useRef(setFull); fullRef.current = setFull;
   useEffect(() => {
     setWidth(Number(ls.get(LS.width, String(DEFAULT_W))) || DEFAULT_W, false);
     setHeight(Number(ls.get(LS.dockH, String(DEFAULT_H))) || DEFAULT_H, false);
     if (ls.get(LS.open, '0') === '1') toggle(true, true);
     const onUnlock = () => { resumeStream(); if (ls.get(LS.open, '0') === '1') maybeBoot(); };
     const onResize = () => { if (cssWidth() > Math.max(320, Math.round(window.innerWidth * 0.6))) setWidth(window.innerWidth * 0.6, false); };
+    const onFull = () => fullRef.current(true);
+    window.addEventListener('kestrel:full', onFull);
     window.addEventListener('finsight:locked', closeStream);
     window.addEventListener('finsight:unlocked', onUnlock);
     window.addEventListener('resize', onResize);
-    return () => { window.removeEventListener('finsight:locked', closeStream); window.removeEventListener('finsight:unlocked', onUnlock); window.removeEventListener('resize', onResize); };
+    return () => { window.removeEventListener('finsight:locked', closeStream); window.removeEventListener('finsight:unlocked', onUnlock); window.removeEventListener('resize', onResize); window.removeEventListener('kestrel:full', onFull); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   // Where the chat shows: body.agent-open for the drawer, the dock's hidden/collapsed state for the dock.
   useEffect(() => { document.body.classList.toggle('agent-open', mode === 'side' && open); }, [mode, open]);
+  // Full page covers everything below the top bar (command bar, status, grid,
+  // status bar); all of it is inert so Tab and screen readers stay in the chat.
+  useEffect(() => {
+    const on = mode === 'side' && open && full;
+    const covered = () => document.querySelectorAll(COVERED);
+    document.body.classList.toggle('agent-full', on);
+    covered().forEach((el) => el.toggleAttribute('inert', on));
+    if (!on) return;
+    // Measured after the class lands: the top bar wraps differently without the drawer's padding.
+    const measure = () => document.documentElement.style.setProperty('--kx-top', Math.round(document.querySelector('header.topbar')?.getBoundingClientRect().bottom ?? 0) + 'px');
+    measure(); window.addEventListener('resize', measure);
+    return () => { window.removeEventListener('resize', measure); document.body.classList.remove('agent-full'); covered().forEach((el) => el.removeAttribute('inert')); };
+  }, [mode, open, full]);
+  useEffect(() => { document.body.classList.toggle('kx-busy', running); }, [running]);
   useEffect(() => { kestrelDock.setState({ visible: mode === 'dock' && open, collapsed }); }, [mode, open, collapsed]);
   // ⌘/ toggles; Esc stops a reply, or closes the drawer / collapses the dock, but never discards a typed message.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === '/' || e.key === '?')) { e.preventDefault(); setFull(!(full && open)); return; }
       if ((e.metaKey || e.ctrlKey) && e.key === '/') { e.preventDefault(); toggle(); return; }
+      if ((e.metaKey || e.ctrlKey) && e.key === '.' && full && open) { e.preventDefault(); setCouncilView(councilView.getState().view === 'cards' ? 'chain' : 'cards'); return; }
       const host = mode === 'side' ? document.getElementById('agent-panel') : dockEl();
       if (e.key === 'Escape' && open && host?.contains(document.activeElement)) {
         if (chat.getState().running) return void stop();
-        if (!chat.getState().draft.trim()) { if (mode === 'side') toggle(false); else setCollapsed(true); }
+        if (!chat.getState().draft.trim()) { if (full) setFull(false); else if (mode === 'side') toggle(false); else setCollapsed(true); }
       }
     };
     document.addEventListener('keydown', onKey);
@@ -125,9 +160,11 @@ export default function KestrelIsland() {
     <span className="agent-head-tools">
       <button className="agent-icon-btn" title="Chats" aria-label="Show chats" aria-expanded={rail} aria-controls="agent-threads" onClick={() => toggleThreads()}><Icon name="sidebar" /></button>
       <button className="agent-icon-btn" title="New chat (/new)" aria-label="New chat" onClick={() => { newChat(); closeOverlay(); inputRef.current?.focus(); }}><Icon name="plus" /></button>
+      <button className="agent-icon-btn" title={full ? 'Back to the side panel (⌘⇧/)' : 'Full page (⌘⇧/)'} aria-label={full ? 'Exit full page' : 'Open full page'} aria-pressed={full}
+        onClick={() => setFull(!full)}><Icon name={full ? 'minimize' : 'maximize'} /></button>
       <MoreMenu items={[
-        { label: mode === 'dock' ? 'Pop out to the side panel' : 'Dock into the terminal', icon: mode === 'dock' ? 'popout' : 'dock', run: () => setMode(mode === 'dock' ? 'side' : 'dock') },
-        ...(mode === 'side' ? [{ label: 'Panel width', hint: 'S · M · L · XL', icon: 'width' as const, run: () => setWidth(nextWidth(cssWidth(), Math.max(320, Math.round(window.innerWidth * 0.6))), true), keep: true }] : []),
+        ...(!full ? [{ label: mode === 'dock' ? 'Pop out to the side panel' : 'Dock into the terminal', icon: mode === 'dock' ? 'popout' as const : 'dock' as const, run: () => setMode(mode === 'dock' ? 'side' : 'dock') }] : []),
+        ...(mode === 'side' && !full ? [{ label: 'Panel width', hint: 'S · M · L · XL', icon: 'width' as const, run: () => setWidth(nextWidth(cssWidth(), Math.max(320, Math.round(window.innerWidth * 0.6))), true), keep: true }] : []),
         ...(activeThread ? [{ label: 'Delete this chat', aria: 'Delete current chat', icon: 'trash' as const, danger: true, run: () => void deleteThread({ ...activeThread, title: chatTitle || activeThread.title }) }] : []),
       ]} />
       <button className="agent-icon-btn" title={collapsed ? 'Expand' : 'Collapse'} aria-label="Collapse chat" aria-expanded={!collapsed} hidden={mode !== 'dock'}
@@ -135,11 +172,11 @@ export default function KestrelIsland() {
       <button className="agent-icon-btn" title="Close (Esc)" aria-label="Close chat" onClick={() => toggle(false)}><Icon name="close" /></button>
     </span>
   );
-  const body = <Chat inputRef={inputRef} docked={mode === 'dock'} onRetry={() => { booted.current = true; void boot(); }} />;
+  const body = <Chat inputRef={inputRef} docked={mode === 'dock'} full={full && mode === 'side' && open} onRetry={() => { booted.current = true; void boot(); }} />;
   return (
     <>
       {slot && createPortal(
-        <button id="agent-toggle" className={'topbar-btn agent-toggle' + (open ? ' active' : '')} title="Open Kestrel (⌘/)"
+        <button id="agent-toggle" className={'topbar-btn agent-toggle' + (open ? ' active' : '') + (running ? ' busy' : '')} title="Open Kestrel (⌘/)"
           aria-controls={mode === 'dock' ? 'agent-dock' : 'agent-panel'} aria-expanded={open} onClick={() => toggle()}>
           <span className="mark">↗</span> <span className="tname">{name.toUpperCase()}</span><span className="kbd">⌘/</span>
         </button>, slot)}
@@ -151,6 +188,7 @@ export default function KestrelIsland() {
         <div className="agent-head">{mode === 'side' && <>{title}{tools}</>}</div>
         {mode === 'side' && body}
       </aside>
+      {!open && running && createPortal(<Capsule onOpen={() => toggle(true)} onFull={() => setFull(true)} />, document.body)}
       {mode === 'dock' && dockHead && createPortal(<>{title}{tools}</>, dockHead)}
       {mode === 'dock' && dockBody && createPortal(body, dockBody)}
       {dockSlot && createPortal(

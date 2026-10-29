@@ -1,7 +1,7 @@
 // Kestrel chat against the fake agent (web/e2e/fake-agent.mjs) through
 // FinSight's /api/agent proxy: stream, stop, reconnect, attachments, docking.
 import { test, expect, type Page } from '@playwright/test';
-import { unlock } from '../helpers';
+import { chatMenu, unlock } from '../helpers';
 
 const FAKE_AGENT = `http://127.0.0.1:${Number(process.env.E2E_PORT_BASE || 8096) + 1}`;
 
@@ -76,7 +76,7 @@ test('switching between docked and side modes keeps the conversation', async ({ 
   await expect(lastTurn(page).locator('.agent-text')).toHaveText('Echo: remember me');
   const docked = () => page.locator('#agent-dock').isVisible();
   const before = await docked();
-  await page.locator(`.agent-icon-btn[title="${before ? 'Pop out to the side panel' : 'Dock into the terminal'}"]`).click();
+  await chatMenu(page, before ? 'Pop out to the side panel' : 'Dock into the terminal');
   await expect.poll(docked).toBe(!before);
   if (before) await expect(page.locator('body')).toHaveClass(/\bagent-open\b/);
   await expect(page.locator('.agent-user:visible').last()).toContainText('remember me');

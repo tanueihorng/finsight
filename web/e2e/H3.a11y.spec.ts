@@ -25,6 +25,19 @@ for (const theme of ['amber', 'teal', 'phosphor']) {
     await seeded(page); await scan(page, 'theme-' + theme);
   });
 }
+for (const theme of ['violet', 'amber', 'teal', 'phosphor']) {
+  test('axe: light ' + theme, async ({ page }) => {
+    await page.addInitScript((t) => { localStorage.setItem('finsight-theme', t); localStorage.setItem('finsight-mode', 'light'); }, theme);
+    await seeded(page); await scan(page, 'light-' + theme);
+  });
+}
+test('axe: light kestrel full page', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('finsight-mode', 'light'));
+  await seeded(page); await page.click('#agent-toggle');
+  await page.getByRole('button', { name: 'Open full page' }).click();
+  await expect(page.locator('body')).toHaveClass(/agent-full/);
+  await scan(page, 'light-kestrel-full');
+});
 test('axe: lock', async ({ page, context }) => {
   await ensurePin(page.request); await context.clearCookies(); await page.goto('/');
   await expect(page.locator('#lock-pin')).toBeVisible(); await scan(page, 'lock');

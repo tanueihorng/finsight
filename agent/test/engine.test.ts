@@ -165,6 +165,7 @@ test('council gate rejects before mutation; enabled runs persist real activity a
   assert.throws(() => engine.send({ threadId: t.id, content: '/committee synthetic company' }), (e: any) => e.code === 'FEATURE_DISABLED');
   assert.equal(store.listMessages(db, t.id).length, 0);
   cfg.council = true;
+  cfg.limits.turnSteps = 1; // ordinary-chat setting must not cap Council
   assert.throws(() => engine.send({ threadId: t.id, content: '/committee' }), (e: any) => e.code === 'BAD_INPUT');
   const sent = engine.send({ threadId: t.id, content: '/committee review this stock', lens: 'growth', pageContext: { symbol: 'NVDA', account: 'main', base: 'SGD' } });
   assert.equal(await waitTurn(db, sent.turnId), 'succeeded');

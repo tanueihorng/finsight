@@ -24,6 +24,9 @@ const PATHS = {
   chat: 'M5 5h14v10H9l-4 4z',
   slash: 'M15 4L9 20',
   table: 'M4 5h16v14H4zM4 10h16M4 15h16M10 5v14',
+  maximize: 'M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7',
+  minimize: 'M4 14h6v6M20 10h-6V4M14 10l6-6M10 14l-6 6',
+
   more: 'M5 11a1 1 0 1 0 0 2a1 1 0 0 0 0-2zM12 11a1 1 0 1 0 0 2a1 1 0 0 0 0-2zM19 11a1 1 0 1 0 0 2a1 1 0 0 0 0-2z',
   sliders: 'M4 7h9M17 7h3M15 5v4M4 17h3M11 17h9M9 15v4',
   copy: 'M9 9h10v10H9zM5 15V5h10',

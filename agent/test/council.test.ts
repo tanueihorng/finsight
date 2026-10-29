@@ -34,14 +34,14 @@ test('stop aborts non-cooperative provider without accepting late completion', a
  const pending = runCouncil(o); ctrl.abort(); await assert.rejects(pending); release(result()); await new Promise((r) => setTimeout(r, 0)); assert.ok(!events.includes('completed'));
 });
 
-test('malformed completed output gets one accounted repair and a hard global call ceiling', async () => {
+test('malformed output gets at most one accounted repair per stage', async () => {
  let n = 0;
  const o = setup(async () => ++n === 1 ? { ...result(), blocks: [{ type: 'text', text: 'not JSON' }] } : result());
  const out = await runCouncil(o);
  assert.equal(out.steps, 8); assert.equal(out.runs.filter((r) => r.status === 'completed').length, 7);
  let dispatched = 0;
- const broken = await runCouncil({ ...setup(async () => { dispatched++; return { ...result(), blocks: [{ type: 'text', text: 'not JSON' }] }; }), maxSteps: 9 });
- assert.equal(dispatched, 9); assert.equal(broken.steps, 9); assert.match(broken.text, /Partial/);
+ const broken = await runCouncil(setup(async () => { dispatched++; return { ...result(), blocks: [{ type: 'text', text: 'not JSON' }] }; }));
+ assert.equal(dispatched, 14); assert.equal(broken.steps, 14); assert.match(broken.text, /Partial/);
 });
 
 test('per-call output limits do not mutate model defaults and reject invalid bounds', async () => {
@@ -59,16 +59,16 @@ test('invalid cost settlement retains reservation instead of poisoning the cap',
  assert.throws(() => budget.reserve(0.3));
 });
 
-test('oversized research batches execute only two calls and acknowledge every skipped call before synthesis', async () => {
+test('oversized research batches execute four calls and acknowledge every skipped call before synthesis', async () => {
  const executed: string[] = [];
  let checkedFollowup = false;
  const o = setup(async (req) => {
   if (!req.system.includes('Council role: growth') || req.system.includes('This phase has no research tools.')) return result();
-  if (req.messages.length === 1) return { ...result(), blocks: ['get_quote', 'get_history', 'edgar_filings'].map((name, i) => ({ type: 'tool_call' as const, id: 'call' + i, name, args: {} })), stopReason: 'tool_use' };
+  if (req.messages.length === 1) return { ...result(), blocks: ['get_quote', 'get_history', 'edgar_filings', 'edgar_financials', 'get_quote'].map((name, i) => ({ type: 'tool_call' as const, id: 'call' + i, name, args: {} })), stopReason: 'tool_use' };
   const replies = req.messages.filter((m) => m.role === 'tool').flatMap((m) => m.blocks);
-  assert.equal(replies.length, 3);
-  assert.deepEqual(replies.map((b) => b.type === 'tool_result' && [b.callId, b.ok]), [['call0', true], ['call1', true], ['call2', false]]);
-  const skipped = replies[2]!;
+  assert.equal(replies.length, 5);
+  assert.deepEqual(replies.map((b) => b.type === 'tool_result' && [b.callId, b.ok]), [['call0', true], ['call1', true], ['call2', true], ['call3', true], ['call4', false]]);
+  const skipped = replies[4]!;
   assert.ok(skipped.type === 'tool_result' && /not executed.*research.*limit/i.test(skipped.content));
   assert.equal(req.tools.length, 0);
   checkedFollowup = true;
@@ -76,7 +76,7 @@ test('oversized research batches execute only two calls and acknowledge every sk
  });
  o.execute = async (_role, name) => { executed.push(name); return { id: 'research' + executed.length, source: 'Synthetic ' + name, observedAt: '2026-10-01', retrievedAt: '2026-10-29', content: 'Synthetic result' }; };
  const out = await runCouncil(o);
- assert.deepEqual(executed, ['get_quote', 'get_history']);
+ assert.deepEqual(executed, ['get_quote', 'get_history', 'edgar_filings', 'edgar_financials']);
  assert.ok(checkedFollowup);
  assert.equal(out.steps, 8);
  assert.ok(out.runs.every((r) => r.status === 'completed'));
@@ -84,7 +84,7 @@ test('oversized research batches execute only two calls and acknowledge every sk
 
 test('a forbidden call in an oversized batch is rejected before any tool execution', async () => {
  let executed = false;
- const o = setup(async (req) => req.system.includes('Council role: growth') ? { ...result(), blocks: ['get_quote', 'get_history', 'propose_record_update'].map((name, i) => ({ type: 'tool_call' as const, id: 'call' + i, name, args: {} })), stopReason: 'tool_use' } : result());
+ const o = setup(async (req) => req.system.includes('Council role: growth') ? { ...result(), blocks: ['get_quote', 'get_history', 'edgar_filings', 'edgar_financials', 'propose_record_update'].map((name, i) => ({ type: 'tool_call' as const, id: 'call' + i, name, args: {} })), stopReason: 'tool_use' } : result());
  o.execute = async () => { executed = true; throw Error('Unexpected'); };
  const out = await runCouncil(o);
  assert.equal(executed, false);
@@ -110,4 +110,26 @@ test('a figure absent from cited evidence gets one repair; an unresolved one is 
   assert.equal(flagged[0]!.status, 'completed');
   assert.match(flagged[0]!.metricIssues!.join(), /15\.28% is not in its cited evidence/);
   assert.match(stuck.text, /Figure check \(unresolved[\s\S]*chair synthesis: finding 1: 15\.28%/);
+});
+
+
+test('repeated unresolved figures reach the chair and remain flagged without a global step cap', async () => {
+ const assessment = { ...finding, findings: [{ ...finding.findings[0]!, claim: 'Holding is 99.99% of assets' }] };
+ let calls = 0;
+ const o = setup(async () => { calls++; return { ...result(), blocks: [{ type: 'text' as const, text: JSON.stringify(assessment) }] }; });
+ const out = await runCouncil({ ...o, prepare: async (call) => { await call('subject resolution', [{ role:'user', blocks:[{type:'text',text:'subject'}] }]); return { question:o.question, evidence:[] }; } });
+ assert.equal(calls, 15); assert.equal(out.steps, 15);
+ assert.equal(out.runs.length, 7); assert.ok(out.runs.every((r) => r.status === 'completed' && r.metricIssues?.length));
+ assert.match(out.text, /chair synthesis: finding 1: 99\.99%/);
+});
+
+test('council advertises four research tools and allows 2000 output tokens when the model supports it', async () => {
+ const requests: StepRequest[] = [];
+ const base = setup(async (req) => { requests.push(req); return result(); });
+ const capable = { ...base, brain: { ...base.brain, manifest: { ...base.brain.manifest, maxOutputTokens: 4096 } } };
+ const out = await runCouncil(capable);
+ assert.equal(out.runs.length, 7);
+ assert.ok(requests.every((r) => r.maxOutputTokens === 2000));
+ assert.match(requests[0]!.system, /at most 4 tool calls/);
+ assert.match(requests[0]!.system, /at most four evidence-backed findings/);
 });

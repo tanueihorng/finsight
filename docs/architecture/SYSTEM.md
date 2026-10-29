@@ -47,6 +47,8 @@ browser ──HTTP──▶ server.ts ──┬─▶ public/* (static terminal 
   - `manifest.json`: Runtime inventory for service worker precaching.
 - **Page composition:** `web/src/main.tsx` mounts one React app (`App.tsx`). The island registry and `mountIslands` remain for external embeds and compatibility tests.
 - **Data Layer:** TanStack Query (`web/src/api/queries.ts`) with automatic poll suspension when locked or hidden.
+- **Appearance:** `data-theme` (accent), `data-font` and `data-mode` (`dark` | `light`) on `<html>`, applied before first paint from `finsight-theme`, `finsight-font` and `finsight-mode`. Every colour is a token on `:root` in `public/styles.css`; light mode redefines them under `:root[data-mode="light"]`, with a darker light variant per accent. The ◐ top-bar button and ⚙ Layout APPEARANCE switch modes; charts repaint through `chartHooks.repaint()`.
+- **Kestrel panel states (FEAT-009):** side drawer (resizable), docked terminal panel, and full page (`body.agent-full`, the same drawer below the top bar with the grid `inert`; `⌘⇧/`, Esc returns). With the panel closed, a running turn shows a capsule (`role="status"`, no finding text) and the ASK button and top bar show a busy state. On the full page, a turn's views move to a workspace column, and the council can switch between Cards and Chain of thought (`kestrel.councilView`, `⌘.`). All council surfaces read one view model (`web/src/features/kestrel/council.ts`) that UNPEEK blanks.
 
 ---
 
