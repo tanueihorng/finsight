@@ -1,7 +1,7 @@
 // Stateless Responses transport. Keep encrypted reasoning with its completed
 // output items, bound to the same brain/model/origin; never render it as text.
 import type { ApiBrain, BrainManifest, StepRequest, StepResult } from './types.ts';
-import { safeId } from './types.ts';
+import { outputLimit, safeId } from './types.ts';
 import type { Block, Msg } from '../types.ts';
 import { AgentError } from '../types.ts';
 
@@ -40,7 +40,7 @@ export function responsesBrain(manifest: BrainManifest, apiKey: string, fetchImp
     const body = {
       model: manifest.model, instructions: req.system, input: toResponsesInput(req.messages, identity),
       stream: true, store: false, include: ['reasoning.encrypted_content'],
-      reasoning: { effort }, max_output_tokens: manifest.maxOutputTokens,
+      reasoning: { effort }, max_output_tokens: outputLimit(manifest, req),
       ...(req.tools.length ? { tools: req.tools.map((t) => ({ type: 'function', name: t.name, description: t.description, parameters: t.parameters, strict: false })), tool_choice: 'auto' } : {}),
     };
     let res: Response;

@@ -1,7 +1,7 @@
 # FEAT-002: Investment Lenses & Council Mode
 
 - **ID:** FEAT-002
-- **Status:** Deferred proposal; not selected for implementation
+- **Status:** Merged and verified; personal activation completed 2026-10-29; generic default off
 - **Priority:** High
 - **Related Tasks:** `MULTIAGENT-001`
 
@@ -40,3 +40,30 @@ Allow the user to evaluate investment ideas through diverse analytical perspecti
   3. **Risk Defense (Risk Officer):** Actual portfolio concentration impact, correlation with existing holdings, and invalidation triggers.
   4. **Chair Synthesis:** Clear trade-off matrix for the user as the final decision-maker.
 - [ ] Fixed delegation budget (no infinite recursive multi-agent loops; aggregate token cost capped within turn limits).
+
+
+## Implementation scope approved 2026-10-28
+
+User approved three specialists (Business & Growth, Macro & Valuation, Portfolio
+Risk), a separate chair, single lenses, bounded execution and synthetic testing
+before live-trial approval. See [runtime and rollout contract](../../agent/docs/COUNCIL.md).
+The earlier draft is retained above; this dated scope refines it. No forced bull
+case, no automatic invocation and no claim of independent source confirmation.
+Live comparative evaluation, model usefulness and production activation remain
+unverified. No paid trials have been run for this implementation.
+
+## Release decision — 2026-10-29
+
+User authorized release into personal FinSight after review of the actual-event
+chat integration and synthetic motion preview. Implemented in c387f52 and
+84c6c0c; personal activation is tracked separately in the workspace release
+packet. The earlier evaluation-pending statements above are historical. Live
+reliability rerun completed 6/6 synthetic cases; the original 5/6 pilot and no
+demonstrated superiority to Balanced remain limitations. DeepSeek Flash with
+thinking off is the qualified council configuration. No automatic invocation,
+trade authority or investment-performance claim is added.
+
+Personal activation verified after local merge d06cabf: live council feature
+flag and DeepSeek Flash availability checked, with30 served manifest assets
+matching the canonical build.262 ordinary browser checks and3 real-backend
+council checks passed (one existing live-fixture skip). See COUNCIL.md for scope.

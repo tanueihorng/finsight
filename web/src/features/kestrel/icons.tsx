@@ -24,6 +24,11 @@ const PATHS = {
   chat: 'M5 5h14v10H9l-4 4z',
   slash: 'M15 4L9 20',
   table: 'M4 5h16v14H4zM4 10h16M4 15h16M10 5v14',
+  more: 'M5 11a1 1 0 1 0 0 2a1 1 0 0 0 0-2zM12 11a1 1 0 1 0 0 2a1 1 0 0 0 0-2zM19 11a1 1 0 1 0 0 2a1 1 0 0 0 0-2z',
+  sliders: 'M4 7h9M17 7h3M15 5v4M4 17h3M11 17h9M9 15v4',
+  copy: 'M9 9h10v10H9zM5 15V5h10',
+  list: 'M9 6h11M9 12h11M9 18h11M5 6h.01M5 12h.01M5 18h.01',
+  council: 'M12 4a2.5 2.5 0 1 0 0 5a2.5 2.5 0 0 0 0-5zM5 9a2 2 0 1 0 0 4a2 2 0 0 0 0-4zM19 9a2 2 0 1 0 0 4a2 2 0 0 0 0-4zM8 20a4 4 0 0 1 8 0M2 19a3 3 0 0 1 5-2.2M22 19a3 3 0 0 0-5-2.2',
   bulb: 'M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z',
 } as const;
 export type IconName = keyof typeof PATHS;

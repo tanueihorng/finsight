@@ -62,6 +62,11 @@ export async function fakeFinsight(options: { scopedAccounts?: boolean; naturalH
       case '/api/accounts': return j(200, { accounts: [{ id: 'a1', name: 'IBKR', type: 'Brokerage', count: 2 }, { id: 'a2', name: 'DBS', type: 'Bank', count: 1 }], activeId: 'a1' });
       case '/api/categories': return j(200, { NVDA: { category: 'Technology' }, VOO: { category: 'ETF' }, 'D05.SI': { category: 'Financial Services' } });
       case '/api/events': return j(200, { events: [{ symbol: 'NVDA', type: 'Earnings', time: Date.now() + 5 * 864e5 }] });
+      case '/api/search': {
+        const instruments = [{symbol:'AMD',name:'Advanced Micro Devices, Inc.'},{symbol:'NVDA',name:'NVIDIA Corporation'},{symbol:'TSM',name:'Taiwan Semiconductor Manufacturing Company Limited'},{symbol:'VOO',name:'Vanguard S&P 500 ETF'}];
+        const q = (u.searchParams.get('q') || '').toLowerCase();
+        return j(200, instruments.filter(x=>x.symbol.toLowerCase()===q || x.name.toLowerCase().includes(q)).map(x=>({...x,exchange:'NASDAQ',type:'EQUITY'})));
+      }
       case '/api/quote': return j(200, { quotes: (u.searchParams.get('symbols') || '').split(',').map((symbol) => {
         const p = PORTFOLIO.positions.find((p) => p.symbol === symbol);
         return { symbol, name: p?.name || symbol, price: p?.last ?? 10, currency: p?.currency || 'USD', change: 1, changePct: 1 };

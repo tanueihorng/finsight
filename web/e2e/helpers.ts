@@ -64,12 +64,18 @@ export const qtyCell = (page: Page, sym: string) => page.locator(`#positions-bod
 export async function dragPanel(page: Page, pid: string, column: '.col-left' | '.col-right'): Promise<void> {
   const grip = page.locator(`.panel[data-pid="${pid}"] .drag-grip`);
   await grip.scrollIntoViewIfNeeded();
+  await grip.hover(); // locator actionability waits for a stable, hittable grip
   const g = (await grip.boundingBox())!, c = (await page.locator(column).boundingBox())!;
   const from = { x: g.x + g.width / 2, y: g.y + g.height / 2 }, to = { x: c.x + 100, y: Math.max(c.y, 0) + 300 };
   await page.mouse.move(from.x, from.y);
   await page.mouse.down();
-  for (let i = 1; i <= 10; i++) await page.mouse.move(from.x + (to.x - from.x) * i / 10, from.y + (to.y - from.y) * i / 10);
-  await page.mouse.up();
+  try {
+    for (let i = 1; i <= 10; i++) await page.mouse.move(from.x + (to.x - from.x) * i / 10, from.y + (to.y - from.y) * i / 10);
+    // HTML dragenter and dragover are distinct: deliver a second movement at
+    // the destination before releasing, rather than relying on event timing.
+    await page.mouse.move(to.x, to.y);
+    await expect(page.locator(`${column} > .panel[data-pid="${pid}"]`)).toHaveCount(1);
+  } finally { await page.mouse.up(); }
 }
 
 // The in-app confirm / prompt (web/src/ui/dialog.tsx), which replaced
@@ -82,4 +88,16 @@ export async function answerDialog(page: Page, { accept = true, text, title }: {
   if (text != null) await dlg.locator('#app-dialog-input').fill(text);
   await dlg.locator(accept ? '#app-dialog-ok' : '#app-dialog-cancel').click();
   await expect(dlg).toHaveCount(0);
+}
+
+// Kestrel: open the reply settings (model, thinking, web search) under the composer.
+export async function replySettings(page: Page): Promise<void> {
+  const btn = page.locator('.kx-model-btn:visible');
+  if (await btn.getAttribute('aria-expanded') !== 'true') await btn.click();
+  await expect(page.locator('.kx-pop:visible')).toBeVisible();
+}
+// Kestrel: pick an item from the header's More menu.
+export async function chatMenu(page: Page, name: string | RegExp): Promise<void> {
+  await page.locator('[aria-label="More chat options"]:visible').click();
+  await page.getByRole('menuitem', { name }).click();
 }

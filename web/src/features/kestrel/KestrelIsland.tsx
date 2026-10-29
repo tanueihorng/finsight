@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKe
 import { createPortal } from 'react-dom';
 import { useStore } from 'zustand';
 import { boot, chat, deleteThread, closeOverlay, closeStream, newChat, railShown, resumeStream, stop, toggleThreads } from './chat.ts';
-import { Icon } from './icons.tsx';
+import { Icon, type IconName } from './icons.tsx';
 import { Chat } from './Chat.tsx';
 import { kestrelDock } from './dock.ts';
 import { clampHeight, clampWidth, DEFAULT_H, DEFAULT_W, LS, ls, nextWidth } from './labels.ts';
@@ -120,15 +120,16 @@ export default function KestrelIsland() {
     <span className="agent-title"><span className="mark">↗</span> <span className="nm">{name}</span>
       {chatTitle && <><span className="sep" aria-hidden="true">/</span><span className="chat-title" title={chatTitle}>{chatTitle}</span></>}</span>
   );
-  const dockTitle = mode === 'dock' ? 'Pop out to the side panel' : 'Dock into the terminal';
+  // Frequent actions stay as icons (chats, new chat, close); layout and delete live under More.
   const tools = (
     <span className="agent-head-tools">
-      {activeThread && <button className="agent-icon-btn" title="Delete this chat" aria-label="Delete current chat" onClick={() => void deleteThread({ ...activeThread, title: chatTitle || activeThread.title })}><Icon name="trash" /></button>}
       <button className="agent-icon-btn" title="Chats" aria-label="Show chats" aria-expanded={rail} aria-controls="agent-threads" onClick={() => toggleThreads()}><Icon name="sidebar" /></button>
       <button className="agent-icon-btn" title="New chat (/new)" aria-label="New chat" onClick={() => { newChat(); closeOverlay(); inputRef.current?.focus(); }}><Icon name="plus" /></button>
-      <button className="agent-icon-btn" title="Panel width: small · medium · large · wide" aria-label="Change panel width" hidden={mode !== 'side'}
-        onClick={() => setWidth(nextWidth(cssWidth(), Math.max(320, Math.round(window.innerWidth * 0.6))), true)}><Icon name="width" /></button>
-      <button className="agent-icon-btn" title={dockTitle} aria-label={dockTitle} onClick={() => setMode(mode === 'dock' ? 'side' : 'dock')}><Icon name={mode === 'dock' ? 'popout' : 'dock'} /></button>
+      <MoreMenu items={[
+        { label: mode === 'dock' ? 'Pop out to the side panel' : 'Dock into the terminal', icon: mode === 'dock' ? 'popout' : 'dock', run: () => setMode(mode === 'dock' ? 'side' : 'dock') },
+        ...(mode === 'side' ? [{ label: 'Panel width', hint: 'S · M · L · XL', icon: 'width' as const, run: () => setWidth(nextWidth(cssWidth(), Math.max(320, Math.round(window.innerWidth * 0.6))), true), keep: true }] : []),
+        ...(activeThread ? [{ label: 'Delete this chat', aria: 'Delete current chat', icon: 'trash' as const, danger: true, run: () => void deleteThread({ ...activeThread, title: chatTitle || activeThread.title }) }] : []),
+      ]} />
       <button className="agent-icon-btn" title={collapsed ? 'Expand' : 'Collapse'} aria-label="Collapse chat" aria-expanded={!collapsed} hidden={mode !== 'dock'}
         onClick={() => setCollapsed(!collapsed)}><Icon name={collapsed ? 'expand' : 'collapse'} /></button>
       <button className="agent-icon-btn" title="Close (Esc)" aria-label="Close chat" onClick={() => toggle(false)}><Icon name="close" /></button>
@@ -158,5 +159,39 @@ export default function KestrelIsland() {
           <span className="agent-grip">⋯</span>
         </div>, dockSlot)}
     </>
+  );
+}
+
+type MoreItem = { label: string; icon: IconName; run: () => void; aria?: string; hint?: string; danger?: boolean; keep?: boolean };
+// The header's overflow menu: arrow keys move, Esc or a click outside closes it.
+function MoreMenu({ items }: { items: MoreItem[] }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLSpanElement>(null), btn = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: PointerEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener('pointerdown', away);
+    ref.current?.querySelector<HTMLButtonElement>('[role="menuitem"]')?.focus();
+    return () => document.removeEventListener('pointerdown', away);
+  }, [open]);
+  const onKey = (e: ReactKeyboardEvent) => {
+    if (e.key === 'Escape' && open) { e.stopPropagation(); setOpen(false); btn.current?.focus(); return; }
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    const rows = [...(ref.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') || [])];
+    const i = rows.indexOf(document.activeElement as HTMLButtonElement);
+    e.preventDefault(); rows[(i + (e.key === 'ArrowDown' ? 1 : rows.length - 1)) % rows.length]?.focus();
+  };
+  return (
+    <span className="kx-more" ref={ref} onKeyDown={onKey}>
+      <button ref={btn} className="agent-icon-btn" title="More" aria-label="More chat options" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}><Icon name="more" /></button>
+      {open && <span className="kx-menu" role="menu" aria-label="Chat options">
+        {items.map((it) => (
+          <button key={it.label} role="menuitem" className={it.danger ? 'danger' : undefined} aria-label={it.aria} title={it.aria ? it.label : undefined}
+            onClick={() => { if (!it.keep) setOpen(false); it.run(); }}>
+            <Icon name={it.icon} size={15} /><span className="t">{it.label}</span>{it.hint && <span className="h">{it.hint}</span>}
+          </button>
+        ))}
+      </span>}
+    </span>
   );
 }

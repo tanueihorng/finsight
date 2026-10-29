@@ -3,7 +3,19 @@
 This records integrated changes with actual Git references. A merge does not certify deployment.
 The earlier draft with unverified release numbers is preserved in `docs/archive/20261027-CHANGELOG-draft.md`.
 
+## Council research handoff correction — 2026-10-29
+
+- Handle an oversized batch of allowed research requests without discarding an entire specialist assessment. Execute at most two tools, return explicit not-executed results for excess calls, and preserve gaps in the final assessment. Validate the whole batch against role permissions before executing any tool. Fixed provider-call and spending limits remain unchanged.
+
+## Council personal release — 2026-10-29
+
+- Investment council and lenses (`c387f52`): independent Business & Growth, Macro & Valuation and Portfolio Risk assessments, a challenge round and Kestrel chair. Read-only tools, durable cost reservations, cancellation, partial results and persisted replay.
+- Chat presentation (`84c6c0c`): one council board with actual-event specialist/chair motion and a distinct synthesis, responsive layout, reduced-motion support and UNPEEK privacy. Standalone synthetic preview is separate.
+- Merged locally at `d06cabf` and activated in personal FinSight on localhost:8001. Live agent advertises council enabled; all30 served manifest assets match the canonical build.262 browser checks plus3 real-backend council checks passed, with one existing live-fixture skip;216 unit and130 agent plus secret scan passed. Generic installations remain default off. Council qualification covers DeepSeek Flash with thinking off; the small synthetic evaluation did not establish superiority over Balanced or investment efficacy.
+
 ## Unreleased
+
+- Council review fixes: resolve and verify requested subjects before research; carry the selected lens and bounded conversation context; label portfolio weight bases and flag unresolved figure checks in the report and UI. Subject resolution adds a model call; Council requires at least 11 turn steps. Figure checks do not establish source entailment or full investment research readiness.
 
 - Isolate the standalone and demo launchers in separate data directories and agent ports, and reject agent configurations that redirect them to another data directory. Show Kestrel's name and connection errors, and keep its chat rail available in the dock. These changes do not migrate existing data.
 

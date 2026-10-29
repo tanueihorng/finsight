@@ -17,6 +17,7 @@ import { AgentError } from '../types.ts';
 import { log } from '../log.ts';
 import { audit } from '../obs/audit.ts';
 import { z } from 'zod';
+import { LensId } from '../chat/council-contract.ts';
 import { Effort } from '../brains/types.ts';
 import type { Skill } from '../skills.ts';
 import { saveUpload, MAX_UPLOAD_BYTES } from '../uploads.ts';
@@ -27,7 +28,7 @@ export type ApiDeps = { cfg: Config; db: DB; engine: ChatEngine; bus: EventBus; 
 
 const Send = z.object({
   content: z.string().min(1).max(12_000), brain: z.string().max(40).optional(), search: z.enum(SEARCH_CHOICES).optional(),
-  effort: Effort.optional(),
+  effort: Effort.optional(), lens: LensId.optional(),
   pageContext: z.object({ view: z.string().max(40).optional(), symbol: z.string().max(24).optional(), timeframe: z.string().max(10).optional(),
     strategy: z.string().max(40).optional(), account: z.string().max(64).optional(), base: z.string().max(3).optional() }).strict().optional(),
   idempotencyKey: z.string().min(8).max(80).optional(), expectedVersion: z.number().int().min(0).optional(),
@@ -99,7 +100,7 @@ async function route(d: ApiDeps, req: http.IncomingMessage, res: http.ServerResp
       thinking: b.manifest.thinking, ui: !!d.cfg.uiViews && b.available && b.manifest.capabilities.tools && !!b.manifest.capabilities.ui && b.manifest.transport !== 'claude-code', tools: b.manifest.capabilities.tools, nativeSearch: b.manifest.capabilities.nativeSearch, available: b.available, reason: b.reason })) });
   }
   if (p === '/v1/search-providers' && m === 'GET') return send(res, 200, searchProviders(d.cfg));
-  if (p === '/v1/info' && m === 'GET') return send(res, 200, { name: d.cfg.assistantName, version: '0.2.0' });
+  if (p === '/v1/info' && m === 'GET') return send(res, 200, { name: d.cfg.assistantName, version: '0.2.0', council: !!d.cfg.council });
   if (p === '/v1/skills' && m === 'GET') {
     return send(res, 200, { skills: [...(d.skills?.() ?? new Map()).values()].map((s) => ({ name: s.name, description: s.description, source: s.source })) });
   }

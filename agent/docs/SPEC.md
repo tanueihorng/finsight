@@ -174,6 +174,7 @@ All facts tools are **read-only** and call FinSight with the GET-only token [D-Q
 | FR-3.9 | All | — | If FinSight is unreachable, return error `FINSIGHT_DOWN` with a hint. The brain MUST tell the user and MUST NOT answer from stale memory as if it were current. | — |
 | FR-3.10 | All | — | Large results MUST be paginated or summarised (≤ 8k tokens per tool result). A truncated result MUST say so. | — |
 | FR-3.11 | `get_liabilities` | — | loan principal, rate, etc. | **source TBD** (A4, P-12) |
+| FR-3.12 | `portfolio_weights` and weight labelling | `symbols[]`, `account?` | Per-holding and combined weights on both bases from one snapshot: `securitiesPct` (securities only) and `weightInclCashPct` (securities plus cash), with both denominators (value, currency, scope, constituents, asOf, completeness) and `liabilities: 'not tracked'`, never zero. `get_portfolio` and `query_positions` keep `weightPct` (securities only), label it `weightBasis: 'securities'` and add `weightInclCashPct`. `get_exposures` labels its weights `securities_plus_cash`. Council findings that quote a percentage absent from their cited evidence, or mix bases, get one repair and are otherwise flagged as unverified (COUNCILQUALITY-001). | `/api/portfolio` |
 
 ### FR-4 Strategy library
 

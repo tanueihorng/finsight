@@ -4,7 +4,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import fs from 'node:fs';
-import { ensurePin, seeded } from './helpers';
+import { chatMenu, ensurePin, seeded } from './helpers';
 
 const DUMP = process.env.H3_DUMP;
 const SERIOUS = new Set(['serious', 'critical']);
@@ -47,7 +47,7 @@ test('axe: modals', async ({ page }) => {
 test('axe: kestrel', async ({ page }) => {
   await seeded(page);
   await page.click('#agent-toggle'); await expect(page.locator('.agent-offline').first()).toBeVisible(); await scan(page, 'kestrel-side');
-  await page.getByRole('button', { name: 'Dock into the terminal' }).click();
+  await chatMenu(page, 'Dock into the terminal');
   await expect(page.locator('#agent-dock')).toBeVisible(); await scan(page, 'kestrel-dock');
 });
 test('axe: chart max', async ({ page }) => {

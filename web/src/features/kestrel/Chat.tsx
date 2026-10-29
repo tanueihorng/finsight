@@ -1,11 +1,13 @@
+import { LENSES } from '../../../../shared/council-lenses.ts';
+import { CouncilBoard, CouncilConclusion } from './CouncilBoard.tsx';
 import { lazy, Suspense, memo, useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
 import { useStore } from 'zustand';
 import { useCalendar, useEvents, useIntraday, usePortfolio } from '../../api/queries.ts';
 import { Money } from '../../ui/Money.tsx';
 import { IslandBoundary } from '../../ui/IslandBoundary.tsx';
 import { agentApi } from './api.ts';
-import { addFiles, chat, chooseBrain, chooseEffort, chooseSearch, clearAllChats, closeOverlay, deleteThread, menuItems, newChat, openThread, pageContext, railShown, removeFile, setDraft, setNarrow, stop, submit, toggleThreads, type FileChip, type Item } from './chat.ts';
-import type { Thread } from './api.ts';
+import { addFiles, chat, chooseLens, chooseBrain, chooseEffort, chooseSearch, clearAllChats, councilText, closeOverlay, deleteThread, menuItems, newChat, openThread, pageContext, railShown, removeFile, setCouncilMode, setDraft, setNarrow, stop, submit, toggleThreads, type FileChip, type Item } from './chat.ts';
+import type { Brain, Thread } from './api.ts';
 import { asks, brief, eventTime, greeting, pctText, portfolioLine, prevClose, symbolLine, usMarket, type Ask, type Brief, type Kind } from './briefing.ts';
 import { Icon, type IconName } from './icons.tsx';
 import { costLabel, ctxButton, LS, ls, prettyArgs, type PageContext } from './labels.ts';
@@ -67,8 +69,23 @@ function Trace({ turnId }: { turnId: string }) {
 }
 
 // Markdown is parsed again only when its segment's text changes (each streamed delta).
+// A trailing "Evidence register:" (council and research answers) folds into a closed
+// list, so the answer reads first and the raw evidence ids stay one click away.
+const EVIDENCE = /\n[ \t]*(?:#+ *)?\**Evidence register:?\**:?[ \t]*\n/i;
 const TextPart = memo(function TextPart({ text }: { text: string }) {
-  return <div className="agent-text" dangerouslySetInnerHTML={{ __html: md(text) }} />;
+  const at = text.search(EVIDENCE);
+  if (at < 0) return <div className="agent-text" dangerouslySetInnerHTML={{ __html: md(text) }} />;
+  const rest = text.slice(at).replace(EVIDENCE, '');
+  const n = rest.split('\n').filter((l) => l.trim()).length;
+  return (
+    <>
+      <div className="agent-text" dangerouslySetInnerHTML={{ __html: md(text.slice(0, at)) }} />
+      <details className="agent-evidence">
+        <summary><Icon name="list" size={13} /><span className="lbl">{`Evidence register · ${n} item${n === 1 ? '' : 's'}`}</span><Icon name="chevron" size={13} /></summary>
+        <div className="agent-text" dangerouslySetInnerHTML={{ __html: md(rest) }} />
+      </details>
+    </>
+  );
 });
 
 type ToolPart = Extract<Turn['parts'][number], { kind: 'tool' }>;
@@ -98,7 +115,8 @@ function ToolGroup({ tools }: { tools: ToolPart[] }) {
 async function copyAnswer(t: Turn): Promise<boolean> {
   // Ordinary answers keep their existing cheap path, even with the feature off.
   let text = t.allText;
-  if (t.parts.some((p) => p.kind === 'ui')) {
+  if (t.parts.some((p) => p.kind === 'council') && !window.FinSight.store.getState().peek) text = '[Council findings hidden by UNPEEK]';
+  else if (t.parts.some((p) => p.kind === 'ui')) {
     const { answerText } = await import('./ui/UiView.tsx');
     text = answerText(t, window.FinSight.store.getState().peek);
   }
@@ -109,6 +127,8 @@ async function copyAnswer(t: Turn): Promise<boolean> {
 
 function TurnView({ t }: { t: Turn }) {
   const [copied, setCopied] = useState(false), [trace, setTrace] = useState(false);
+  const councilRuns = t.parts.filter((p) => p.kind === 'council');
+  let councilShown = false;
   const blocks: ReactNode[] = [];
   for (let i = 0; i < t.parts.length; i++) {
     const p = t.parts[i]!;
@@ -116,7 +136,9 @@ function TurnView({ t }: { t: Turn }) {
       const tools: ToolPart[] = [];
       while (i < t.parts.length && t.parts[i]!.kind === 'tool') tools.push(t.parts[i++] as ToolPart);
       i--; blocks.push(<ToolGroup key={'g' + tools[0]!.key} tools={tools} />);
-    } else if (p.kind === 'text') blocks.push(<TextPart key={i} text={p.text} />);
+    } else if (p.kind === 'text') blocks.push(councilRuns.length ? <CouncilConclusion key={i} runs={councilRuns}><TextPart text={p.text} /></CouncilConclusion> : <TextPart key={i} text={p.text} />);
+    else if (p.kind === 'council' && !councilShown) { councilShown = true; blocks.push(<CouncilBoard key="council" runs={councilRuns} finished={t.meta !== null} />); }
+    else if (p.kind === 'council') continue;
     else if (p.kind === 'ui') blocks.push(<Suspense key={p.key} fallback={<div className="agent-notice">Loading snapshot…</div>}><IslandBoundary><UiView view={p.view} /></IslandBoundary></Suspense>);
     else blocks.push(<div key={i} className={'agent-notice ' + p.cls}>{p.text}</div>);
   }
@@ -134,12 +156,16 @@ function TurnView({ t }: { t: Turn }) {
       </div>
       <div className="agent-meta">
         {t.meta && <>
-          {t.meta.label && <span>{t.meta.label}</span>}
-          {search && <span title="Web search provider for this answer">{`${search} search`}</span>}
-          {t.meta.costUsd != null && <span title="API cost of this answer">{costLabel(t.meta.costUsd)}</span>}
-          {!!t.meta.ms && <span>{(t.meta.ms / 1000).toFixed(1)}s</span>}
-          {(t.allText || t.parts.some((p) => p.kind === 'ui')) && <button title="Copy answer" onClick={() => { void copyAnswer(t).then((ok) => { if (ok) { setCopied(true); setTimeout(() => setCopied(false), 1200); } }).catch(() => setCopied(false)); }}>{copied ? 'copied' : 'copy'}</button>}
-          {/^turn_/.test(t.id) && <button title="Show every model, tool and data call for this answer" onClick={() => setTrace((v) => !v)}>trace</button>}
+          <span className="acts">
+            {(t.allText || t.parts.some((p) => p.kind === 'ui')) && <button title="Copy answer" onClick={() => { void copyAnswer(t).then((ok) => { if (ok) { setCopied(true); setTimeout(() => setCopied(false), 1200); } }).catch(() => setCopied(false)); }}><Icon name={copied ? 'check' : 'copy'} size={13} />{copied ? 'copied' : 'copy'}</button>}
+            {/^turn_/.test(t.id) && <button title="Show every model, tool and data call for this answer" aria-expanded={trace} onClick={() => setTrace((v) => !v)}><Icon name="list" size={13} />trace</button>}
+          </span>
+          <span className="facts">
+            {t.meta.label && <span>{t.meta.label}</span>}
+            {search && <span title="Web search provider for this answer">{`${search} search`}</span>}
+            {t.meta.costUsd != null && <span title="API cost of this answer">{costLabel(t.meta.costUsd)}</span>}
+            {!!t.meta.ms && <span>{(t.meta.ms / 1000).toFixed(1)}s</span>}
+          </span>
         </>}
       </div>
       {trace && <Trace turnId={t.id} />}
@@ -329,6 +355,59 @@ function Offline({ name, why, onRetry }: { name: string; why: [string, string]; 
   );
 }
 
+// One button for the reply's model, thinking and web search. It shows the model and
+// thinking level (what changes cost and quality); the menu holds all three pickers.
+function ReplySettings({ brain, searchDefault }: { brain: Brain | undefined; searchDefault: string }) {
+  const s = useStore(chat);
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null), btn = useRef<HTMLButtonElement>(null);
+  const busy = !!s.running || s.sending;
+  const thinking = !!brain?.thinking && !!s.effort && s.effort !== 'none';
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: PointerEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener('pointerdown', away);
+    ref.current?.querySelector<HTMLSelectElement>('select:not(:disabled)')?.focus();
+    return () => document.removeEventListener('pointerdown', away);
+  }, [open]);
+  const searchLabel = s.search === 'auto' ? `Auto${searchDefault ? ` (${searchDefault})` : ''}` : s.searchProviders.find((p) => p.id === s.search)?.label || s.search;
+  return (
+    <div className="kx-settings" ref={ref} onKeyDown={(e) => { if (e.key === 'Escape' && open) { e.stopPropagation(); setOpen(false); btn.current?.focus(); } }}>
+      <button ref={btn} className={'kx-model-btn' + (open ? ' open' : '')} aria-haspopup="dialog" aria-expanded={open} aria-controls="kx-reply-settings"
+        title={`Model: ${brain?.label || 'none'}${brain?.thinking ? ` · thinking ${effortLabel(s.effort || 'none').toLowerCase()}` : ''} · web search: ${searchLabel}`} onClick={() => setOpen(!open)}>
+        <span className="it"><Icon name="spark" size={13} /><span className="lbl">{brain?.label || 'No model'}</span></span>
+        {brain?.thinking && <span className={'it' + (thinking ? ' think' : '')}><Icon name="bulb" size={13} />{thinking ? effortLabel(s.effort) : 'No thinking'}</span>}
+        {s.searchProviders.length > 0 && <span className="it srch"><Icon name="globe" size={13} /><span className="lbl">{searchLabel}</span></span>}
+        <Icon name="chevron" size={12} />
+      </button>
+      {open && <div className="kx-pop" id="kx-reply-settings" role="dialog" aria-label="Reply settings">
+        <div className="kx-pop-head">Reply settings<span>for your next message</span></div>
+        <label className="kx-field"><span className="k"><Icon name="spark" size={13} />Model</span>
+          <select className="agent-model" aria-label="Model" disabled={busy} value={s.brain} onChange={(e) => chooseBrain(e.target.value)}>
+            {s.brains.map((b) => <option key={b.id} value={b.id} disabled={!b.available} title={b.available ? b.label : b.reason}>{`${b.label} ${b.costTier}${b.ui ? ' · views' : ''}${b.available ? '' : ' · n/a'}`}</option>)}
+          </select>
+        </label>
+        {brain?.thinking && (
+          <label className={'kx-field kx-think' + (thinking ? ' on' : '')}><span className="k"><Icon name="bulb" size={13} />Thinking</span>
+            <select className="agent-effort" aria-label="Thinking effort" value={s.effort} disabled={busy} onChange={(e) => chooseEffort(e.target.value)}>
+              {brain.thinking.levels.map((l) => <option key={l} value={l}>{effortLabel(l)}</option>)}
+            </select>
+            <span className="note">More thinking is slower and costs more.</span>
+          </label>
+        )}
+        {s.searchProviders.length > 0 && (
+          <label className="kx-field"><span className="k"><Icon name="globe" size={13} />Web search</span>
+            <select className="agent-search" aria-label="Web search" value={s.search} onChange={(e) => chooseSearch(e.target.value)}>
+              <option value="auto">{`Auto${searchDefault ? ` (${searchDefault})` : ''}`}</option>
+              {s.searchProviders.map((p) => <option key={p.id} value={p.id} disabled={!p.available} title={p.reason}>{`${p.label}${p.available ? '' : ' · no key'}`}</option>)}
+            </select>
+          </label>
+        )}
+      </div>}
+    </div>
+  );
+}
+
 // The rail sits beside the chat from this panel width; below it the list is an overlay.
 const RAIL_MIN = 680;
 
@@ -362,7 +441,7 @@ export function Chat({ inputRef, onRetry, docked }: { inputRef: RefObject<HTMLTe
   const all = menu ? [...menu.skills, ...menu.cmds] : [];
   const sel = Math.min(menuSel, Math.max(0, all.length - 1));
   useLayoutEffect(() => { if (menu) document.getElementById(`agent-option-${sel}`)?.scrollIntoView({ block: 'nearest' }); }, [sel, !!menu]);
-  const send = (text: string) => void submit(text.trim(), ctxOn ? pageContext() : undefined, (t) => setDraft(t));
+  const send = (text: string) => void submit(councilText(text.trim(), s.council && s.councilMode), ctxOn ? pageContext() : undefined, (t) => setDraft(t));
   const pick = (i: number) => { const it = all[i]; if (!it) return; setDraft(it.k + ' '); setMenuSel(0); setMenuOpen(false); inputRef.current?.focus(); };
   const onNew = () => { newChat(); closeOverlay(); inputRef.current?.focus(); };
   const pc = pageContext();
@@ -404,7 +483,7 @@ export function Chat({ inputRef, onRetry, docked }: { inputRef: RefObject<HTMLTe
               {menu.cmds.map((it, i) => <MenuRow key={it.k} id={`agent-option-${i + menu.skills.length}`} k={it.k} v={it.v} on={i + menu.skills.length === sel} onPick={() => pick(i + menu.skills.length)} />)}
             </>}
           </div>
-          <div className={'agent-box' + (drag ? ' drag' : '')} onDragOver={(e) => { e.preventDefault(); setDrag(true); }} onDragLeave={() => setDrag(false)}
+          <div className={'agent-box' + (drag ? ' drag' : '') + (s.council && s.councilMode ? ' council' : '')} onDragOver={(e) => { e.preventDefault(); setDrag(true); }} onDragLeave={() => setDrag(false)}
             onDrop={(e) => { e.preventDefault(); setDrag(false); if (e.dataTransfer?.files.length) void addFiles(e.dataTransfer.files); }}>
             <div className="agent-attach-row">
               {s.files.map((f: FileChip, i) => {
@@ -413,7 +492,7 @@ export function Chat({ inputRef, onRetry, docked }: { inputRef: RefObject<HTMLTe
               })}
             </div>
             <textarea ref={inputRef} className="agent-input" rows={1} maxLength={12000} aria-label="Message" aria-autocomplete="list" aria-controls={menu ? 'agent-command-menu' : undefined} aria-activedescendant={menu && all.length ? `agent-option-${sel}` : undefined}
-              placeholder={s.named ? `Ask ${s.name} anything…  (/ for skills)` : 'Ask anything about your portfolio, a stock, a strategy…  (/ for skills)'}
+              placeholder={s.council && s.councilMode ? 'Ask the council: a holding, a position size, a thesis…' : s.named ? `Ask ${s.name} anything…  (/ for skills)` : 'Ask anything about your portfolio, a stock, a strategy…  (/ for skills)'}
               value={s.draft} onChange={(e) => { setDraft(e.target.value); setMenuOpen(true); }}
               onBlur={() => { blurTimer.current = setTimeout(() => setMenuOpen(false), 120); }} onFocus={() => { clearTimeout(blurTimer.current); setMenuOpen(true); }}
               onPaste={(e) => { const files = [...(e.clipboardData?.files || [])]; if (files.length) { e.preventDefault(); void addFiles(files); } }}
@@ -427,37 +506,26 @@ export function Chat({ inputRef, onRetry, docked }: { inputRef: RefObject<HTMLTe
                 }
                 if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); if (!s.running) send(s.draft); }
               }} />
+            {/* What matters for this message sits up front and is always labelled (attach, page
+                context, council); model, thinking and web search live behind one settings button. */}
             <div className="agent-tools-row">
-              <button className="agent-icon-btn" title="Attach images or documents (or paste / drop)" aria-label="Attach files" onClick={() => fileRef.current?.click()}><Icon name="clip" /></button>
-              <button className={'agent-ctx kx-pill' + (ctxOn ? ' on' : '')} title="Send what you are looking at (symbol, timeframe, strategy) with your message"
-                onClick={() => { const v = !ctxOn; setCtxOn(v); ls.set(LS.ctx, v ? '1' : '0'); }}>{ctxButton(ctxOn, pc)}</button>
-              <label className="kx-pill kx-select" title="Model for this chat">
-                <Icon name="spark" size={13} />
-                <select className="agent-model" aria-label="Model" disabled={!!s.running || s.sending} value={s.brain} onChange={(e) => chooseBrain(e.target.value)}>
-                  {s.brains.map((b) => <option key={b.id} value={b.id} disabled={!b.available} title={b.available ? b.label : b.reason}>{`${b.label} ${b.costTier}${b.ui ? ' · views' : ''}${b.available ? '' : ' · n/a'}`}</option>)}
-                </select>
-              </label>
-              {brain?.thinking && (
-                <label className={'kx-pill kx-select kx-think' + (s.effort && s.effort !== 'none' ? ' on' : '')} title="Thinking for the next message. More thinking can take longer and cost more.">
-                  <Icon name="bulb" size={13} />
-                  <select className="agent-effort" aria-label="Thinking effort" value={s.effort} disabled={!!s.running || s.sending} onChange={(e) => chooseEffort(e.target.value)}>
-                    <optgroup label="Thinking">{brain.thinking.levels.map((l) => <option key={l} value={l}>{effortLabel(l)}</option>)}</optgroup>
-                  </select>
-                </label>
-              )}
-              {s.searchProviders.length > 0 && (
-                <label className="kx-pill kx-select" title="Web search provider, independent of the model">
-                  <Icon name="globe" size={13} />
-                  <select className="agent-search" aria-label="Web search" value={s.search} onChange={(e) => chooseSearch(e.target.value)}>
-                    <option value="auto">{`Auto${searchDefault ? ` (${searchDefault})` : ''}`}</option>
-                    {s.searchProviders.map((p) => <option key={p.id} value={p.id} disabled={!p.available} title={p.reason}>{`${p.label}${p.available ? '' : ' · no key'}`}</option>)}
-                  </select>
-                </label>
-              )}
+              <button className="agent-icon-btn kx-attach" title="Attach images or documents (or paste / drop)" aria-label="Attach files" onClick={() => fileRef.current?.click()}><Icon name="plus" size={18} /></button>
+              <button className={'agent-ctx kx-pill' + (ctxOn ? ' on' : '')} aria-pressed={ctxOn}
+                title={ctxOn ? `Sending what you are looking at (${ctxButton(true, pc)}) with your message. Click to stop.` : 'Page context is off. Click to send what you are looking at (symbol, timeframe, strategy) with your message.'}
+                onClick={() => { const v = !ctxOn; setCtxOn(v); ls.set(LS.ctx, v ? '1' : '0'); }}><Icon name="target" size={13} /><span className="lbl">{ctxButton(ctxOn, pc)}</span></button>
+              {s.council && <button className={'kx-pill kx-council' + (s.councilMode ? ' on' : '')} aria-pressed={s.councilMode} disabled={!!s.running}
+                title={s.councilMode ? 'Council mode is on: three specialists and a chair review your next messages. Click to turn it off.' : 'Ask the investment council: three specialists and a chair review the question'}
+                onClick={() => { setCouncilMode(!s.councilMode); inputRef.current?.focus(); }}><Icon name="council" size={14} /><span className="lbl">Council</span></button>}
+              {s.council && s.councilMode && <label className="kx-pill kx-select kx-lens" title="The council's analytical lens">
+                <span className="pre">Lens</span>
+                <select aria-label="Analytical lens" value={s.lens} onChange={(e) => chooseLens(e.target.value)}>{LENSES.map(({ id, label }) => <option key={id} value={id}>{label}</option>)}</select>
+                <Icon name="chevron" size={12} />
+              </label>}
               <button className={'agent-send' + (s.running ? ' stop' : '')} title={s.running ? 'Stop (Esc)' : 'Send (Enter)'} aria-label={s.running ? 'Stop' : 'Send'}
                 disabled={!s.running && (s.sending || s.view === 'offline' || !brain)} onClick={() => (s.running ? void stop() : send(s.draft))}><Icon name={s.running ? 'stop' : 'up'} /></button>
             </div>
           </div>
+          <div className="kx-under"><ReplySettings brain={brain} searchDefault={searchDefault} /><span className="kx-keys">Enter to send · Shift+Enter for a new line</span></div>
           <input ref={fileRef} type="file" multiple hidden accept="image/png,image/jpeg,image/gif,image/webp,application/pdf,.docx,.txt,.md,.csv,.json"
             onChange={(e) => { if (e.target.files) void addFiles(e.target.files); e.target.value = ''; }} />
           {s.brains.length > 0 && !brain && <div className="agent-hints">No model available: add an API key (see agent README).</div>}
