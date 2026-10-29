@@ -7,7 +7,7 @@ import { costOf } from '../brains/types.ts';
 import type { Msg } from '../types.ts';
 import { Assessment, decodeAssessment, Evidence } from './council-contract.ts';
 import { audit, auditContext } from '../obs/audit.ts';
-import { metricIssues } from './council-metrics.ts';
+import { basisNote, metricIssues } from './council-metrics.ts';
 
 export const COUNCIL_ROLES = [
   { id: 'growth', label: 'Business & Growth', focus: 'Business quality, competitive position, growth durability, catalysts, upside and counterevidence.' },
@@ -200,6 +200,6 @@ export async function runCouncil(o: {
   const text = (partial ? 'Partial council review — one or more stages failed.\n\n' : 'Council review\n\n') + (chair.findings ? chair.findings.findings.map((f) => `${f.claim}\nEvidence: ${f.evidenceIds.join(', ')}\nAssumptions: ${f.assumptions.join('; ') || 'None stated'}\nUncertainty: ${f.uncertainty}\nCounterevidence: ${f.counterevidence.join('; ') || 'None supplied'}\nWould change with: ${f.invalidation}\nMissing: ${f.missingEvidence.join('; ') || 'None stated'}`).join('\n\n') + '\n\nUnresolved: ' + chair.findings.unresolvedQuestions.join('; ') : 'Insufficient evidence to synthesize. Review the specialist failures.');
   const flagged = runs.filter((r) => r.metricIssues?.length).map((r) => `${r.role} ${r.phase}: ${r.metricIssues!.join('; ')}`);
   const figureCheck = flagged.length ? '\n\nFigure check (unresolved, treat these figures as unverified):\n' + flagged.join('\n') : '';
-  const sourceList = '\n\nEvidence register:\n' + evidence.map((e) => `${e.id}: ${e.source} · observed ${e.observedAt} · retrieved ${e.retrievedAt}`).join('\n');
+  const sourceList = '\n\nEvidence register:\n' + evidence.map((e) => { const note = basisNote(e.content); return `${e.id}: ${e.source} · observed ${e.observedAt} · retrieved ${e.retrievedAt}` + (note ? ` · ${note}` : ''); }).join('\n');
   return { text: text + figureCheck + sourceList, runs, costUsd: total, steps };
 }

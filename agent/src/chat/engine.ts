@@ -28,6 +28,7 @@ export type SendInput = { threadId: string; content: string; lens?: LensId; brai
 
 import { UI_GUIDANCE } from '../ui/schema.ts';
 import { bytePrefix, inputBudget, selectContext } from './context.ts';
+import { basisNote } from './council-metrics.ts';
 const PACK_TTL_MS = 15 * 60_000;
 
 export class ChatEngine {
@@ -396,7 +397,8 @@ const round6 = (n: number) => Math.round(n * 1e6) / 1e6;
 function summarizeArgs(a: unknown): string { const s = JSON.stringify(a ?? {}); return s === '{}' ? '' : s.slice(0, 160); }
 function summarizeResult(content: string): string {
   try { const j = JSON.parse(content); if (j.error) return `error: ${j.error.message}`.slice(0, 160); } catch { /* not JSON */ }
-  return `${Math.round(content.length / 100) / 10}k chars`;
+  const note = basisNote(content);
+  return `${Math.round(content.length / 100) / 10}k chars` + (note ? ` · ${note}` : '');
 }
 
 async function mapLimit<T, R>(items: T[], limit: number, fn: (x: T) => Promise<R>): Promise<R[]> {

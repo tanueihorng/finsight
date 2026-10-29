@@ -63,3 +63,11 @@ test('correct or negated membership statements pass', () => {
   assert.deepEqual(metricIssues(finding('AAA is not in the ETF / Fund group.', ['s']), withSectors), []);
   assert.deepEqual(metricIssues(finding('AAA is 13.53% and ETF / Fund is 20.71%.', ['s']), withSectors), []);
 });
+
+test('basisNote names weight bases, classification gaps and untracked liabilities', async () => {
+  const { basisNote } = await import('../src/chat/council-metrics.ts');
+  assert.equal(basisNote(portfolio), 'weightPct = share of securities; weightInclCashPct includes cash · liabilities not tracked');
+  assert.equal(basisNote(JSON.stringify({ weightBasis: 'securities_plus_cash', liabilities: 'not tracked', coverage: { unclassified: ['A'], funds: ['B', 'C'] } })), 'weights include cash · 1 unclassified · 2 funds without look-through · liabilities not tracked');
+  assert.equal(basisNote('not json'), '');
+  assert.equal(basisNote(JSON.stringify({ quotes: [] })), '');
+});

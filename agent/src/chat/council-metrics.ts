@@ -108,3 +108,22 @@ export function metricIssues(assessment: Assessment, evidence: readonly { id: st
   });
   return issues;
 }
+
+/** A short, code-made label for a tool result's weight basis and classification
+ * coverage, so a reader sees what a percentage divides by. Empty when none apply. */
+export function basisNote(content: string): string {
+  let j: Record<string, any>;
+  try { j = JSON.parse(content); } catch { return ''; }
+  if (!j || typeof j !== 'object' || Array.isArray(j)) return '';
+  const out: string[] = [];
+  if (j.weightBasis === 'securities') out.push('weightPct = share of securities; weightInclCashPct includes cash');
+  else if (j.weightBasis === 'securities_plus_cash') out.push('weights include cash');
+  else if (j.denominators?.securities && j.denominators?.securities_plus_cash) out.push('securitiesPct excludes cash; weightInclCashPct includes it');
+  const c = j.coverage;
+  if (c && typeof c === 'object') {
+    if (Array.isArray(c.unclassified) && c.unclassified.length) out.push(`${c.unclassified.length} unclassified`);
+    if (Array.isArray(c.funds) && c.funds.length) out.push(`${c.funds.length} fund${c.funds.length === 1 ? '' : 's'} without look-through`);
+  }
+  if (out.length && (j.liabilities === 'not tracked' || j.denominators?.liabilities === 'not tracked')) out.push('liabilities not tracked');
+  return out.join(' · ');
+}
