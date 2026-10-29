@@ -15,6 +15,8 @@ The earlier draft with unverified release numbers is preserved in `docs/archive/
 
 ## Unreleased
 
+- Council specialists may request four research tools in their single research batch (previously two); model output is capped at 2,000 tokens per call or the model maximum, whichever is lower. Up to four evidence-backed findings may be returned. Time and spending caps are unchanged.
+
 - Council no longer has a global model-call-count cap, per user request. Fixed phases, one repair per phase, the existing time and spending caps, and research-tool bounds remain. Duplicate figure warnings across a specialist’s phases are displayed once.
 
 - `KESTRELUX-001` ([FEAT-009](docs/features/FEAT-009-kestrel-terminal-redesign.md)), on `claude/chatbot-ui-concepts-b7a075`, not merged:

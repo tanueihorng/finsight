@@ -59,16 +59,16 @@ test('invalid cost settlement retains reservation instead of poisoning the cap',
  assert.throws(() => budget.reserve(0.3));
 });
 
-test('oversized research batches execute only two calls and acknowledge every skipped call before synthesis', async () => {
+test('oversized research batches execute four calls and acknowledge every skipped call before synthesis', async () => {
  const executed: string[] = [];
  let checkedFollowup = false;
  const o = setup(async (req) => {
   if (!req.system.includes('Council role: growth') || req.system.includes('This phase has no research tools.')) return result();
-  if (req.messages.length === 1) return { ...result(), blocks: ['get_quote', 'get_history', 'edgar_filings'].map((name, i) => ({ type: 'tool_call' as const, id: 'call' + i, name, args: {} })), stopReason: 'tool_use' };
+  if (req.messages.length === 1) return { ...result(), blocks: ['get_quote', 'get_history', 'edgar_filings', 'edgar_financials', 'get_quote'].map((name, i) => ({ type: 'tool_call' as const, id: 'call' + i, name, args: {} })), stopReason: 'tool_use' };
   const replies = req.messages.filter((m) => m.role === 'tool').flatMap((m) => m.blocks);
-  assert.equal(replies.length, 3);
-  assert.deepEqual(replies.map((b) => b.type === 'tool_result' && [b.callId, b.ok]), [['call0', true], ['call1', true], ['call2', false]]);
-  const skipped = replies[2]!;
+  assert.equal(replies.length, 5);
+  assert.deepEqual(replies.map((b) => b.type === 'tool_result' && [b.callId, b.ok]), [['call0', true], ['call1', true], ['call2', true], ['call3', true], ['call4', false]]);
+  const skipped = replies[4]!;
   assert.ok(skipped.type === 'tool_result' && /not executed.*research.*limit/i.test(skipped.content));
   assert.equal(req.tools.length, 0);
   checkedFollowup = true;
@@ -76,7 +76,7 @@ test('oversized research batches execute only two calls and acknowledge every sk
  });
  o.execute = async (_role, name) => { executed.push(name); return { id: 'research' + executed.length, source: 'Synthetic ' + name, observedAt: '2026-10-01', retrievedAt: '2026-10-29', content: 'Synthetic result' }; };
  const out = await runCouncil(o);
- assert.deepEqual(executed, ['get_quote', 'get_history']);
+ assert.deepEqual(executed, ['get_quote', 'get_history', 'edgar_filings', 'edgar_financials']);
  assert.ok(checkedFollowup);
  assert.equal(out.steps, 8);
  assert.ok(out.runs.every((r) => r.status === 'completed'));
@@ -84,7 +84,7 @@ test('oversized research batches execute only two calls and acknowledge every sk
 
 test('a forbidden call in an oversized batch is rejected before any tool execution', async () => {
  let executed = false;
- const o = setup(async (req) => req.system.includes('Council role: growth') ? { ...result(), blocks: ['get_quote', 'get_history', 'propose_record_update'].map((name, i) => ({ type: 'tool_call' as const, id: 'call' + i, name, args: {} })), stopReason: 'tool_use' } : result());
+ const o = setup(async (req) => req.system.includes('Council role: growth') ? { ...result(), blocks: ['get_quote', 'get_history', 'edgar_filings', 'edgar_financials', 'propose_record_update'].map((name, i) => ({ type: 'tool_call' as const, id: 'call' + i, name, args: {} })), stopReason: 'tool_use' } : result());
  o.execute = async () => { executed = true; throw Error('Unexpected'); };
  const out = await runCouncil(o);
  assert.equal(executed, false);
@@ -121,4 +121,15 @@ test('repeated unresolved figures reach the chair and remain flagged without a g
  assert.equal(calls, 15); assert.equal(out.steps, 15);
  assert.equal(out.runs.length, 7); assert.ok(out.runs.every((r) => r.status === 'completed' && r.metricIssues?.length));
  assert.match(out.text, /chair synthesis: finding 1: 99\.99%/);
+});
+
+test('council advertises four research tools and allows 2000 output tokens when the model supports it', async () => {
+ const requests: StepRequest[] = [];
+ const base = setup(async (req) => { requests.push(req); return result(); });
+ const capable = { ...base, brain: { ...base.brain, manifest: { ...base.brain.manifest, maxOutputTokens: 4096 } } };
+ const out = await runCouncil(capable);
+ assert.equal(out.runs.length, 7);
+ assert.ok(requests.every((r) => r.maxOutputTokens === 2000));
+ assert.match(requests[0]!.system, /at most 4 tool calls/);
+ assert.match(requests[0]!.system, /at most four evidence-backed findings/);
 });
