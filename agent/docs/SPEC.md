@@ -166,7 +166,7 @@ All facts tools are **read-only** and call FinSight with the GET-only token [D-Q
 | FR-3.1 | `get_context_pack` | — | §7.2 snapshot | several, composed |
 | FR-3.2 | `get_portfolio` | `account?` | positions: symbol, name, currency, quantity, avgCost, price, marketValue (native + SGD), unrealised P/L, weight | `/api/portfolio` |
 | FR-3.3 | `query_positions` | `filter{currency?, sector?, account?, symbols?}`, `sort{field, dir}`, `limit≤100` | filtered rows + totals computed by code | `/api/portfolio`, `/api/categories` |
-| FR-3.4 | `get_exposures` | `by: currency\|sector\|account\|asset_type` | weights + `lookThrough: false` flag | `/api/portfolio`, `/api/categories`, `/api/fx-risk` |
+| FR-3.4 | `get_exposures` | `by: currency\|sector\|account\|asset_type` | weights + `lookThrough: false` flag. Currency and sector rows list member holdings (values reconcile to the row). Sector view marks each holding's classification (`sector`, `instrument_type`, `label`, `unclassified`; a failed lookup is `Unclassified`, never `Other`) and reports coverage, fund symbols and `fundLookThrough: 'unknown'`. Council claims placing a holding in a group its cited result excludes are repaired or flagged (COUNCILQUALITY-001). | `/api/portfolio`, `/api/categories`, `/api/fx-risk` |
 | FR-3.5 | `get_cash` | `account?` | cash by account and currency (+ SGD) | `/api/portfolio` |
 | FR-3.6 | `get_quote` / `get_history` | `symbols[]` / `symbol, range, interval` | quotes / OHLCV bars | `/api/quote`, `/api/history` |
 | FR-3.7 | `get_events` | `days≤90` | earnings, dividends and ex-dates for holdings | `/api/events`, `/api/calendar` |

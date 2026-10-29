@@ -117,14 +117,31 @@ const queryPositions: ToolDef = {
   },
 };
 
+// How a holding got its sector-view group. A sector is an economic label; an
+// instrument type (ETF / Fund, Crypto, ...) is administrative and says nothing
+// about what a fund holds. A failed lookup is unclassified, never silently Other.
+export type Classification = 'sector' | 'instrument_type' | 'label' | 'unclassified';
+const FUND_TYPES = new Set(['ETF', 'MUTUALFUND']);
+export function classify(c: Partial<Category> | undefined): { group: string; classification: Classification; fund: boolean } {
+  const type = String(c?.type || '').toUpperCase(), fund = FUND_TYPES.has(type);
+  if (c?.sector) return { group: c.sector, classification: 'sector', fund };
+  if (type && c?.category) return { group: c.category, classification: 'instrument_type', fund };
+  if (c?.category && c.category !== 'Other') return { group: c.category, classification: 'label', fund };
+  return { group: 'Unclassified', classification: 'unclassified', fund };
+}
+
 const getExposures: ToolDef = {
   name: 'get_exposures',
-  description: 'Portfolio exposure weights grouped by currency, sector or account (computed in code, cash included where relevant). ETF look-through is NOT available: sector exposure treats each ETF as one line, and the result says so.',
+  description: 'Portfolio exposure weights grouped by currency, sector or account (computed in code, cash included). Currency and sector rows list their member holdings. Sector view reports how each holding was classified (sector, instrument type, or unclassified) and coverage. ETF look-through is NOT available: each fund is one line, and the result says so.',
   input: z.object({ by: z.enum(['currency', 'sector', 'account']), base: Base }),
   async handler({ by, base = 'SGD' }, ctx) {
     const asOf = new Date().toISOString();
     const groups = new Map<string, number>();
     const add = (k: string, v: number) => groups.set(k, (groups.get(k) ?? 0) + (Number.isFinite(v) ? v : 0));
+    // Membership is reported, so a group's makeup is never inferred from names.
+    const members = new Map<string, { symbol: string; value: number; classification?: Classification }[]>();
+    const member = (k: string, symbol: string, v: number, classification?: Classification) => { add(k, v); members.set(k, [...(members.get(k) ?? []), { symbol, value: finite(v), classification }]); };
+    let coverage: Record<string, unknown> | undefined;
     if (by === 'account') {
       const accts = await ctx.finsight.get('/api/accounts', {}, ctx.signal);
       for (const a of accts.accounts || []) {
@@ -135,22 +152,36 @@ const getExposures: ToolDef = {
       const { d } = await fetchPortfolio(ctx, undefined, base);
       const positions: Position[] = d.positions || [];
       if (by === 'currency') {
-        for (const p of positions) add(p.currency, p.marketValue);
-        for (const c of d.cash || []) add(`${c.ccy} (cash)`, c.base);
+        for (const p of positions) member(p.currency, p.symbol, p.marketValue);
+        for (const c of d.cash || []) member(`${c.ccy} (cash)`, `${c.ccy} cash`, c.base);
       } else {
         const cats = positions.length ? await ctx.finsight.get<Record<string, Category>>('/api/categories', { symbols: positions.map((p) => p.symbol).join(',') }, ctx.signal) : {};
-        for (const p of positions) add(cats[String(p.symbol).toUpperCase()]?.category || 'Other', p.marketValue);
-        const cash = (d.cash || []).reduce((s: number, c: CashPosition) => s + (c.base || 0), 0);
-        if (cash) add('Cash', cash);
+        const classed: Record<Classification, number> = { sector: 0, instrument_type: 0, label: 0, unclassified: 0 };
+        const funds: string[] = [], unclassified: string[] = [];
+        for (const p of positions) {
+          const c = classify(cats[String(p.symbol).toUpperCase()]);
+          member(c.group, p.symbol, p.marketValue, c.classification);
+          classed[c.classification] += finite(p.marketValue);
+          if (c.fund) funds.push(p.symbol);
+          if (c.classification === 'unclassified') unclassified.push(p.symbol);
+        }
+        for (const c of d.cash || []) if (c.base) member('Cash', `${c.ccy} cash`, c.base);
+        const sec = positions.reduce((s, p) => s + finite(p.marketValue), 0);
+        coverage = {
+          securitiesValue: r2(sec), bySectorPct: pct(classed.sector, sec), byInstrumentTypePct: pct(classed.instrument_type, sec), byUnsourcedLabelPct: pct(classed.label, sec), unclassifiedPct: pct(classed.unclassified, sec),
+          funds, unclassified, fundLookThrough: 'unknown',
+          meaning: 'Coverage is a share of securities value. Funds sit whole in one line; their holdings and sector mix are unknown here.',
+        };
       }
     }
     const total = [...groups.values()].reduce((s, v) => s + v, 0);
-    const rows = [...groups.entries()].map(([group, value]) => ({ group, value: r2(value), weightPct: total ? r2((value / total) * 100) : null }))
+    const rows = [...groups.entries()].map(([group, value]) => ({ group, value: r2(value), weightPct: total ? r2((value / total) * 100) : null,
+      members: by === 'account' ? undefined : (members.get(group) ?? []).sort((a, b) => b.value - a.value).map((m) => ({ ...m, value: r2(m.value), weightInclCashPct: pct(m.value, total) })) }))
       .sort((a, b) => (b.value ?? 0) - (a.value ?? 0));
     // Every grouping here includes cash, so weights share the securities-plus-cash basis.
     return { source: 'FinSight', asOf, base, by, total: r2(total), weightBasis: 'securities_plus_cash',
-      denominator: { scope: 'securities_plus_cash', value: r2(total), currency: base, asOf, constituents: groups.size, meaning: WEIGHT_BASIS.securities_plus_cash }, liabilities: 'not tracked', rows, lookThrough: false,
-      note: by === 'sector' ? 'ETFs and funds are counted as single lines (no look-through).' : undefined };
+      denominator: { scope: 'securities_plus_cash', value: r2(total), currency: base, asOf, constituents: groups.size, meaning: WEIGHT_BASIS.securities_plus_cash }, liabilities: 'not tracked', rows, coverage, lookThrough: false,
+      note: by === 'sector' ? 'ETFs and funds are counted as single lines (no look-through). Each row lists its member holdings; an instrument-type group such as ETF / Fund is an administrative label, not an economic sector. Do not infer membership from names.' : undefined };
   },
 };
 

@@ -60,7 +60,7 @@ export async function fakeFinsight(options: { scopedAccounts?: boolean; naturalH
         return j(200, { ...PORTFOLIO, account, positions, cash, summary: { totalValue, cashBase, netWorth: totalValue + cashBase, totalCost: positions.reduce((n, p) => n + p.cost, 0), totalUnrealized: positions.reduce((n, p) => n + p.unrealized, 0), realizedPnl: account === 'a1' ? 100 : account === 'a2' ? 20 : 0 } });
       }
       case '/api/accounts': return j(200, { accounts: [{ id: 'a1', name: 'IBKR', type: 'Brokerage', count: 2 }, { id: 'a2', name: 'DBS', type: 'Bank', count: 1 }], activeId: 'a1' });
-      case '/api/categories': return j(200, { NVDA: { category: 'Technology' }, VOO: { category: 'ETF' }, 'D05.SI': { category: 'Financial Services' } });
+      case '/api/categories': return j(200, { NVDA: { symbol: 'NVDA', sector: 'Technology', type: 'EQUITY', category: 'Technology' }, VOO: { symbol: 'VOO', sector: null, type: 'ETF', category: 'ETF / Fund' }, 'D05.SI': { symbol: 'D05.SI', category: 'Other' } });
       case '/api/events': return j(200, { events: [{ symbol: 'NVDA', type: 'Earnings', time: Date.now() + 5 * 864e5 }] });
       case '/api/search': {
         const instruments = [{symbol:'AMD',name:'Advanced Micro Devices, Inc.'},{symbol:'NVDA',name:'NVIDIA Corporation'},{symbol:'TSM',name:'Taiwan Semiconductor Manufacturing Company Limited'},{symbol:'VOO',name:'Vanguard S&P 500 ETF'}];

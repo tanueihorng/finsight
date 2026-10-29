@@ -8,7 +8,7 @@ const den = { securities: { scope: 'securities', value: 119000, currency: 'SGD' 
 const portfolio = JSON.stringify({ weightBasis: 'securities', denominators: den, positions: [{ symbol: 'AAA', marketValue: 18188.02, weightPct: 15.28, weightInclCashPct: 13.53 }] });
 const exposures = JSON.stringify({ weightBasis: 'securities_plus_cash', total: 134447.51, rows: [{ group: 'USD', value: 60000, weightPct: 44.63 }] });
 const evidence = [{ id: 'p', content: portfolio }, { id: 'x', content: exposures }, { id: 'n', content: 'Plain text filing' }];
-const finding = (claim: string, evidenceIds = ['p']) => ({ findings: [{ claim, evidenceIds, assumptions: [], uncertainty: 'Low', counterevidence: [], invalidation: 'New data', missingEvidence: [] }], unresolvedQuestions: [] });
+const finding = (claim: string, evidenceIds = ['p']) => ({ findings: [{ claim, evidenceIds, assumptions: [], uncertainty: 'Low', counterevidence: [] as string[], invalidation: 'New data', missingEvidence: [] }], unresolvedQuestions: [] });
 
 test('labels weights by key and inherited basis', () => {
   const f = evidenceFacts(portfolio);
@@ -39,4 +39,27 @@ test('a percentage absent from the cited evidence is unsupported', () => {
   assert.match(metricIssues(finding('AAA is 13.53% of the total.', ['n']), evidence).join(), /13\.53% is not in its cited evidence/);
   assert.match(metricIssues(finding('Margins expanded 40%.'), evidence).join(), /40% is not in its cited evidence/);
   assert.deepEqual(metricIssues(finding('No figures here.', ['n']), evidence), []);
+});
+
+// Audited case: a report placed two funds in an ETF / Fund bucket whose value
+// was smaller than the two together. Membership now comes from the tool.
+const sectors = JSON.stringify({ weightBasis: 'securities_plus_cash', by: 'sector', total: 134447.51, rows: [
+  { group: 'ETF / Fund', value: 27850.19, weightPct: 20.71, members: [{ symbol: 'PPP', value: 21315.79 }, { symbol: 'QQQ1', value: 6534.4 }] },
+  { group: 'Unclassified', value: 18188.02, weightPct: 13.53, members: [{ symbol: 'AAA', value: 18188.02 }] },
+] });
+const withSectors = [...evidence, { id: 's', content: sectors }];
+
+test('flags a holding placed in a group the cited exposure result excludes it from', () => {
+  const issues = metricIssues(finding('The 20.71% ETF / Fund bucket is dominated by AAA and PPP.', ['s']), withSectors);
+  assert.deepEqual(issues, ['finding 1: AAA is not in the ETF / Fund group in its cited evidence (it is in Unclassified)']);
+  assert.match(metricIssues(finding('AAA sits within the ETF/Fund line.', ['s']), withSectors).join(), /AAA is not in the ETF \/ Fund group/);
+  const counter = { ...finding('Fund exposure is moderate.', ['s']) };
+  counter.findings[0]!.counterevidence = ['ETF / Fund (20.71%) includes AAA.'];
+  assert.match(metricIssues(counter, withSectors).join(), /AAA is not in the ETF \/ Fund group/);
+});
+
+test('correct or negated membership statements pass', () => {
+  assert.deepEqual(metricIssues(finding('The 20.71% ETF / Fund bucket is dominated by PPP.', ['s']), withSectors), []);
+  assert.deepEqual(metricIssues(finding('AAA is not in the ETF / Fund group.', ['s']), withSectors), []);
+  assert.deepEqual(metricIssues(finding('AAA is 13.53% and ETF / Fund is 20.71%.', ['s']), withSectors), []);
 });

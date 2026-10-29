@@ -162,3 +162,17 @@ test('portfolio_weights computes single and combined weights on both bases in co
   assert.deepEqual(r.json.notHeld, ['ZZZZ']);
   assert.equal(r.json.denominators.liabilities, 'not tracked');
 });
+
+test('sector exposure lists members, separates sector from instrument type and never hides failed lookups as Other', async () => {
+  const r = await run('get_exposures', { by: 'sector' });
+  const row = (g: string) => r.json.rows.find((x: any) => x.group === g);
+  assert.deepEqual(row('ETF / Fund').members.map((m: any) => [m.symbol, m.classification]), [['VOO', 'instrument_type']]);
+  assert.deepEqual(row('Technology').members.map((m: any) => [m.symbol, m.classification]), [['NVDA', 'sector']]);
+  assert.deepEqual(row('Unclassified').members.map((m: any) => m.symbol), ['D05.SI']);
+  assert.equal(row('Other'), undefined);
+  for (const x of r.json.rows) assert.ok(Math.abs(x.members.reduce((s: number, m: any) => s + m.value, 0) - x.value) < 0.01, x.group);
+  assert.deepEqual([r.json.coverage.bySectorPct, r.json.coverage.byInstrumentTypePct, r.json.coverage.unclassifiedPct], [45, 45, 10]);
+  assert.deepEqual(r.json.coverage.funds, ['VOO']);
+  assert.equal(r.json.coverage.fundLookThrough, 'unknown');
+  assert.equal(r.json.lookThrough, false);
+});

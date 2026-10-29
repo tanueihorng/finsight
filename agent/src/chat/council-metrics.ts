@@ -1,19 +1,23 @@
 // Deterministic checks on figures in council claims (FR-1.5). A percentage in a
-// claim must appear in the evidence that claim cites, and one claim must not mix
+// claim must appear in the evidence that claim cites, one claim must not mix
 // weights or totals from different denominators (securities vs securities plus
-// cash). No model judgement is involved; issues trigger the existing repair turn.
+// cash), and a claim must not place a holding in a group the cited exposure
+// result says it is not in. No model judgement is involved; issues trigger the
+// existing repair turn.
 import type { Assessment } from './council-contract.ts';
 
 type Basis = 'securities' | 'securities_plus_cash';
 type Labelled = { value: number; basis: Basis | null; kind: 'weight' | 'denominator' };
-type Facts = { numbers: number[]; labelled: Labelled[] };
+// One grouping (e.g. sector view): each group's label and member symbols.
+type Grouping = Map<string, Set<string>>;
+type Facts = { numbers: number[]; labelled: Labelled[]; groupings: Grouping[] };
 
 const BASIS_KEYS: Record<string, Basis> = { securitiesPct: 'securities', weightInclCashPct: 'securities_plus_cash' };
 const isBasis = (v: unknown): v is Basis => v === 'securities' || v === 'securities_plus_cash';
 
 /** Collect every number in a tool result, and the weights and denominators whose basis it names. */
 export function evidenceFacts(content: string): Facts {
-  const facts: Facts = { numbers: [], labelled: [] };
+  const facts: Facts = { numbers: [], labelled: [], groupings: [] };
   let root: unknown;
   try { root = JSON.parse(content); } catch { return facts; }
   const walk = (node: unknown, basis: Basis | null) => {
@@ -23,7 +27,12 @@ export function evidenceFacts(content: string): Facts {
     if (!node || typeof node !== 'object') return;
     const o = node as Record<string, unknown>;
     // Evidence wrappers carry the tool result as a JSON string.
-    if (typeof o.content === 'string' && /^\s*[[{]/.test(o.content)) { const inner = evidenceFacts(o.content); facts.numbers.push(...inner.numbers); facts.labelled.push(...inner.labelled); }
+    if (typeof o.content === 'string' && /^\s*[[{]/.test(o.content)) { const inner = evidenceFacts(o.content); facts.numbers.push(...inner.numbers); facts.labelled.push(...inner.labelled); facts.groupings.push(...inner.groupings); }
+    if (Array.isArray(o.rows) && o.rows.some((r) => Array.isArray((r as { members?: unknown })?.members))) {
+      const g: Grouping = new Map();
+      for (const r of o.rows as { group?: unknown; members?: { symbol?: unknown }[] }[]) if (typeof r?.group === 'string' && Array.isArray(r.members)) g.set(r.group, new Set(r.members.map((m) => String(m?.symbol ?? '')).filter(Boolean)));
+      facts.groupings.push(g);
+    }
     const own = isBasis(o.weightBasis) ? o.weightBasis : basis;
     if (isBasis(o.scope) && typeof o.value === 'number') facts.labelled.push({ value: o.value, basis: o.scope, kind: 'denominator' });
     for (const [k, v] of Object.entries(o)) {
@@ -52,13 +61,41 @@ function figures(text: string): Figure[] {
 // A rounded figure matches the evidence it was rounded from.
 const near = (f: Figure, v: number) => Math.abs(f.value - v) <= 0.5 * 10 ** -f.decimals + 1e-9;
 
+const escape = (x: string) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const labelPattern = (label: string) => label.trim().split(/\s*\/\s*/).map((part) => part.split(/\s+/).map(escape).join('\\s+')).join('\\s*/\\s*');
+const symbolPattern = (symbol: string) => `(?<![A-Za-z0-9.])${escape(symbol)}(?![A-Za-z0-9])`;
+const CONTAINS = '(?:dominated|driven|led|made\\s+up|composed)\\s+(?:mostly\\s+|largely\\s+|mainly\\s+)?(?:by|of)|includ(?:es|ing)|consists?\\s+of|compris(?:es|ing)|contains?|mostly|mainly|largely|chiefly|primarily';
+const WITHIN = '(?:is|sits|falls|counts)?\\s*(?:in|within|inside|part\\s+of|belongs\\s+to)';
+
+/** "X is in group G" or "G is dominated by X" where the cited grouping says otherwise. */
+function membershipIssues(text: string, groupings: Grouping[]): string[] {
+  const out = new Set<string>();
+  for (const sentence of text.split(/(?<=[.;!?])\s+/)) for (const g of groupings) {
+    const owner = new Map<string, string>();
+    for (const [label, symbols] of g) for (const s of symbols) owner.set(s, label);
+    for (const [label, symbols] of g) {
+      if (!new RegExp(labelPattern(label), 'i').test(sentence)) continue;
+      for (const [symbol, actual] of owner) {
+        if (symbols.has(symbol) || !/^[A-Z0-9.^-]{1,24}$/.test(symbol)) continue;
+        const L = labelPattern(label), S = symbolPattern(symbol);
+        const hit = new RegExp(`${L}[^;!?]*?(?:${CONTAINS})[^;!?]*?${S}`, 'i').exec(sentence) ?? new RegExp(`${S}[^;!?]*?${WITHIN}\\s+(?:the\\s+)?${L}`, 'i').exec(sentence);
+        // A negated statement ("X is not in G") agrees with the evidence.
+        const claimed = !!hit && !/\b(?:not|no|never|outside|except|exclud\w*)\b|n't/i.test(hit[0]);
+        if (claimed) out.add(`${symbol} is not in the ${label} group in its cited evidence (it is in ${actual})`);
+      }
+    }
+  }
+  return [...out];
+}
+
 /** Issues for each finding, keyed "finding N: …". Empty when every figure checks out. */
 export function metricIssues(assessment: Assessment, evidence: readonly { id: string; content?: string }[]): string[] {
   const facts = new Map(evidence.map((e) => [e.id, evidenceFacts(e.content ?? '')]));
   const issues: string[] = [];
   assessment.findings.forEach((finding, i) => {
     const cited = finding.evidenceIds.map((id) => facts.get(id)).filter((f): f is Facts => !!f);
-    const numbers = cited.flatMap((f) => f.numbers), labelled = cited.flatMap((f) => f.labelled);
+    const numbers = cited.flatMap((f) => f.numbers), labelled = cited.flatMap((f) => f.labelled), groupings = cited.flatMap((f) => f.groupings);
+    for (const text of [finding.claim, ...finding.counterevidence]) for (const m of membershipIssues(text, groupings)) issues.push(`finding ${i + 1}: ${m}`);
     const bases = new Map<Basis, string[]>();
     for (const fig of figures(finding.claim)) {
       if (fig.percent && !numbers.some((v) => near(fig, v) || near(fig, v * 100))) issues.push(`finding ${i + 1}: ${fig.text}% is not in its cited evidence`);
