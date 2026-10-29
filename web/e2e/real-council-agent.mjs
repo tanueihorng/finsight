@@ -15,13 +15,23 @@ const manifest = BrainManifest.parse({ apiVersion: 1, kind: 'brain', id: 'counci
 const brain = { kind: 'api', manifest, async step(req) {
  const data = JSON.parse(req.messages[0].blocks[0].text);
  const question = String(data.question);
+ if (req.system.startsWith('Research subject resolution.')) {
+   const symbols = [...question.matchAll(/\b(AMD|NVDA|VOO)\b/gi)].map(m=>m[0].toUpperCase());
+   const subjects = [...new Set(symbols)].map(symbol=>({mention:question.match(new RegExp('\\b'+symbol+'\\b','i'))[0],symbol}));
+   const plan = subjects.length ? {kind:'explicit',subjects,clarification:''} : {kind:'reference',subjects:[],clarification:''};
+   // Existing lifecycle fixtures refer to the selected holding implicitly.
+   if (!subjects.length && !/\b(this|it)\b/i.test(question)) plan.kind='general';
+   return {blocks:[{type:'text',text:JSON.stringify(plan)}],usage:{inputTokens:100,outputTokens:100},stopReason:'end'};
+ }
  if (question.includes('slow')) await new Promise((resolve, reject) => {
    const timer = setTimeout(resolve, 60000);
    req.signal.addEventListener('abort', () => { clearTimeout(timer); reject(Error('Aborted')); }, { once: true });
  });
  if (question.includes('partial') && req.system.includes('Council role: growth')) return { blocks: [], usage: { inputTokens: 10, outputTokens: 0 }, stopReason: 'refusal' };
  const first = data.evidence[0];
- const assessment = { findings: first ? [{ claim: 'Synthetic review backed by captured quote.', evidenceIds: [first.id], assumptions: [], uncertainty: 'Policy not supplied', counterevidence: [], invalidation: 'New evidence', missingEvidence: ['Accepted policy'] }] : [], unresolvedQuestions: ['Fixture only; not an investment opinion'] };
+ const amdRequested = /\bAMD\b/.test(question);
+ if (amdRequested && (!first || !JSON.parse(first.content).quotes?.some(q=>q.symbol==='AMD' && q.price>0))) throw Error('AMD specialists received no matching AMD quote');
+ const assessment = { findings: first ? [{ claim: amdRequested ? 'Synthetic review of AMD backed by matching quote.' : 'Synthetic review backed by captured quote.', evidenceIds: [first.id], assumptions: [], uncertainty: 'Policy not supplied', counterevidence: [], invalidation: 'New evidence', missingEvidence: ['Accepted policy'] }] : [], unresolvedQuestions: ['Fixture only; not an investment opinion'] };
  return { blocks: [{ type: 'text', text: JSON.stringify(assessment) }], usage: { inputTokens: 100, outputTokens: 100 }, stopReason: 'end' };
 } };
 const brains = new Map([[manifest.id, { manifest, available: true, create: () => brain }]]);

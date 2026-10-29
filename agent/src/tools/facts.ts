@@ -188,6 +188,7 @@ const withAll = (i: any) => ({ ...i, account: i.account || 'ALL' });
 
 export const factsTools: ToolDef[] = [
   getPortfolio, queryPositions, getExposures, getCash, getAccounts, getQuote, getHistory,
+  simple('search_instruments', 'Resolve a company name or ticker to market-data instruments. Use the explicit question before optional chart context; ask about materially ambiguous listings rather than silently substituting the chart.', '/api/search', z.object({ query: z.string().trim().min(1).max(120) }), (i) => ({ q: i.query })),
   simple('get_events', 'Upcoming earnings, dividends and ex-dates for holdings and watchlist.', '/api/events', z.object({ account: Account }), withAll),
   simple('get_dividends', 'Dividend income report (received, expected, withholding).', '/api/dividends', acctBase, withAll),
   simple('get_realized', 'Realized gains report from sells (stock vs FX split).', '/api/realized', acctBase, withAll),
