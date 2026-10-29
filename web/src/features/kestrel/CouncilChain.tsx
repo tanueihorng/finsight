@@ -47,7 +47,7 @@ export function CouncilChain({ v, onAsk }: { v: CouncilView; onAsk?: (q: string)
         {v.roles.map((r) => <Lane key={r.id} r={r} focused={focus === r.id} dim={!!focus && focus !== r.id} cited={cited} onFocus={() => setFocus(focus === r.id ? null : r.id)} />)}
         <section className={styles.lane + ' ' + styles.chairLane} data-role="chair" data-state={v.chair.state} aria-label="Kestrel Chair lane">
           <div className={styles.laneHead}><i className={styles.laneDot} aria-hidden="true" /><strong>Kestrel Chair</strong>
-            <span className={styles.laneLive} aria-hidden="true">{v.chair.state === 'running' ? <i className="kx-spin" /> : v.chair.state === 'completed' ? '✓' : '○'}</span>
+            <span className={styles.laneLive} aria-hidden="true">{v.chair.state === 'running' ? <i className="kx-spin" /> : v.chair.state === 'completed' ? '✓' : v.chair.state === 'failed' || v.chair.state === 'stopped' ? '✕' : '○'}</span>
             <span className={styles.laneStatus}>{v.chair.waiting}</span></div>
           <div className={styles.chairBlock}><h4>Ledger</h4>
             {ledger.length ? <ul className={styles.ledger}>{ledger.map((l) => <li key={l.key} data-role={l.role}><i aria-hidden="true" />{l.text}</li>)}</ul>
@@ -55,7 +55,9 @@ export function CouncilChain({ v, onAsk }: { v: CouncilView; onAsk?: (q: string)
           <div className={styles.chairBlock}><h4>Draft ruling</h4>
             {v.chair.lead ? <p className={styles.ruling}>{v.chair.lead}</p>
               : v.hidden && v.chair.state === 'completed' ? <p className={styles.muted}>Findings hidden by UNPEEK.</p>
-              : <div className={styles.shimmer} aria-hidden="true"><i /><i /></div>}</div>
+              : v.chair.error ? <p className={styles.chairError} role="note">{v.chair.error}</p>
+              : v.chair.state === 'running' || v.chair.state === 'queued' ? <div className={styles.shimmer} aria-hidden="true"><i /><i /></div>
+              : <p className={styles.muted}>No ruling was produced.</p>}</div>
           {question && <div className={styles.chairAsk}><h4>The Chair needs one answer from you</h4><p>{question}</p>
             {onAsk && <button type="button" onClick={() => onAsk(question)}>Answer in the composer</button>}</div>}
         </section>

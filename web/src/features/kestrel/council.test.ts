@@ -54,3 +54,14 @@ test('running, failed, queued and not-run states stay truthful', () => {
   assert.equal(ended.roles[1]!.state, 'not-run');
   assert.equal(ended.cost, null);
 });
+
+test('a failed chair reports the failure, with its error only under PEEK', () => {
+  const runs = ['growth', 'macro', 'risk'].map((r) => run(r, 'assessment', 'completed')).concat({ ...run('chair', 'synthesis', 'failed'), detail: 'provider timeout' } as CouncilPart);
+  const v = councilModel(runs, true, true);
+  assert.equal(v.chair.state, 'failed');
+  assert.equal(v.chair.waiting, 'Synthesis failed');
+  assert.equal(v.chair.error, 'Synthesis failed: provider timeout');
+  assert.equal(councilModel(runs, true, false).chair.error, 'Synthesis failed.');
+  const stopped = councilModel([run('chair', 'synthesis', 'stopped')], true, true);
+  assert.equal(stopped.chair.error, 'Synthesis interrupted.');
+});

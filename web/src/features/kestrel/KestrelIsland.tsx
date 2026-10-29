@@ -18,6 +18,7 @@ import { clampHeight, clampWidth, DEFAULT_H, DEFAULT_W, LS, ls, nextWidth } from
 // remounts), and a capsule shows a run in progress while the panel is closed.
 type Mode = 'side' | 'dock';
 const dockEl = () => document.getElementById('agent-dock');
+const COVERED = '.cmdbar, [data-island="status"], main.grid, footer.statusbar';
 const resizeEvent = () => window.dispatchEvent(new Event('resize'));
 const cssWidth = () => parseInt(getComputedStyle(document.documentElement).getPropertyValue('--agent-w'), 10) || DEFAULT_W;
 
@@ -100,16 +101,18 @@ export default function KestrelIsland() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   // Where the chat shows: body.agent-open for the drawer, the dock's hidden/collapsed state for the dock.
   useEffect(() => { document.body.classList.toggle('agent-open', mode === 'side' && open); }, [mode, open]);
-  // Full page covers the grid below the top bar; the grid is inert so Tab stays in the chat.
+  // Full page covers everything below the top bar (command bar, status, grid,
+  // status bar); all of it is inert so Tab and screen readers stay in the chat.
   useEffect(() => {
     const on = mode === 'side' && open && full;
+    const covered = () => document.querySelectorAll(COVERED);
     document.body.classList.toggle('agent-full', on);
-    document.querySelector('main.grid')?.toggleAttribute('inert', on);
+    covered().forEach((el) => el.toggleAttribute('inert', on));
     if (!on) return;
     // Measured after the class lands: the top bar wraps differently without the drawer's padding.
     const measure = () => document.documentElement.style.setProperty('--kx-top', Math.round(document.querySelector('header.topbar')?.getBoundingClientRect().bottom ?? 0) + 'px');
     measure(); window.addEventListener('resize', measure);
-    return () => { window.removeEventListener('resize', measure); document.body.classList.remove('agent-full'); document.querySelector('main.grid')?.removeAttribute('inert'); };
+    return () => { window.removeEventListener('resize', measure); document.body.classList.remove('agent-full'); covered().forEach((el) => el.removeAttribute('inert')); };
   }, [mode, open, full]);
   useEffect(() => { document.body.classList.toggle('kx-busy', running); }, [running]);
   useEffect(() => { kestrelDock.setState({ visible: mode === 'dock' && open, collapsed }); }, [mode, open, collapsed]);

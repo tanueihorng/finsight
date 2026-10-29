@@ -44,7 +44,7 @@ export interface RoleView {
 }
 export interface ChairView {
   state: RunState; lead: string; findings: Finding[]; missing: string[]; changes: string[]; questions: string[];
-  evidence: string[]; waiting: string; runs: CouncilPart[];
+  evidence: string[]; waiting: string; error: string; runs: CouncilPart[];
 }
 export interface CouncilView {
   hidden: boolean; working: boolean; partial: boolean; incomplete: boolean; finished: boolean;
@@ -97,6 +97,14 @@ function roleView(role: (typeof ROLES)[number], index: number, all: CouncilPart[
   };
 }
 
+// A failed or stopped synthesis says so; its error text is shown only under PEEK.
+function chairError(runs: CouncilPart[], state: RunState, peek: boolean): string {
+  if (state !== 'failed' && state !== 'stopped') return '';
+  const bad = [...runs].reverse().find((r) => r.status === 'failed' || r.status === 'stopped');
+  const label = state === 'failed' ? 'Synthesis failed' : 'Synthesis interrupted';
+  return peek && bad?.detail ? `${label}: ${bad.detail}` : `${label}.`;
+}
+
 export function councilModel(runs: CouncilPart[], finished: boolean, peek: boolean): CouncilView {
   const roles = ROLES.map((r, i) => roleView(r, i, runs, finished, peek));
   const chairRuns = runs.filter((r) => r.role === 'chair');
@@ -106,6 +114,7 @@ export function councilModel(runs: CouncilPart[], finished: boolean, peek: boole
   const running = roles.filter((r) => r.state === 'running');
   const waiting = chairState === 'running' ? 'Weighing the evidence and unresolved views'
     : chairState === 'completed' ? 'Synthesis ready · evidence over votes'
+    : chairState === 'failed' ? 'Synthesis failed' : chairState === 'stopped' ? 'Synthesis interrupted'
     : running.length ? `Waiting for ${running.map((r) => r.label).join(', ')}`
     : finished ? 'Synthesis did not run' : 'Receives all assessments and challenges';
   const stageDone: [boolean, boolean, boolean] = [
@@ -127,7 +136,7 @@ export function councilModel(runs: CouncilPart[], finished: boolean, peek: boole
       state: chairState, lead: findings[0]?.claim ?? '', findings,
       missing: uniq(findings.flatMap((f) => f.missingEvidence)), changes: uniq(findings.map((f) => f.invalidation)),
       questions: peek ? synthesis?.unresolvedQuestions ?? [] : [], evidence: uniq(findings.flatMap((f) => f.evidenceIds)),
-      waiting, runs: chairRuns,
+      waiting, runs: chairRuns, error: chairError(chairRuns, chairState, peek),
     },
     cost, done: runs.filter((r) => r.status === 'completed').length, total: EXPECTED_RUNS,
     activeLabel: active ? `${STAGES[stage]} · ${active}` : STAGES[stage],

@@ -27,9 +27,17 @@ test('full page covers the grid below the top bar without remounting the chat; E
   await expect.poll(async () => (await page.locator('#agent-panel').boundingBox())?.x).toBe(0);
   await expect.poll(async () => Math.round((await page.locator('#agent-panel').boundingBox())!.y)).toBe(Math.round(top!.y + top!.height));
   await expect(input).toHaveValue('kept draft');
+  // Everything the page covers is out of the Tab order: focus never leaves the chat.
+  for (const sel of ['.cmdbar', '[data-island="status"]', 'main.grid', 'footer.statusbar']) await expect(page.locator(sel).first()).toHaveAttribute('inert', '');
+  await input.focus();
+  for (let i = 0; i < 40; i++) {
+    await page.keyboard.press('Tab');
+    expect(await page.evaluate(() => !!document.activeElement?.closest('.cmdbar, main.grid, footer.statusbar, [data-island="status"]'))).toBe(false);
+  }
   await page.getByRole('button', { name: 'Exit full page' }).click();
   await expect(page.locator('body')).not.toHaveClass(/agent-full/);
   await expect(page.locator('main.grid')).not.toHaveAttribute('inert', '');
+  await expect(page.locator('.cmdbar').first()).not.toHaveAttribute('inert', '');
   await input.fill('');
   await input.focus();
   await page.keyboard.press('ControlOrMeta+Shift+Slash');
@@ -103,4 +111,31 @@ test('full page council switches between Cards and Chain of thought, remembers i
   await expect(board.getByText('Synthetic lane claim')).toHaveCount(0);
   await expect(board.getByText('Synthetic chair ruling')).toHaveCount(0);
   await expect(board.getByText('Synthetic open question?')).toHaveCount(0);
+});
+
+test('a failed chair shows its failure in Chain of thought, not a loading placeholder', async ({ page }) => {
+  await page.route('**/api/agent/info', async (route) => {
+    const response = await route.fetch(); const data = await response.json();
+    await route.fulfill({ response, json: { ...data, council: true } });
+  });
+  await seeded(page); await page.click('#agent-toggle');
+  await page.locator('.agent-input:visible').fill('/committee synthetic failed chair ');
+  await page.locator('.agent-input:visible').press('Enter');
+  await expect(page.locator('.agent-turn:visible').last()).toContainText('Echo: /committee synthetic failed chair');
+  await page.route('**/api/agent/threads/*', async (route) => {
+    const response = await route.fetch(); const data = await response.json();
+    if (!data.messages) return route.fulfill({ response });
+    const turnId = data.messages.find((m: { role: string }) => m.role === 'assistant')?.turnId;
+    data.messages.push({ id: 'run-f', role: 'assistant', turnId, blocks: [{ type: 'notice', kind: 'council', text: JSON.stringify({ id: 'cf', parentId: 'p', role: 'chair', phase: 'synthesis', model: 'fixture', version: 1, ms: 10, costUsd: null, status: 'failed', error: 'Synthetic chair outage' }) }] });
+    await route.fulfill({ response, json: data });
+  });
+  await page.locator('.agent-icon-btn[title="New chat (/new)"]:visible').click();
+  await page.locator('.kx-jump-row', { hasText: '/committee synthetic failed chair' }).first().click();
+  await page.getByRole('button', { name: 'Open full page' }).click();
+  const board = page.locator('[data-council-board]');
+  await board.getByRole('button', { name: '≡ Chain of thought' }).click();
+  const chair = board.getByLabel('Kestrel Chair lane');
+  await expect(chair).toHaveAttribute('data-state', 'failed');
+  await expect(chair).toContainText('Synthesis failed');
+  await expect(chair.locator('[aria-hidden="true"] i')).toHaveCount(0); // no shimmer
 });
