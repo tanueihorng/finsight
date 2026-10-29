@@ -52,6 +52,23 @@ Persisted notices/events reconstruct child status by stable ID. On reload with
 no active parent, formerly running children are labelled interrupted/stopped.
 Automatic restart and duplicate paid-call replay are unsupported.
 
+## Local observability work in progress — 2026-10-29
+
+Source changes record council model requests, responses, cost, rejection and
+stage outcomes with run, role, phase, stage and call identifiers. Research
+tool logs link call and evidence identifiers; skipped, denied and repair events
+are explicit. Normal API turns record their system instructions and tool call
+identifiers. These are bounded, redacted interaction logs in the existing
+private log directory, subject to configured retention and field caps. The trace
+viewer can load earlier retained events and hides event detail under UNPEEK.
+Model-reported findings are not hidden reasoning, and a trace is not proof that
+an answer is accurate. Historical traces may lack these fields or have expired.
+
+This source work is not a release or a research-quality qualification. Some
+pre-dispatch and interrupted paths, cross-process attribution beyond the agent
+proxy, and full provider/CLI coverage need further verification. See the
+workspace work packet for current test evidence and remaining work.
+
 ## Rollout gates still required
 
 Mock/unit/integration and browser tests must pass. Before activation, evaluate

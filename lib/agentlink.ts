@@ -74,11 +74,12 @@ export function proxy(req: IncomingMessage, res: ServerResponse, pathname: strin
   if (!sameOrigin(req)) { res.writeHead(403, { 'Content-Type': 'application/json' }); return void res.end(JSON.stringify({ error: 'Cross-origin request refused' })); }
   if (!['GET', 'POST', 'PATCH', 'DELETE'].includes(req.method!)) { res.writeHead(405); return void res.end(); }
   const target = '/v1/' + pathname.slice('/api/agent/'.length) + (search || '');
-  const headers: OutgoingHttpHeaders = { 'x-agent-secret': ensureLink().proxySecret, host: AGENT_URL.host, accept: req.headers.accept || 'application/json' };
+  const requestId = crypto.randomBytes(12).toString('hex');
+  const headers: OutgoingHttpHeaders = { 'x-agent-secret': ensureLink().proxySecret, 'x-finsight-request-id': requestId, host: AGENT_URL.host, accept: req.headers.accept || 'application/json' };
   if (req.headers['content-type']) headers['content-type'] = req.headers['content-type'];
   if (req.headers['last-event-id']) headers['last-event-id'] = req.headers['last-event-id'];
   const upstream = http.request({ hostname: AGENT_URL.hostname, port: AGENT_URL.port, method: req.method, path: target, headers, timeout: 0 }, (up) => {
-    const out: Record<string, string> = { 'Content-Type': up.headers['content-type'] || 'application/json', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' };
+    const out: Record<string, string> = { 'Content-Type': up.headers['content-type'] || 'application/json', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'X-Request-Id': requestId };
     if (/event-stream/.test(out['Content-Type']!)) { out.Connection = 'keep-alive'; out['X-Accel-Buffering'] = 'no'; }
     res.writeHead(up.statusCode || 502, out);
     if (res.flushHeaders) res.flushHeaders();
@@ -92,7 +93,8 @@ export function proxy(req: IncomingMessage, res: ServerResponse, pathname: strin
   });
   upstream.on('error', () => {
     if (res.headersSent) return void res.end();
-    res.writeHead(503, { 'Content-Type': 'application/json' });
+    console.warn(`Agent proxy unavailable (request ${requestId})`);
+    res.writeHead(503, { 'Content-Type': 'application/json', 'X-Request-Id': requestId });
     res.end(JSON.stringify({ error: { code: 'AGENT_OFFLINE', message: 'The agent is not running. Start it with: cd agent && npm start' } }));
   });
   res.on('close', () => upstream.destroy()); // response done or browser went away: release the upstream (stops SSE)

@@ -8,8 +8,10 @@ import { buildRegistry } from '../../agent/src/tools/index.ts';
 import { finsightClient } from '../../agent/src/tools/finsight.ts';
 import { createApi } from '../../agent/src/api/server.ts';
 import { BrainManifest } from '../../agent/src/brains/types.ts';
+import { AuditLog, setAudit } from '../../agent/src/obs/audit.ts';
 if (process.env.FINSIGHT_FAKE_MARKET !== '1' || !process.env.FINSIGHT_DATA_DIR?.includes('finsight-e2e-')) throw Error('Disposable synthetic E2E environment required');
 const cfg = loadConfig({ ...process.env, AGENT_BRAIN: 'council-fixture', KESTREL_COUNCIL: '1' });
+setAudit(new AuditLog(cfg.logsDir, cfg.logRetentionDays));
 const db = openDb(cfg.dbPath), bus = new EventBus(db), tools = buildRegistry(), finsight = finsightClient(cfg.finsightUrl, cfg.finsightDataDir);
 const manifest = BrainManifest.parse({ apiVersion: 1, kind: 'brain', id: 'council-fixture', label: 'Synthetic council fixture', model: 'fixture', transport: 'mock', pricing: { inputPerM: 0, outputPerM: 0, version: 'fixture' }, capabilities: { tools: true, streaming: false, contextTokens: 100000 }, costTier: '$', maxOutputTokens: 1200 });
 const brain = { kind: 'api', manifest, async step(req) {

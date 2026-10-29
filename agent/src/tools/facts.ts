@@ -146,7 +146,7 @@ const getQuote: ToolDef = {
   input: z.object({ symbols: Symbols }),
   async handler({ symbols }, ctx) {
     const d = await ctx.finsight.get('/api/quote', { symbols: symbols.join(',') }, ctx.signal);
-    return { source: 'FinSight /api/quote (Yahoo)', asOf: new Date().toISOString(), quotes: d.quotes };
+    return { source: 'FinSight /api/quote (Yahoo)', asOf: new Date().toISOString(), asOfMeaning: 'Tool retrieval time; quote marketTime is the market observation time. Check each quote cache status and cachedAt for freshness.', quotes: d.quotes };
   },
 };
 
@@ -168,7 +168,7 @@ const getHistory: ToolDef = {
     for (const p of pts) { peak = Math.max(peak, p.c); mdd = Math.min(mdd, p.c / peak - 1); }
     const first = pts[0]!, last = pts[pts.length - 1]!;
     return {
-      source: 'FinSight /api/history (Yahoo)', asOf: new Date().toISOString(), symbol, range, interval, currency: d.meta?.currency ?? null, bars: pts.length,
+      source: 'FinSight /api/history (Yahoo)', asOf: new Date().toISOString(), asOfMeaning: 'Tool retrieval time; bar dates are observation times.', cache: d.cache ?? null, symbol, range, interval, currency: d.meta?.currency ?? null, bars: pts.length,
       from: new Date(first.t).toISOString().slice(0, 10), to: new Date(last.t).toISOString().slice(0, 10),
       firstClose: r2(first.c), lastClose: r2(last.c), returnPct: r2((last.c / first.c - 1) * 100),
       high: r2(Math.max(...pts.map((p) => p.h ?? p.c))), low: r2(Math.min(...pts.map((p) => p.l ?? p.c))), maxDrawdownPct: r2(mdd * 100),

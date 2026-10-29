@@ -53,21 +53,21 @@ export class ToolRegistry {
 
   async execute(name: string, rawArgs: unknown, ctx: ToolCtx): Promise<{ ok: boolean; content: string }> {
     const t = this.tools.get(name);
-    if (!t) return { ok: false, content: JSON.stringify({ error: { code: 'UNKNOWN_TOOL', message: `No tool named ${name}` } }) };
+    if (!t) { audit('tool.denied', { tool: name, turnId: ctx.turnId, callId: ctx.callId, code: 'UNKNOWN_TOOL' }); return { ok: false, content: JSON.stringify({ error: { code: 'UNKNOWN_TOOL', message: `No tool named ${name}` } }) }; }
     if (name === 'render_ui') {
       // Count invalid attempts too, before schema parsing. No unbounded repair loop.
-      if (!ctx.ui?.enabled || !ctx.cfg.uiViews || ++ctx.ui.attempts > 3) return { ok: false, content: JSON.stringify({ error: { code: 'UI_REJECTED', message: 'Views unavailable or three-attempt limit reached; answer in prose.' } }) };
-      if (Buffer.byteLength(JSON.stringify(rawArgs ?? {})) > 24 * 1024) return { ok: false, content: JSON.stringify({ error: { code: 'UI_REJECTED', message: 'Spec exceeds 24 KiB' } }) };
+      if (!ctx.ui?.enabled || !ctx.cfg.uiViews || ++ctx.ui.attempts > 3) { audit('tool.denied', { tool: name, turnId: ctx.turnId, callId: ctx.callId, code: 'UI_REJECTED' }); return { ok: false, content: JSON.stringify({ error: { code: 'UI_REJECTED', message: 'Views unavailable or three-attempt limit reached; answer in prose.' } }) }; }
+      if (Buffer.byteLength(JSON.stringify(rawArgs ?? {})) > 24 * 1024) { audit('tool.denied', { tool: name, turnId: ctx.turnId, callId: ctx.callId, code: 'UI_REJECTED', reason: 'size' }); return { ok: false, content: JSON.stringify({ error: { code: 'UI_REJECTED', message: 'Spec exceeds 24 KiB' } }) }; }
     }
     const parsed = t.input.safeParse(rawArgs ?? {});
     if (!parsed.success) {
-      audit('tool.invalid', { tool: name, turnId: ctx.turnId, args: rawArgs, error: z.prettifyError(parsed.error) });
+      audit('tool.invalid', { tool: name, turnId: ctx.turnId, callId: ctx.callId, args: rawArgs, error: z.prettifyError(parsed.error) });
       return { ok: false, content: JSON.stringify({ error: { code: 'TOOL_INPUT_INVALID', message: z.prettifyError(parsed.error) } }) };
     }
     const timeout = t.timeoutMs ?? 30_000;
     let timer: NodeJS.Timeout | undefined;
     const t0 = Date.now();
-    const ids = { tool: name, turnId: ctx.turnId, threadId: ctx.threadId, via: ctx.via ?? 'chat' };
+    const ids = { tool: name, turnId: ctx.turnId, threadId: ctx.threadId, callId: ctx.callId, via: ctx.via ?? 'chat' };
     audit('tool.call', { ...ids, args: parsed.data });
     const done = (ok: boolean, content: string) => { audit('tool.result', { ...ids, ok, ms: Date.now() - t0, content }); return { ok, content }; };
     try {

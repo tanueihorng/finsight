@@ -108,7 +108,7 @@ export class ChatEngine {
     if (input.brain && input.brain !== thread.defaultBrain) store.updateThread(this.db, thread.id, { defaultBrain: input.brain });
     this.bus.emit(thread.id, 'turn.started', { turnId: turn.id, brain: brainId, label: brain.manifest.label, skill: skill?.name, effort, search: cfg.searchProvider, lens: lens + ':1' });
     audit('turn.start', { turnId: turn.id, threadId: thread.id, brain: brainId, content, attachments: input.attachmentIds ?? [], skill: skill?.name, effort, search: cfg.searchProvider, pageContext: input.pageContext });
-    void auditContext.run({ turnId: turn.id, threadId: thread.id }, () => this.run(thread.id, turn.id, brain, ctrl, cfg, effort)).finally(() => {
+    void auditContext.run({ ...(auditContext.getStore() ?? {}), turnId: turn.id, threadId: thread.id }, () => this.run(thread.id, turn.id, brain, ctrl, cfg, effort)).finally(() => {
       if (council) this.councilRunning = false;
       if (this.running.get(thread.id)?.turnId === turn.id) this.running.delete(thread.id);
     });
@@ -264,7 +264,7 @@ export class ChatEngine {
         warnedContext = true;
         this.bus.emit(threadId, 'budget.warning', { turnId, scope: 'context', note: 'Some earlier conversation or document text is outside the current context. Original messages and documents remain available through search and document tools.' });
       }
-      audit('model.request', { turnId, threadId, step, brain: brain.manifest.id, model: brain.manifest.model, effort, final, tools: final ? [] : tools.map((x) => x.name),
+      audit('model.request', { turnId, threadId, step, brain: brain.manifest.id, model: brain.manifest.model, effort, final, system, tools: final ? [] : tools.map((x) => x.name),
         messages: messages.map((m) => ({ role: m.role, blocks: m.blocks.map((b) => (b.type === 'image' ? { type: 'image', mime: b.mime, name: b.name, bytes: b.data.length } : b)) })) });
       let res: StepResult;
       try {
@@ -276,7 +276,7 @@ export class ChatEngine {
       audit('model.response', { turnId, step, brain: brain.manifest.id, ms: Date.now() - t, stopReason: res.stopReason, usage: res.usage, blocks: res.blocks });
       const c = costOf(brain.manifest, res.usage, res.searches);
       costUsd += c; addUsage(usageTotal, res.usage);
-      store.addTraceStep(this.db, turnId, step, { kind: 'brain', name: brain.manifest.id, usage: res.usage, costUsd: c, ms: Date.now() - t, ok: true });
+      store.addTraceStep(this.db, turnId, step * 100, { kind: 'brain', name: brain.manifest.id, usage: res.usage, costUsd: c, ms: Date.now() - t, ok: true });
       store.addCost(this.db, { brain: brain.manifest.id, kind: 'tokens', units: (res.usage.inputTokens ?? 0) + (res.usage.outputTokens ?? 0), usd: c, priceVersion: brain.manifest.pricing.version, turnId, threadId });
       step++;
       const calls = res.blocks.filter((b): b is Extract<Block, { type: 'tool_call' }> => b.type === 'tool_call');
@@ -290,7 +290,7 @@ export class ChatEngine {
         const ts = Date.now();
         const r = await this.tools.execute(call.name, call.args, { ...ctx, callId: call.id });
         const ms = Date.now() - ts;
-        store.addTraceStep(this.db, turnId, step * 100 + calls.indexOf(call), { kind: 'tool', name: call.name, args: redactValue(call.args), resultSummary: r.content.slice(0, 500), ok: r.ok, ms });
+        store.addTraceStep(this.db, turnId, (step - 1) * 100 + calls.indexOf(call) + 1, { kind: 'tool', name: call.name, args: redactValue(call.args), resultSummary: redactValue(r.content.slice(0, 500)), ok: r.ok, ms });
         this.bus.emit(threadId, 'tool.finished', { turnId, callId: call.id, name: call.name, ok: r.ok, resultSummary: summarizeResult(r.content), ms });
         if (r.ok && call.name === 'render_ui') {
           const view = store.getUiView(this.db, turnId, call.id);
@@ -332,6 +332,7 @@ export class ChatEngine {
         if (!transient || emitted || attempt >= 3 || req.signal.aborted) throw e;
         const wait = Math.min(8000, 500 * 2 ** attempt) * (0.5 + Math.random());
         attempt++;
+        audit('model.retry', { turnId, attempt, waitMs: Math.round(wait), code: e.code });
         this.bus.emit(threadId, 'turn.retry', { turnId, attempt, waitMs: Math.round(wait), code: e.code });
         await new Promise((r) => setTimeout(r, wait));
       }

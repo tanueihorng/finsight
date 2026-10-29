@@ -49,20 +49,26 @@ function Status() {
 }
 
 function Trace({ turnId }: { turnId: string }) {
-  const [lines, setLines] = useState<Record<string, unknown>[] | string | null>(null);
+  const peek = useStore(window.FinSight.store, (s) => s.peek);
+  type TracePage = { lines: Record<string, unknown>[]; limited?: boolean; nextOffset?: number | null; failedWrites?: number; retentionDays?: number; available?: boolean };
+  const [lines, setLines] = useState<TracePage | string | null>(null);
+  const [loadingEarlier, setLoadingEarlier] = useState(false);
   useEffect(() => {
-    agentApi<{ lines: Record<string, unknown>[] }>(`/logs?turnId=${encodeURIComponent(turnId)}&limit=500`).then((r) => setLines(r.lines), (e: Error) => setLines(e.message));
+    agentApi<TracePage>(`/logs?turnId=${encodeURIComponent(turnId)}&limit=500`).then(setLines, (e: Error) => setLines(e.message));
   }, [turnId]);
   if (lines == null) return <div className="agent-trace"><div>loading…</div></div>;
   if (typeof lines === 'string') return <div className="agent-trace"><div className="bad">{lines}</div></div>;
   return (
     <div className="agent-trace">
-      <div><b>{turnId}</b> · {lines.length} events · full detail: agent logs {turnId}</div>
-      {lines.map((l, i) => {
+      <div><b>{turnId}</b> · {lines.lines.length} events{lines.limited ? ' · earlier events available' : ''} · logs retained up to {lines.retentionDays ?? '?'} days</div>
+      {!!lines.failedWrites && <div>Some interaction log writes failed; this trace may be incomplete.</div>}
+      {!lines.available ? <div>Interaction log unavailable.</div> : !lines.lines.length ? <div>No retained events found; the trace may have expired or logging may have been unavailable.</div> : null}
+      {lines.nextOffset != null && <button disabled={loadingEarlier} onClick={() => { setLoadingEarlier(true); void agentApi<TracePage>(`/logs?turnId=${encodeURIComponent(turnId)}&limit=500&offset=${lines.nextOffset}`).then((previous) => setLines((current) => typeof current === 'object' && current ? { ...previous, lines: [...previous.lines, ...current.lines] } : previous), (e: Error) => setLines(e.message)).finally(() => setLoadingEarlier(false)); }}>Load earlier events</button>}
+      {lines.lines.map((l, i) => {
         const bad = l.ok === false || /error|failed/.test(String(l.kind)) || l.status === 'failed';
         const usage = l.usage as { inputTokens: number; outputTokens: number } | undefined;
-        const extra = [l.ms != null ? `${l.ms}ms` : '', l.stopReason || '', usage ? `in ${usage.inputTokens} / out ${usage.outputTokens}` : '', l.code || '', l.error ? String(l.error).slice(0, 80) : ''].filter(Boolean).join(' · ');
-        return <div key={i} className={bad ? 'bad' : ''}>{`${String(l.ts).slice(11, 19)} `}<b>{String(l.kind)}</b>{` ${String(l.tool || l.path || l.brain || '')} ${extra}`}</div>;
+        const extra = [l.ms != null ? `${l.ms}ms` : '', l.stopReason || '', usage ? `in ${usage.inputTokens} / out ${usage.outputTokens}` : '', l.code || '', peek && l.error ? String(l.error).slice(0, 80) : ''].filter(Boolean).join(' · ');
+        return <details key={i} className={bad ? 'bad' : ''}><summary>{`${String(l.ts).slice(11, 19)} `}<b>{String(l.kind)}</b>{` ${String(l.councilRole || '')} ${String(l.councilPhase || '')} ${String(l.tool || l.path || l.brain || '')} ${extra}`}</summary>{peek ? <pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{JSON.stringify(l, null, 2)}</pre> : <span>Details hidden by UNPEEK.</span>}</details>;
       })}
     </div>
   );

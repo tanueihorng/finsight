@@ -10,7 +10,7 @@ import path from 'node:path';
 import { spawn, type ChildProcess } from 'node:child_process';
 import type { AddressInfo } from 'node:net';
 
-interface Hit { method?: string; url?: string; secret?: string | string[]; origin?: string; host?: string }
+interface Hit { method?: string; url?: string; secret?: string | string[]; origin?: string; host?: string; requestId?: string | string[] }
 interface Res { status: number; headers: http.IncomingHttpHeaders; body: string }
 
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'finsight-agentlink-'));
@@ -29,7 +29,7 @@ function req(port: number, method: string, p: string, headers: Record<string, st
 before(async () => {
   fsPort = await freePort(); agentPort = await freePort();
   agent = http.createServer((q, s) => {
-    agentHits.push({ method: q.method, url: q.url, secret: q.headers['x-agent-secret'], origin: q.headers.origin, host: q.headers.host });
+    agentHits.push({ method: q.method, url: q.url, secret: q.headers['x-agent-secret'], origin: q.headers.origin, host: q.headers.host, requestId: q.headers['x-finsight-request-id'] });
     if (q.url === '/v1/threads/th_cut/events') { s.writeHead(200, { 'Content-Type': 'text/event-stream' }); s.write('id: 1\ndata: partial\n\n'); setTimeout(() => s.destroy(), 50); return; }
     if (q.url!.startsWith('/v1/threads/th_x/events')) { s.writeHead(200, { 'Content-Type': 'text/event-stream' }); s.write('id: 1\nevent: turn.started\ndata: {}\n\n'); setTimeout(() => s.end('id: 2\nevent: turn.finished\ndata: {}\n\n'), 50); return; }
     s.writeHead(200, { 'Content-Type': 'application/json' }); s.end(JSON.stringify({ ok: true, url: q.url }));
@@ -82,6 +82,8 @@ test('proxy: needs a session, adds the secret, drops browser Origin, enforces sa
   assert.equal(hit.secret, link().proxySecret);
   assert.equal(hit.origin, undefined);
   assert.equal(hit.host, `127.0.0.1:${agentPort}`);
+  assert.match(String(hit.requestId), /^[a-f0-9]{24}$/);
+  assert.equal(ok.headers['x-request-id'], hit.requestId);
   const origin = `http://127.0.0.1:${fsPort}`;
   assert.equal((await req(fsPort, 'POST', '/api/agent/threads', { cookie, origin, 'content-type': 'application/json' }, '{}')).status, 200);
   assert.equal((await req(fsPort, 'POST', '/api/agent/threads', { cookie, origin: 'https://evil.example', 'content-type': 'application/json' }, '{}')).status, 403);

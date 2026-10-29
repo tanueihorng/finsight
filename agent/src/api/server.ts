@@ -15,7 +15,7 @@ import type { FinsightClient } from '../tools/finsight.ts';
 import { readAgentLink } from '../tools/finsight.ts';
 import { AgentError } from '../types.ts';
 import { log } from '../log.ts';
-import { audit } from '../obs/audit.ts';
+import { audit, auditContext } from '../obs/audit.ts';
 import { z } from 'zod';
 import { LensId } from '../chat/council-contract.ts';
 import { Effort } from '../brains/types.ts';
@@ -68,7 +68,8 @@ function readJson(req: http.IncomingMessage, max = 64 * 1024): Promise<unknown> 
 export function createApi(d: ApiDeps): http.Server {
   const allowedHosts = new Set([`127.0.0.1:${d.cfg.port}`, `localhost:${d.cfg.port}`, `[::1]:${d.cfg.port}`]);
   return http.createServer(async (req, res) => {
-    const reqId = crypto.randomBytes(6).toString('hex'), t0 = Date.now();
+    const incomingId = String(req.headers['x-finsight-request-id'] || '');
+    const reqId = /^[a-f0-9]{24}$/.test(incomingId) ? incomingId : crypto.randomBytes(12).toString('hex'), t0 = Date.now();
     res.on('finish', () => audit('http', { reqId, method: req.method, path: (req.url || '').split('?')[0], status: res.statusCode, ms: Date.now() - t0 }));
     try {
       const host = String(req.headers.host || '').toLowerCase();
@@ -80,7 +81,7 @@ export function createApi(d: ApiDeps): http.Server {
       const link = readAgentLink(d.cfg.finsightDataDir);
       const secret = String(req.headers['x-agent-secret'] || '');
       if (!link || !secret || !safeEqual(secret, link.proxySecret)) return send(res, 401, { error: { code: 'UNAUTHORIZED', message: 'Missing or bad proxy secret' } });
-      return await route(d, req, res, p, u);
+      return await auditContext.run({ reqId }, () => route(d, req, res, p, u));
     } catch (e) { return fail(res, e); }
   });
 }
@@ -92,7 +93,7 @@ async function route(d: ApiDeps, req: http.IncomingMessage, res: http.ServerResp
   if (p === '/v1/health' && m === 'GET') {
     let finsight = 'ok';
     try { await d.finsight.get('/api/accounts', {}, AbortSignal.timeout(3000)); } catch (e) { finsight = e instanceof AgentError ? e.code : 'error'; }
-    return send(res, 200, { ok: true, finsight, brains: [...d.brains.values()].filter((b) => b.available).length, time: Date.now() });
+    return send(res, 200, { ok: true, finsight, brains: [...d.brains.values()].filter((b) => b.available).length, audit: getAudit()?.status() ?? null, time: Date.now() });
   }
   if (p === '/v1/brains' && m === 'GET') {
     return send(res, 200, { default: d.cfg.defaultBrain, brains: [...d.brains.values()].map((b) => ({
@@ -109,8 +110,10 @@ async function route(d: ApiDeps, req: http.IncomingMessage, res: http.ServerResp
     return send(res, 201, { upload: await saveUpload(d.cfg.home, b.name, b.dataBase64) });
   }
   if (p === '/v1/logs' && m === 'GET') {
-    const a = getAudit(); if (!a) return send(res, 200, { lines: [] });
-    return send(res, 200, { lines: a.read({ turnId: u.searchParams.get('turnId') || undefined, kind: u.searchParams.get('kind') || undefined, limit: Math.min(2000, Number(u.searchParams.get('limit')) || 300) }) });
+    const a = getAudit(); if (!a) return send(res, 200, { lines: [], available: false });
+    const offset = Number(u.searchParams.get('offset') || 0);
+    if (!Number.isSafeInteger(offset) || offset < 0) throw new AgentError('BAD_INPUT', 'Invalid log offset');
+    return send(res, 200, { ...a.readPage({ turnId: u.searchParams.get('turnId') || undefined, kind: u.searchParams.get('kind') || undefined, limit: Math.min(2000, Math.max(1, Number(u.searchParams.get('limit')) || 300)), offset }), available: true });
   }
   if (p === '/v1/plugins' && m === 'GET') return send(res, 200, { brains: { valid: [...d.brains.keys()], invalid: d.brainsInvalid }, tools: d.tools.list().map((t) => t.name) });
 

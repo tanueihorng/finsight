@@ -4,10 +4,37 @@ import { CouncilBudget, runCouncil } from '../src/chat/council.ts';
 import type { CouncilEvidence } from '../src/chat/council.ts';
 import type { ApiBrain, StepRequest } from '../src/brains/types.ts';
 import { BrainManifest } from '../src/brains/types.ts';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { AuditLog, setAudit } from '../src/obs/audit.ts';
 const finding = { findings: [{ claim: 'Insufficient evidence', evidenceIds: ['e1'], assumptions: [], uncertainty: 'Policy missing', counterevidence: [], invalidation: 'New filing', missingEvidence: ['Policy'] }], unresolvedQuestions: ['Suitability unknown'] };
 const manifest = BrainManifest.parse({ apiVersion: 1, kind: 'brain', id: 'test-brain', label: 'Test', transport: 'mock', model: 'test', pricing: { inputPerM: 0.1, outputPerM: 0.1, version: '1' }, capabilities: { tools: true, streaming: false, contextTokens: 100000 }, costTier: '$', maxOutputTokens: 100 });
 const setup = (step: ApiBrain['step']) => ({ question: 'Review synthetic company', evidence: [{ id: 'e1', source: 'Synthetic filing', observedAt: '2026-10-01', retrievedAt: '2026-10-28', content: 'Test evidence' }], brain: { kind: 'api' as const, manifest, step }, system: 'Core rules', signal: new AbortController().signal, capUsd: 1, dayBudget: new CouncilBudget(1), emit: () => {}, account: () => {}, execute: async (_role: string, _name: string, _args: unknown, _signal: AbortSignal): Promise<CouncilEvidence> => { throw Error('Must not execute'); }, tools: [] });
 const result = () => ({ blocks: [{ type: 'text' as const, text: JSON.stringify(finding) }], usage: { inputTokens: 100, outputTokens: 100 }, stopReason: 'end' as const });
+
+test('concurrent council model calls retain role, phase and paired call IDs', async () => {
+ const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'council-trace-')); const log = new AuditLog(dir); setAudit(log);
+ try {
+  await runCouncil(setup(async () => { await new Promise((r) => setTimeout(r, 2)); return result(); }));
+  const lines = log.read({ limit: 100 }); const requests = lines.filter((l) => l.kind === 'council.model.request');
+  assert.equal(requests.length, 7);
+  for (const req of requests) {
+   const response = lines.find((l) => l.kind === 'council.model.response' && l.callId === req.callId);
+   assert.ok(response); assert.equal(response.councilRole, req.councilRole); assert.equal(response.councilPhase, req.councilPhase); assert.ok(req.councilStageId);
+  }
+ } finally { setAudit(null); fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('council logs a budget refusal before dispatch with role and phase', async () => {
+ const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'council-budget-trace-')); const log = new AuditLog(dir); setAudit(log);
+ try {
+  const o = setup(async () => result()); o.dayBudget = new CouncilBudget(0.000001);
+  await runCouncil(o);
+  const rejected = log.read({ limit: 100 }).filter((l) => l.kind === 'council.model.rejected');
+  assert.ok(rejected.length); assert.ok(rejected.every((l) => l.dispatched === false && l.callId && l.councilRole && l.councilPhase));
+ } finally { setAudit(null); fs.rmSync(dir, { recursive: true, force: true }); }
+});
 
 test('reservations stop concurrent overspend; settlement cannot release twice; unknown usage retains reserve', () => {
  const b = new CouncilBudget(1); const settle = b.reserve(0.7);

@@ -114,6 +114,21 @@ test('interaction log: every tool call/result and FinSight request is written, r
   setAudit(null);
 });
 
+test('turn lookup searches all retained files and reports bounded results', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-retention-'));
+  try {
+    const a = new AuditLog(dir, 14);
+    const day = (n: number) => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
+    for (const n of [0, 1, 3]) fs.writeFileSync(path.join(dir, day(n) + '.jsonl'), JSON.stringify({ turnId: n === 3 ? 'old' : 'other', kind: 'turn.start' }) + '\n');
+    assert.equal(a.read({ turnId: 'old' }).length, 1);
+    const page = a.readPage({ turnId: 'other', limit: 1 });
+    assert.equal(page.total, 2); assert.equal(page.limited, true); assert.equal(page.retentionDays, 14);
+    assert.equal(page.nextOffset, 1);
+    const earlier = a.readPage({ turnId: 'other', limit: 1, offset: page.nextOffset! });
+    assert.equal(earlier.lines.length, 1); assert.equal(earlier.nextOffset, null);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('engine: attached document text reaches the model; image gets a no-vision note; /skill preloads instructions', async () => {
   const cfg = testConfig(fake); cfg.defaultBrain = 'mock';
   const db = openDb(':memory:'); const bus = new EventBus(db);

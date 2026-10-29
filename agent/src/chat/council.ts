@@ -6,6 +6,7 @@ import type { ApiBrain, Effort, StepRequest, StepResult } from '../brains/types.
 import { costOf } from '../brains/types.ts';
 import type { Msg } from '../types.ts';
 import { Assessment, decodeAssessment, Evidence } from './council-contract.ts';
+import { audit, auditContext } from '../obs/audit.ts';
 
 export const COUNCIL_ROLES = [
   { id: 'growth', label: 'Business & Growth', focus: 'Business quality, competitive position, growth durability, catalysts, upside and counterevidence.' },
@@ -71,31 +72,38 @@ export async function runCouncil(o: {
   const roleTools = new Set(['get_quote', 'get_history', 'get_exposures', 'query_positions', 'get_cash', 'get_policy', 'edgar_filings', 'edgar_financials']);
   const tools = o.tools.filter((t) => roleTools.has(t.name));
   const call = async (system: string, messages: Msg[], withTools: boolean, onCost: (cost: number | null) => void, allowedTools = tools): Promise<StepResult> => {
-    o.signal.throwIfAborted();
-    if (steps >= Math.min(o.maxSteps ?? 12, 12)) throw Error('Council model-call limit reached');
+    const callId = randomUUID();
+    const reject = (reason: string): never => { audit('council.model.rejected', { callId, dispatched: false, reason }); throw Error(reason); };
+    if (o.signal.aborted) return reject('Council stopped before model call');
+    if (steps >= Math.min(o.maxSteps ?? 12, 12)) return reject('Council model-call limit reached');
     const req = { system, messages, tools: withTools ? allowedTools : [] };
     const bytes = Buffer.byteLength(JSON.stringify(req));
-    if (bytes > 60000) throw Error('Council context too large; narrow the evidence packet');
+    if (bytes > 60000) return reject('Council context too large; narrow the evidence packet');
     // One token cannot encode less than a byte for the supported text adapters;
     // add protocol allowance and reserve at the highest long-context price tier.
     const p = o.brain.manifest.pricing, tier = p.longContext;
     const reserve = ((bytes + 8192) * p.inputPerM * (tier?.inputMultiplier ?? 1) + outputTokens * p.outputPerM * (tier?.outputMultiplier ?? 1)) / 1e6;
-    const settleDay = o.dayBudget.reserve(reserve);
+    let settleDay: (actual: number | null) => void;
+    try { settleDay = o.dayBudget.reserve(reserve); } catch { return reject('Council daily budget cannot cover next call'); }
     let settleTurn: ((actual: number | null) => void);
-    try { settleTurn = budget.reserve(reserve); } catch (e) { settleDay(0); throw e; }
+    try { settleTurn = budget.reserve(reserve); } catch { settleDay(0); return reject('Council turn budget cannot cover next call'); }
     let settleLedger: ((actual: number | null) => void) | undefined;
     let measured: number | null = null, dispatched = false;
     try {
       settleLedger = o.reserveCost?.(reserve);
       steps++; dispatched = true;
+      const started = Date.now();
+      audit('council.model.request', { callId, model: o.brain.manifest.model, brain: o.brain.manifest.id, effort: o.effort, system, reservedUsd: reserve, tools: withTools ? allowedTools.map((t) => t.name) : [], messages });
       const res = await abortable(o.brain.step({ ...req, maxOutputTokens: outputTokens, effort: o.effort, signal: o.signal, onText: () => {} }), o.signal);
+      audit('council.model.response', { callId, ms: Date.now() - started, stopReason: res.stopReason, usage: res.usage, blocks: res.blocks });
       measured = res.usage.inputTokens === null || res.usage.outputTokens === null ? null : costOf(o.brain.manifest, res.usage, res.searches);
       if (measured !== null && (!Number.isFinite(measured) || measured < 0)) measured = null;
+      audit('council.model.cost', { callId, costUsd: measured, reservedUsd: reserve });
       total = total === null || measured === null ? null : total + measured;
       o.account(res, measured); onCost(measured);
       if (res.stopReason === 'refusal' || res.stopReason === 'max_tokens') throw Error('Council response refused or truncated');
       return res;
-    } catch (e) { if (dispatched && measured === null) { total = null; onCost(null); } throw e;
+    } catch (e) { audit('council.model.failed', { callId, dispatched, error: String((e as Error).message).slice(0, 300) }); if (dispatched && measured === null) { total = null; onCost(null); } throw e;
     } finally { settleTurn(measured); settleDay(measured); settleLedger?.(measured); }
   };
   if (o.prepare) {
@@ -118,44 +126,48 @@ export async function runCouncil(o: {
       // Separate histories. Initial calls receive no peer assessments.
       const messages: Msg[] = [{ role: 'user', blocks: [{ type: 'text', text: JSON.stringify({ question, evidence, data }) }] }];
       const allowed = new Set(role === 'risk' ? ['get_exposures', 'query_positions', 'get_cash', 'get_policy'] : ['get_quote', 'get_history', 'edgar_filings', 'edgar_financials']);
-      let res = await call(system, messages, research, onCost, tools.filter((t) => allowed.has(t.name)));
+      const context = { ...(auditContext.getStore() ?? {}), councilRunId: parentId, councilRole: role, councilPhase: phase, councilStageId: r.id };
+      let res = await auditContext.run(context, () => call(system, messages, research, onCost, tools.filter((t) => allowed.has(t.name))));
       const calls = res.blocks.filter((b) => b.type === 'tool_call');
       if (calls.length) {
         if (!research) throw Error('Council research limit exceeded');
         // Validate the complete batch before executing any call. An over-budget
         // allowed call is acknowledged, never executed or treated as evidence.
-        for (const c of calls) if (!roleTools.has(c.name) || !allowed.has(c.name)) throw Error('Council tool denied: ' + c.name);
+        for (const c of calls) if (!roleTools.has(c.name) || !allowed.has(c.name)) { auditContext.run(context, () => audit('council.tool.denied', { callId: c.id, tool: c.name })); throw Error('Council tool denied: ' + c.name); }
         messages.push({ role: 'assistant', blocks: res.blocks, providerExtra: res.providerExtra });
         for (const [index, c] of calls.entries()) {
           if (index >= RESEARCH_CALL_LIMIT) {
+            auditContext.run(context, () => audit('council.tool.skipped', { callId: c.id, tool: c.name, reason: 'research call limit' }));
             messages.push({ role: 'tool', blocks: [{ type: 'tool_result', callId: c.id, name: c.name, ok: false, content: 'Not executed: council research tool-call limit reached. This request supplies no evidence. Return your final assessment using the completed results and disclose the missing research.' }] });
             continue;
           }
-          const e = await abortable(o.execute(role, c.name, c.args, o.signal), o.signal);
+          const e = await abortable(auditContext.run({ ...context, callId: c.id }, () => o.execute(role, c.name, c.args, o.signal)), o.signal);
           const parsed = { ...Evidence.parse({ id: e.id, source: e.source, observedAt: e.observedAt, retrievedAt: e.retrievedAt }), content: e.content };
           if (evidence.some((x) => x.id === parsed.id)) throw Error('Duplicate research evidence');
           evidence.push(parsed);
           messages.push({ role: 'tool', blocks: [{ type: 'tool_result', callId: c.id, name: c.name, ok: true, content: JSON.stringify(parsed) }] });
         }
-        res = await call(system, messages, false, onCost);
+        res = await auditContext.run(context, () => call(system, messages, false, onCost));
       }
       if (res.blocks.some((b) => b.type === 'tool_call')) throw Error('Council tool use after research limit');
       const metadata = evidence.map(({ content: _content, ...item }) => item);
       const decode = (response: StepResult) => decodeAssessment(response.blocks.filter((b) => b.type === 'text').map((b) => b.text).join(''), metadata);
       try { r.findings = decode(res); }
       catch {
+        auditContext.run(context, () => audit('council.validation.repair', { reason: 'invalid assessment' }));
         // Repair completed malformed output once. Never retry an uncertain
         // transport failure, refusal or truncation; it may already be billable.
         o.signal.throwIfAborted();
         messages.push({ role: 'assistant', blocks: res.blocks, providerExtra: res.providerExtra });
         messages.push({ role: 'user', blocks: [{ type: 'text', text: 'The response did not validate. Return one JSON object matching the supplied schema, at most two concise findings, using only these evidence IDs: ' + JSON.stringify(metadata.map((e) => e.id)) + '. No tools or surrounding prose.' }] });
-        res = await call(system, messages, false, onCost);
+        res = await auditContext.run(context, () => call(system, messages, false, onCost));
         r.findings = decode(res);
       }
       r.status = 'completed';
     } catch (e) { r.status = o.signal.aborted ? 'stopped' : 'failed'; r.error = o.signal.aborted ? 'Council stopped' : String((e as Error).message).slice(0, 300); }
     r.ms = Date.now() - start;
     r.costUsd = ownCost;
+    audit('council.stage', { councilRunId: parentId, councilRole: role, councilPhase: phase, councilStageId: r.id, status: r.status, ms: r.ms, costUsd: r.costUsd, error: r.error });
     o.emit({ ...r }); return r;
   };
   // Concurrency is fixed at two; initial peer results are never supplied here.

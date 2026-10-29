@@ -384,7 +384,7 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
 // Background alert checker — evaluates alerts on a timer and fires desktop
 // notifications even when no browser is open. Override cadence with ALERT_INTERVAL (seconds).
 const ALERT_INTERVAL = Math.max(15, Number(process.env.ALERT_INTERVAL) || 60) * 1000;
-setInterval(() => { evaluateAlerts(true).catch(() => {}); }, ALERT_INTERVAL);
+setInterval(() => { evaluateAlerts(true).catch(() => console.warn('Alert evaluation failed; see application diagnostics.')); }, ALERT_INTERVAL);
 
 agentlink.ensureLink(); // creates DATA_DIR/agent-link.json (0600) for the optional local agent
 // PORT may be a numeric string from the environment; listen() accepts that.

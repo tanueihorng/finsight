@@ -25,6 +25,21 @@ test('real API/engine/store: a failed specialist yields explicit partial synthes
  await expect(page.locator('summary', { hasText: 'Business & Growth · assessment · failed' })).toHaveCount(1);
 });
 
+test('trace exposes retained event detail and hides it under UNPEEK', async ({ page }) => {
+ await open(page); await send(page, 'review selected holding');
+ await expect(page.locator('.agent-turn:visible').last()).toContainText('Synthetic review backed by captured quote.');
+ await page.getByTitle('Show every model, tool and data call for this answer').last().click();
+ const trace = page.locator('.agent-trace');
+ await expect(trace).toContainText('council.model.request');
+ const request = trace.locator('details').filter({ hasText: 'council.model.request' }).first();
+ await expect(request).toContainText('assessment');
+ await request.locator('summary').click();
+ await expect(request).toContainText('review selected holding');
+ await page.evaluate(() => window.FinSight.store.setState({ peek: false }));
+ await expect(trace).not.toContainText('review selected holding');
+ await expect(trace).toContainText('Details hidden by UNPEEK.');
+});
+
 test('wide chat presents one council panel and a distinct final result', async ({ page }, info) => {
  await page.setViewportSize({width:1600,height:1200});
  await page.addInitScript(()=>localStorage.setItem('finsight-agent-w','800'));

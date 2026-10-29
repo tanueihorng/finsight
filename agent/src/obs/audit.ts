@@ -25,6 +25,7 @@ function cap(v: unknown): unknown {
 export class AuditLog {
   dir: string; retentionDays: number;
   private day = ''; private fd: number | null = null;
+  private failedWrites = 0;
   constructor(dir: string, retentionDays = 14) {
     this.dir = dir; this.retentionDays = retentionDays;
     fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
@@ -36,14 +37,15 @@ export class AuditLog {
       const now = new Date();
       const day = now.toISOString().slice(0, 10);
       if (day !== this.day || this.fd == null) {
-        if (this.fd != null) fs.closeSync(this.fd);
+        if (this.fd != null) { fs.closeSync(this.fd); this.fd = null; }
         this.fd = fs.openSync(this.file(day), 'a', 0o600); this.day = day;
       }
       const rec: Record<string, unknown> = { ts: now.toISOString(), kind };
       for (const [k, v] of Object.entries(fields)) rec[k] = cap(v);
       fs.writeSync(this.fd, redact(JSON.stringify(rec)) + '\n');
-    } catch { /* logging must never break the app */ }
+    } catch { this.failedWrites++; if (this.failedWrites === 1) process.stderr.write('Interaction log write failed; trace may be incomplete.\n'); }
   }
+  status() { return { failedWrites: this.failedWrites }; }
   prune(): void {
     const cutoff = Date.now() - this.retentionDays * 864e5;
     for (const f of fs.readdirSync(this.dir)) {
@@ -53,7 +55,10 @@ export class AuditLog {
   }
   /** Read back lines (newest file last), optionally filtered. */
   read(filter: { turnId?: string; kind?: string; days?: number; limit?: number } = {}): Record<string, unknown>[] {
-    const files = fs.readdirSync(this.dir).filter((f) => /^\d{4}-\d{2}-\d{2}\.jsonl$/.test(f)).sort().slice(-(filter.days ?? 2));
+    return this.readPage(filter).lines;
+  }
+  readPage(filter: { turnId?: string; kind?: string; days?: number; limit?: number; offset?: number } = {}): { lines: Record<string, unknown>[]; total: number; limited: boolean; nextOffset: number | null; retentionDays: number; failedWrites: number } {
+    const files = fs.readdirSync(this.dir).filter((f) => /^\d{4}-\d{2}-\d{2}\.jsonl$/.test(f)).sort().slice(-(filter.days ?? (filter.turnId ? this.retentionDays : 2)));
     const out: Record<string, unknown>[] = [];
     for (const f of files) {
       for (const line of fs.readFileSync(path.join(this.dir, f), 'utf8').split('\n')) {
@@ -64,7 +69,10 @@ export class AuditLog {
         out.push(r);
       }
     }
-    return out.slice(-(filter.limit ?? 500));
+    const limit = filter.limit ?? 500;
+    const end = Math.max(0, out.length - (filter.offset ?? 0));
+    const start = Math.max(0, end - limit);
+    return { lines: out.slice(start, end), total: out.length, limited: start > 0, nextOffset: start > 0 ? out.length - start : null, retentionDays: this.retentionDays, failedWrites: this.failedWrites };
   }
 }
 

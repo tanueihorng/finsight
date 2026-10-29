@@ -48,7 +48,7 @@ test('tool loop: brain calls a tool, gets the real result, answers; events + tra
   assert.match(sawResult, /"totalBase":4350/);
   const types = store.eventsAfter(db, t.id, 0).map((e) => e.type);
   for (const ty of ['turn.started', 'message.delta', 'tool.started', 'tool.finished', 'turn.finished']) assert.ok(types.includes(ty), ty);
-  assert.ok(store.getTrace(db, r.turnId).length >= 3);
+  assert.deepEqual((store.getTrace(db, r.turnId) as {kind: string}[]).map((s) => s.kind), ['brain', 'tool', 'brain']);
   assert.ok(store.spendSince(db, 0) > 0);
   const msgs = store.listMessages(db, t.id);
   assert.ok(msgs.some((m) => m.blocks.some((b) => b.type === 'notice' && b.kind === 'context_pack')), 'context snapshot attached');

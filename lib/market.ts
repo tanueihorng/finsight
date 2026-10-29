@@ -1,7 +1,7 @@
 // Market data from Yahoo Finance (free, no key): quotes, history, FX, search,
 // world markets, news and sector categories.
 import { UA } from './config.ts';
-import { cacheGet, cacheSet, cached } from './cache.ts';
+import { cacheGet, cacheSet, cached, cachedWithStatus } from './cache.ts';
 import { install as installFakeMarket } from './fakemarket.ts';
 import type { QuotedQuote, Quote, History, HistoryPoint, SearchResult, NewsItem, Category, Markets } from '../shared/types.ts';
 // E2E only: answer every market fetch from local fixtures (see lib/fakemarket.ts).
@@ -107,13 +107,14 @@ function normalizeQuote(symbol: string, meta: YahooMeta): QuotedQuote {
   };
 }
 
-export function getQuote(symbol: string): Promise<QuotedQuote> {
-  return cached(`q:${symbol}`, 15000, async () => {
+export async function getQuote(symbol: string): Promise<QuotedQuote> {
+  const result = await cachedWithStatus(`q:${symbol}`, 15000, async () => {
     const data = await yahooFetch<YahooChart>(`/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=1d`);
     const result = data?.chart?.result?.[0];
     if (!result?.meta) throw new Error(`No data for ${symbol}`);
     return normalizeQuote(symbol, result.meta);
   }, { stale: 0, persist: true }); // last price survives restarts / outages (served only if a fetch fails)
+  return { ...result.value, cache: result.cache };
 }
 
 export async function getQuotes(symbols: string[]): Promise<Quote[]> {
@@ -220,13 +221,14 @@ export async function weeklyFxVol(from: string | null | undefined, to: string | 
   return cacheSet(key, Math.sqrt(variance), 6 * 60 * 60000);
 }
 
-export function getHistory(symbol: string, range = '1mo', interval = '1d'): Promise<History> {
+export async function getHistory(symbol: string, range = '1mo', interval = '1d'): Promise<History> {
   // Intraday bars move; daily/weekly history of a long range barely does, so it
   // can be served stale while it refreshes, and persisted across restarts.
   const intraday = /m$|h$/.test(interval);
   const ttl = intraday ? 60000 : (range === '1d' || range === '5d') ? 5 * 60000 : 15 * 60000;
-  return cached(`h:${symbol}:${range}:${interval}`, ttl, () => fetchHistory(symbol, range, interval),
+  const result = await cachedWithStatus(`h:${symbol}:${range}:${interval}`, ttl, () => fetchHistory(symbol, range, interval),
     { stale: intraday ? 0 : 7 * 24 * 60 * 60000, persist: !intraday });
+  return { ...result.value, cache: result.cache };
 }
 async function fetchHistory(symbol: string, range: string, interval: string): Promise<History> {
   const data = await yahooFetch<YahooChart>(

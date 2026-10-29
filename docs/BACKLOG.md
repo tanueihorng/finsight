@@ -30,6 +30,8 @@ The Kestrel panel redesign and search-provider picker (`KESTRELUI-001` / `SEARCH
 | In-chat stock price charts, source-bound to historical close prices | `CHATCHART-001` | Verified; included in the merge containing CHARTSHIP-001; deployment and live-provider chart qualification pending |
 | Smarter visual selection, richer charts, exposure views and safe navigation/alert drafts | `UIUPGRADE-001` | Integrated on main at `dc8a7c9`; demo activated; broader model qualification remains pending |
 | Demo defaults to supported Intelligent UI views | `DEMOPARITY-001` | Integrated on main at `dc8a7c9`; explicit settings and model gates remain effective |
+| Council research reliability and source grounding ([FEAT-002](features/FEAT-002-investment-council-lenses.md)) | `COUNCILQUALITY-001` | Priority1 to-do: subject-specific retrieval, instruction following, metric denominators, source support, substantive challenges, correlated model/tool traces, honest research status and equal-source comparative evaluation; implementation pending |
+
 
 ## Council delivered — 2026-10-29
 
@@ -89,3 +91,20 @@ Modal layering correction (MODALLAYER-001, 2026-10-27): verified in serving main
 Integration evidence in the investment workspace: `harness/runs/20261026T180610Z-FEATURESHIP-001-b6b72115/REPORT.md`. The final source includes the deferred-autofocus repair and static cache shellv52.
 
 Canonical and symlinked-worktree build artifacts are now reproducible through esbuild dependency identity preservation. Both build checks pass60 files and the normalized bundle passes the full integration suite. Deployment/restart remains separate.
+
+
+## Context routing delivered in isolated preview — 2026-10-29
+
+`CONTEXT-001`: code4e1aa3b/docs861e937 in feature/investment-council; preview8004 uses PR1 UI9cd2414 plus this backend. Explicit question companies override optional chart context; names/comparisons, matching quotes and reference/ambiguity handling verified.145 agent + secret scan,216 unit,typechecks/build64 and4 real-backend browser tests pass. Live AMD/TSM synthetic check passed routing at ledgerUS$0.011918256. No PR merge/push or personal deployment. Preserve separate observability edits and reconcile before integration. COUNCILQUALITY-001 remains open. Workspace evidence: harness/runs/20261029T085519Z-CONTEXT-001-eee356cb/REPORT.md.
+
+
+### Council answer quality and depth — recorded2026-10-29
+
+`COUNCILQUALITY-001` remains priority1/open. User-requested detailed issue capture
+adds AMD-DEPTH-01: correct company routing still yielded quote-only analysis,
+no specialist research, unsupported trend/valuation claims, prose arithmetic,
+repeated specialist contributions and an overconfident completion label.
+Acceptance requires actual bounded evidence collection, useful supported
+business/valuation/risk/portfolio detail and separate research-readiness states.
+The existing workspace council quality contract holds evidence and regressions;
+this is backlog capture, not another implementation or release claim.

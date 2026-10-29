@@ -11,6 +11,7 @@ export interface QuotedQuote {
   dayHigh?: number | null; dayLow?: number | null;
   weekHigh52?: number | null; weekLow52?: number | null; volume?: number | null;
   marketTime: number | null;
+  cache?: { cachedAt: string; status: 'fresh' | 'stale-revalidating' | 'stale-fallback' };
   error?: never;
 }
 /** lib/market.ts getQuotes: per-symbol failures in otherwise successful batches. */
@@ -20,7 +21,7 @@ export type Markets = Record<string, (Quote & { label: string })[]>;
 /** lib/market.ts getHistory: only c is filtered for null, other OHLCV may be absent. */
 export interface HistoryPoint { t: number; c: number; o?: number | null; h?: number | null; l?: number | null; v?: number | null }
 /** lib/market.ts getHistory, server.ts GET /api/history. */
-export interface History { symbol: string; range: string; interval: string; meta: QuotedQuote | null; points: HistoryPoint[] }
+export interface History { symbol: string; range: string; interval: string; meta: QuotedQuote | null; points: HistoryPoint[]; cache?: { cachedAt: string; status: 'fresh' | 'stale-revalidating' | 'stale-fallback' } }
 
 /** lib/portfolio.ts listAccounts (a summary, not the on-disk account). */
 export interface Account { id: string; name: string; type: string; count: number }

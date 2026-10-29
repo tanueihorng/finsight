@@ -8,6 +8,8 @@ import * as store from '../store/db.ts';
 import type { EventBus } from './bus.ts';
 import type { Usage, PageContext } from '../types.ts';
 import { resolveSubjects, type ResearchSubject, type SubjectResolution } from './research-subjects.ts';
+import { audit, auditContext } from '../obs/audit.ts';
+import { randomUUID } from 'node:crypto';
 export async function runStoredCouncil(o: { db: DB; bus: EventBus; tools: ToolRegistry; ctx: ToolCtx; brain: ApiBrain; system: string; question: string; usageTotal: Usage; effort?: Effort; scope?: PageContext }) {
   const { db, bus, tools, ctx, brain, system, question, usageTotal } = o;
   const { cfg } = ctx;
@@ -20,10 +22,11 @@ export async function runStoredCouncil(o: { db: DB; bus: EventBus; tools: ToolRe
   };
   const execute = async (_role: string, name: string, args: unknown, signal: AbortSignal) => {
       signal.throwIfAborted();
-      const r = await tools.execute(name, args, { ...ctx, signal });
+      const r = await tools.execute(name, args, { ...ctx, signal, callId: auditContext.getStore()?.callId });
       if (!r.ok) throw Error('Research tool failed: ' + name);
       const data = JSON.parse(r.content);
-      const evidence = { id: store.newId('e'), source: 'FinSight tool ' + name, observedAt: typeof data.asOf === 'string' ? data.asOf : 'Observation date unavailable; see tool result', retrievedAt: new Date().toISOString(), content: r.content };
+      const evidence = { id: store.newId('e'), source: 'FinSight tool ' + name, observedAt: data.asOfMeaning ? 'See marketTime or bar dates and cache status in tool result' : typeof data.asOf === 'string' ? data.asOf : 'Observation date unavailable; see tool result', retrievedAt: new Date().toISOString(), content: r.content };
+      audit('council.evidence', { evidenceId: evidence.id, tool: name, observedAt: evidence.observedAt, retrievedAt: evidence.retrievedAt });
       signal.throwIfAborted();
       store.appendMessage(db, threadId, 'user', [{ type: 'notice', kind: 'council_evidence', text: JSON.stringify({ ...evidence, tool: name, args }) }], { turnId });
       return evidence;
@@ -43,7 +46,7 @@ export async function runStoredCouncil(o: { db: DB; bus: EventBus; tools: ToolRe
       if (resolution.status === 'ready') {
         try {
           const symbols = resolution.subjects.map((s) => s.symbol);
-          const quote = await execute('shared', 'get_quote', { symbols }, ctx.signal);
+          const quote = await auditContext.run({ ...(auditContext.getStore() ?? {}), councilRole: 'shared', councilPhase: 'prefetch', callId: randomUUID() }, () => execute('shared', 'get_quote', { symbols }, ctx.signal));
           const data = JSON.parse(quote.content);
           const matched = Array.isArray(data.quotes) ? data.quotes.filter((q: { symbol?: string; price?: number }) => symbols.includes(q.symbol || '') && typeof q.price === 'number' && Number.isFinite(q.price) && q.price > 0) : [];
           const missing = symbols.filter((symbol) => !matched.some((q: {symbol: string}) => q.symbol === symbol));
