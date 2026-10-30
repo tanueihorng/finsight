@@ -25,9 +25,13 @@ export function councilReadiness(runs: CouncilRun[], coverage: Coverage[]): Read
   if (stages.completed < EXPECTED_STAGES) reasons.push(`${stages.completed} of ${EXPECTED_STAGES} stages completed`);
   if (!chairDone) reasons.push('no chair synthesis');
   if (evidence.failed) reasons.push(`${evidence.failed} planned evidence item${evidence.failed === 1 ? '' : 's'} failed`);
+  if (evidence.unavailable) reasons.push(`${evidence.unavailable} planned evidence item${evidence.unavailable === 1 ? '' : 's'} unavailable`);
   if (evidence.skipped_limit) reasons.push(`${evidence.skipped_limit} skipped by the research limit`);
   if (unverifiedFigures) reasons.push(`${unverifiedFigures} unverified figure check${unverifiedFigures === 1 ? '' : 's'}`);
-  // Unavailable and not-applicable sources are disclosed gaps, not failures.
+  // Coverage and numeric checks do not verify whether qualitative conclusions
+  // follow from their sources. Do not label the overall research ready until
+  // that independent verification exists.
+  reasons.push('qualitative claims have not been independently verified');
   const level: ReadinessLevel = !chairDone || assessed < 2 ? 'insufficient' : reasons.length ? 'partial' : 'ready';
   return { kind: 'readiness', version: 1, level, stages, evidence, unverifiedFigures, reasons };
 }
@@ -35,5 +39,5 @@ export function councilReadiness(runs: CouncilRun[], coverage: Coverage[]): Read
 export function readinessLine(r: Readiness): string {
   const e = r.evidence;
   const gaps = [e.failed && `${e.failed} failed`, e.unavailable && `${e.unavailable} unavailable`, e.not_applicable && `${e.not_applicable} not applicable`, e.skipped_limit && `${e.skipped_limit} skipped`].filter(Boolean).join(', ');
-  return `Research readiness: ${r.level} · stages ${r.stages.completed}/${r.stages.expected} · evidence ${e.retrieved} retrieved${gaps ? ` (${gaps})` : ''}` + (r.unverifiedFigures ? ` · ${r.unverifiedFigures} unverified figure${r.unverifiedFigures === 1 ? '' : 's'}` : '');
+  return `Research readiness: ${r.level} · stages ${r.stages.completed}/${r.stages.expected} · evidence ${e.retrieved} retrieved${gaps ? ` (${gaps})` : ''}` + (r.unverifiedFigures ? ` · ${r.unverifiedFigures} unverified figure${r.unverifiedFigures === 1 ? '' : 's'}` : '') + (r.reasons.length ? `\nLimitations: ${r.reasons.join('; ')}.` : '');
 }

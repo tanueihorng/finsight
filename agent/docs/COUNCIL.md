@@ -19,11 +19,16 @@ See the dated rollout record below; earlier proposal sections are historical.
 
 API brains only; native paid search and CLI brains are rejected. Three initial
 analysts (Business & Growth, Macro & Valuation, Portfolio Risk), concurrency two,
-one challenge call per analyst and one separate chair. Up to two tool requests
-and one follow-up model call per initial analyst: at most ten role calls, plus
-one subject-resolution call. A turn must permit at least eleven steps. No recursive delegation, automatic council
+one challenge call per analyst and one separate chair. Up to four tool requests
+and one follow-up model call per initial analyst, with one validation repair per
+stage. There is no global model-call count cap; turn and daily dollar budgets,
+the context bound, deadline and per-stage limits still apply. No recursive delegation, automatic council
 routing, retries, attachments or restart/resume. Text questions must state their
 scope. Simple questions keep the normal single-agent route.
+
+Research readiness remains partial while qualitative claim support lacks an
+independent check, and unavailable planned sources also prevent a ready status.
+Stage completion and numeric checks alone do not establish research quality.
 
 Growth/macro can read quotes, histories and SEC filings/financials; risk can read
 exposures, positions, cash and policy. Paid web search/fetch are excluded in this

@@ -41,6 +41,15 @@ test('reservations stop concurrent overspend; settlement cannot release twice; u
  assert.throws(() => b.reserve(0.4)); settle(null); assert.throws(() => settle(0)); assert.throws(() => b.reserve(0.4));
  const done = b.reserve(0.2); done(0.1); assert.doesNotThrow(() => b.reserve(0.2));
 });
+
+test('daily budget waits for an in-flight reservation instead of prematurely refusing a concurrent role', async () => {
+ let active = 0, peak = 0;
+ const o = setup(async () => { active++; peak = Math.max(peak, active); await new Promise((resolve) => setTimeout(resolve, 2)); active--; return result(); });
+ o.dayBudget = new CouncilBudget(0.0017);
+ const out = await runCouncil(o);
+ assert.equal(peak, 1);
+ assert.equal(out.runs.filter((r) => r.status === 'completed').length, 7);
+});
 test('council isolates initial histories, fixes rounds and limits concurrency', async () => {
  const requests: StepRequest[] = []; let active = 0, peak = 0;
  const o = setup(async (r) => { requests.push(r); active++; peak = Math.max(peak, active); await new Promise((resolve) => setTimeout(resolve, 2)); active--; return result(); });
@@ -61,14 +70,14 @@ test('stop aborts non-cooperative provider without accepting late completion', a
  const pending = runCouncil(o); ctrl.abort(); await assert.rejects(pending); release(result()); await new Promise((r) => setTimeout(r, 0)); assert.ok(!events.includes('completed'));
 });
 
-test('malformed completed output gets one accounted repair and a hard global call ceiling', async () => {
+test('malformed completed output gets one accounted repair per stage without a global call ceiling', async () => {
  let n = 0;
  const o = setup(async () => ++n === 1 ? { ...result(), blocks: [{ type: 'text', text: 'not JSON' }] } : result());
  const out = await runCouncil(o);
  assert.equal(out.steps, 8); assert.equal(out.runs.filter((r) => r.status === 'completed').length, 7);
  let dispatched = 0;
- const broken = await runCouncil({ ...setup(async () => { dispatched++; return { ...result(), blocks: [{ type: 'text', text: 'not JSON' }] }; }), maxSteps: 9 });
- assert.equal(dispatched, 9); assert.equal(broken.steps, 9); assert.match(broken.text, /Partial/);
+ const broken = await runCouncil({ ...setup(async () => { dispatched++; return { ...result(), blocks: [{ type: 'text', text: 'not JSON' }] }; }) });
+ assert.equal(dispatched, 14); assert.equal(broken.steps, 14); assert.match(broken.text, /Partial/);
 });
 
 test('per-call output limits do not mutate model defaults and reject invalid bounds', async () => {
@@ -86,16 +95,16 @@ test('invalid cost settlement retains reservation instead of poisoning the cap',
  assert.throws(() => budget.reserve(0.3));
 });
 
-test('oversized research batches execute only two calls and acknowledge every skipped call before synthesis', async () => {
+test('oversized research batches execute only four calls and acknowledge every skipped call before synthesis', async () => {
  const executed: string[] = [];
  let checkedFollowup = false;
  const o = setup(async (req) => {
   if (!req.system.includes('Council role: growth') || req.system.includes('This phase has no research tools.')) return result();
-  if (req.messages.length === 1) return { ...result(), blocks: ['get_quote', 'get_history', 'edgar_filings'].map((name, i) => ({ type: 'tool_call' as const, id: 'call' + i, name, args: {} })), stopReason: 'tool_use' };
+  if (req.messages.length === 1) return { ...result(), blocks: ['get_quote', 'get_history', 'edgar_filings', 'edgar_financials', 'get_quote'].map((name, i) => ({ type: 'tool_call' as const, id: 'call' + i, name, args: {} })), stopReason: 'tool_use' };
   const replies = req.messages.filter((m) => m.role === 'tool').flatMap((m) => m.blocks);
-  assert.equal(replies.length, 3);
-  assert.deepEqual(replies.map((b) => b.type === 'tool_result' && [b.callId, b.ok]), [['call0', true], ['call1', true], ['call2', false]]);
-  const skipped = replies[2]!;
+  assert.equal(replies.length, 5);
+  assert.deepEqual(replies.map((b) => b.type === 'tool_result' && [b.callId, b.ok]), [['call0', true], ['call1', true], ['call2', true], ['call3', true], ['call4', false]]);
+  const skipped = replies[4]!;
   assert.ok(skipped.type === 'tool_result' && /not executed.*research.*limit/i.test(skipped.content));
   assert.equal(req.tools.length, 0);
   checkedFollowup = true;
@@ -103,7 +112,7 @@ test('oversized research batches execute only two calls and acknowledge every sk
  });
  o.execute = async (_role, name) => { executed.push(name); return { id: 'research' + executed.length, source: 'Synthetic ' + name, observedAt: '2026-10-01', retrievedAt: '2026-10-29', content: 'Synthetic result' }; };
  const out = await runCouncil(o);
- assert.deepEqual(executed, ['get_quote', 'get_history']);
+ assert.deepEqual(executed, ['get_quote', 'get_history', 'edgar_filings', 'edgar_financials']);
  assert.ok(checkedFollowup);
  assert.equal(out.steps, 8);
  assert.ok(out.runs.every((r) => r.status === 'completed'));

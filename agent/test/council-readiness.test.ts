@@ -12,21 +12,21 @@ const all = (failed: string[] = []) => [
   run('chair', 'synthesis', 'completed')];
 const cov = (status: Coverage['status']): Coverage => ({ key: 'k' + Math.random(), purpose: 'p', tool: 't', roles: [], status });
 
-test('all stages and evidence complete is ready; disclosed unavailable sources do not lower it', () => {
+test('unavailable sources and unchecked qualitative claims prevent a ready status', () => {
   const r = councilReadiness(all(), [cov('retrieved'), cov('unavailable')]);
-  assert.equal(r.level, 'ready'); assert.deepEqual(r.reasons, []);
-  assert.equal(readinessLine(r), 'Research readiness: ready · stages 7/7 · evidence 1 retrieved (1 unavailable)');
+  assert.equal(r.level, 'partial'); assert.deepEqual(r.reasons, ['1 planned evidence item unavailable', 'qualitative claims have not been independently verified']);
+  assert.equal(readinessLine(r), 'Research readiness: partial · stages 7/7 · evidence 1 retrieved (1 unavailable)\nLimitations: 1 planned evidence item unavailable; qualitative claims have not been independently verified.');
 });
 
 test('the audited live case (two refused challenges) is partial, never a clean success', () => {
   const r = councilReadiness(all(['macro', 'risk']), [cov('retrieved')]);
   assert.equal(r.level, 'partial');
-  assert.deepEqual(r.reasons, ['5 of 7 stages completed']);
+  assert.deepEqual(r.reasons, ['5 of 7 stages completed', 'qualitative claims have not been independently verified']);
 });
 
 test('failed evidence and unverified figures are partial; no chair synthesis is insufficient', () => {
   const flagged = all(); flagged[6] = run('chair', 'synthesis', 'completed', ['x']);
-  assert.deepEqual(councilReadiness(flagged, [cov('failed')]).reasons, ['1 planned evidence item failed', '1 unverified figure check']);
+  assert.deepEqual(councilReadiness(flagged, [cov('failed')]).reasons, ['1 planned evidence item failed', '1 unverified figure check', 'qualitative claims have not been independently verified']);
   const noChair = all().slice(0, 6);
   assert.equal(councilReadiness(noChair, []).level, 'insufficient');
 });

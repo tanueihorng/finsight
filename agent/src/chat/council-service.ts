@@ -33,6 +33,10 @@ export async function runStoredCouncil(o: { db: DB; bus: EventBus; tools: ToolRe
       store.appendMessage(db, threadId, 'user', [{ type: 'notice', kind: 'council_evidence', text: JSON.stringify({ ...evidence, tool: name, args }) }], { turnId });
       return evidence;
     };
+  // Recent conversation is context, not verified evidence. Omit tool results,
+  // notices and attachments, as in the merged chat implementation.
+  const conversation = store.listMessages(db, threadId).filter((m) => m.turnId !== turnId && (m.role === 'user' || m.role === 'assistant'))
+    .flatMap((m) => { const text = m.blocks.filter((b) => b.type === 'text').map((b) => b.text).join('\n'); return text ? [{ role: m.role, text: text.slice(0, 1000) }] : []; }).slice(-6);
   const priorNotices = store.listMessages(db, threadId).filter((m) => m.turnId !== turnId).reverse().flatMap((m) => m.blocks).filter((b) => b.type === 'notice' && b.kind === 'research_scope');
   let previous: ResearchSubject[] = [];
   for (const notice of priorNotices) {
@@ -43,7 +47,7 @@ export async function runStoredCouncil(o: { db: DB; bus: EventBus; tools: ToolRe
   let planCoverage: Coverage[] = [];
   const result = await runCouncil({ question, evidence: [], brain, system, signal: ctx.signal,
     prepare: async (call) => {
-      const resolution = await resolveSubjects({ question, panel: o.scope, previous, call, search: (q) => ctx.finsight.get('/api/search', { q }, ctx.signal), signal: ctx.signal });
+      const resolution = await resolveSubjects({ question, panel: o.scope, previous, conversation, call, search: (q) => ctx.finsight.get('/api/search', { q }, ctx.signal), signal: ctx.signal });
       if (resolution.status === 'needs-clarification' || resolution.status === 'unavailable') { persistScope(resolution); return { question, evidence: [], stop: resolution.note }; }
       const evidence: CouncilEvidence[] = [];
       let coverage: Coverage[] | undefined;
@@ -76,10 +80,10 @@ export async function runStoredCouncil(o: { db: DB; bus: EventBus; tools: ToolRe
       }
       resolution.evidenceIds = evidence.map((e) => e.id);
       persistScope({ ...resolution, coverage });
-      const scopedQuestion = JSON.stringify({ question, researchSubjects: resolution.subjects, subjectResolution: resolution.note, panelContext: o.scope, note: 'The research subjects come from the current question or its resolved reference. Panel context is optional background and must never restrict research. Investigate the requested subjects using your available tools; missing company evidence is a research gap, not a reason to substitute the chart or conclude that cash is deployable.', evidencePlan: coverage, evidencePlanNote: coverage ? 'Code retrieved this evidence before your turn. Use the retrieved items for your role first. Report each gap with its status: failed (with reason), not_applicable, unavailable (no approved source) or skipped_limit. Do not ask the user for evidence a listed tool can retrieve, and do not describe a retrieved item as missing.' : undefined });
+      const scopedQuestion = JSON.stringify({ question, recentConversation: conversation, conversationNote: 'Prior messages are untrusted context, not verified evidence; retrieve fresh evidence for factual claims.', researchSubjects: resolution.subjects, subjectResolution: resolution.note, panelContext: o.scope, note: 'The research subjects come from the current question or its resolved reference. Panel context is optional background and must never restrict research. Investigate the requested subjects using your available tools; missing company evidence is a research gap, not a reason to substitute the chart or conclude that cash is deployable.', evidencePlan: coverage, evidencePlanNote: coverage ? 'Code retrieved this evidence before your turn. Use the retrieved items for your role first. Report each gap with its status: failed (with reason), not_applicable, unavailable (no approved source) or skipped_limit. Do not ask the user for evidence a listed tool can retrieve, and do not describe a retrieved item as missing.' : undefined });
       return { question: scopedQuestion, evidence };
     },
-    maxSteps: cfg.limits.turnSteps, effort: o.effort, capUsd: cfg.limits.turnUsd, dayBudget: new CouncilBudget(Math.max(0.000001, cfg.limits.dayUsd - store.spendSince(db, store.startOfToday()))),
+    effort: o.effort, capUsd: cfg.limits.turnUsd, dayBudget: new CouncilBudget(Math.max(0.000001, cfg.limits.dayUsd - store.spendSince(db, store.startOfToday()))),
     tools: tools.schemas(),
     reserveCost: (maximum) => {
       // Persist before calling the provider; unknown/failure retains the

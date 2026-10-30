@@ -97,8 +97,8 @@ test('the council service retrieves planned evidence before specialists and pers
   assert.equal(JSON.parse((scope as { text: string }).text).coverage.length, plan.length);
   // Readiness is persisted for replay and leads the answer text.
   const ready = store.listMessages(s.db, s.ctx.threadId!).flatMap((m) => m.blocks).filter((b) => b.type === 'notice' && b.kind === 'council').map((b) => JSON.parse((b as { text: string }).text)).find((x) => x.kind === 'readiness');
-  assert.equal(ready.level, 'ready'); assert.equal(ready.evidence.retrieved, plan.length);
-  assert.match(out.text, /^Research readiness: ready · stages 7\/7/);
+  assert.equal(ready.level, 'partial'); assert.equal(ready.evidence.retrieved, plan.length);
+  assert.match(out.text, /^Research readiness: partial · stages 7\/7/);
   // Prefetch adds tool calls, not model calls.
   assert.equal(s.requests.length, 8);
   s.db.close();

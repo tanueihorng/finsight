@@ -40,3 +40,9 @@ test('general questions do not inherit a chart subject; malformed intent asks a 
 test('lookup outages are explicit and never fall back to the selected chart',async()=>{
  const r=await run('Research Nvidia',intent([{mention:'Nvidia',symbol:'NVDA'}]),{search:async()=>{throw Error('offline');}});assert.equal(r.status,'unavailable');assert.deepEqual(r.subjects,[]);assert.match(r.note,/chart has not been substituted/);
 });
+test('references to earlier conversation require a literal source-backed company mention', async () => {
+ const r=await run('What about its risks?',{kind:'reference',subjects:[{mention:'Nvidia',symbol:'NVDA'}],clarification:''},{panel:undefined,conversation:[{role:'user',text:'Compare Nvidia against bonds.'}],search:async()=>[candidate('NVDA','NVIDIA Corporation')]});
+ assert.equal(r.status,'ready');assert.deepEqual(r.subjects.map(s=>[s.symbol,s.basis]),[['NVDA','conversation']]);
+ const invented=await run('What about its risks?',{kind:'reference',subjects:[{mention:'AMD',symbol:'AMD'}],clarification:''},{panel:undefined,conversation:[{role:'user',text:'Compare Nvidia against bonds.'}]});
+ assert.equal(invented.status,'needs-clarification');
+});

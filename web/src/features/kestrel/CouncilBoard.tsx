@@ -103,6 +103,7 @@ export function ReadinessNote({ readiness: r }: { readiness: Readiness }) {
   return <div className={styles.readiness} data-readiness={r.level} role="note">
     <strong>{READINESS_LABEL[r.level]}</strong>
     <span>Stages {r.stages.completed}/{r.stages.expected} · evidence {e.retrieved} retrieved{gaps ? ' · ' + gaps : ''}{r.unverifiedFigures ? ` · ${r.unverifiedFigures} unverified figure${r.unverifiedFigures === 1 ? '' : 's'}` : ''}</span>
+    {r.reasons.includes('qualitative claims have not been independently verified') && <span>Qualitative claims have not been independently verified.</span>}
   </div>;
 }
 
