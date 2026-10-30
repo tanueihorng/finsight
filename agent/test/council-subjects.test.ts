@@ -20,7 +20,7 @@ function setup(question='Should I buy AMD?',plan:unknown={kind:'explicit',subjec
 }
 test('actual council service fetches AMD before any specialist even with TSM attached, and persists its scope',async()=>{
  const s=setup();const out=await runStoredCouncil(s.args);
- for(const req of s.requests.slice(1)){const data=JSON.parse((req.messages[0]!.blocks[0] as {text:string}).text);const quote=JSON.parse(data.evidence[0].content);assert.deepEqual(quote.quotes.map((x:{symbol:string})=>x.symbol),['AMD']);assert.deepEqual(JSON.parse(data.question).researchSubjects.map((x:{symbol:string})=>x.symbol),['AMD']);}
+ for(const req of s.requests.slice(1)){const data=JSON.parse((req.messages[0]!.blocks[0] as {text:string}).text);const quote=(typeof data.evidence[0].content === 'string' ? JSON.parse(data.evidence[0].content) : data.evidence[0].content);assert.deepEqual(quote.quotes.map((x:{symbol:string})=>x.symbol),['AMD']);assert.deepEqual(JSON.parse(data.question).researchSubjects.map((x:{symbol:string})=>x.symbol),['AMD']);}
  assert.equal(out.steps,8);assert.equal(s.requests.length,8);
  const notices=store.listMessages(s.db,s.ctx.threadId!).flatMap(m=>m.blocks).filter(b=>b.type==='notice');assert.ok(notices.some(b=>b.type==='notice'&&b.kind==='research_scope'&&JSON.parse(b.text).subjects[0].symbol==='AMD'));
  assert.equal(store.getTrace(s.db,s.ctx.turnId!).length,8);assert.ok(store.spendSince(s.db,0)>0);assert.ok(out.runs.every(r=>r.status==='completed'));s.db.close();
@@ -54,7 +54,7 @@ test('company-name comparisons fetch all requested quotes without requiring char
   assert.equal(out.runs.length, 7);
   for (const req of s.requests.slice(1)) {
     const data = JSON.parse((req.messages[0]!.blocks[0] as {text:string}).text);
-    assert.deepEqual(JSON.parse(data.evidence[0].content).quotes.map((q:{symbol:string})=>q.symbol), ['NVDA','AMD']);
+    assert.deepEqual((typeof data.evidence[0].content === 'string' ? JSON.parse(data.evidence[0].content) : data.evidence[0].content).quotes.map((q:{symbol:string})=>q.symbol), ['NVDA','AMD']);
   }
   s.db.close();
 });

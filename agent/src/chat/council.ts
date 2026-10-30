@@ -30,6 +30,10 @@ export class CouncilBudget {
     this.cap = cap; this.externalSpent = externalSpent;
     if (!Number.isFinite(cap) || cap <= 0) throw Error('Invalid council budget');
   }
+  snapshot() {
+    const external = this.externalSpent();
+    return { capUsd: this.cap, chargedUsd: this.charged, reservedUsd: this.reserved, externalUsd: external, availableUsd: Math.max(0, this.cap - external - this.charged - this.reserved), inFlight: this.open };
+  }
   /** A `hold` (the chair's allowance) is not an in-flight call, so nothing waits on it. */
   reserve(max: number, hold = false): (actual: number | null) => void {
     if (!Number.isFinite(max) || max < 0 || this.externalSpent() + this.charged + this.reserved + max > this.cap) throw Error('Council budget cannot cover next call');
@@ -93,7 +97,7 @@ export async function runCouncil(o: {
   const tools = o.tools.filter((t) => roleTools.has(t.name));
   const call = async (system: string, messages: Msg[], withTools: boolean, onCost: (cost: number | null) => void, allowedTools = tools): Promise<StepResult> => {
     const callId = randomUUID();
-    const reject = (reason: string): never => { audit('council.model.rejected', { callId, dispatched: false, reason }); throw Error(reason); };
+    const reject = (reason: string, details: Record<string, unknown> = {}): never => { audit('council.model.rejected', { callId, dispatched: false, reason, ...details }); throw Error(reason); };
     if (o.signal.aborted) return reject('Council stopped before model call');
     const req = { system, messages, tools: withTools ? allowedTools : [] };
     const bytes = Buffer.byteLength(JSON.stringify(req));
@@ -103,9 +107,9 @@ export async function runCouncil(o: {
     const p = o.brain.manifest.pricing, tier = p.longContext;
     const reserve = ((bytes + 8192) * p.inputPerM * (tier?.inputMultiplier ?? 1) + outputTokens * p.outputPerM * (tier?.outputMultiplier ?? 1)) / 1e6;
     let settleDay: (actual: number | null) => void;
-    try { settleDay = await o.dayBudget.reserveWhenSettled(reserve, o.signal); } catch { if (o.signal.aborted) return reject('Council stopped before model call'); return reject('Council daily budget cannot cover next call'); }
+    try { settleDay = await o.dayBudget.reserveWhenSettled(reserve, o.signal); } catch { if (o.signal.aborted) return reject('Council stopped before model call'); return reject('Council daily budget cannot cover next call', { requestedUsd: reserve, inputBytes: bytes, budget: o.dayBudget.snapshot() }); }
     let settleTurn: ((actual: number | null) => void);
-    try { settleTurn = await budget.reserveWhenSettled(reserve, o.signal); } catch { settleDay(0); if (o.signal.aborted) return reject('Council stopped before model call'); return reject('Council turn budget cannot cover next call'); }
+    try { settleTurn = await budget.reserveWhenSettled(reserve, o.signal); } catch { settleDay(0); if (o.signal.aborted) return reject('Council stopped before model call'); return reject('Council turn budget cannot cover next call', { requestedUsd: reserve, inputBytes: bytes, budget: budget.snapshot() }); }
     let settleLedger: ((actual: number | null) => void) | undefined;
     let measured: number | null = null, dispatched = false;
     try {
@@ -142,7 +146,13 @@ export async function runCouncil(o: {
   };
   const packet = (role: string, data: unknown) => {
     const ids = cited(data);
-    return evidence.filter((e) => ids.has(e.id) || !e.roles || (role !== 'chair' && e.roles.includes(role))).map(({ roles: _roles, ...e }) => e);
+    return evidence.filter((e) => ids.has(e.id) || !e.roles || (role !== 'chair' && e.roles.includes(role))).map(({ roles: _roles, ...e }) => {
+      // Avoid repeatedly escaping a complete JSON tool result inside another
+      // JSON string. Only use the structured form when it round-trips exactly,
+      // so large numbers, formatting and other noncanonical input stay intact.
+      try { const value: unknown = JSON.parse(e.content); if (JSON.stringify(value) === e.content) return { ...e, content: value }; } catch { /* non-JSON evidence stays text */ }
+      return e;
+    });
   };
   const run = async (role: string, phase: string, focus: string, data: unknown, research: boolean) => {
     const r: CouncilRun = { id: randomUUID(), parentId, role, phase, status: 'running', costUsd: null, ms: 0, model: o.brain.manifest.id + ' / ' + o.brain.manifest.model, version: 1 };
@@ -221,7 +231,7 @@ export async function runCouncil(o: {
   const challenges: CouncilRun[] = [];
   for (const role of COUNCIL_ROLES) {
     o.signal.throwIfAborted();
-    challenges.push(await run(role.id, 'challenge', 'Check material opposing claims, source dependence and missing evidence. Agreement is allowed. Preserve correct minority views.', peers, false));
+    challenges.push(await run(role.id, 'challenge', 'Check the other specialists’ material opposing claims, source dependence and missing evidence. Agreement is allowed. Preserve correct minority views.', peers.filter((peer) => peer.role !== role.id), false));
   }
   o.signal.throwIfAborted();
   releaseChair(0);

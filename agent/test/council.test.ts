@@ -33,6 +33,7 @@ test('council logs a budget refusal before dispatch with role and phase', async 
   await runCouncil(o);
   const rejected = log.read({ limit: 100 }).filter((l) => l.kind === 'council.model.rejected');
   assert.ok(rejected.length); assert.ok(rejected.every((l) => l.dispatched === false && l.callId && l.councilRole && l.councilPhase));
+  assert.ok(rejected.every((l) => typeof l.requestedUsd === 'number' && typeof l.inputBytes === 'number' && (l.budget as {capUsd: number}).capUsd === 0.000001));
  } finally { setAudit(null); fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -57,6 +58,16 @@ test('council isolates initial histories, fixes rounds and limits concurrency', 
  assert.equal(out.steps, 7); assert.equal(out.runs.length, 7); assert.equal(peak, 2);
  for (const r of requests.slice(0, 3)) { assert.equal(r.messages.length, 1); assert.equal(JSON.parse((r.messages[0]!.blocks[0] as { text: string }).text).data, null); }
  assert.match(out.text, /Insufficient evidence/);
+});
+test('evidence packing retains noncanonical JSON verbatim and exact structured canonical data', async () => {
+ const requests: StepRequest[] = [];
+ const o = setup(async (req) => { requests.push(req); return result(); });
+ o.evidence.push({ id:'precise', source:'Synthetic', observedAt:'2026-10-01', retrievedAt:'2026-10-28', content:'{"amount":9007199254740993}' });
+ o.evidence.push({ id:'canonical', source:'Synthetic', observedAt:'2026-10-01', retrievedAt:'2026-10-28', content:'{"amount":123,"description":"quoted \\\"text\\\""}' });
+ await runCouncil(o);
+ const data=JSON.parse((requests[0]!.messages[0]!.blocks[0] as {text:string}).text);
+ assert.equal(data.evidence.find((e:{id:string})=>e.id==='precise').content,'{"amount":9007199254740993}');
+ assert.deepEqual(data.evidence.find((e:{id:string})=>e.id==='canonical').content,{amount:123,description:'quoted "text"'});
 });
 test('hallucinated tools are denied at execution; failures label partial synthesis', async () => {
  let executed = false;

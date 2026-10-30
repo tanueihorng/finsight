@@ -30,6 +30,13 @@ Research readiness remains partial while qualitative claim support lacks an
 independent check, and unavailable planned sources also prevent a ready status.
 Stage completion and numeric checks alone do not establish research quality.
 
+Challenge calls receive the other specialists' assessments and the complete
+evidence packet selected for their own role and the cited peer sources. Canonical
+JSON tool results are passed as structured JSON instead of nested escaped text;
+noncanonical or precision-sensitive results remain verbatim. This saves request
+space without reducing the per-call output limit or changing dollar caps. Budget
+refusal traces include the requested reservation, input bytes and budget snapshot.
+
 Growth/macro can read quotes, histories and SEC filings/financials; risk can read
 exposures, positions, cash and policy. Paid web search/fetch are excluded in this
 first implementation. Every tool is checked both in offered schemas and at

@@ -32,7 +32,7 @@ const brain = { kind: 'api', manifest, async step(req) {
  if (question.includes('partial') && req.system.includes('Council role: growth')) return { blocks: [], usage: { inputTokens: 10, outputTokens: 0 }, stopReason: 'refusal' };
  const first = data.evidence[0];
  const amdRequested = /\bAMD\b/.test(question);
- if (amdRequested && (!first || !JSON.parse(first.content).quotes?.some(q=>q.symbol==='AMD' && q.price>0))) throw Error('AMD specialists received no matching AMD quote');
+ if (amdRequested && (!first || !(typeof first.content === 'string' ? JSON.parse(first.content) : first.content).quotes?.some(q=>q.symbol==='AMD' && q.price>0))) throw Error('AMD specialists received no matching AMD quote');
  const assessment = { findings: first ? [{ claim: amdRequested ? 'Synthetic review of AMD backed by matching quote.' : 'Synthetic review backed by captured quote.', evidenceIds: [first.id], assumptions: [], uncertainty: 'Policy not supplied', counterevidence: [], invalidation: 'New evidence', missingEvidence: ['Accepted policy'] }] : [], unresolvedQuestions: ['Fixture only; not an investment opinion'] };
  return { blocks: [{ type: 'text', text: JSON.stringify(assessment) }], usage: { inputTokens: 100, outputTokens: 100 }, stopReason: 'end' };
 } };
