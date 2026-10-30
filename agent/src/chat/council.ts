@@ -75,7 +75,7 @@ function abortable<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
 
 export async function runCouncil(o: {
   question: string; evidence: CouncilEvidence[]; brain: ApiBrain; system: string; signal: AbortSignal;
-  effort?: Effort; capUsd: number; dayBudget: CouncilBudget;
+  effort?: Effort; capUsd: number; maxOutputTokens?: number; dayBudget: CouncilBudget;
   emit: (run: CouncilRun) => void; account: (result: StepResult, cost: number | null) => void;
   execute: (role: string, name: string, args: unknown, signal: AbortSignal) => Promise<CouncilEvidence>;
   tools: StepRequest['tools'];
@@ -89,7 +89,8 @@ export async function runCouncil(o: {
   const parentId = randomUUID(), runs: CouncilRun[] = [];
   let question = o.question;
   // Evidence-rich assessments run 800–1,100 tokens; 1,200 truncated live runs.
-  const outputTokens = Math.min(2000, o.brain.manifest.maxOutputTokens);
+  const outputTokens = Math.min(o.maxOutputTokens ?? 2000, o.brain.manifest.maxOutputTokens);
+  if (!Number.isSafeInteger(outputTokens) || outputTokens < 1) throw Error('Invalid council output limit');
   const budget = new CouncilBudget(o.capUsd);
   const releaseChair = budget.reserve(o.capUsd / 4, true);
   let total: number | null = 0, steps = 0;
@@ -231,7 +232,7 @@ export async function runCouncil(o: {
   const challenges: CouncilRun[] = [];
   for (const role of COUNCIL_ROLES) {
     o.signal.throwIfAborted();
-    challenges.push(await run(role.id, 'challenge', 'Check the other specialists’ material opposing claims, source dependence and missing evidence. Agreement is allowed. Preserve correct minority views.', peers.filter((peer) => peer.role !== role.id), false));
+    challenges.push(await run(role.id, 'challenge', 'Check the assessments, including your own, for material opposing claims, source dependence and missing evidence. Agreement is allowed. Preserve correct minority views.', peers, false));
   }
   o.signal.throwIfAborted();
   releaseChair(0);

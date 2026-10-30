@@ -15,7 +15,7 @@ The earlier draft with unverified release numbers is preserved in `docs/archive/
 
 ## Unreleased
 
-- Council challenge packets preserve canonical tool data as structured JSON and focus on other specialists' assessments, reducing conservative reservations while retaining referenced sources. Budget-refusal traces now include reservation and available-budget details. A trace-sized synthetic regression passes with the existing $0.05 cap; live-provider confirmation remains pending.
+- Council challenge packets preserve canonical tool data as structured JSON and include all specialist assessments and cited evidence. Optional Council-specific spending and output limits allow a fuller review without changing ordinary chat limits. Budget-refusal traces include reservation and available-budget details; live-provider research-quality confirmation remains pending.
 
 - `COUNCILQUALITY-001`: isolated integration `53c6709` combines GitHub main `f215b4cd` with the local observability snapshot and council-quality work. Unavailable sources and unverified qualitative claims prevent a ready research status. Concurrent daily budget reservations wait for in-flight calls before refusing work. These changes are not deployed; the AMD turn-budget issue and full research qualification remain open.
 

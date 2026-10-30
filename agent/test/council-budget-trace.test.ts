@@ -23,23 +23,22 @@ function answer(role:string, phase:string) {
  const long = 'Synthetic analysis and limitation. '.repeat(phase === 'challenge' ? 4 : 10);
  return { findings: Array.from({length:3},(_,i) => ({claim:`${role} ${i} ${long}`, evidenceIds:ids[role], assumptions:[long], uncertainty:long, counterevidence:[], invalidation:long, missingEvidence:[]})), unresolvedQuestions:['Synthetic research gap'] };
 }
-test('trace-sized evidence packet fits seven stages under the unchanged turn cap', async () => {
+test('trace-sized evidence packet fits seven stages with full context and the chosen council budget', async () => {
  const requests: StepRequest[]=[]; const reservations:number[]=[]; let held=0, charged=0, peak=0;
  const brain = {kind:'api' as const, manifest, step:async(req:StepRequest) => {
   requests.push(req); const m=/Council role: (\w+)\./.exec(req.system);
   const role=m?.[1] || 'resolution', phase=role==='chair'?'synthesis':req.system.includes('This phase has no research tools')?'challenge':'assessment';
   return {blocks:[{type:'text' as const,text:JSON.stringify(role==='resolution'?{}:answer(role, phase))}], usage:usage[role+':'+phase] ?? {inputTokens:427,outputTokens:24,cacheReadTokens:256},stopReason:'end' as const};
  }};
- const result = await runCouncil({ question:'Review SYN', evidence, brain, system:'Core rules. '+ 'x'.repeat(5500), signal:new AbortController().signal, capUsd:.05, dayBudget:new CouncilBudget(.25), tools:[], emit:()=>{}, account:()=>{}, execute:async()=>{throw Error('not used');}, reserveCost:(n)=>{reservations.push(n); held+=n; peak=Math.max(peak,held+charged); return (actual)=>{held-=n; charged+=actual ?? n;};}, prepare:async(call)=>{await call('x'.repeat(1776),[{role:'user',blocks:[{type:'text',text:'subject'}]}]);return {question:'Review SYN '+ 'q'.repeat(2700),evidence:[]};} });
+ const result = await runCouncil({ question:'Review SYN', evidence, brain, system:'Core rules. '+ 'x'.repeat(5500), signal:new AbortController().signal, capUsd:.5, maxOutputTokens:8000, dayBudget:new CouncilBudget(2), tools:[], emit:()=>{}, account:()=>{}, execute:async()=>{throw Error('not used');}, reserveCost:(n)=>{reservations.push(n); held+=n; peak=Math.max(peak,held+charged); return (actual)=>{held-=n; charged+=actual ?? n;};}, prepare:async(call)=>{await call('x'.repeat(1776),[{role:'user',blocks:[{type:'text',text:'subject'}]}]);return {question:'Review SYN '+ 'q'.repeat(2700),evidence:[]};} });
  assert.deepEqual(result.runs.filter(r=>r.status!=='completed').map(r=>[r.role,r.phase,r.error]), []);
- assert.equal(result.steps,8); assert.ok(peak <= .05); assert.ok(result.costUsd !== null && result.costUsd < .05); assert.equal(held,0);
+ assert.equal(result.steps,8); assert.ok(peak <= .5); assert.ok(result.costUsd !== null && result.costUsd < .5); assert.ok(Math.abs(held) < 1e-12);
  for (const req of requests.filter(r=>r.system.includes('This phase has no research tools') && !r.system.includes('Council role: chair'))) {
-   const role=/Council role: (\w+)\./.exec(req.system)![1]!;
    const data=JSON.parse((req.messages[0]!.blocks[0] as {text:string}).text);
-   assert.deepEqual(data.data.map((p:{role:string})=>p.role).sort(), ['growth','macro','risk'].filter(r=>r!==role).sort());
+   assert.deepEqual(data.data.map((p:{role:string})=>p.role).sort(), ['growth','macro','risk'].sort());
    const supplied=new Map<string,unknown>(data.evidence.map((e:{id:string;content:unknown})=>[e.id,e.content]));
    for (const peer of data.data) for (const finding of peer.findings.findings) for(const id of finding.evidenceIds) assert.ok(supplied.has(id));
    for (const [id,content] of supplied) assert.equal(JSON.stringify(content), evidence.find(e=>e.id===id)!.content);
-   assert.equal(req.maxOutputTokens, 2000);
+   assert.equal(req.maxOutputTokens, 8000);
  }
 });

@@ -25,6 +25,13 @@ test('actual council service fetches AMD before any specialist even with TSM att
  const notices=store.listMessages(s.db,s.ctx.threadId!).flatMap(m=>m.blocks).filter(b=>b.type==='notice');assert.ok(notices.some(b=>b.type==='notice'&&b.kind==='research_scope'&&JSON.parse(b.text).subjects[0].symbol==='AMD'));
  assert.equal(store.getTrace(s.db,s.ctx.turnId!).length,8);assert.ok(store.spendSince(s.db,0)>0);assert.ok(out.runs.every(r=>r.status==='completed'));s.db.close();
 });
+test('council-specific budget and output cap override ordinary chat limits without changing them',async()=>{
+ const s=setup();s.cfg.limits.turnUsd=0.00000001;s.cfg.limits.councilTurnUsd=.5;s.cfg.limits.councilOutputTokens=8000;
+ const out=await runStoredCouncil(s.args);
+ assert.equal(out.runs.filter(r=>r.status==='completed').length,7);
+ assert.ok(s.requests.every(r=>r.maxOutputTokens===manifest.maxOutputTokens));
+ assert.equal(s.cfg.limits.turnUsd,0.00000001);s.db.close();
+});
 test('wrong-subject or unavailable quotes stop before specialists instead of supplying chart data',async()=>{
  for(const mode of ['wrong','unavailable']){
   const s=setup();s.ctx.finsight={get:async<T>(url:string)=>(url==='/api/search'?[{symbol:'AMD',name:'Advanced Micro Devices, Inc.',exchange:'NASDAQ',type:'EQUITY'}]:{quotes:mode==='wrong'?[{symbol:'TSM',price:400}]:[{symbol:'AMD',price:null}]}) as T};

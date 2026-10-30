@@ -30,11 +30,15 @@ Research readiness remains partial while qualitative claim support lacks an
 independent check, and unavailable planned sources also prevent a ready status.
 Stage completion and numeric checks alone do not establish research quality.
 
-Challenge calls receive the other specialists' assessments and the complete
-evidence packet selected for their own role and the cited peer sources. Canonical
+Challenge calls receive all specialist assessments, including their own, and the
+complete evidence packet selected for their role and the cited sources. Canonical
 JSON tool results are passed as structured JSON instead of nested escaped text;
 noncanonical or precision-sensitive results remain verbatim. This saves request
-space without reducing the per-call output limit or changing dollar caps. Budget
+space without dropping evidence. The optional `limits.councilTurnUsd` and
+`limits.councilOutputTokens` settings give Council its own turn ceiling and
+output allowance; omitted settings preserve the ordinary turn ceiling and the
+2,000-token default. The provider model's maximum, daily ceiling, deadline and
+context bound still apply. Budget
 refusal traces include the requested reservation, input bytes and budget snapshot.
 
 Growth/macro can read quotes, histories and SEC filings/financials; risk can read
