@@ -1,16 +1,17 @@
 import { test, expect, type Page } from '@playwright/test';
-import { seeded, answerDialog } from './helpers';
+import { seeded, answerDialog, chatMenu } from './helpers';
 const input = (page: Page) => page.locator('.agent-input:visible');
 async function open(page: Page) { await seeded(page); await page.click('#agent-toggle'); await expect(input(page)).toBeVisible(); }
 async function send(page: Page, text: string) { await expect(page.locator('.agent-send:visible')).toBeEnabled(); await input(page).fill(text.startsWith('/') ? text + ' ' : text); await input(page).press('Enter'); }
 async function chat(page: Page, text: string) { await send(page, text); await expect(page.locator('.agent-turn:visible').last()).toContainText('Echo: ' + text); }
 test('header delete asks first; cancel keeps the chat and confirm returns home', async ({ page }) => {
   await open(page); await chat(page, 'header deletion fixture');
-  await page.locator('[aria-label="Delete current chat"]:visible').click(); await answerDialog(page, { accept: false });
-  await expect(page.locator('[aria-label="Delete current chat"]:visible')).toBeVisible();
-  await page.locator('[aria-label="Delete current chat"]:visible').click(); await answerDialog(page);
+  await chatMenu(page, 'Delete current chat'); await answerDialog(page, { accept: false });
+  await expect(page.locator('.agent-turn:visible').last()).toContainText('Echo: header deletion fixture');
+  await chatMenu(page, 'Delete current chat'); await answerDialog(page);
   await expect(page.locator('.kx-start:visible')).toBeVisible();
-  await expect(page.locator('[aria-label="Delete current chat"]')).toHaveCount(0);
+  await page.locator('[aria-label="More chat options"]:visible').click();
+  await expect(page.getByRole('menuitem', { name: 'Delete current chat' })).toHaveCount(0);
 });
 test('/clear preserves history; recent-list deletion removes a saved chat; /delete asks first', async ({ page }) => {
   await open(page); await chat(page, 'recent deletion fixture'); await send(page, '/clear');

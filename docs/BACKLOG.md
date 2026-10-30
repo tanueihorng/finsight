@@ -30,8 +30,9 @@ The Kestrel panel redesign and search-provider picker (`KESTRELUI-001` / `SEARCH
 | In-chat stock price charts, source-bound to historical close prices | `CHATCHART-001` | Verified; included in the merge containing CHARTSHIP-001; deployment and live-provider chart qualification pending |
 | Smarter visual selection, richer charts, exposure views and safe navigation/alert drafts | `UIUPGRADE-001` | Integrated on main at `dc8a7c9`; demo activated; broader model qualification remains pending |
 | Demo defaults to supported Intelligent UI views | `DEMOPARITY-001` | Integrated on main at `dc8a7c9`; explicit settings and model gates remain effective |
-| Council research reliability and source grounding ([FEAT-002](features/FEAT-002-investment-council-lenses.md)) | `COUNCILQUALITY-001` | Priority1 to-do: subject-specific retrieval, instruction following, metric denominators, source support, substantive challenges, correlated model/tool traces, honest research status and equal-source comparative evaluation; implementation pending |
+| Council research reliability and source grounding ([FEAT-002](features/FEAT-002-investment-council-lenses.md)) | `COUNCILQUALITY-001` | In progress on feature/council-quality: subject routing, evidence planning, denominator checks, traces and honest partial status implemented; primary fund evidence, qualitative verification and equal-source evaluation remain pending |
 
+| [FEAT-009](features/FEAT-009-kestrel-terminal-redesign.md) Kestrel terminal redesign: panel states, light mode, start screen, conversation, council Cards / Chain of thought | `KESTRELUX-001` | Merged on GitHub in PR #1; local integration into the council-quality checkout in progress |
 
 ## Council delivered — 2026-10-29
 

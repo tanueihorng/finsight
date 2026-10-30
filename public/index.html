@@ -29,6 +29,7 @@
 try { var d = document.documentElement;
   d.dataset.theme = localStorage.getItem('finsight-theme') || 'violet';
   d.dataset.font  = localStorage.getItem('finsight-font')  || 'mono';
+  d.dataset.mode  = localStorage.getItem('finsight-mode')  || 'dark';
 } catch (e) {}</script>
 <script>/* start the first requests now, while the scripts load (H1). For a
    signed-in session that is its accounts and the portfolio the app will show

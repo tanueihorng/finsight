@@ -38,7 +38,7 @@ export interface PageContext { symbol?: string; account?: string; base?: string;
 export function ctxLabel(pc: PageContext | string | undefined): string {
   try { const c = (typeof pc === 'string' ? JSON.parse(pc) : pc) as PageContext; return [c.symbol && `@${c.symbol}`, c.timeframe, c.strategy && `strategy ${c.strategy}`].filter(Boolean).join(' · '); } catch { return ''; }
 }
-export const ctxButton = (on: boolean, c: PageContext) => (on ? `◉ ${[c.symbol, c.timeframe].filter(Boolean).join(' ') || 'page'}` : '○ no context');
+export const ctxButton = (on: boolean, c: PageContext) => (on ? [c.symbol, c.timeframe].filter(Boolean).join(' ') || 'This page' : 'No context');
 export function suggestions(c: PageContext): string[] {
   const list = ['How is my portfolio doing today, and what moved it?', 'What is my currency and sector exposure?', '/strategy-scan any live setups in my holdings?'];
   if (c.symbol) list.unshift(`What do my strategies say about ${c.symbol} right now?`);

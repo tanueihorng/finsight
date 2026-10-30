@@ -120,7 +120,7 @@ test('oversized research batches execute only four calls and acknowledge every s
 
 test('a forbidden call in an oversized batch is rejected before any tool execution', async () => {
  let executed = false;
- const o = setup(async (req) => req.system.includes('Council role: growth') ? { ...result(), blocks: ['get_quote', 'get_history', 'propose_record_update'].map((name, i) => ({ type: 'tool_call' as const, id: 'call' + i, name, args: {} })), stopReason: 'tool_use' } : result());
+ const o = setup(async (req) => req.system.includes('Council role: growth') ? { ...result(), blocks: ['get_quote', 'get_history', 'edgar_filings', 'edgar_financials', 'propose_record_update'].map((name, i) => ({ type: 'tool_call' as const, id: 'call' + i, name, args: {} })), stopReason: 'tool_use' } : result());
  o.execute = async () => { executed = true; throw Error('Unexpected'); };
  const out = await runCouncil(o);
  assert.equal(executed, false);
@@ -178,4 +178,25 @@ test('a call that does not fit waits for in-flight reservations to settle; it is
   hold(0); await assert.rejects(b.reserveWhenSettled(0.5, stop.signal), /cannot cover/);
   const c = new CouncilBudget(1), busy = c.reserve(0.9), gone = c.reserveWhenSettled(0.5, stop.signal);
   stop.abort(); await assert.rejects(gone); busy(0);
+});
+
+test('repeated unresolved figures reach the chair and remain flagged without a global step cap', async () => {
+ const assessment = { ...finding, findings: [{ ...finding.findings[0]!, claim: 'Holding is 99.99% of assets' }] };
+ let calls = 0;
+ const o = setup(async () => { calls++; return { ...result(), blocks: [{ type: 'text' as const, text: JSON.stringify(assessment) }] }; });
+ const out = await runCouncil({ ...o, prepare: async (call) => { await call('subject resolution', [{ role:'user', blocks:[{type:'text',text:'subject'}] }]); return { question:o.question, evidence:[] }; } });
+ assert.equal(calls, 15); assert.equal(out.steps, 15);
+ assert.equal(out.runs.length, 7); assert.ok(out.runs.every((r) => r.status === 'completed' && r.metricIssues?.length));
+ assert.match(out.text, /chair synthesis: finding 1: 99\.99%/);
+});
+
+test('council advertises four research tools and allows 2000 output tokens when the model supports it', async () => {
+ const requests: StepRequest[] = [];
+ const base = setup(async (req) => { requests.push(req); return result(); });
+ const capable = { ...base, brain: { ...base.brain, manifest: { ...base.brain.manifest, maxOutputTokens: 4096 } } };
+ const out = await runCouncil(capable);
+ assert.equal(out.runs.length, 7);
+ assert.ok(requests.every((r) => r.maxOutputTokens === 2000));
+ assert.match(requests[0]!.system, /at most 4 tool calls/);
+ assert.match(requests[0]!.system, /at most four evidence-backed findings/);
 });

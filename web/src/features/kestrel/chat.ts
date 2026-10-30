@@ -23,7 +23,8 @@ export interface ChatState {
   welcomeCtx: PageContext; // the page context the start screen opened with
   // Search provider per message, independent of the model ('auto' = the agent's config default).
   searchProviders: SearchProvider[]; searchDefault: string; search: string;
-  council: boolean; lens: string;
+  // Council mode: the next messages go to the investment council (/committee) with this lens.
+  council: boolean; councilMode: boolean; lens: string;
   todayUsd: number | null; effort: string;
   // The chat list: a rail beside the chat when the panel is wide (hideable), an overlay when narrow.
   narrow: boolean; railHidden: boolean;
@@ -32,7 +33,7 @@ const initial = (): ChatState => ({
   name: 'Kestrel', named: false, brains: [], skills: [], defaultBrain: null, brain: '', thread: null, version: 0, lastEventId: 0,
   view: 'idle', offline: null, items: [], turns: {}, running: null, sending: false,
   status: { verb: '', start: 0, chars: 0 }, files: [], draft: '', threadsOpen: false, threads: null, stick: 0, welcome: [], welcomeCtx: { view: 'terminal' },
-  searchProviders: [], searchDefault: '', search: 'auto', todayUsd: null, effort: '', council: false, lens: 'balanced',
+  searchProviders: [], searchDefault: '', search: 'auto', todayUsd: null, effort: '', council: false, councilMode: false, lens: 'balanced',
   narrow: false, railHidden: ls.get(LS.rail, '1') === '0',
 });
 export const chat = createStore<ChatState>()(initial);
@@ -154,8 +155,11 @@ export function pageContext(): PageContext {
 export function showWelcome() { const c = pageContext(); set({ view: 'welcome', items: [], turns: {}, welcome: suggestions(c), welcomeCtx: c }); }
 function clearLog() { set({ view: 'log', items: [], turns: {} }); }
 export function chooseLens(lens: string) { if (LENS_IDS.some((id) => id === lens)) set({ lens }); }
+export const setCouncilMode = (on: boolean) => set({ councilMode: on && get().council });
+// In council mode a plain message becomes /committee <message>; slash commands pass through.
+export const councilText = (text: string, on: boolean) => (on && text && !text.startsWith('/') ? '/committee ' + text : text);
 export function newChat() {
-  closeStream(); set({ thread: null, lens: 'balanced' }); setRunning(null); ls.set(LS.thread, ''); showWelcome();
+  closeStream(); set({ thread: null, lens: 'balanced', councilMode: false }); setRunning(null); ls.set(LS.thread, ''); showWelcome();
 }
 function renderHistory(messages: Message[], citations: Citation[], uiViews: UiView[] = []) {
   const byTurn = new Map<string, Message[]>();
@@ -195,7 +199,7 @@ export async function openThread(id: string) {
   set({ thread: d.thread, version: d.thread.version, lastEventId: d.lastEventId || 0 });
   ls.set(LS.thread, id); pickBrain(); clearLog();
   const saved = [...d.messages].reverse().flatMap((m) => m.blocks).find((b) => b.type === 'notice' && b.kind === 'lens');
-  set({ lens: saved?.text?.split(':')[0] || 'balanced' });
+  set({ lens: saved?.text?.split(':')[0] || 'balanced', councilMode: false });
   renderHistory(d.messages, d.citations || [], d.uiViews || []);
   if (!d.runningTurn) for (const [id, turn] of Object.entries(get().turns)) updateTurn(id, () => ({ ...turn, parts: turn.parts.map((p) => p.kind === 'council' && p.status === 'running' ? { ...p, status: 'stopped', detail: 'Interrupted; automatic resume is unsupported.' } : p) }));
   setRunning(d.runningTurn || null);

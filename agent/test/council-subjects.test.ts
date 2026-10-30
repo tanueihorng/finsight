@@ -103,3 +103,21 @@ test('the council service retrieves planned evidence before specialists and pers
   assert.equal(s.requests.length, 8);
   s.db.close();
 });
+
+test('council receives bounded prior text as untrusted context, with the chosen system lens', async () => {
+ const s=setup('Review the comparison', {kind:'general',subjects:[],clarification:''});
+ store.appendMessage(s.db,s.ctx.threadId!,'user',[{type:'text',text:'Compare long-term risks with the bond alternative.'},{type:'notice',kind:'private',text:'do not include notice'}]);
+ store.appendMessage(s.db,s.ctx.threadId!,'assistant',[{type:'text',text:'The bond has interest-rate risk.'}]);
+ s.args.system='Core read-only rules\nAnalytical lens: growth';
+ await runStoredCouncil(s.args);
+ const plan=JSON.parse((s.requests[0]!.messages[0]!.blocks[0] as {text:string}).text);
+ assert.equal(plan.recentConversation.length,2);
+ for(const req of s.requests.slice(1)) {
+   assert.match(req.system,/Analytical lens: growth/);
+   const data=JSON.parse((req.messages[0]!.blocks[0] as {text:string}).text);
+   const scope=JSON.parse(data.question);
+   assert.deepEqual(scope.recentConversation.map((m:{text:string})=>m.text),['Compare long-term risks with the bond alternative.','The bond has interest-rate risk.']);
+   assert.match(scope.conversationNote,/not verified evidence/);
+ }
+ s.db.close();
+});

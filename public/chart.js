@@ -220,7 +220,7 @@
     ['avwap', ['avwap']],
   ];
   const DEFAULT_COLOR = { trend: '#2962ff', ray: '#2962ff', ext: '#2962ff', hline: '#ff9800', hray: '#ff9800', vline: '#787b86', channel: '#2962ff',
-    fib: '#787b86', fibext: '#787b86', rect: '#9c27b0', text: '#ffffff', arrowup: '#089981', arrowdn: '#f23645', long: '#089981', short: '#f23645',
+    fib: '#787b86', fibext: '#787b86', rect: '#9c27b0', get text() { return document.documentElement.dataset.mode === 'light' ? '#16162a' : '#ffffff'; }, arrowup: '#089981', arrowdn: '#f23645', long: '#089981', short: '#f23645',
     measure: '#2962ff', avwap: '#fb923c', pitchfork: '#00bcd4', callout: '#ffeb3b', note: '#ff9800', brush: '#e040fb', pricerange: '#2962ff', daterange: '#2962ff' };
   // drawing types an alert can follow: flat ones become price alerts, sloped ones line alerts
   const ALERT_FLAT = { hline: 1, hray: 1 }, ALERT_SLOPED = { trend: 1, ray: 1, ext: 1 };

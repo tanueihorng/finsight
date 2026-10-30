@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Merged start screen</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="./fonts/fonts.css">
+<style>
+body{margin:0}
+a{color:#2453d6}a:hover{color:#163a9e}
+.m{font-family:'JetBrains Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums}
+@keyframes blink{50%{opacity:0}}
+.caret{display:inline-block;width:2px;height:18px;vertical-align:-3px;animation:blink 1.1s steps(1) infinite}
+</style>
+</helmet>
+<div style="width:1280px;height:820px;box-sizing:border-box;display:flex;flex-direction:column;background:{{t.bg}};color:{{t.text}};font-family:Inter,system-ui,sans-serif;overflow:hidden">
+
+  <!-- B: ticker strip -->
+  <div class="m" style="height:34px;flex:none;display:flex;align-items:center;gap:22px;padding:0 16px;border-bottom:1px solid {{t.line}};background:{{t.strip}};font-size:12px;color:{{t.muted}}">
+    <span style="color:{{accent}};font-weight:600">KESTREL</span>
+    <span>NYSE <b style="color:{{t.up}}">OPEN</b> 2h18m left</span>
+    <span>PORT <b style="color:{{t.up}}">+0.84%</b></span>
+    <span>SPX <b style="color:{{t.up}}">+0.31%</b></span>
+    <span>AMD <b style="color:{{t.dn}}">−3.10%</b></span>
+    <span>10Y <b style="color:{{t.text}}">4.12</b></span>
+    <div style="flex:1"></div>
+    <span>$0.42 today</span>
+  </div>
+
+  <div style="flex:1;display:flex;min-height:0">
+    <!-- A: icon rail -->
+    <nav aria-label="Kestrel" style="width:64px;flex:none;display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 0;border-right:1px solid {{t.line}};background:{{t.surface}}">
+      <button aria-label="New chat" style="width:40px;height:40px;border:0;border-radius:10px;background:{{t.chip}};color:{{accent}};display:flex;align-items:center;justify-content:center;cursor:pointer"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+      <button aria-label="Chats" style="width:40px;height:40px;border:0;border-radius:10px;background:transparent;color:{{t.muted}};display:flex;align-items:center;justify-content:center;cursor:pointer"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 5h16v11H8l-4 4z"/></svg></button>
+      <button aria-label="Search chats" style="width:40px;height:40px;border:0;border-radius:10px;background:transparent;color:{{t.muted}};display:flex;align-items:center;justify-content:center;cursor:pointer"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg></button>
+      <button aria-label="Skills" style="width:40px;height:40px;border:0;border-radius:10px;background:transparent;color:{{t.muted}};display:flex;align-items:center;justify-content:center;cursor:pointer"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M9 4l-4 16M19 4l-4 16"/></svg></button>
+    </nav>
+
+    <!-- C: centered ask-first -->
+    <main style="flex:1;display:flex;flex-direction:column;align-items:center;padding:44px 24px 0">
+      <div style="width:780px;display:flex;flex-direction:column;gap:24px">
+        <h1 style="margin:0;font-size:32px;font-weight:600;letter-spacing:-.02em;text-align:center">Good morning. What are we looking at?</h1>
+
+        <div style="background:{{t.surface}};border:1px solid {{t.line2}};border-radius:20px;box-shadow:{{t.shadow}};padding:8px 8px 10px">
+          <div style="display:flex;gap:2px;padding:4px 6px 8px">
+            <button style="height:30px;padding:0 12px;border:0;border-radius:8px;background:{{t.chip}};color:{{t.text}};font:600 13px Inter;cursor:pointer">Ask</button>
+            <button style="height:30px;padding:0 12px;border:0;border-radius:8px;background:transparent;color:{{t.muted}};font:500 13px Inter;cursor:pointer">Deep research</button>
+            <button style="height:30px;padding:0 12px;border:0;border-radius:8px;background:transparent;color:{{t.muted}};font:500 13px Inter;cursor:pointer">Council</button>
+          </div>
+          <div style="padding:6px 14px 14px;font-size:16.5px;color:{{t.muted}}"><span class="caret" style="background:{{accent}}"></span> Ask about your portfolio, a ticker, a filing…  <span class="m" style="font-size:13px">/ for skills</span></div>
+          <div class="m" style="display:flex;align-items:center;gap:14px;padding:0 8px 0 14px;font-size:11.5px;color:{{t.muted}}">
+            <button style="border:0;background:none;padding:0;color:{{t.sub}};font:inherit;cursor:pointer">+ attach</button>
+            <button style="border:0;background:none;padding:0;color:{{t.sub}};font:inherit;cursor:pointer">ctx: Portfolio ▾</button>
+            <button style="border:0;background:none;padding:0;color:{{t.sub}};font:inherit;cursor:pointer">search: exa ▾</button>
+            <button style="border:0;background:none;padding:0;color:{{t.sub}};font:inherit;cursor:pointer">model: sonnet · think ▾</button>
+            <div style="flex:1"></div>
+            <button aria-label="Send" style="width:38px;height:38px;border:0;border-radius:12px;background:{{accent}};color:{{t.onAccent}};display:flex;align-items:center;justify-content:center;cursor:pointer"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px">
+          <button style="text-align:left;background:{{t.surface}};border:1px solid {{t.line}};border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:6px;font-family:inherit;color:{{t.text}};cursor:pointer">
+            <span style="font-size:12px;color:{{t.muted}};font-weight:500">Portfolio today</span>
+            <span class="m" style="font-size:22px;font-weight:600;color:{{t.up}}">+0.84%</span>
+            <svg viewBox="0 0 100 26" preserveAspectRatio="none" aria-hidden="true" style="width:100%;height:26px"><path d="M0,20 L12,18 L24,21 L36,14 L48,15 L60,10 L72,11 L84,6 L100,4" fill="none" stroke="{{t.up}}" stroke-width="1.6" vector-effect="non-scaling-stroke"/></svg>
+            <span style="font-size:12px;color:{{t.muted}}">Why did it move? →</span>
+          </button>
+          <button style="text-align:left;background:{{t.surface}};border:1px solid {{t.line}};border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:6px;font-family:inherit;color:{{t.text}};cursor:pointer">
+            <span style="font-size:12px;color:{{t.muted}};font-weight:500">Top mover</span>
+            <span class="m" style="font-size:22px;font-weight:600">AMD <span style="font-size:14px;color:{{t.dn}}">−3.1%</span></span>
+            <svg viewBox="0 0 100 26" preserveAspectRatio="none" aria-hidden="true" style="width:100%;height:26px"><path d="M0,5 L14,7 L28,6 L42,11 L56,14 L70,13 L84,19 L100,22" fill="none" stroke="{{t.dn}}" stroke-width="1.6" vector-effect="non-scaling-stroke"/></svg>
+            <span style="font-size:12px;color:{{t.muted}}">What happened? →</span>
+          </button>
+          <button style="text-align:left;background:{{t.surface}};border:1px solid {{t.line}};border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:6px;font-family:inherit;color:{{t.text}};cursor:pointer">
+            <span style="font-size:12px;color:{{t.muted}};font-weight:500">Next event · in 6d</span>
+            <span style="font-size:19px;font-weight:600">NVDA earnings</span>
+            <div aria-hidden="true" style="height:4px;border-radius:2px;background:{{t.line}};margin:11px 0 9px"><i style="display:block;width:22%;height:4px;border-radius:2px;background:{{accent}}"></i></div>
+            <span style="font-size:12px;color:{{t.muted}}">Prep a playbook →</span>
+          </button>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px">
+          <div style="display:flex;flex-direction:column;gap:2px">
+            <span style="font-size:12px;color:{{t.muted}};font-weight:500;padding:0 12px 4px">Try</span>
+            <button style="display:flex;gap:10px;padding:10px 12px;border:0;border-radius:10px;background:transparent;text-align:left;font:400 14px Inter;color:{{t.text}};cursor:pointer"><span style="color:{{accent}}">↗</span>Am I too concentrated after this month?</button>
+            <button style="display:flex;gap:10px;padding:10px 12px;border:0;border-radius:10px;background:transparent;text-align:left;font:400 14px Inter;color:{{t.text}};cursor:pointer"><span style="color:{{accent}}">↗</span>Stress-test the book for a 50bp surprise</button>
+            <button style="display:flex;gap:10px;padding:10px 12px;border:0;border-radius:10px;background:transparent;text-align:left;font:400 14px Inter;color:{{t.text}};cursor:pointer"><span style="color:{{accent}}">↗</span>Run the council on trimming NVDA</button>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:2px">
+            <span style="font-size:12px;color:{{t.muted}};font-weight:500;padding:0 12px 4px">Recent</span>
+            <button style="display:flex;justify-content:space-between;padding:10px 12px;border:0;border-radius:10px;background:transparent;font:400 14px Inter;color:{{t.text}};cursor:pointer"><span>Semis exposure / NVDA</span><span class="m" style="font-size:12px;color:{{t.muted}}">42m</span></button>
+            <button style="display:flex;justify-content:space-between;padding:10px 12px;border:0;border-radius:10px;background:transparent;font:400 14px Inter;color:{{t.text}};cursor:pointer"><span>Rebalance vs policy</span><span class="m" style="font-size:12px;color:{{t.muted}}">2h</span></button>
+            <button style="display:flex;justify-content:space-between;padding:10px 12px;border:0;border-radius:10px;background:transparent;font:400 14px Inter;color:{{t.text}};cursor:pointer"><span>CPI week playbook</span><span class="m" style="font-size:12px;color:{{t.muted}}">1d</span></button>
+          </div>
+        </div>
+      </div>
+      <div style="flex:1"></div>
+      <div class="m" style="padding:14px 0;font-size:11px;color:{{t.muted}};display:flex;gap:18px">
+        <span>⌘N new</span><span>⌘K chats</span><span>/ skills</span><span>⌘/ toggle</span><span>Kestrel never trades · sample figures</span>
+      </div>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","terminal"],"default":"light"},"accent":{"editor":"color","default":"","options":["#2453d6","#f5b544","#0f766e","#7c3aed"]},"$preview":{"width":1280,"height":820}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const dark = this.props.theme === 'terminal';
+    const t = dark
+      ? { bg: '#0b0d10', strip: '#0b0d10', surface: '#11141a', line: '#1f242c', line2: '#2a3039', text: '#e6e8ec', sub: '#c7ccd4', muted: '#8b93a1', chip: '#1a1f28', up: '#5ad19a', dn: '#ff8a65', shadow: 'none', onAccent: '#0b0d10' }
+      : { bg: '#f6f7f9', strip: '#ffffff', surface: '#ffffff', line: '#e7e9ee', line2: '#dfe2e8', text: '#15171c', sub: '#3b3f48', muted: '#6a707c', chip: '#eef2fd', up: '#1f7a55', dn: '#c2410c', shadow: '0 10px 40px rgba(20,23,28,.07)', onAccent: '#ffffff' };
+    return { t, accent: this.props.accent || (dark ? '#f5b544' : '#2453d6') };
+  }
+}
+</script>
+</body>
+</html>
