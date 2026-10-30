@@ -5,10 +5,12 @@ async function send(page: import('@playwright/test').Page, question: string) { a
 test('real API/engine/store: captured evidence, activity replay and cancellation', async ({ page }) => {
  await open(page); await send(page, 'review this stock');
  await expect(page.locator('.agent-turn:visible').last()).toContainText('Synthetic review backed by captured quote.');
+ await expect(page.locator('[data-readiness=partial]')).toContainText('Qualitative claims have not been independently verified');
  await page.getByRole('button', { name: 'Inspect Kestrel Chair', exact: true }).click();
  await expect(page.locator('summary', { hasText: 'Kestrel Chair' })).toHaveCount(1);
  await page.reload();
  await page.locator('.kx-jump-row', { hasText: '/committee review this stock' }).first().click();
+ await expect(page.locator('[data-readiness=partial]')).toContainText('Qualitative claims have not been independently verified');
  await page.getByRole('button', { name: 'Inspect Kestrel Chair', exact: true }).click();
  await expect(page.locator('summary', { hasText: 'Kestrel Chair' })).toHaveCount(1);
  await page.locator('.agent-icon-btn[title="New chat (/new)"]:visible').click();
@@ -31,7 +33,7 @@ test('trace exposes retained event detail and hides it under UNPEEK', async ({ p
  await page.getByTitle('Show every model, tool and data call for this answer').last().click();
  const trace = page.locator('.agent-trace');
  await expect(trace).toContainText('council.model.request');
- const request = trace.locator('details').filter({ hasText: 'council.model.request' }).first();
+ const request = trace.locator('details').filter({ hasText: 'council.model.request' }).filter({ hasText: 'assessment' }).first();
  await expect(request).toContainText('assessment');
  await request.locator('summary').click();
  await expect(request).toContainText('review selected holding');

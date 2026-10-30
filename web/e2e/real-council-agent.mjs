@@ -22,7 +22,7 @@ const brain = { kind: 'api', manifest, async step(req) {
    const subjects = [...new Set(symbols)].map(symbol=>({mention:question.match(new RegExp('\\b'+symbol+'\\b','i'))[0],symbol}));
    const plan = subjects.length ? {kind:'explicit',subjects,clarification:''} : {kind:'reference',subjects:[],clarification:''};
    // Existing lifecycle fixtures refer to the selected holding implicitly.
-   if (!subjects.length && !/\b(this|it)\b/i.test(question)) plan.kind='general';
+   if (!subjects.length && !/\b(this|it|selected holding)\b/i.test(question)) plan.kind='general';
    return {blocks:[{type:'text',text:JSON.stringify(plan)}],usage:{inputTokens:100,outputTokens:100},stopReason:'end'};
  }
  if (question.includes('slow')) await new Promise((resolve, reject) => {

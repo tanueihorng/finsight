@@ -15,6 +15,8 @@ The earlier draft with unverified release numbers is preserved in `docs/archive/
 
 ## Unreleased
 
+- `COUNCILQUALITY-001`: isolated integration `53c6709` combines GitHub main `f215b4cd` with the local observability snapshot and council-quality work. Unavailable sources and unverified qualitative claims prevent a ready research status. Concurrent daily budget reservations wait for in-flight calls before refusing work. These changes are not deployed; the AMD turn-budget issue and full research qualification remain open.
+
 - Council specialists may request four research tools in their single research batch (previously two); model output is capped at 2,000 tokens per call or the model maximum, whichever is lower. Up to four evidence-backed findings may be returned. Time and spending caps are unchanged.
 
 - Council no longer has a global model-call-count cap, per user request. Fixed phases, one repair per phase, the existing time and spending caps, and research-tool bounds remain. Duplicate figure warnings across a specialist’s phases are displayed once.

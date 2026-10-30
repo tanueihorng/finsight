@@ -27,6 +27,7 @@ test('ambiguous listings, invented names and mismatched proposed tickers cannot 
 });
 test('chart references and conversation pronouns have separate, explicit fallback rules', async () => {
  const chart=await run('Should I buy this stock?',reference,{previous});assert.equal(chart.subjects[0]!.symbol,'TSM');assert.equal(chart.subjects[0]!.basis,'chart');
+ const selected=await run('Review the selected holding',reference,{previous});assert.equal(selected.subjects[0]!.symbol,'TSM');assert.equal(selected.subjects[0]!.basis,'chart');
  const conversation=await run('What about its risks?',reference,{previous});assert.equal(conversation.subjects[0]!.symbol,'AMD');assert.equal(conversation.subjects[0]!.basis,'conversation');
  const noChart=await run('What about it?',reference,{panel:undefined,previous});assert.equal(noChart.subjects[0]!.symbol,'AMD');
  const noReference=await run('Should I buy AMD?',reference);assert.equal(noReference.status,'needs-clarification');
