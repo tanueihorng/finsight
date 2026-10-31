@@ -189,3 +189,37 @@ test('symbols, keys and order normalisation', async () => {
   assert.match(String(await limitBreach(o, s, { price: 100, priceSource: 'limit price', valueUsd: 1000 }, { kestrelOrdersToday: 0, equity: 10000, positionValue: 500 })), /15\.0% of paper equity/);
   assert.equal(await limitBreach(o, s, { price: 100, priceSource: 'limit price', valueUsd: 1000 }, { kestrelOrdersToday: 0, equity: 100000, positionValue: 500 }), null);
 });
+
+test('security: one order per approval, Kestrel cancels only its own orders in ask mode, serialized limits, same-origin writes', async (t) => {
+  const { s, c } = await connected(); t.after(() => s.stop());
+  // A double click or a second tab approves once and sends one order.
+  const k = await s.req('POST', '/api/paper/orders', agent(s, { symbol: 'MSFT', side: 'buy', type: 'limit', qty: 1, limitPrice: 300, tif: 'gtc' }));
+  const id = k.json.ticket.id;
+  const both = await Promise.all([1, 2].map(() => s.req('POST', '/api/paper/tickets/decide', json(c, { id, approve: true }))));
+  assert.deepEqual(both.map((x) => x.status).sort(), [200, 400]);
+  let st = (await s.req('GET', '/api/paper/state', json(c))).json;
+  assert.equal(st.openOrders.length, 1, 'exactly one order reached Alpaca');
+  const kestrelOrder = st.openOrders[0].id;
+
+  // Ask mode: Kestrel cannot cancel the user's order, but can cancel its own.
+  const mine = await s.req('POST', '/api/paper/orders', json(c, { symbol: 'AAPL', side: 'buy', type: 'limit', qty: 1, limitPrice: 100, tif: 'gtc' }));
+  const refused = await s.req('POST', '/api/paper/orders/cancel', agent(s, { id: mine.json.order.id }));
+  assert.equal(refused.json.refused, true); assert.match(refused.json.reason, /not placed by Kestrel/);
+  assert.equal((await s.req('POST', '/api/paper/orders/cancel', agent(s, { id: kestrelOrder }))).json.cancelled, kestrelOrder);
+  st = (await s.req('GET', '/api/paper/state', json(c))).json;
+  assert.deepEqual(st.openOrders.map((o: { id: string }) => o.id), [mine.json.order.id]);
+
+  // Auto mode: concurrent Kestrel orders cannot slip past the daily count together.
+  await s.req('POST', '/api/paper/settings', json(c, { approval: 'auto', limits: { maxOrdersPerDay: 2 } }));
+  const burst = await Promise.all([1, 2, 3].map(() => s.req('POST', '/api/paper/orders', agent(s, { symbol: 'NVDA', side: 'buy', qty: 1 }))));
+  assert.equal(burst.filter((x) => x.json.placed).length, 1, 'one more order fits today (the approved ticket counts)');
+
+  // A write from another origin (another localhost port shares the cookie) is refused.
+  const cross = { ...json(c, { book: 'paper' }) } as { headers: Record<string, string> };
+  for (const h of [{ origin: 'http://localhost:9999' }, { 'sec-fetch-site': 'same-site' }] as Record<string, string>[]) {
+    const r = await s.req('POST', '/api/book', { ...cross, headers: { ...cross.headers, ...h } });
+    assert.equal(r.status, 403, JSON.stringify(h));
+  }
+  assert.equal((await s.req('POST', '/api/book', { ...cross, headers: { ...cross.headers, 'sec-fetch-site': 'same-origin' } })).status, 200);
+  assert.throws(() => normalizeOrder({ symbol: 'AAPL', side: 'buy', type: 'limit', qty: 1, limitPrice: Infinity }), /limit price/);
+});

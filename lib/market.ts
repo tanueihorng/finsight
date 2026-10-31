@@ -39,6 +39,7 @@ export interface QuoteDetails {
   dividendRate: number | null; trailingDividendRate: number | null; dividendYield: number | null;
   dividendDate: number | null; exDividendDate: number | null; earningsStart: number | null; earningsEnd: number | null;
   earningsEstimated: boolean | null; currency: string | null;
+  marketCap: number | null; trailingPE: number | null; forwardPE: number | null;
 }
 export interface DividendPayment { t: number; amount: number }
 
@@ -306,6 +307,9 @@ export function getQuoteDetails(symbols: string[]): Promise<Record<string, Quote
             earningsEnd: sec('earningsTimestampEnd'),
             earningsEstimated: q.isEarningsDateEstimate ?? null,
             currency: q.currency || null,
+            marketCap: pickRaw(q.marketCap) ?? null,
+            trailingPE: pickRaw(q.trailingPE) ?? null,
+            forwardPE: pickRaw(q.forwardPE) ?? null,
           };
         }
         return out;
@@ -430,7 +434,8 @@ export function getNews(symbol: string): Promise<NewsItem[]> {
 }
 async function fetchNews(q: string): Promise<NewsItem[]> {
   const data = await yahooFetch<YahooSearch>(`/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=0&newsCount=14`);
-  const items = (data?.news || []).map((n) => ({
+  // Links open in the browser: keep only http(s) URLs from the feed.
+  const items = (data?.news || []).filter((n) => /^https?:\/\//i.test(n.link || '')).map((n) => ({
     title: n.title,
     publisher: n.publisher,
     link: n.link,

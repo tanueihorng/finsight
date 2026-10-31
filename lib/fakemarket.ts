@@ -156,6 +156,7 @@ function quoteDetails(q: URLSearchParams, now: number): Reply {
   const result = (q.get('symbols') || '').split(',').filter(Boolean).map((sym) => {
     const s = lookup(sym); if (!s) return null;
     const out: Record<string, unknown> = { symbol: sym, currency: s.currency };
+    if (s.type !== 'ETF' && s.type !== 'CURRENCY') Object.assign(out, { marketCap: round(s.price * 1e9), trailingPE: round(s.price / 8), forwardPE: round(s.price / 9) });
     if (s.div) {
       const rate = s.div.amount * s.div.months.length;
       Object.assign(out, { dividendRate: rate, trailingAnnualDividendRate: rate, dividendYield: round(rate / s.price * 100) });

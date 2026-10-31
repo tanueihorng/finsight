@@ -1,5 +1,7 @@
 // Paper trading view helpers (FEAT-012): wire shapes of /api/paper/state and
 // the pure text and form logic the panel uses, unit-tested without a DOM.
+import { fmt, fmtBig } from '../../ui/format.ts';
+
 export type Approval = 'ask' | 'auto';
 export interface Limits { maxOrderUsd: number | null; maxOrdersPerDay: number | null; maxPositionPct: number | null; symbols: string[] | null }
 export interface Settings { approval: Approval; limits: Limits }
@@ -8,7 +10,7 @@ export interface PaperOrder {
   id: string; symbol: string; side: 'buy' | 'sell'; type: string; tif: string; qty: number | null; notional: number | null; limitPrice: number | null;
   filledQty: number | null; filledAvgPrice: number | null; status: string; createdAt: string; filledAt: string | null; origin: 'user' | 'kestrel' | 'alpaca'; threadId: string | null;
 }
-export interface Ticket { id: string; status: 'pending' | 'approved' | 'rejected' | 'failed'; order: OrderInput; note?: string; createdAt: number; error?: string; estimate?: { valueUsd: number | null; priceSource: string } }
+export interface Ticket { id: string; status: 'pending' | 'approving' | 'approved' | 'rejected' | 'failed'; order: OrderInput; note?: string; createdAt: number; error?: string; estimate?: { valueUsd: number | null; priceSource: string } }
 export interface PaperPosition { symbol: string; bookSymbol: string; qty: number; side: string; avgEntryPrice: number; currentPrice: number; marketValue: number; unrealizedPl: number }
 export interface PaperState {
   connected: boolean; keySource: 'env' | 'file' | null; settings: Settings; tickets: Ticket[];
@@ -96,4 +98,21 @@ export function quickAmount(f: Form, pct: number, last: number | null, buyingPow
 export function chartOrders(orders: PaperOrder[], symbol: string) {
   return orders.filter((o) => bookSymbol(o.symbol) === symbol && o.limitPrice != null)
     .map((o) => ({ side: o.side, price: o.limitPrice!, label: `${o.side.toUpperCase()} LMT ${o.qty != null ? qtyText(o.qty) : usd(o.notional)} @ ${n2(o.limitPrice!)}${o.origin === 'kestrel' ? ' · KESTREL' : ''}` }));
+}
+
+/** Quote fields the desk's key-stats strip reads (QuotedQuote subset). */
+export interface DeskQuote { prevClose?: number | null; dayLow?: number | null; dayHigh?: number | null; weekLow52?: number | null; weekHigh52?: number | null; volume?: number | null }
+/** /api/quote-details fields (earnings, dividends, valuation). */
+export interface DeskDetails { marketCap?: number | null; trailingPE?: number | null; forwardPE?: number | null; dividendYield?: number | null; earningsStart?: number | null; earningsEstimated?: boolean | null }
+const range = (lo?: number | null, hi?: number | null) => (lo != null && hi != null ? `${fmt(lo)} – ${fmt(hi)}` : '—');
+const ratio = (v?: number | null) => (v != null && Number.isFinite(v) && v > 0 ? v.toFixed(1) : '—');
+/** The key stats beside the chart, as [label, value]; a dash where the source has nothing. Paper is US-only: earnings dates are New York dates. */
+export function keyStats(q: DeskQuote | null, d: DeskDetails | null, now = Date.now()): [string, string][] {
+  const e = d?.earningsStart;
+  const earnings = e && e > now - 86_400_000 ? `${new Date(e).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'America/New_York' })}${d?.earningsEstimated ? ' (est.)' : ''}` : '—';
+  return [
+    ['Prev close', fmt(q?.prevClose)], ['Day range', range(q?.dayLow, q?.dayHigh)], ['52W range', range(q?.weekLow52, q?.weekHigh52)],
+    ['Volume', fmtBig(q?.volume)], ['Mkt cap', d?.marketCap ? fmtBig(d.marketCap) : '—'], ['P/E', ratio(d?.trailingPE)], ['Fwd P/E', ratio(d?.forwardPE)],
+    ['Earnings', earnings], ['Div yield', d?.dividendYield ? `${d.dividendYield.toFixed(2)}%` : '—'],
+  ];
 }

@@ -56,3 +56,12 @@ export function getCookie(req: IncomingMessage, name: string): string | null {
 }
 export function setSessionCookie(res: ServerResponse, token: string): void { res.setHeader('Set-Cookie', `sid=${token}; HttpOnly; SameSite=Strict; Path=/`); }
 export const PIN_RE = /^\d{4,12}$/;
+
+/** A browser write is same-origin: Sec-Fetch-Site and Origin, when sent, must match this host. */
+export function sameOriginWrite(req: IncomingMessage): boolean {
+  const site = req.headers['sec-fetch-site'];
+  if (site && site !== 'same-origin' && site !== 'none') return false;
+  const origin = req.headers.origin;
+  if (!origin) return true;
+  try { return new URL(origin).host === String(req.headers.host || ''); } catch { return false; }
+}

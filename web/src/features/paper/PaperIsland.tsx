@@ -2,16 +2,18 @@ import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useStore } from 'zustand';
 import { api } from '../../api/client.ts';
-import { queryDefaults, useHistory, useQuote } from '../../api/queries.ts';
+import { queryDefaults, useHistory, useNews, useQuote, useSearch, useWatchlist } from '../../api/queries.ts';
+import { selectSymbol } from '../../legacy/app.ts';
 import { loadChartScripts } from '../../legacy/chartScripts.ts';
 import type { PriceChartInstance } from '../../legacy/chart.d.ts';
 import { showToast } from '../../ui/toast.tsx';
 import { fmt, signClass, signStr } from '../../ui/format.ts';
+import type { WatchItem } from '../../../../shared/types.ts';
 import { CHART_TF_RANGE, fetchRangeFor, RANGES, visibleStart, type DetailRange } from '../detail/detail.ts';
 import { closeTrade, tradeSheet } from '../trade/trade.ts';
 import { useBook } from './book.ts';
 import {
-  bookSymbol, chartOrders, dayChange, emptyForm, estimate, fillText, formOrder, limitsBody, limitsText, orderLabel, originLabel, quickAmount, streamLabel, usd,
+  bookSymbol, chartOrders, keyStats, type DeskDetails, dayChange, emptyForm, estimate, fillText, formOrder, limitsBody, limitsText, orderLabel, originLabel, quickAmount, streamLabel, usd,
   type Form, type PaperState, type Settings, type Ticket,
 } from './paper.ts';
 import s from './Paper.module.css';
@@ -42,10 +44,10 @@ function Connect({ onDone }: { onDone: () => void }) {
     catch (x) { setErr((x as Error).message); } finally { setBusy(false); }
   };
   return (
-    <form className={s.body} onSubmit={(e) => void submit(e)} aria-label="Connect Alpaca paper">
-      <h2 className={s.deskH}>PAPER TRADING · ALPACA <span className={s.muted}>fake money</span></h2>
+    <form className={`${s.ticket} ${s.connect}`} onSubmit={(e) => void submit(e)} aria-label="Connect Alpaca paper">
+      <h3 className={s.sectH}>CONNECT ALPACA PAPER</h3>
       <p className={s.muted}>Connect a free Alpaca <b>paper</b> account (fake money, US stocks and ETFs). Create one at alpaca.markets, switch to the paper account, and generate API keys there. Paper key ids start with <b>PK</b>; live keys are refused. Keys stay on this computer and are never shown to Kestrel.</p>
-      <div className={s.form}>
+      <div className={s.connectForm}>
         <label className={s.field}>API key id<input className={s.input} value={keyId} onChange={(e) => setKeyId(e.target.value)} autoComplete="off" spellCheck={false} placeholder="PK…" /></label>
         <label className={s.field}>Secret key<input className={s.input} type="password" value={secret} onChange={(e) => setSecret(e.target.value)} autoComplete="off" /></label>
         <button className={`${s.btn} ${s.primary}`} disabled={busy || !keyId || !secret}>{busy ? 'Checking…' : 'Connect paper'}</button>
@@ -222,10 +224,81 @@ function KestrelSettings({ settings, onSaved }: { settings: Settings; onSaved: (
     </form>
   );
 }
-const ticketStatus: Record<Ticket['status'], string> = { pending: 'waiting for you', approved: 'approved', rejected: 'rejected', failed: 'failed' };
+const ticketStatus: Record<Ticket['status'], string> = { pending: 'waiting for you', approving: 'sending', approved: 'approved', rejected: 'rejected', failed: 'failed' };
+
+// ---- watchlist and information ------------------------------------------------------
+// The book's own watchlist (the same list as the Watchlist panel) and the paper
+// positions, beside the chart: click a row to chart it, add or remove symbols here.
+async function watchChange(qc: ReturnType<typeof useQueryClient>, symbol: string, remove: boolean) {
+  const result = await api<{ watchlist: WatchItem[] }>(`/api/watchlist/${remove ? 'remove' : 'add'}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ symbol }) });
+  await qc.cancelQueries({ queryKey: ['watchlist'] }); qc.setQueryData(['watchlist'], result);
+  await window.FinSight.bus.write(remove ? 'watchlist-remove' : 'watchlist-add');
+}
+function DeskWatch({ positions, symbol, onPick }: { positions: PaperState['positions']; symbol: string; onPick: (s: string) => void }) {
+  const qc = useQueryClient(), wl = useWatchlist();
+  const [text, setText] = useState(''), [term, setTerm] = useState(''), [open, setOpen] = useState(false);
+  useEffect(() => { const t = setTimeout(() => setTerm(text.trim()), 200); return () => clearTimeout(t); }, [text]);
+  const search = useSearch(term);
+  const add = async (sym: string) => {
+    const v = sym.trim().toUpperCase(); if (!v) return;
+    try { await watchChange(qc, v, false); setText(''); setOpen(false); onPick(v); } catch (x) { fail(x); }
+  };
+  const row = (sym: string, price: number | null | undefined, pct: number | null | undefined, extra?: ReactNode) => (
+    <li key={sym} className={`${s.wRow} ${sym === symbol ? s.wOn : ''}`}>
+      <button type="button" className={s.wPick} onClick={() => onPick(sym)} aria-current={sym === symbol || undefined}>
+        <span className={s.wSym}>{sym}</span><span className={s.wPx}>{price != null ? fmt(price) : '—'}</span>
+        <span className={`${s.wChg} ${signClass(pct)}`}>{pct != null ? `${signStr(pct)}%` : ''}</span>
+      </button>{extra}
+    </li>
+  );
+  const list = wl.data?.watchlist ?? [];
+  return (
+    <aside className={s.watch} aria-label="Watchlist">
+      <form className={s.wAdd} onSubmit={(e) => { e.preventDefault(); void add(text); }} autoComplete="off">
+        <input id="paper-watch-add" className={s.input} value={text} placeholder="Add symbol…" aria-label="Add a symbol to the watchlist" spellCheck={false}
+          onChange={(e) => { setText(e.target.value); setOpen(true); }} onBlur={() => setTimeout(() => setOpen(false), 150)} />
+        {open && term && !!search.data?.length && (
+          <ul className={s.suggest} role="listbox" aria-label="Matching symbols">
+            {search.data.slice(0, 6).map((x) => <li key={x.symbol}><button type="button" role="option" aria-selected={false} onMouseDown={(e) => e.preventDefault()} onClick={() => void add(x.symbol)}><b>{x.symbol}</b> <span>{x.name.slice(0, 22)} · {x.exchange}</span></button></li>)}
+          </ul>
+        )}
+      </form>
+      {positions.length > 0 && <>
+        <h3 className={s.wH}>PAPER POSITIONS</h3>
+        <ul className={s.wList}>{positions.map((p) => row(p.bookSymbol, p.currentPrice, null))}</ul>
+      </>}
+      <h3 className={s.wH}>WATCHLIST</h3>
+      {list.length === 0 && <p className={s.wEmpty}>{wl.data ? 'Add symbols above to follow them here.' : 'Loading…'}</p>}
+      <ul className={s.wList}>{list.map((w) => row(w.symbol, 'error' in w ? null : w.price, 'error' in w ? null : w.changePct,
+        <button type="button" className={s.wX} aria-label={`Remove ${w.symbol} from the watchlist`} onClick={() => void watchChange(qc, w.symbol, true).catch(fail)}>✕</button>))}</ul>
+    </aside>
+  );
+}
+function useQuoteDetails(symbol: string | null) {
+  return useQuery({ queryKey: ['quote-details', symbol], enabled: !!symbol, staleTime: 3_600_000, ...queryDefaults,
+    queryFn: async () => (await api<{ details: Record<string, DeskDetails> }>(`/api/quote-details?symbols=${encodeURIComponent(symbol!)}`)).details[symbol!.toUpperCase()] ?? null });
+}
+const ago = (t: number | null) => {
+  if (!t) return '';
+  const m = Math.max(1, Math.round((Date.now() - t) / 60_000));
+  return m < 60 ? `${m}m ago` : m < 1440 ? `${Math.round(m / 60)}h ago` : `${Math.round(m / 1440)}d ago`;
+};
+function DeskNews({ symbol }: { symbol: string }) {
+  const n = useNews(symbol);
+  if (n.error) return <div className={s.body}><span className={s.err}>{(n.error as Error).message}</span></div>;
+  if (!n.data) return <div className={s.body}><span className={s.muted}>Loading news…</span></div>;
+  if (!n.data.news.length) return <div className={s.body}><span className={s.muted}>No recent news for {symbol}.</span></div>;
+  return (
+    <ul className={s.news}>
+      {n.data.news.slice(0, 12).map((x, i) => (
+        <li key={x.link || i}><a href={x.link} target="_blank" rel="noopener noreferrer">{x.title}</a><span className={s.muted}>{[x.publisher, ago(x.time)].filter(Boolean).join(' · ')}</span></li>
+      ))}
+    </ul>
+  );
+}
 
 // ---- desk ---------------------------------------------------------------------------
-type Tab = 'positions' | 'orders' | 'history' | 'kestrel' | 'settings';
+type Tab = 'positions' | 'orders' | 'history' | 'news' | 'kestrel' | 'settings';
 function Table({ head, children, empty }: { head: string[]; children: ReactNode[]; empty: string }) {
   if (!children.length) return <div className={s.body}><span className={s.muted}>{empty}</span></div>;
   return (
@@ -245,7 +318,13 @@ export default function PaperIsland() {
   const [f, setF] = useState<Form & { focus?: number }>(() => emptyForm(savedSymbol()));
   const set = (patch: Partial<Form & { focus?: number }>) => setF((x) => ({ ...x, ...patch }));
   const [tab, setTab] = useState<Tab>('positions');
-  const selectSym = (sym: string, patch: Partial<Form & { focus?: number }> = {}) => { saveSymbol(sym); setF((x) => ({ ...x, symbol: sym, amount: '', limitPrice: '', ...patch })); };
+  const selectSym = (sym: string, patch: Partial<Form & { focus?: number }> = {}) => {
+    saveSymbol(sym); setF((x) => ({ ...x, symbol: sym, amount: '', limitPrice: '', ...patch }));
+    if (window.FinSight.store.getState().selected !== sym) selectSymbol(sym); // the terminal's detail and news panels follow
+  };
+  // And the desk follows a symbol picked elsewhere in the terminal (a position row, Q SYMBOL, the Watchlist panel).
+  const selected = useStore(window.FinSight.store, (x) => x.selected);
+  useEffect(() => { if (paper && selected && selected !== f.symbol) { saveSymbol(selected); setF((x) => ({ ...x, symbol: selected, amount: '', limitPrice: '' })); } }, [paper, selected]); // eslint-disable-line react-hooks/exhaustive-deps
   // Live updates from the server.
   useEffect(() => {
     if (!paper || typeof EventSource !== 'function') return;
@@ -276,9 +355,11 @@ export default function PaperIsland() {
   }, [paper, sheet]); // eslint-disable-line react-hooks/exhaustive-deps
   // No symbol yet: the first paper position, else SPY.
   useEffect(() => {
-    if (data && !f.symbol) selectSym(data.positions[0]?.bookSymbol || 'SPY');
+    if (data && !f.symbol) selectSym(data.positions[0]?.bookSymbol || window.FinSight.store.getState().selected || 'SPY');
   }, [data, f.symbol]); // eslint-disable-line react-hooks/exhaustive-deps
   const quote = useQuote(paper && f.symbol ? f.symbol : null);
+  const details = useQuoteDetails(paper && f.symbol ? f.symbol : null);
+  const wlData = useWatchlist(paper).data?.watchlist;
   const positions = data?.positions ?? [];
   const watch = useMemo(() => positions.map((p) => ({ symbol: p.bookSymbol, price: p.currentPrice, changePct: null, group: 'Paper positions' })), [JSON.stringify(positions.map((p) => [p.bookSymbol, p.currentPrice]))]); // eslint-disable-line react-hooks/exhaustive-deps
   const orders = useMemo(() => chartOrders(data?.openOrders ?? [], f.symbol), [data?.openOrders, f.symbol]);
@@ -287,7 +368,6 @@ export default function PaperIsland() {
   if (!paper) return null;
   if (error && !data) return <div className={s.body}><span className={s.err}>{(error as Error).message}</span></div>;
   if (!data) return <div className={s.body}><span className={s.muted}>Loading paper account…</span></div>;
-  if (!data.connected) return <div ref={hostRef}><Connect onDone={refresh} /></div>;
   const a = data.account, chg = dayChange(a), pending = data.tickets.filter((t) => t.status === 'pending');
   const pos = positions.find((p) => p.bookSymbol === f.symbol);
   const q = quote.data && (quote.data.symbol || '').toUpperCase() === f.symbol ? quote.data : null;
@@ -298,8 +378,11 @@ export default function PaperIsland() {
   };
   const cancel = async (id: string) => { try { await post('/api/paper/orders/cancel', { id }); showToast('Cancel sent'); } catch (x) { fail(x); } finally { refresh(); } };
   const disconnect = async () => { try { await post('/api/paper/disconnect', {}); refresh(); } catch (x) { fail(x); } };
-  const tabs: [Tab, string][] = [['positions', `Positions (${positions.length})`], ['orders', `Open orders (${data.openOrders.length})`], ['history', 'History'],
-    ['kestrel', `Kestrel${pending.length ? ` (${pending.length})` : ''}`], ['settings', 'Settings']];
+  // Not connected: the desk still shows the watchlist, chart, stats and news; the ticket slot asks for keys.
+  const tabs: [Tab, string][] = data.connected ? [['positions', `Positions (${positions.length})`], ['orders', `Open orders (${data.openOrders.length})`], ['history', 'History'],
+    ['news', 'News'], ['kestrel', `Kestrel${pending.length ? ` (${pending.length})` : ''}`], ['settings', 'Settings']] : [['news', 'News']];
+  const shown: Tab = data.connected ? tab : 'news';
+  const watched = (wlData ?? []).some((w) => w.symbol === f.symbol);
   const stat = (k: string, v: ReactNode, cls = '') => <div className={s.stat}><span className={s.statK}>{k}</span><span className={`${s.statV} ${cls}`}>{v}</span></div>;
   return (
     <div className={s.desk} ref={hostRef}>
@@ -311,7 +394,8 @@ export default function PaperIsland() {
           {stat('CASH', usd(a.cash))}
           {stat('BUYING POWER', usd(a.buyingPower))}
         </>}
-        <span className={s.streamTag}><i className={`${s.dot} ${data.stream.state === 'live' ? s.live : ''}`} aria-hidden="true" />Order stream {streamLabel[data.stream.state]}</span>
+        {!data.connected && <span className={s.muted}>Not connected · fake money</span>}
+        {data.connected && <span className={s.streamTag}><i className={`${s.dot} ${data.stream.state === 'live' ? s.live : ''}`} aria-hidden="true" />Order stream {streamLabel[data.stream.state]}</span>}
       </div>
       {data.error && <div role="alert" className={s.err}>{data.error}</div>}
       {data.sync.error && <div role="alert" className={s.err}>Book sync: {data.sync.error}</div>}
@@ -337,24 +421,32 @@ export default function PaperIsland() {
       )}
 
       <div className={s.main}>
+        <DeskWatch positions={positions} symbol={f.symbol} onPick={(sym) => selectSym(sym)} />
         <div className={s.chartCol}>
           <div className={s.symHead}>
             <span className={s.sym}>{f.symbol}</span>
+            <button type="button" className={`${s.star} ${watched ? s.starOn : ''}`} aria-pressed={watched} title={watched ? 'Remove from watchlist' : 'Add to watchlist'}
+              onClick={() => void watchChange(qc, f.symbol, watched).catch(fail)}>{watched ? '★ Watching' : '☆ Watch'}</button>
             <span className={s.symName}>{q?.name || ''}</span>
             <span className={s.price}>{last != null ? fmt(last) : '—'}</span>
             {q && <span className={signClass(q.change)}>{signStr(q.change)} ({signStr(q.changePct)}%)</span>}
             {pos && <span className={s.muted}>· holding {fmt(pos.qty, 4)} @ {fmt(pos.avgEntryPrice)} · <span className={signClass(pos.unrealizedPl)}>{signStr(pos.unrealizedPl)}</span></span>}
           </div>
+          <dl className={s.keyStats} aria-label={`${f.symbol} key stats`}>
+            {keyStats(q, details.data ?? null).map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}
+          </dl>
           <DeskChart symbol={f.symbol} overlay={overlay} watch={watch} onSymbol={(sym) => selectSym(sym)} />
         </div>
-        <OrderTicket f={f} set={set} last={last} buyingPower={a?.buyingPower ?? null} held={pos?.qty ?? 0} onSymbol={(sym) => selectSym(sym)} onPlaced={refresh} />
+        {data.connected
+          ? <OrderTicket f={f} set={set} last={last} buyingPower={a?.buyingPower ?? null} held={pos?.qty ?? 0} onSymbol={(sym) => selectSym(sym)} onPlaced={refresh} />
+          : <Connect onDone={refresh} />}
       </div>
 
       <div className={s.tabs} role="tablist" aria-label="Paper account">
-        {tabs.map(([id, label]) => <button key={id} type="button" role="tab" id={`paper-tab-${id}`} aria-selected={tab === id} aria-controls="paper-tabpanel" className={`${s.tab} ${tab === id ? s.tabOn : ''}`} onClick={() => setTab(id)}>{label}</button>)}
+        {tabs.map(([id, label]) => <button key={id} type="button" role="tab" id={`paper-tab-${id}`} aria-selected={shown === id} aria-controls="paper-tabpanel" className={`${s.tab} ${shown === id ? s.tabOn : ''}`} onClick={() => setTab(id)}>{label}</button>)}
       </div>
-      <div role="tabpanel" id="paper-tabpanel" aria-labelledby={`paper-tab-${tab}`} className={s.tabPanel}>
-        {tab === 'positions' && (
+      <div role="tabpanel" id="paper-tabpanel" aria-labelledby={`paper-tab-${shown}`} className={s.tabPanel}>
+        {shown === 'positions' && (
           <section aria-label="Paper positions">
             <Table head={['Symbol', 'Qty', 'Avg price', 'Last', 'Market value', 'Unrealized P/L', '']} empty="No positions yet. Place an order with the ticket.">
               {positions.map((p) => (
@@ -371,7 +463,7 @@ export default function PaperIsland() {
             </Table>
           </section>
         )}
-        {tab === 'orders' && (
+        {shown === 'orders' && (
           <section aria-label="Open paper orders">
             <Table head={['By', 'Order', 'Status', 'Placed', '']} empty="No open orders.">
               {data.openOrders.map((o) => (
@@ -384,7 +476,7 @@ export default function PaperIsland() {
             </Table>
           </section>
         )}
-        {tab === 'history' && (
+        {shown === 'history' && (
           <section aria-label="Recent paper orders">
             <Table head={['By', 'Order', 'Fill', 'Time']} empty="No orders yet.">
               {data.recentOrders.map((o) => (
@@ -396,7 +488,8 @@ export default function PaperIsland() {
             </Table>
           </section>
         )}
-        {tab === 'kestrel' && (
+        {shown === 'news' && <section aria-label={`${f.symbol} news`}><DeskNews symbol={f.symbol} /></section>}
+        {shown === 'kestrel' && (
           <section aria-label="Kestrel paper tickets">
             <div className={s.body} style={{ paddingBottom: 0 }}><span className={s.muted}>Kestrel's orders: {data.settings.approval === 'ask' ? 'ask me first' : 'autonomous'} · {limitsText(data.settings.limits)}. Change this under Settings.</span></div>
             <Table head={['Order', 'Status', 'Note', 'Time']} empty="Kestrel has not proposed a paper order yet. Ask it in the Kestrel panel.">
@@ -409,7 +502,7 @@ export default function PaperIsland() {
             </Table>
           </section>
         )}
-        {tab === 'settings' && (
+        {shown === 'settings' && (
           <>
             <KestrelSettings key={JSON.stringify(data.settings)} settings={data.settings} onSaved={refresh} />
             <div className={`${s.body} ${s.row}`}>
