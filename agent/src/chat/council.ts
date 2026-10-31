@@ -102,7 +102,10 @@ export async function runCouncil(o: {
     if (o.signal.aborted) return reject('Council stopped before model call');
     const req = { system, messages, tools: withTools ? allowedTools : [] };
     const bytes = Buffer.byteLength(JSON.stringify(req));
-    if (bytes > 60000) return reject('Council context too large; narrow the evidence packet');
+    // Bound input by the model's real context window, reserving the requested
+    // output and protocol overhead. Serialized bytes conservatively upper-bound
+    // text tokens; the separate spending reservation still applies.
+    if (bytes + 8192 + outputTokens > o.brain.manifest.capabilities.contextTokens) return reject('Council context too large for this model; narrow the evidence packet', { inputBytes: bytes, contextTokens: o.brain.manifest.capabilities.contextTokens, outputTokens });
     // One token cannot encode less than a byte for the supported text adapters;
     // add protocol allowance and reserve at the highest long-context price tier.
     const p = o.brain.manifest.pricing, tier = p.longContext;

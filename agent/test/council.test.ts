@@ -99,6 +99,14 @@ test('per-call output limits do not mutate model defaults and reject invalid bou
  assert.throws(() => outputLimit(manifest, { maxOutputTokens: -1 }));
  assert.equal(manifest.maxOutputTokens, 100);
 });
+test('model context limit is checked before dispatch including output and protocol allowance', async () => {
+ let dispatched=0;
+ const o=setup(async()=>{dispatched++;return result();});
+ o.brain.manifest={...o.brain.manifest,capabilities:{...o.brain.manifest.capabilities,contextTokens:8300}};
+ const out=await runCouncil(o);
+ assert.equal(dispatched,0);
+ assert.ok(out.runs.every(r=>r.status==='failed' && /context too large for this model/.test(r.error ?? '')));
+});
 
 test('invalid cost settlement retains reservation instead of poisoning the cap', () => {
  const budget = new CouncilBudget(1); const settle = budget.reserve(0.8);

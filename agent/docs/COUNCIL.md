@@ -44,8 +44,9 @@ refusal traces include the requested reservation, input bytes and budget snapsho
 Growth/macro can read quotes, histories and SEC filings/financials; risk can read
 exposures, positions, cash and policy. Paid web search/fetch are excluded in this
 first implementation. Every tool is checked both in offered schemas and at
-execution. Context is bounded at 60k serialized bytes; oversized packets fail
-explicitly rather than silently dropping evidence. Core rules remain shared;
+execution. Serialized input bytes, protocol allowance and reserved output must
+fit the model's context window; oversized packets fail explicitly rather than
+silently dropping evidence. Cost reservations also apply. Core rules remain shared;
 missing policy, valuations and sources remain gaps rather than assumed facts.
 
 Initial assessments have separate histories, without peer conclusions. Later

@@ -20,7 +20,7 @@ const usage: Record<string,{inputTokens:number;outputTokens:number;cacheReadToke
   'chair:synthesis': {inputTokens:16007,outputTokens:1027,cacheReadTokens:1920},
 };
 function answer(role:string, phase:string) {
- const long = 'Synthetic analysis and limitation. '.repeat(phase === 'challenge' ? 4 : 10);
+ const long = 'Synthetic analysis and limitation. '.repeat(phase === 'challenge' ? 6 : 15);
  return { findings: Array.from({length:3},(_,i) => ({claim:`${role} ${i} ${long}`, evidenceIds:ids[role], assumptions:[long], uncertainty:long, counterevidence:[], invalidation:long, missingEvidence:[]})), unresolvedQuestions:['Synthetic research gap'] };
 }
 test('trace-sized evidence packet fits seven stages with full context and the chosen council budget', async () => {
@@ -33,6 +33,7 @@ test('trace-sized evidence packet fits seven stages with full context and the ch
  const result = await runCouncil({ question:'Review SYN', evidence, brain, system:'Core rules. '+ 'x'.repeat(5500), signal:new AbortController().signal, capUsd:.5, maxOutputTokens:8000, dayBudget:new CouncilBudget(2), tools:[], emit:()=>{}, account:()=>{}, execute:async()=>{throw Error('not used');}, reserveCost:(n)=>{reservations.push(n); held+=n; peak=Math.max(peak,held+charged); return (actual)=>{held-=n; charged+=actual ?? n;};}, prepare:async(call)=>{await call('x'.repeat(1776),[{role:'user',blocks:[{type:'text',text:'subject'}]}]);return {question:'Review SYN '+ 'q'.repeat(2700),evidence:[]};} });
  assert.deepEqual(result.runs.filter(r=>r.status!=='completed').map(r=>[r.role,r.phase,r.error]), []);
  assert.equal(result.steps,8); assert.ok(peak <= .5); assert.ok(result.costUsd !== null && result.costUsd < .5); assert.ok(Math.abs(held) < 1e-12);
+ assert.ok(requests.some(r=>r.system.includes('Council role: chair') && Buffer.byteLength(JSON.stringify({system:r.system,messages:r.messages,tools:r.tools})) > 60000), 'chair fixture exercises the previous 60 KB failure');
  for (const req of requests.filter(r=>r.system.includes('This phase has no research tools') && !r.system.includes('Council role: chair'))) {
    const data=JSON.parse((req.messages[0]!.blocks[0] as {text:string}).text);
    assert.deepEqual(data.data.map((p:{role:string})=>p.role).sort(), ['growth','macro','risk'].sort());
