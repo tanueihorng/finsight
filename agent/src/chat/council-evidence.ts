@@ -8,7 +8,8 @@ import type { CouncilEvidence } from './council.ts';
 export type SubjectKind = 'equity' | 'fund' | 'other';
 export type Subject = { symbol: string; type?: string | null };
 export type PlanItem = { key: string; purpose: string; tool: string; args: Record<string, unknown>; roles: string[]; subject?: string };
-export type Coverage = Omit<PlanItem, 'args'> & { status: 'retrieved' | 'failed' | 'not_applicable' | 'unavailable' | 'skipped_limit'; evidenceId?: string; reason?: string };
+// detail: what a retrieved item actually used, e.g. the filing form (8-K or 6-K).
+export type Coverage = Omit<PlanItem, 'args'> & { status: 'retrieved' | 'failed' | 'not_applicable' | 'unavailable' | 'skipped_limit'; evidenceId?: string; reason?: string; detail?: string };
 
 // Three equities need 5 items each plus 6 shared ones.
 export const PLAN_LIMITS = { subjects: 3, items: 22, concurrency: 3 } as const;
@@ -39,11 +40,13 @@ export function planEvidence(subjects: Subject[], now = Date.now(), scope: { acc
       coverage.push({ key: `issuer:${sym}`, purpose: 'Issuer prospectus or factsheet (dated holdings, replication, domicile, benchmark, tracking)', tool: 'none', roles: ['growth', 'macro', 'risk'], subject: sym, status: 'unavailable', reason: 'No approved issuer-document source is configured; the fund profile above is an aggregator view' });
     } else if (kind === 'equity' || kind === 'other') {
       if (secTicker(sym)) {
-        add({ key: `financials:${sym}`, purpose: 'Reported revenue, operating income, net income and diluted EPS (SEC XBRL)', tool: 'edgar_financials', args: { ticker: sym }, roles: ['growth', 'macro'], subject: sym });
-        add({ key: `valuation:${sym}`, purpose: 'Trailing P/E, earnings yield, price-to-sales and market cap computed from SEC data and the live price', tool: 'valuation_metrics', args: { ticker: sym }, roles: ['growth', 'macro', 'risk'], subject: sym });
-        // The latest results release is not necessarily among the latest 8-Ks.
-        add({ key: `earnings8k:${sym}`, purpose: 'Latest earnings release (8-K item 2.02): segment results, margins and outlook', tool: 'edgar_recent_8k', args: { ticker: sym, limit: 1, items: ['2.02'], maxChars: 8000 }, roles: ['growth', 'macro'], subject: sym });
-        add({ key: `8k:${sym}`, purpose: 'Text of the two most recent 8-K reports (earnings exhibit when present)', tool: 'edgar_recent_8k', args: { ticker: sym, limit: 2 }, roles: ['growth', 'macro'], subject: sym });
+        add({ key: `financials:${sym}`, purpose: 'Reported revenue, operating income, net income and diluted EPS (SEC XBRL: 10-K/10-Q, or 20-F for a foreign private issuer)', tool: 'edgar_financials', args: { ticker: sym }, roles: ['growth', 'macro'], subject: sym });
+        add({ key: `valuation:${sym}`, purpose: 'Trailing P/E, earnings yield, price-to-sales and market cap computed from SEC data and the live price (ADR ratio applied, or refused when unknown)', tool: 'valuation_metrics', args: { ticker: sym }, roles: ['growth', 'macro', 'risk'], subject: sym });
+        // The latest results release is not necessarily among the latest
+        // current reports. The tool picks 8-K item 2.02, or for a foreign
+        // private issuer the latest 6-K results release, and names the form.
+        add({ key: `earnings8k:${sym}`, purpose: 'Latest earnings release (8-K item 2.02, or 6-K for a foreign private issuer): results, segments, margins and outlook', tool: 'edgar_recent_8k', args: { ticker: sym, limit: 1, items: ['2.02'], maxChars: 8000 }, roles: ['growth', 'macro'], subject: sym });
+        add({ key: `8k:${sym}`, purpose: 'Text of the two most recent current reports (8-K, or 6-K for a foreign private issuer), with the latest 20-F named', tool: 'edgar_recent_8k', args: { ticker: sym, limit: 2 }, roles: ['growth', 'macro'], subject: sym });
       } else {
         coverage.push({ key: `financials:${sym}`, purpose: 'Reported financials', tool: 'edgar_financials', roles: ['growth', 'macro'], subject: sym, status: 'not_applicable', reason: 'Not a US SEC registrant ticker; no approved primary filings source for this listing' });
         coverage.push({ key: `valuation:${sym}`, purpose: 'Trailing valuation multiples', tool: 'valuation_metrics', roles: ['growth', 'macro', 'risk'], subject: sym, status: 'unavailable', reason: 'Valuation is computed from SEC filings; no approved source for this listing' });
@@ -64,6 +67,15 @@ export function planEvidence(subjects: Subject[], now = Date.now(), scope: { acc
   return { items, coverage };
 }
 const strip = ({ args: _args, ...rest }: PlanItem): Omit<PlanItem, 'args'> => rest;
+// The filing form a tool actually used, and any metric it refused, so the plan
+// says "6-K earnings release filed …" or "ADR ratio unknown" rather than just "retrieved".
+function detailOf(content: string): { detail?: string } {
+  try {
+    const j = JSON.parse(content);
+    const parts = [typeof j.formUsed === 'string' ? j.formUsed : '', j.annualReport?.form && j.annualReport?.filed ? `latest ${j.annualReport.form} filed ${j.annualReport.filed}` : '', Array.isArray(j.gaps) && j.gaps.length ? `${j.gaps.length} metric gap${j.gaps.length === 1 ? '' : 's'} (see gaps)` : ''].filter(Boolean);
+    return parts.length ? { detail: parts.join('; ').slice(0, 200) } : {};
+  } catch { return {}; }
+}
 
 /** Run planned items with bounded concurrency. A failure is recorded, never filled in. */
 export async function collectEvidence(plan: { items: PlanItem[]; coverage: Coverage[] }, execute: (tool: string, args: unknown) => Promise<CouncilEvidence>, signal: AbortSignal): Promise<{ evidence: CouncilEvidence[]; coverage: Coverage[] }> {
@@ -74,7 +86,7 @@ export async function collectEvidence(plan: { items: PlanItem[]; coverage: Cover
     while (next < plan.items.length) {
       const i = next++, item = plan.items[i]!;
       signal.throwIfAborted();
-      try { const e = await execute(item.tool, item.args); evidence[i] = { ...e, roles: item.roles }; done[i] = { ...strip(item), status: 'retrieved', evidenceId: e.id }; }
+      try { const e = await execute(item.tool, item.args); evidence[i] = { ...e, roles: item.roles }; done[i] = { ...strip(item), status: 'retrieved', evidenceId: e.id, ...detailOf(e.content) }; }
       catch (err) { if (signal.aborted) throw err; done[i] = { ...strip(item), status: 'failed', reason: String((err as Error).message || err).slice(0, 200) }; }
     }
   };

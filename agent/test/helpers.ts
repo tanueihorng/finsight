@@ -27,7 +27,26 @@ globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) =>
   if (!/(^|\.)sec\.gov$/.test(url.hostname)) return realFetch(input, init);
   SEC_CALLS.push(url.pathname);
   const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
-  if (url.pathname === '/files/company_tickers.json') return json(200, { 0: { cik_str: 2488, ticker: 'AMD', title: 'Synthetic Micro Devices' } });
+  if (url.pathname === '/files/company_tickers.json') return json(200, { 0: { cik_str: 2488, ticker: 'AMD', title: 'Synthetic Micro Devices' }, 1: { cik_str: 9001, ticker: 'TSM', title: 'Synthetic Foundry Co (ADR)' }, 2: { cik_str: 9002, ticker: 'FPX', title: 'Synthetic Foreign Issuer' } });
+  // Foreign private issuers: 6-K current reports and a 20-F, no 8-K. Only one
+  // 6-K is a results release; the newest is a monthly revenue report.
+  if (url.pathname === '/submissions/CIK0000009001.json') return json(200, { filings: { recent: { form: ['6-K', '6-K', '6-K', '20-F'], accessionNumber: ['0000009001-26-000004', '0000009001-26-000003', '0000009001-26-000002', '0000009001-26-000001'], filingDate: ['2026-10-08', '2026-10-15', '2026-08-11', '2026-04-16'], reportDate: ['2026-09-30', '2026-09-30', '2026-06-30', '2025-12-31'], primaryDocument: ['rev.htm', 'cover.htm', 'board.htm', 'annual.htm'], primaryDocDescription: ['6-K', '6-K', '6-K', '20-F'], items: ['', '', '', ''] } } });
+  if (url.pathname === '/submissions/CIK0000009002.json') return json(200, { filings: { recent: { form: ['6-K', '20-F'], accessionNumber: ['0000009002-26-000002', '0000009002-26-000001'], filingDate: ['2026-09-01', '2026-03-01'], reportDate: ['', '2025-12-31'], primaryDocument: ['notice.htm', 'annual.htm'], primaryDocDescription: ['6-K', '20-F'], items: ['', ''] } } });
+  if (url.pathname === '/api/xbrl/companyfacts/CIK0000009001.json') return json(200, { facts: {
+    dei: { EntityCommonStockSharesOutstanding: { units: { shares: [{ end: '2025-12-31', val: 5000, form: '20-F', filed: '2026-04-16' }] } } },
+    'ifrs-full': {
+      Revenue: { label: 'Revenue', units: { XTW: [{ form: '20-F', fp: 'FY', fy: 2025, start: '2025-01-01', end: '2025-12-31', val: 64000, filed: '2026-04-16' }], USD: [{ form: '20-F', fp: 'FY', fy: 2025, start: '2025-01-01', end: '2025-12-31', val: 2000, filed: '2026-04-16' }] } },
+      DilutedEarningsLossPerShare: { label: 'Diluted EPS', units: { 'XTW/shares': [{ form: '20-F', fp: 'FY', fy: 2025, start: '2025-01-01', end: '2025-12-31', val: 3.2, filed: '2026-04-16' }], 'USD/shares': [{ form: '20-F', fp: 'FY', fy: 2025, start: '2025-01-01', end: '2025-12-31', val: 0.1, filed: '2026-04-16' }] } },
+    } } });
+  if (url.pathname === '/api/xbrl/companyfacts/CIK0000009002.json') return json(200, { facts: {
+    dei: { EntityCommonStockSharesOutstanding: { units: { shares: [{ end: '2025-12-31', val: 2000, filed: '2026-03-01' }] } } },
+    'us-gaap': { EarningsPerShareDiluted: { label: 'EPS', units: { 'USD/shares': [{ form: '20-F', fp: 'FY', fy: 2025, start: '2025-01-01', end: '2025-12-31', val: 1, filed: '2026-03-01' }] } } } } });
+  const fpi = '/Archives/edgar/data/9001/';
+  if (url.pathname === fpi + '000000900126000004/rev.htm') return new Response('<html><body><p>Synthetic Foundry September 2026 Revenue Report: revenue for September was approximately 500.</p></body></html>', { status: 200 });
+  if (url.pathname === fpi + '000000900126000003/cover.htm') return new Response('<html><body><p>FORM 6-K REPORT OF FOREIGN PRIVATE ISSUER. Exhibits: 99.1 Press release issued on October 15, 2026. 99.2 2026 Third Quarter Earnings Conference Presentation Material.</p></body></html>', { status: 200 });
+  if (url.pathname === fpi + '000000900126000003/index.json') return json(200, { directory: { item: [{ name: 'cover.htm', size: 900 }, { name: 'q3presentation.htm', size: 9000 }, { name: 'q3release.htm', size: 3000 }] } });
+  if (url.pathname === fpi + '000000900126000003/q3release.htm') return new Response('<html><body><p>Synthetic Foundry reports third quarter EPS of 1.20 per ADR unit. Management expects fourth quarter revenue between 60 and 62.</p></body></html>', { status: 200 });
+  if (url.pathname === fpi + '000000900126000002/board.htm') return new Response('<html><body><p>Board of Directors Meeting Resolutions: approved the 2026 second quarter Business Report and Financial Statements.</p></body></html>', { status: 200 });
   if (url.pathname === '/submissions/CIK0000002488.json') return json(200, { filings: { recent: { form: ['8-K', '10-Q', '8-K'], accessionNumber: ['0000002488-26-000003', '0000002488-26-000001', '0000002488-26-000002'], filingDate: ['2026-09-28', '2026-08-01', '2026-08-04'], reportDate: ['', '2026-06-30', ''], primaryDocument: ['k3.htm', 'q2.htm', 'k2.htm'], primaryDocDescription: ['8-K', '10-Q', '8-K'], items: ['8.01', '', '2.02,9.01'] } } });
   if (url.pathname === '/api/xbrl/companyfacts/CIK0000002488.json') return json(200, { facts: {
     dei: { EntityCommonStockSharesOutstanding: { units: { shares: [{ end: '2026-07-25', val: 1000, filed: '2026-08-01' }] } } },

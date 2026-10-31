@@ -106,13 +106,25 @@ export default function KestrelIsland() {
   useEffect(() => {
     const on = mode === 'side' && open && full;
     const covered = () => document.querySelectorAll(COVERED);
+    // Read before the class lands: dropping the drawer's padding re-lays out the grid shorter and clamps the scroll.
+    const scrollY = window.scrollY;
     document.body.classList.toggle('agent-full', on);
     covered().forEach((el) => el.toggleAttribute('inert', on));
     if (!on) return;
     // Measured after the class lands: the top bar wraps differently without the drawer's padding.
-    const measure = () => document.documentElement.style.setProperty('--kx-top', Math.round(document.querySelector('header.topbar')?.getBoundingClientRect().bottom ?? 0) + 'px');
-    measure(); window.addEventListener('resize', measure);
-    return () => { window.removeEventListener('resize', measure); document.body.classList.remove('agent-full'); covered().forEach((el) => el.removeAttribute('inert')); };
+    // The top bar scrolls with the page, so with the terminal scrolled down its
+    // bottom is above the viewport; clamp to 0 so the chat's own header (exit,
+    // earlier messages) stays on screen. The page's scroll position is kept for the return.
+    const bar = document.querySelector('header.topbar');
+    const measure = () => document.documentElement.style.setProperty('--kx-top', Math.max(0, Math.round(bar?.getBoundingClientRect().bottom ?? 0)) + 'px');
+    measure(); window.addEventListener('resize', measure); window.addEventListener('scroll', measure, { passive: true });
+    const watch = bar && typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
+    if (bar) watch?.observe(bar);
+    return () => {
+      window.removeEventListener('resize', measure); window.removeEventListener('scroll', measure); watch?.disconnect(); document.body.classList.remove('agent-full'); covered().forEach((el) => el.removeAttribute('inert'));
+      // A zoom or resize while covered can clamp the page's scroll; return where the terminal was.
+      if (window.scrollY !== scrollY) window.scrollTo(0, scrollY);
+    };
   }, [mode, open, full]);
   useEffect(() => { document.body.classList.toggle('kx-busy', running); }, [running]);
   useEffect(() => { kestrelDock.setState({ visible: mode === 'dock' && open, collapsed }); }, [mode, open, collapsed]);

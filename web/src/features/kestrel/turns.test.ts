@@ -72,3 +72,16 @@ test('council readiness is kept on the turn as bounded counts and never becomes 
   assert.deepEqual(t.readiness, { level: 'partial', stages: { completed: 5, expected: 7 }, evidence: { retrieved: 7, failed: 0, not_applicable: 0, unavailable: 0, skipped_limit: 0 }, unverifiedFigures: 0, reasons: ['5 of 7 stages completed'] });
   assert.equal(addCouncil(newTurn('p'), JSON.stringify({ kind: 'readiness', level: 'great' })).readiness, undefined);
 });
+
+// TSM demo replay: the persisted run has only the error text (no cause), and
+// the readiness record carries stage issues and the cap source.
+test('replay recognises a spending-cap refusal and keeps stage issues on readiness', () => {
+  const legacy = { id: 'rc', role: 'risk', phase: 'challenge', status: 'failed', model: 'm', costUsd: 0, ms: 1, error: 'Council turn budget cannot cover next call' };
+  const t = addCouncil(newTurn('p'), JSON.stringify(legacy));
+  assert.equal((t.parts[0] as { cause?: string }).cause, 'budget');
+  assert.equal((addCouncil(newTurn('p'), JSON.stringify({ ...legacy, error: 'provider 500' })).parts[0] as { cause?: string }).cause, 'model');
+  assert.equal((addCouncil(newTurn('p'), JSON.stringify({ ...legacy, status: 'completed', findings: { findings: [], unresolvedQuestions: [] } })).parts[0] as { cause?: string }).cause, undefined);
+  const r = addCouncil(newTurn('p'), JSON.stringify({ kind: 'readiness', level: 'partial', stages: { completed: 6, expected: 7 }, evidence: { retrieved: 9 }, unverifiedFigures: 0, reasons: [], stageIssues: ['Risk challenge: stopped by the spending cap', 4], budget: { capUsd: 0.05, capSource: 'limits.turnUsd' } }));
+  assert.deepEqual(r.readiness?.stageIssues, ['Risk challenge: stopped by the spending cap']);
+  assert.deepEqual(r.readiness?.budget, { capUsd: 0.05, capSource: 'limits.turnUsd' });
+});

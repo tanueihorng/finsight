@@ -410,7 +410,7 @@ function ReplySettings({ brain, searchDefault }: { brain: Brain | undefined; sea
   return (
     <div className="kx-settings" ref={ref} onKeyDown={(e) => { if (e.key === 'Escape' && open) { e.stopPropagation(); setOpen(false); btn.current?.focus(); } }}>
       <button ref={btn} className={'kx-model-btn' + (open ? ' open' : '')} aria-haspopup="dialog" aria-expanded={open} aria-controls="kx-reply-settings"
-        title={`Model: ${brain?.label || 'none'}${brain?.thinking ? ` · thinking ${effortLabel(s.effort || 'none').toLowerCase()}` : ''} · web search: ${searchLabel}`} onClick={() => setOpen(!open)}>
+        title={`Model: ${brain?.label || 'none'}${brain?.thinking ? ` · thinking ${effortLabel(s.effort || 'none').toLowerCase()}` : ''} · web search: ${searchLabel}${s.councilMode ? ' (Council: Business and Macro specialists)' : ''}`} onClick={() => setOpen(!open)}>
         <span className="it"><Icon name="spark" size={13} /><span className="lbl">{brain?.label || 'No model'}</span></span>
         {brain?.thinking && <span className={'it' + (thinking ? ' think' : '')}><Icon name="bulb" size={13} />{thinking ? effortLabel(s.effort) : 'No thinking'}</span>}
         {s.searchProviders.length > 0 && <span className="it srch"><Icon name="globe" size={13} /><span className="lbl">{searchLabel}</span></span>}
@@ -437,6 +437,7 @@ function ReplySettings({ brain, searchDefault }: { brain: Brain | undefined; sea
               <option value="auto">{`Auto${searchDefault ? ` (${searchDefault})` : ''}`}</option>
               {s.searchProviders.map((p) => <option key={p.id} value={p.id} disabled={!p.available} title={p.reason}>{`${p.label}${p.available ? '' : ' · no key'}`}</option>)}
             </select>
+            {s.councilMode && <span className="note" data-council-search>In Council, the Business and Macro specialists can search and read pages; Risk uses portfolio tools only.</span>}
           </label>
         )}
       </div>}

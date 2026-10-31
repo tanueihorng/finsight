@@ -33,7 +33,7 @@ const list = (title: string, items: string[]) => items.length > 0 && <div classN
 function Card({ r, open, onToggle, hidden }: { r: RoleView; open: boolean; onToggle: () => void; hidden: boolean }) {
   const excerpt = r.claim || (hidden && r.runs.some((x) => x.status === 'completed') ? 'Findings hidden' : r.phaseNote);
   return <button type="button" data-role={r.id} data-state={r.state} className={styles.card + (open ? ' ' + styles.selected : '')} aria-label={'Inspect ' + r.label} aria-expanded={open} disabled={!r.runs.length} onClick={onToggle}>
-    <span className={styles.cardTop}><CouncilOrb role={r.id} active={r.state === 'running'} /><span className={styles.state}><i />{STATE_LABEL[r.state]}</span></span>
+    <span className={styles.cardTop}><CouncilOrb role={r.id} active={r.state === 'running'} /><span className={styles.state}><i />{r.stateLabel}</span></span>
     <span className={styles.cardName}><span className={styles.roleEyebrow}>{`SPECIALIST 0${r.index + 1}`}</span><strong>{r.short}</strong><span>{r.focus}</span></span>
     <span className={styles.phaseNote}>{r.phaseNote}</span>
     <span className={styles.excerpt}>{excerpt}</span>
@@ -115,6 +115,7 @@ export function ReadinessNote({ readiness: r }: { readiness: Readiness }) {
   return <div className={styles.readiness} data-readiness={r.level} role="note">
     <strong>{READINESS_LABEL[r.level]}</strong>
     <span>Stages {r.stages.completed}/{r.stages.expected} · evidence {e.retrieved} retrieved{gaps ? ' · ' + gaps : ''}{r.unverifiedFigures ? ` · ${r.unverifiedFigures} unverified figure${r.unverifiedFigures === 1 ? '' : 's'}` : ''}</span>
+    {!!r.stageIssues?.length && <span data-stage-issues>Not completed: {r.stageIssues.join('; ')}{r.budget ? ` · cap US$${r.budget.capUsd.toFixed(2)} per Council turn (${r.budget.capSource})` : ''}</span>}
     {r.reasons.includes('qualitative claims have not been independently verified') && <span>Qualitative claims have not been independently verified.</span>}
   </div>;
 }

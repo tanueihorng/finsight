@@ -10,7 +10,7 @@ import path from 'node:path';
 import { AuditLog, setAudit } from '../src/obs/audit.ts';
 const finding = { findings: [{ claim: 'Insufficient evidence', evidenceIds: ['e1'], assumptions: [], uncertainty: 'Policy missing', counterevidence: [], invalidation: 'New filing', missingEvidence: ['Policy'] }], unresolvedQuestions: ['Suitability unknown'] };
 const manifest = BrainManifest.parse({ apiVersion: 1, kind: 'brain', id: 'test-brain', label: 'Test', transport: 'mock', model: 'test', pricing: { inputPerM: 0.1, outputPerM: 0.1, version: '1' }, capabilities: { tools: true, streaming: false, contextTokens: 100000 }, costTier: '$', maxOutputTokens: 100 });
-const setup = (step: ApiBrain['step']) => ({ question: 'Review synthetic company', evidence: [{ id: 'e1', source: 'Synthetic filing', observedAt: '2026-10-01', retrievedAt: '2026-10-28', content: 'Test evidence' }], brain: { kind: 'api' as const, manifest, step }, system: 'Core rules', signal: new AbortController().signal, capUsd: 1, dayBudget: new CouncilBudget(1), emit: () => {}, account: () => {}, execute: async (_role: string, _name: string, _args: unknown, _signal: AbortSignal): Promise<CouncilEvidence> => { throw Error('Must not execute'); }, tools: [] });
+const setup = (step: ApiBrain['step']) => ({ question: 'Review synthetic company', evidence: [{ id: 'e1', source: 'Synthetic filing', observedAt: '2026-10-01', retrievedAt: '2026-10-28', content: 'Test evidence' }], brain: { kind: 'api' as const, manifest, step }, system: 'Core rules', signal: new AbortController().signal, capUsd: 1, dayBudget: new CouncilBudget(1), emit: () => {}, account: () => {}, execute: async (_role: string, _name: string, _args: unknown, _signal: AbortSignal): Promise<CouncilEvidence> => { throw Error('Must not execute'); }, tools: [] as StepRequest['tools'] });
 const result = () => ({ blocks: [{ type: 'text' as const, text: JSON.stringify(finding) }], usage: { inputTokens: 100, outputTokens: 100 }, stopReason: 'end' as const });
 
 test('concurrent council model calls retain role, phase and paired call IDs', async () => {
@@ -218,4 +218,58 @@ test('council advertises four research tools and allows 2000 output tokens when 
  assert.ok(requests.every((r) => r.maxOutputTokens === 2000));
  assert.match(requests[0]!.system, /at most 4 tool calls/);
  assert.match(requests[0]!.system, /at most four evidence-backed findings/);
+});
+
+// TSM council audit 2026-10-31: Council specialists can use web research
+// through the same tools and caps, a failed lookup is a disclosed gap, and a
+// budget refusal names its cause instead of reading as a missing assessment.
+const webSchemas = ['get_quote', 'web_search', 'fetch_url', 'get_policy'].map((name) => ({ name, description: name, parameters: { type: 'object' } })) as StepRequest['tools'];
+test('Business and Macro are offered web search and fetch; Risk is not', async () => {
+ const offered: Record<string, string[]> = {};
+ const o = setup(async (r) => { const role = /Council role: (\w+)/.exec(r.system)![1]!; if (r.tools.length) offered[role] = r.tools.map((t) => t.name); return result(); });
+ o.tools = webSchemas;
+ await runCouncil(o);
+ assert.deepEqual(offered, { growth: ['get_quote', 'web_search', 'fetch_url'], macro: ['get_quote', 'web_search', 'fetch_url'], risk: ['get_policy'] });
+});
+test('a paid web request is reserved in the turn budget, settles at its reported fee, and a fetched page is bounded', async () => {
+ const calls: { name: string; args: unknown }[] = []; let ask = true;
+ const o = setup(async (r) => {
+  const role = /Council role: (\w+)/.exec(r.system)![1];
+  if (role === 'growth' && ask && r.tools.length) { ask = false; return { ...result(), blocks: [{ type: 'tool_call', id: 's1', name: 'web_search', args: { query: 'issuer results' } }, { type: 'tool_call', id: 'f1', name: 'fetch_url', args: { url: 'https://investor.example/q3', maxChars: 15000 } }], stopReason: 'tool_use' }; }
+  return result();
+ });
+ o.tools = webSchemas;
+ o.execute = async (_role, name, args) => { calls.push({ name, args }); return { id: 'w' + calls.length, source: 'FinSight tool ' + name, observedAt: 'x', retrievedAt: '2026-10-31', content: JSON.stringify({ usage: { estimatedCostUsd: name === 'web_search' ? 0.00075 : 0 } }) }; };
+ o.dayBudget = new CouncilBudget(1);
+ const out = await runCouncil(o);
+ assert.deepEqual(calls.map((c) => c.name), ['web_search', 'fetch_url']);
+ assert.equal((calls[1]!.args as { maxChars: number }).maxChars, 6000);
+ assert.ok(out.runs.every((r) => r.status === 'completed'));
+ // The reported search fee (not the 0.01 reservation) is what the day budget keeps.
+ assert.ok(Math.abs(o.dayBudget.snapshot().chargedUsd - (out.costUsd! + 0.00075)) < 1e-9);
+});
+test('a web request the cap cannot cover is not executed and is acknowledged as missing research', async () => {
+ let executed = false; const sent: string[] = [];
+ const o = setup(async (r) => {
+  const last = JSON.stringify(r.messages.at(-1)); if (/Not executed: the Council spending cap/.test(last)) sent.push(last);
+  return /Council role: growth/.test(r.system) && r.tools.length ? { ...result(), blocks: [{ type: 'tool_call', id: 's1', name: 'web_search', args: { query: 'q' } }], stopReason: 'tool_use' } : result();
+ });
+ o.tools = webSchemas; o.execute = async () => { executed = true; throw Error('no'); };
+ o.dayBudget = new CouncilBudget(0.005); // cannot hold the 0.01 web reservation
+ await runCouncil(o);
+ assert.equal(executed, false); assert.equal(sent.length, 1);
+});
+test('a failed research lookup becomes a disclosed gap instead of failing the assessment', async () => {
+ const o = setup(async (r) => /Council role: growth/.test(r.system) && r.tools.length ? { ...result(), blocks: [{ type: 'tool_call', id: 's1', name: 'web_search', args: { query: 'q' } }], stopReason: 'tool_use' } : result());
+ o.tools = webSchemas; o.execute = async () => { throw Error('Research tool failed: web_search (SEARCH_NOT_CONFIGURED: Add TAVILY_API_KEY)'); };
+ const out = await runCouncil(o);
+ assert.equal(out.runs.find((r) => r.role === 'growth' && r.phase === 'assessment')!.status, 'completed');
+});
+test('a stage refused by the turn cap records cause budget and the answer says why', async () => {
+ // Seven 100-token calls fit the day budget; the turn cap admits the initial round only.
+ const o = setup(async () => result()); o.capUsd = 0.0001;
+ const out = await runCouncil(o);
+ const refused = out.runs.filter((r) => r.status === 'failed');
+ assert.ok(refused.length); assert.ok(refused.every((r) => r.cause === 'budget' && /needs up to US\$\d+\.\d{4}.*of the US\$0\.0001 cap is free/.test(r.error!)));
+ assert.match(out.text, /^Partial council review — \d of 7 stages completed\. Not completed: .*stopped by the spending cap.*The Council turn cap is US\$0\.0001; each call reserves its worst-case cost/);
 });

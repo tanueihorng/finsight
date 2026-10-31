@@ -42,8 +42,8 @@ context bound still apply. Budget
 refusal traces include the requested reservation, input bytes and budget snapshot.
 
 Growth/macro can read quotes, histories and SEC filings/financials; risk can read
-exposures, positions, cash and policy. Paid web search/fetch are excluded in this
-first implementation. Every tool is checked both in offered schemas and at
+exposures, positions, cash and policy. Paid web search/fetch were excluded in the
+first implementation; since 2026-10-31 growth/macro may also use them (see below). Every tool is checked both in offered schemas and at
 execution. Serialized input bytes, protocol allowance and reserved output must
 fit the model's context window; oversized packets fail explicitly rather than
 silently dropping evidence. Cost reservations also apply. Core rules remain shared;
@@ -256,3 +256,56 @@ The user requested removing the Council's global model-call-count cap, supersedi
 ## Research and output allowances — 2026-10-30
 
 The user requested deeper research and output. This supersedes the earlier historical two-tool and 1,200-token limits: each specialist may request at most four allowed tools in one batch, receives one tool-free follow-up, and may return up to four evidence-backed findings. Output is limited to 2,000 tokens per call or the model maximum, whichever is lower. Tool allowlists, validation, refusal handling, context bounds, time and spending caps remain. More retrieval or text does not guarantee evidence quality.
+
+## TSM ADR audit fixes — 2026-10-31
+
+Fixes for the TSM entry-price review (demo turn `turn_efdghuYZ73T4`). Decision on
+web search: SPEC FR-6.8 offers our search tools to every brain, so Council now
+uses them rather than relabelling the UI. Business & Growth and Macro &
+Valuation may request `web_search` and `fetch_url` inside their existing
+four-call research batch; Portfolio Risk may not. The ordinary per-turn search
+and fetch counts apply across the whole Council. Each web request reserves
+US$0.01 in the Council turn and daily budgets before it runs and settles at the
+tool's reported fee (zero when cached or local; the full reservation when the
+provider reports none, as for Tavily). A request the cap cannot cover is not run
+and is returned to the specialist as missing research. Paid DeepSeek search and
+fetch are checked against the Council turn cap, not the ordinary chat cap. Search
+is not offered when `searchProvider` is `none`. Fetched pages are cut to 6,000
+characters. A failed research tool is now a disclosed gap in that specialist's
+assessment instead of failing the stage. The Web search setting notes that only
+Business and Macro use it in Council mode.
+
+Foreign private issuers (SEC FRM §6110) are detected from the forms they file
+(20-F/40-F and 6-K, no 10-K/10-Q/8-K). `edgar_recent_8k` then reads 6-K
+reports; with `items: ["2.02"]` it picks the latest 6-K whose cover names
+quarterly results (bounded scan of eight), never treating every 6-K as earnings.
+It returns `formUsed`, `filerType`, a per-report `classification` and the latest
+20-F/40-F, and the evidence plan records the form used in coverage `detail`.
+`edgar_financials` reads IFRS (`ifrs-full`) 20-F facts with mapped concept names.
+
+`valuation_metrics` no longer multiplies an ADR price by ordinary shares. For a
+foreign issuer it divides the ordinary-share count by the ADR ratio from a
+curated table of issuer-stated ratios (TSM: 5) and states the basis. When the
+ratio is unknown, or EPS/revenue are in another currency than the USD quote, the
+metric is null with an explicit entry in `gaps`; no FX conversion is applied.
+IFRS trailing figures come from the annual 20-F only and are labelled as possibly
+older than the latest 6-K results.
+
+Budget: the audited run's cap was the default US$0.05 turn limit
+(`councilTurnUsd` unset). Worst-case reservations were about four times the
+measured cost (US$0.0178 reserved for a challenge that would have cost about
+US$0.0045), and US$0.0125 stays held for the chair, so the risk challenge was
+refused although the whole run cost US$0.028. Caps are unchanged. A stage that
+does not complete now records `cause` (budget, context, tool, model, stopped); the
+answer, readiness record and UI name each such stage and cause, the refusal
+states the reservation, free amount and cap, and readiness names the cap's
+setting. The Risk card shows "Assessed · challenge not run · spending cap reached"
+instead of "Assessment missing", live and on replay of older records. Opening
+full page while the terminal is scrolled no longer places the panel above the
+viewport; the terminal's scroll position is restored on return.
+
+Limits: the ADR table covers only TSM; other ADRs fail closed. The 6-K
+classifier is a cover-text pattern, not a semantic check. Web evidence is
+untrusted and its support for claims is still unverified. A foreign-issuer
+packet with web pages is larger, so the US$0.05 default makes partial reviews
+likely; a higher `councilTurnUsd` needs the user's approval.

@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fakeFinsight, testConfig, testCtx, TOKEN } from './helpers.ts';
 import type { Fake } from './helpers.ts';
 import { buildRegistry } from '../src/tools/index.ts';
+import { ADR_RATIOS, EARNINGS_6K, filerType } from '../src/tools/web.ts';
 
 let fake: Fake;
 before(async () => { fake = await fakeFinsight(); });
@@ -214,7 +215,8 @@ test('valuation_metrics derives trailing EPS, P/E, earnings yield and market cap
   assert.equal(r.json.peTrailing, 6.67); assert.equal(r.json.earningsYieldPct, 15);
   assert.equal(r.json.marketCap, 10000); assert.equal(r.json.psTrailing, 10);
   assert.equal(r.json.ttm.revenue.concept, 'RevenueFromContractWithCustomerExcludingAssessedTax');
-  assert.deepEqual(r.json.sharesOutstanding, { value: 1000, asOf: '2026-07-25', filed: '2026-08-01' });
+  assert.deepEqual(r.json.sharesOutstanding, { value: 1000, asOf: '2026-07-25', filed: '2026-08-01', kind: 'common shares' });
+  assert.equal(r.json.filerType, 'domestic'); assert.equal(r.json.adr, undefined); assert.deepEqual(r.json.gaps, []);
 });
 
 test('edgar_recent_8k reads the earnings exhibit when present, bounded and marked untrusted', async () => {
@@ -244,6 +246,68 @@ test('edgar_financials computes the annual change, and valuation_metrics marks c
   const v = await run('valuation_metrics', { ticker: 'AMD' });
   assert.equal(v.json.epsApproximate, true);
   assert.match(v.json.epsMethodNote, /approximate/);
+});
+
+// TSM council audit 2026-10-31: a foreign private issuer files 6-K and 20-F,
+// never 8-K, and its ADR price must not be multiplied by ordinary shares.
+test('edgar_recent_8k uses the 6-K results release and names the 20-F for a foreign private issuer', async () => {
+  const r = await run('edgar_recent_8k', { ticker: 'TSM', limit: 1, items: ['2.02'], maxChars: 8000 });
+  assert.equal(r.ok, true, JSON.stringify(r.json));
+  assert.equal(r.json.filerType, 'foreign_private_issuer');
+  assert.equal(r.json.formUsed, '6-K earnings release filed 2026-10-15');
+  // The newer monthly revenue 6-K is not mistaken for results.
+  assert.deepEqual(r.json.reports.map((x: any) => [x.form, x.filed, x.classification, x.document, x.items]), [['6-K', '2026-10-15', 'earnings_release', 'q3release.htm', null]]);
+  assert.match(r.json.reports[0].text, /third quarter EPS of 1\.20 per ADR/);
+  assert.deepEqual(r.json.annualReport, { form: '20-F', filed: '2026-04-16', period: '2025-12-31', url: 'https://www.sec.gov/Archives/edgar/data/9001/000000900126000001/annual.htm' });
+  assert.match(r.json.note, /6-K, not 8-K/);
+  const latest = await run('edgar_recent_8k', { ticker: 'TSM', limit: 2 });
+  assert.deepEqual(latest.json.reports.map((x: any) => [x.filed, x.classification]), [['2026-10-08', 'other'], ['2026-10-15', 'earnings_release']]);
+  const none = await run('edgar_recent_8k', { ticker: 'FPX', items: ['2.02'] });
+  assert.deepEqual(none.json.reports, []); assert.match(none.json.note, /None of the last 1 6-K reports names quarterly results/);
+  // A US registrant keeps the 8-K path.
+  assert.equal((await run('edgar_recent_8k', { ticker: 'AMD', limit: 1 })).json.formUsed, '8-K filed 2026-09-28');
+});
+
+test('the 6-K earnings classifier accepts results releases and rejects other home-market disclosures', () => {
+  for (const yes of ['99.2 2026 Third Quarter Earnings Conference Presentation Material', 'TSMC Reports Third Quarter EPS of NT$29.43', 'Announcement of fourth quarter 2025 financial results', 'Quarterly results for the period']) assert.ok(EARNINGS_6K.test(yes), yes);
+  for (const no of ['TSMC September 2026 Revenue Report', 'Board of Directors Meeting Resolutions: approved the 2026 second quarter Business Report and Financial Statements', 'Adjustment to Cash Dividend Per Share', 'Consolidated Financial Statements for the Six Months Ended June 30, 2026', 'changes in the shareholdings of directors']) assert.ok(!EARNINGS_6K.test(no), no);
+  assert.equal(filerType(['6-K', '20-F']), 'foreign_private_issuer'); assert.equal(filerType(['8-K', '10-Q']), 'domestic'); assert.equal(filerType(['SC 13G']), 'unknown');
+});
+
+test('valuation_metrics converts ordinary shares with the ADR ratio and refuses mixed-currency multiples', async () => {
+  const v = await run('valuation_metrics', { ticker: 'TSM' });
+  assert.equal(v.ok, true, JSON.stringify(v.json));
+  assert.equal(v.json.filerType, 'foreign_private_issuer'); assert.equal(v.json.taxonomy, 'ifrs-full');
+  // 10 USD per ADR × (5,000 ordinary ÷ 5) — not 10 × 5,000.
+  assert.equal(v.json.price.value, 10);
+  assert.deepEqual([v.json.adr.ordinaryPerAdr, v.json.adr.adrEquivalentShares], [5, 1000]);
+  assert.equal(v.json.marketCap, 10000); assert.match(v.json.marketCapBasis, /ordinary shares ÷ 5/);
+  // EPS and revenue are in the reporting currency (not the USD convenience translation); no FX is applied.
+  assert.equal(v.json.ttm.epsDiluted.unit, 'XTW/shares'); assert.equal(v.json.ttm.revenue.unit, 'XTW');
+  assert.equal(v.json.peTrailing, null); assert.equal(v.json.earningsYieldPct, null); assert.equal(v.json.psTrailing, null);
+  assert.ok(v.json.gaps.some((g: string) => /XTW\/shares/.test(g) && /P\/E and earnings yield are not computed/.test(g)));
+  assert.ok(v.json.gaps.some((g: string) => /6-K without XBRL/.test(g)));
+});
+
+test('valuation_metrics refuses market cap and P/E for a foreign issuer with an unknown ADR ratio, and uses a known one', async () => {
+  const v = await run('valuation_metrics', { ticker: 'FPX' });
+  assert.equal(v.json.filerType, 'foreign_private_issuer');
+  assert.deepEqual(v.json.adr, { ordinaryPerAdr: null, status: 'ratio_unknown' });
+  assert.equal(v.json.marketCap, null); assert.equal(v.json.peTrailing, null); assert.equal(v.json.earningsYieldPct, null);
+  assert.match(v.json.gaps[0], /ordinary shares per ADR are not known/);
+  ADR_RATIOS.FPX = { ordinaryPerAdr: 2, source: 'synthetic' };
+  try {
+    const k = await run('valuation_metrics', { ticker: 'FPX' });
+    // 10 × 2,000 ÷ 2; EPS 1 USD per ordinary share is 2 per ADR, so P/E 5.
+    assert.equal(k.json.marketCap, 10000); assert.equal(k.json.peTrailing, 5); assert.equal(k.json.earningsYieldPct, 20);
+  } finally { delete ADR_RATIOS.FPX; }
+});
+
+test('edgar_financials reads IFRS 20-F facts for a foreign private issuer', async () => {
+  const f = await run('edgar_financials', { ticker: 'TSM', concepts: ['Revenues', 'EarningsPerShareDiluted'] });
+  assert.equal(f.json.taxonomy, 'ifrs-full');
+  assert.deepEqual([f.json.concepts.Revenues.concept, f.json.concepts.Revenues.annualForm, f.json.concepts.Revenues.annual[0].value], ['Revenue', '20-F', 64000]);
+  assert.deepEqual(f.json.missing, []); assert.match(f.json.note, /furnished on 6-K without XBRL/);
 });
 
 test('get_earnings_dates reports whether each date is past or upcoming', async () => {

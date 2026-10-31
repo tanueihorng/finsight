@@ -101,10 +101,26 @@ const PENDING_NOTE = 'Describes an agreement or an event not yet completed. Its 
 export function exhibit99(items: { name?: unknown; size?: unknown }[], primary: string): string | undefined {
   const docs = items.map((x) => ({ name: String(x.name ?? ''), size: Number(x.size) || 0 }))
     .filter((x) => /\.html?$/i.test(x.name) && x.name !== primary && !/^R\d+\.htm$/i.test(x.name) && !/index/i.test(x.name));
-  return (docs.find((x) => /ex-?99/i.test(x.name)) ?? docs.find((x) => /99[-_]?\d{0,2}\.html?$/i.test(x.name)) ?? [...docs].sort((a, b) => b.size - a.size)[0])?.name;
+  const prose = docs.filter((x) => !/presentation|slides?/i.test(x.name));
+  return (docs.find((x) => /ex-?99/i.test(x.name)) ?? docs.find((x) => /99[-_]?\d{0,2}\.html?$/i.test(x.name)) ?? [...(prose.length ? prose : docs)].sort((a, b) => b.size - a.size)[0])?.name;
 }
 
 type Fact = { start?: string; end: string; val: number; form?: string; fp?: string; fy?: number; filed?: string };
+const ANNUAL_FORMS = new Set(['10-K', '20-F', '40-F']);
+// IFRS filers (most foreign private issuers) tag ifrs-full concepts; requests
+// keep the US GAAP names and are mapped to the IFRS equivalent.
+const IFRS_CONCEPTS: Record<string, string> = {
+  Revenues: 'Revenue', RevenueFromContractWithCustomerExcludingAssessedTax: 'Revenue', SalesRevenueNet: 'Revenue',
+  NetIncomeLoss: 'ProfitLossAttributableToOwnersOfParent', EarningsPerShareDiluted: 'DilutedEarningsLossPerShare',
+  EarningsPerShareBasic: 'BasicEarningsLossPerShare', OperatingIncomeLoss: 'ProfitLossFromOperatingActivities',
+  NetCashProvidedByUsedInOperatingActivities: 'CashFlowsFromUsedInOperatingActivities',
+  PaymentsToAcquirePropertyPlantAndEquipment: 'PurchaseOfPropertyPlantAndEquipmentClassifiedAsInvestingActivities',
+};
+function reportedFacts(facts: any): { taxonomy: 'us-gaap' | 'ifrs-full'; facts: Record<string, any>; concept: (name: string) => string } {
+  const gaap = facts.facts?.['us-gaap'], ifrs = facts.facts?.['ifrs-full'];
+  if (ifrs && (!gaap || !Object.keys(gaap).length)) return { taxonomy: 'ifrs-full', facts: ifrs, concept: (n) => (ifrs[n] ? n : IFRS_CONCEPTS[n] ?? n) };
+  return { taxonomy: 'us-gaap', facts: gaap || {}, concept: (n) => n };
+}
 const days = (a: string, b: string) => (Date.parse(b) - Date.parse(a)) / 864e5;
 /** Trailing twelve months for a flow concept, from discrete quarters when four
  * consecutive ones exist, else latest fiscal year plus the year-to-date change. */
@@ -125,6 +141,31 @@ export function ttm(facts: Fact[]): { value: number; method: string; periodEnd: 
   if (ytd && prior) return { value: fy.val + ytd.val - prior.val, method: 'fiscal year + current year-to-date - prior year-to-date', periodEnd: ytd.end, inputs: [fy, ytd, prior].map(pick) };
   return { value: fy.val, method: 'latest fiscal year (no comparable year-to-date)', periodEnd: fy.end, inputs: [pick(fy)] };
 }
+
+// SEC Financial Reporting Manual §6110: foreign private issuers file 20-F or
+// 40-F annual reports and furnish 6-K current reports; the 8-K rules do not
+// apply to them. The forms an issuer actually files decide which it is.
+export type FilerType = 'domestic' | 'foreign_private_issuer' | 'unknown';
+export function filerType(forms: unknown[]): FilerType {
+  const f = new Set(forms.map((x) => String(x).toUpperCase()));
+  if (['10-K', '10-Q', '8-K'].some((x) => f.has(x))) return 'domestic';
+  if (['20-F', '40-F', '6-K'].some((x) => f.has(x))) return 'foreign_private_issuer';
+  return 'unknown';
+}
+
+// Ordinary shares represented by one US depositary share, as stated in the
+// issuer's own filings. A foreign issuer missing here gets no market cap or
+// per-share multiple: an ADR price times an ordinary-share count is wrong by
+// the ratio, so the metric is refused rather than guessed.
+export const ADR_RATIOS: Record<string, { ordinaryPerAdr: number; source: string }> = {
+  TSM: { ordinaryPerAdr: 5, source: 'TSMC Form 20-F and quarterly financial statements: one ADS represents five common shares' },
+};
+
+// A 6-K is furnished for anything the issuer publishes at home: results, but
+// also monthly revenue, board resolutions or shareholding changes. Only one
+// whose cover or exhibit list names quarterly results counts as an earnings release.
+export const EARNINGS_6K = /\b(?:earnings\s+(?:release|conference|call|report)|quarterly\s+(?:results|earnings)|(?:first|second|third|fourth|1st|2nd|3rd|4th)[\s-]+quarter\s+(?:(?:fiscal\s+)?\d{4}\s+)?(?:financial\s+)?(?:results|earnings)|(?:reports?|announces?)\s+(?:its\s+)?(?:\w+\s+){0,3}(?:quarter|quarterly|half-year|interim)\s+(?:\w+\s+){0,2}(?:results|EPS|earnings))\b/i;
+const FPI_SCAN = 8;
 
 async function cikFor(ctx: ToolCtx, t: string): Promise<{ cik: string; title: string }> {
   const map = await secJson(ctx, 'https://www.sec.gov/files/company_tickers.json', 7 * 864e5);
@@ -325,42 +366,51 @@ export function createWebTools(fetchImpl: typeof fetch = fetch, fetchPage = guar
     async handler({ ticker: t, concepts, periods }, ctx) {
       const { cik, title } = await cikFor(ctx, t);
       const facts = await secJson(ctx, `https://data.sec.gov/api/xbrl/companyfacts/CIK${cik}.json`, 12 * 3600e3);
-      const gaap = facts.facts?.['us-gaap'] || {};
+      const { taxonomy, facts: gaap, concept } = reportedFacts(facts);
       const out: Record<string, unknown> = {};
       for (const c of concepts) {
-        const f = gaap[c]; if (!f) continue;
+        const name = concept(c), f = gaap[name]; if (!f) continue;
         const unit = Object.keys(f.units || {})[0]!; const vals: any[] = f.units[unit] || [];
+        const annualForm = taxonomy === 'ifrs-full' ? '20-F' : '10-K';
         const pick = (form: string) => {
           const seen = new Map<string, any>();
-          for (const v of vals) if (v.form === form && v.fp && (form === '10-K' ? v.fp === 'FY' : true)) seen.set(`${v.fy}-${v.fp}-${v.end}`, v);
+          for (const v of vals) if ((form === '10-K' ? ANNUAL_FORMS.has(v.form) : v.form === form) && v.fp && (form === '10-K' ? v.fp === 'FY' : true)) seen.set(`${v.fy}-${v.fp}-${v.end}`, v);
           const rows = [...seen.values()].sort((a, b) => String(b.end).localeCompare(String(a.end))).slice(0, periods)
             .map((v) => ({ end: v.end, fy: v.fy, fp: v.fp, value: v.val, filed: v.filed }));
           // Year-over-year change for annual flow values, computed here so a
           // claim can quote it instead of describing the change in words.
-          if (form === '10-K' && unit === 'USD') rows.forEach((row: any, i) => { const prev = rows[i + 1]; if (prev && prev.value > 0) row.changePctFromPriorYear = Math.round(((row.value - prev.value) / prev.value) * 10000) / 100; });
+          if (form === '10-K' && /^[A-Z]{3}$/.test(unit)) rows.forEach((row: any, i) => { const prev = rows[i + 1]; if (prev && prev.value > 0) row.changePctFromPriorYear = Math.round(((row.value - prev.value) / prev.value) * 10000) / 100; });
           return rows;
         };
-        out[c] = { unit, label: f.label, annual: pick('10-K'), quarterly: pick('10-Q') };
+        out[c] = { unit, units: Object.keys(f.units || {}), label: f.label, ...(name !== c ? { concept: name } : {}), annualForm, annual: pick('10-K'), quarterly: pick('10-Q') };
       }
       const retrievedAt = new Date().toISOString();
       ctx.citations.push({ type: 'citation', url: `https://data.sec.gov/api/xbrl/companyfacts/CIK${cik}.json`, title: `${title} XBRL company facts (SEC)`, retrievedAt, class: 'primary' });
-      return { source: 'SEC XBRL company facts', sourceClass: 'primary', retrievedAt, company: title, cik, concepts: out,
-        missing: concepts.filter((c: string) => !gaap[c]), note: 'Quarterly 10-Q values can be year-to-date for flow items; check fp and end dates. changePctFromPriorYear is computed in code from the listed annual values; quote it rather than describing growth as doubling or similar.' };
+      return { source: 'SEC XBRL company facts', sourceClass: 'primary', retrievedAt, company: title, cik, taxonomy, concepts: out,
+        missing: concepts.filter((c: string) => !gaap[concept(c)]),
+        note: (taxonomy === 'ifrs-full' ? 'IFRS filer (foreign private issuer): values come from the annual 20-F in the reporting currency named by unit; a USD unit beside it is a convenience translation. Interim results are furnished on 6-K without XBRL, so there are no quarterly values here; use the 6-K earnings release. ' : 'Quarterly 10-Q values can be year-to-date for flow items; check fp and end dates. ') + 'changePctFromPriorYear is computed in code from the listed annual values; quote it rather than describing growth as doubling or similar.' };
     },
   },
   {
     name: 'valuation_metrics',
-    description: 'Trailing valuation for a US SEC registrant, computed in code: trailing-twelve-month diluted EPS, revenue and net income from SEC XBRL, shares outstanding, live price from FinSight, then market cap, trailing P/E, earnings yield and price-to-sales. Every input and period is returned. Negative earnings give no P/E.',
+    description: 'Trailing valuation for an SEC filer, computed in code: trailing-twelve-month diluted EPS, revenue and net income from SEC XBRL, shares outstanding, live price from FinSight, then market cap, trailing P/E, earnings yield and price-to-sales. Every input and period is returned. Negative earnings give no P/E. For a foreign issuer\'s ADR the ordinary-share count is converted with the ADR ratio, or the metric is refused when the ratio or currency basis is unknown.',
     input: z.object({ ticker }),
     timeoutMs: 45_000,
     async handler({ ticker: t }, ctx) {
       const { cik, title } = await cikFor(ctx, t);
       const facts = await secJson(ctx, `https://data.sec.gov/api/xbrl/companyfacts/CIK${cik}.json`, 12 * 3600e3);
-      const gaap = facts.facts?.['us-gaap'] || {};
+      const sub = await secJson(ctx, `https://data.sec.gov/submissions/CIK${cik}.json`, 6 * 3600e3);
+      const filer = filerType(sub.filings?.recent?.form || []);
+      const { taxonomy, facts: gaap, concept } = reportedFacts(facts);
       // Filers switch concepts over time (AMD's Revenues stops in 2017), so take
-      // the concept with the latest trailing period and drop stale ones.
+      // the concept with the latest trailing period and drop stale ones. An IFRS
+      // filer's USD unit is a convenience translation, so its reporting currency comes first.
       const series = (...names: string[]) => {
-        const found = names.flatMap((n) => { const u = gaap[n]?.units; const vals = u && (u.USD || u['USD/shares'] || Object.values(u)[0]); const t = Array.isArray(vals) && vals.length ? ttm(vals as Fact[]) : null; return t ? [{ concept: n, ttm: t }] : []; });
+        const found = [...new Set(names.map(concept))].flatMap((n) => {
+          const u = gaap[n]?.units; if (!u) return [];
+          const keys = Object.keys(u), unit = taxonomy === 'ifrs-full' ? keys.find((k) => !/^USD/.test(k)) ?? keys[0]! : ['USD', 'USD/shares'].find((k) => u[k]) ?? keys[0]!;
+          const vals = u[unit]; const t = Array.isArray(vals) && vals.length ? ttm(vals as Fact[]) : null; return t ? [{ concept: n, unit, ttm: t }] : [];
+        });
         return found.sort((a, b) => b.ttm.periodEnd.localeCompare(a.ttm.periodEnd))[0] ?? null;
       };
       const eps = series('EarningsPerShareDiluted'), rev = series('Revenues', 'RevenueFromContractWithCustomerExcludingAssessedTax', 'SalesRevenueNet'), ni = series('NetIncomeLoss');
@@ -374,8 +424,23 @@ export function createWebTools(fetchImpl: typeof fetch = fetch, fetchPage = guar
       const fresh = (x: typeof eps) => (x && days(x.ttm.periodEnd, newest) <= 200 ? x.ttm : null);
       const T = { eps: fresh(eps), revenue: fresh(rev), netIncome: fresh(ni) };
       const r = (n: number | null, d = 2) => (n === null || !Number.isFinite(n) ? null : Math.round(n * 10 ** d) / 10 ** d);
-      const marketCap = price && shares && usd ? price * shares.val : null;
-      const epsV = T.eps?.value ?? null;
+      // The quoted price is per listed security. A foreign issuer's US listing is
+      // usually an ADR, while the cover-page count is ordinary shares, so the
+      // count is divided by the ratio; an unknown ratio refuses the per-share metrics.
+      const gaps: string[] = [];
+      const adr = filer === 'foreign_private_issuer' ? ADR_RATIOS[t.toUpperCase()] ?? null : null;
+      const perListed = filer === 'foreign_private_issuer' ? adr?.ordinaryPerAdr ?? null : 1;
+      if (filer === 'foreign_private_issuer' && !adr) gaps.push(`${title} is a foreign private issuer and its US listing may be an ADR; the ordinary shares per ADR are not known here, so market cap, P/E, earnings yield and price-to-sales are not computed.`);
+      const listedShares = shares && perListed ? shares.val / perListed : null;
+      const marketCap = price && listedShares && usd ? price * listedShares : null;
+      if (price && !usd) gaps.push(`Quote currency ${q?.currency ?? 'unknown'} is not USD; per-share metrics are not computed.`);
+      // EPS is per ordinary share in its reported currency; per listed security it is times the ratio.
+      const epsUsd = !!eps && eps.unit === 'USD/shares';
+      const epsV = T.eps && perListed && epsUsd ? T.eps.value * perListed : null;
+      if (T.eps && perListed && !epsUsd) gaps.push(`Diluted EPS is reported in ${eps!.unit} (${T.eps.method}, period ending ${T.eps.periodEnd}); the quote is in ${q?.currency ?? 'an unknown currency'}. No currency conversion is applied, so P/E and earnings yield are not computed. Use per-ADR results stated in the issuer's earnings release.`);
+      const revUsd = !!rev && rev.unit === 'USD';
+      if (T.revenue && marketCap && !revUsd) gaps.push(`Revenue is reported in ${rev!.unit}; price-to-sales is not computed against a USD market cap.`);
+      if (taxonomy === 'ifrs-full') gaps.push('IFRS figures come from the annual 20-F only; interim results are furnished on 6-K without XBRL, so these trailing figures can be older than the latest reported quarter.');
       // Diluted EPS is a per-share ratio over each period's own weighted share
       // count, so summing or differencing periods only approximates the true
       // trailing figure when the share count changes.
@@ -383,33 +448,38 @@ export function createWebTools(fetchImpl: typeof fetch = fetch, fetchPage = guar
       const retrievedAt = new Date().toISOString();
       ctx.citations.push({ type: 'citation', url: `https://data.sec.gov/api/xbrl/companyfacts/CIK${cik}.json`, title: `${title} XBRL company facts (SEC)`, retrievedAt, class: 'primary' });
       return {
-        source: 'SEC XBRL company facts + FinSight /api/quote', sourceClass: 'primary', retrievedAt, company: title, cik,
+        source: 'SEC XBRL company facts + FinSight /api/quote', sourceClass: 'primary', retrievedAt, company: title, cik, filerType: filer, taxonomy,
         price: { value: price, currency: q?.currency ?? null, marketTime: q?.marketTime ? new Date(q.marketTime * (q.marketTime < 1e12 ? 1000 : 1)).toISOString() : null },
-        ttm: { epsDiluted: T.eps && { ...T.eps, concept: eps!.concept }, revenue: T.revenue && { ...T.revenue, concept: rev!.concept }, netIncome: T.netIncome && { ...T.netIncome, concept: ni!.concept } },
-        sharesOutstanding: shares && { value: shares.val, asOf: shares.end, filed: shares.filed ?? null },
+        ttm: { epsDiluted: T.eps && { ...T.eps, concept: eps!.concept, unit: eps!.unit }, revenue: T.revenue && { ...T.revenue, concept: rev!.concept, unit: rev!.unit }, netIncome: T.netIncome && { ...T.netIncome, concept: ni!.concept, unit: ni!.unit } },
+        sharesOutstanding: shares && { value: shares.val, asOf: shares.end, filed: shares.filed ?? null, kind: filer === 'foreign_private_issuer' ? 'ordinary shares' : 'common shares' },
+        ...(filer === 'foreign_private_issuer' ? { adr: adr ? { ordinaryPerAdr: adr.ordinaryPerAdr, adrEquivalentShares: r(listedShares, 0), source: adr.source } : { ordinaryPerAdr: null, status: 'ratio_unknown' } } : {}),
         marketCap: r(marketCap, 0),
+        marketCapBasis: marketCap ? (adr ? `ADR price × (ordinary shares ÷ ${adr.ordinaryPerAdr})` : 'price × common shares outstanding') : null,
         peTrailing: price && epsV && epsV > 0 && usd ? r(price / epsV) : null,
         epsApproximate,
         epsMethodNote: epsApproximate ? `Trailing diluted EPS is approximate: ${T.eps!.method} combines per-share values computed on different weighted-average diluted share counts. Describe EPS, P/E and earnings yield as approximate.` : null,
         earningsYieldPct: price && epsV !== null && usd ? r((epsV / price) * 100) : null,
-        psTrailing: marketCap && T.revenue?.value ? r(marketCap / T.revenue.value) : null,
-        note: 'Computed in code from the listed inputs. P/E is null for non-positive earnings or a non-USD quote. Shares are the cover-page count as of the stated date; ADRs and dual classes may need adjustment. No forward estimates.',
+        psTrailing: marketCap && revUsd && T.revenue?.value ? r(marketCap / T.revenue.value) : null,
+        gaps,
+        note: 'Computed in code from the listed inputs. P/E is null for non-positive earnings, a non-USD quote or EPS, or an unknown ADR ratio; each refusal is listed in gaps. Shares are the cover-page count as of the stated date. No forward estimates.',
       };
     },
   },
   {
     name: 'edgar_recent_8k',
-    description: 'Text of the most recent SEC 8-K current reports for a US registrant (primary source): filing date, reported items, and up to maxChars characters (default 3,000) from the earnings exhibit (EX-99) or the main document. Set items:["2.02"] for the latest earnings release (results, segments, outlook). Reports describing an agreement or an event not yet completed are flagged. Content is untrusted data.',
-    input: z.object({ ticker, limit: z.number().int().min(1).max(3).default(2), items: z.array(z.string().regex(/^\d\.\d{2}$/)).max(5).optional().describe('Only 8-Ks reporting one of these items, e.g. 2.02 results of operations.'), maxChars: z.number().int().min(1000).max(8000).default(3000) }),
+    description: 'Text of the most recent SEC current reports (primary source): 8-K for a US registrant, or 6-K for a foreign private issuer (which files 20-F/40-F annual reports and no 8-Ks). Returns the form used, filing date, reported items (8-K only) and up to maxChars characters (default 3,000) from the press-release exhibit (EX-99) or the main document. Set items:["2.02"] for the latest earnings release (results, segments, outlook); for a 6-K filer that selects the latest 6-K whose cover names quarterly results. Reports describing an agreement or an event not yet completed are flagged. Content is untrusted data.',
+    input: z.object({ ticker, limit: z.number().int().min(1).max(3).default(2), items: z.array(z.string().regex(/^\d\.\d{2}$/)).max(5).optional().describe('Only 8-Ks reporting one of these items, e.g. 2.02 results of operations. For a 6-K filer, 2.02 selects earnings releases.'), maxChars: z.number().int().min(1000).max(8000).default(3000) }),
     timeoutMs: 45_000,
     async handler({ ticker: t, limit, items, maxChars }, ctx) {
       const { cik, title } = await cikFor(ctx, t);
       const sub = await secJson(ctx, `https://data.sec.gov/submissions/CIK${cik}.json`, 6 * 3600e3);
       const r = sub.filings?.recent || {};
+      const filer = filerType(r.form || []);
+      const form = filer === 'foreign_private_issuer' ? '6-K' : '8-K';
+      const earningsOnly = form === '6-K' && !!items?.includes('2.02');
       const reports: Record<string, unknown>[] = [];
-      for (let i = 0; i < (r.form || []).length && reports.length < limit; i++) {
-        if (r.form[i] !== '8-K') continue;
-        if (items?.length && !String(r.items?.[i] || '').split(',').some((x) => items.includes(x.trim()))) continue;
+      let scanned = 0;
+      const read = async (i: number, chars: number) => {
         const acc = String(r.accessionNumber[i]).replace(/-/g, ''), dir = `https://www.sec.gov/Archives/edgar/data/${Number(cik)}/${acc}`;
         let doc = r.primaryDocument[i] as string, exhibit = false;
         try {
@@ -418,14 +488,41 @@ export function createWebTools(fetchImpl: typeof fetch = fetch, fetchPage = guar
           if (ex) { doc = ex; exhibit = true; }
         } catch { /* index unavailable: use the main document */ }
         let text = '', error: string | null = null;
-        try { text = await secText(ctx, `${dir}/${doc}`, 30 * 864e5, maxChars); } catch (e) { error = String((e as Error).message).slice(0, 160); }
+        try { text = await secText(ctx, `${dir}/${doc}`, 30 * 864e5, chars); } catch (e) { error = String((e as Error).message).slice(0, 160); }
         if (!text && !error) error = 'No text could be extracted from this document';
-        reports.push({ filed: r.filingDate[i], items: r.items?.[i] || null, document: doc, exhibit, url: `${dir}/${doc}`, text, truncated: text.length >= maxChars, error, ...(PENDING_EVENT.test(text) ? { eventStatus: 'pending', eventNote: PENDING_NOTE } : {}) });
+        return { dir, doc, exhibit, text, error };
+      };
+      for (let i = 0; i < (r.form || []).length && reports.length < limit; i++) {
+        if (r.form[i] !== form) continue;
+        if (form === '8-K' && items?.length && !String(r.items?.[i] || '').split(',').some((x) => items.includes(x.trim()))) continue;
+        let classification: string | undefined;
+        if (form === '6-K') {
+          // 6-Ks carry no item numbers. The cover page lists the exhibits, so it
+          // decides whether this one is a results release; scanning stays bounded.
+          if (earningsOnly && scanned >= FPI_SCAN) break;
+          scanned++;
+          const acc = String(r.accessionNumber[i]).replace(/-/g, '');
+          let cover = '';
+          try { cover = await secText(ctx, `https://www.sec.gov/Archives/edgar/data/${Number(cik)}/${acc}/${r.primaryDocument[i]}`, 30 * 864e5, 4000); } catch { /* unreadable cover: not classified as earnings */ }
+          classification = EARNINGS_6K.test(cover) ? 'earnings_release' : 'other';
+          if (earningsOnly && classification !== 'earnings_release') continue;
+        }
+        const { dir, doc, exhibit, text, error } = await read(i, maxChars);
+        reports.push({ form, filed: r.filingDate[i], period: r.reportDate?.[i] || null, items: form === '8-K' ? r.items?.[i] || null : null, ...(classification ? { classification } : {}), document: doc, exhibit, url: `${dir}/${doc}`, text, truncated: text.length >= maxChars, error, ...(PENDING_EVENT.test(text) ? { eventStatus: 'pending', eventNote: PENDING_NOTE } : {}) });
+      }
+      // A foreign issuer's annual report is the 20-F (or 40-F): name the latest one.
+      let annualReport: Record<string, unknown> | null = null;
+      if (filer === 'foreign_private_issuer') for (let i = 0; i < (r.form || []).length; i++) if (['20-F', '40-F'].includes(r.form[i])) {
+        annualReport = { form: r.form[i], filed: r.filingDate[i], period: r.reportDate?.[i] || null, url: `https://www.sec.gov/Archives/edgar/data/${Number(cik)}/${String(r.accessionNumber[i]).replace(/-/g, '')}/${r.primaryDocument[i]}` };
+        break;
       }
       const retrievedAt = new Date().toISOString();
-      ctx.citations.push({ type: 'citation', url: `https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${cik}&type=8-K`, title: `${title} 8-K reports (SEC EDGAR)`, retrievedAt, class: 'primary' });
-      return { notice: UNTRUSTED, source: 'SEC EDGAR 8-K documents', sourceClass: 'primary', retrievedAt, company: title, cik, reports,
-        note: 'Item 2.02 is results of operations; 9.01 lists exhibits. Text is the first part of the document only.' + (items?.length && !reports.length ? ` No recent 8-K reports item ${items.join(' or ')}.` : '') };
+      ctx.citations.push({ type: 'citation', url: `https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${cik}&type=${form}`, title: `${title} ${form} reports (SEC EDGAR)`, retrievedAt, class: 'primary' });
+      const latest = reports[0] as { filed?: string } | undefined;
+      const none = !reports.length ? (form === '6-K' ? (earningsOnly ? ` None of the last ${scanned} 6-K reports names quarterly results on its cover.` : ' No recent 6-K reports.') : items?.length ? ` No recent 8-K reports item ${items.join(' or ')}.` : '') : '';
+      return { notice: UNTRUSTED, source: `SEC EDGAR ${form} documents`, sourceClass: 'primary', retrievedAt, company: title, cik, filerType: filer,
+        formUsed: form + (earningsOnly ? ' earnings release' : '') + (latest?.filed ? ` filed ${latest.filed}` : ''), reports, ...(annualReport ? { annualReport } : {}),
+        note: (form === '6-K' ? 'Foreign private issuer: current reports are 6-K, not 8-K, and annual reports are 20-F/40-F. A 6-K can be any home-market disclosure; only one classified earnings_release is a results release. Management guidance in a release is a forecast, not a reported result.' : 'Item 2.02 is results of operations; 9.01 lists exhibits.') + ' Text is the first part of the document only.' + none };
     },
   },
 ];

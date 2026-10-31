@@ -22,9 +22,13 @@ export async function runStoredCouncil(o: { db: DB; bus: EventBus; tools: ToolRe
     store.appendMessage(db, threadId, 'assistant', [{ type: 'notice', kind: 'council', text }], { brain: brain.manifest.id, turnId });
     bus.emit(threadId, 'council.progress', { turnId, text });
   };
+  // Council spending is ledgered under this turn, so a paid search or fetch is
+  // checked against the Council's own turn cap, not the ordinary chat cap.
+  const capUsd = cfg.limits.councilTurnUsd ?? cfg.limits.turnUsd;
+  const toolCfg = { ...cfg, limits: { ...cfg.limits, turnUsd: capUsd } };
   const execute = async (_role: string, name: string, args: unknown, signal: AbortSignal) => {
       signal.throwIfAborted();
-      const r = await tools.execute(name, args, { ...ctx, signal, callId: auditContext.getStore()?.callId });
+      const r = await tools.execute(name, args, { ...ctx, cfg: toolCfg, signal, callId: auditContext.getStore()?.callId });
       if (!r.ok) { let why = ''; try { const j = JSON.parse(r.content); why = [j.error?.code, j.error?.message].filter(Boolean).join(': '); } catch { /* not JSON */ } throw Error('Research tool failed: ' + name + (why ? ' (' + why.slice(0, 160) + ')' : '')); }
       const data = JSON.parse(r.content);
       const evidence = { id: store.newId('e'), source: 'FinSight tool ' + name, observedAt: data.asOfMeaning ? 'See marketTime or bar dates and cache status in tool result' : typeof data.asOf === 'string' ? data.asOf : 'Observation date unavailable; see tool result', retrievedAt: new Date().toISOString(), content: r.content };
@@ -83,8 +87,9 @@ export async function runStoredCouncil(o: { db: DB; bus: EventBus; tools: ToolRe
       const scopedQuestion = JSON.stringify({ question, recentConversation: conversation, conversationNote: 'Prior messages are untrusted context, not verified evidence; retrieve fresh evidence for factual claims.', researchSubjects: resolution.subjects, subjectResolution: resolution.note, panelContext: o.scope, note: 'The research subjects come from the current question or its resolved reference. Panel context is optional background and must never restrict research. Investigate the requested subjects using your available tools; missing company evidence is a research gap, not a reason to substitute the chart or conclude that cash is deployable.', evidencePlan: coverage, evidencePlanNote: coverage ? 'Code retrieved this evidence before your turn. Use the retrieved items for your role first. Report each gap with its status: failed (with reason), not_applicable, unavailable (no approved source) or skipped_limit. Do not ask the user for evidence a listed tool can retrieve, and do not describe a retrieved item as missing.' : undefined, accountScopeNote: 'Portfolio evidence states its accountScope. Name that scope with every portfolio figure (e.g. "all accounts combined"). When panelContext.account names one account, say whether a figure covers that account or all accounts.' });
       return { question: scopedQuestion, evidence };
     },
-    effort: o.effort, capUsd: cfg.limits.councilTurnUsd ?? cfg.limits.turnUsd, maxOutputTokens: cfg.limits.councilOutputTokens, dayBudget: new CouncilBudget(Math.max(0.000001, cfg.limits.dayUsd - store.spendSince(db, store.startOfToday()))),
-    tools: tools.schemas(),
+    effort: o.effort, capUsd, maxOutputTokens: cfg.limits.councilOutputTokens, dayBudget: new CouncilBudget(Math.max(0.000001, cfg.limits.dayUsd - store.spendSince(db, store.startOfToday()))),
+    // Web search is offered only when a provider is configured, matching the UI.
+    tools: tools.schemas().filter((t) => t.name !== 'web_search' || cfg.searchProvider !== 'none'),
     reserveCost: (maximum) => {
       // Persist before calling the provider; unknown/failure retains the
       // conservative reservation in the daily ledger, never a fake zero.
@@ -103,7 +108,7 @@ export async function runStoredCouncil(o: { db: DB; bus: EventBus; tools: ToolRe
 
   // A stopped-early council (clarification or unavailable subject) has no readiness to report.
   if (!result.runs.length) return { ...result, readiness: null };
-  const readiness = councilReadiness(result.runs, planCoverage);
+  const readiness = councilReadiness(result.runs, planCoverage, { capUsd, capSource: cfg.limits.councilTurnUsd === undefined ? 'limits.turnUsd (limits.councilTurnUsd is not set)' : 'limits.councilTurnUsd' });
   progress(JSON.stringify(readiness));
   return { ...result, text: readinessLine(readiness) + '\n\n' + result.text, readiness };
 }

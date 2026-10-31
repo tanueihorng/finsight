@@ -37,7 +37,7 @@ export interface Step {
 }
 export interface RoleView {
   id: string; label: string; short: string; focus: string; index: number;
-  state: RunState; challenged: boolean; phaseNote: string;
+  state: RunState; stateLabel: string; challenged: boolean; phaseNote: string;
   claim: string; evidence: number | null; against: number | null; uncertainty: string; invalidation: string;
   assumptions: string[]; counter: string[]; missing: string[]; challengeClaim: string;
   steps: Step[]; ms: number; runs: CouncilPart[]; flags: string[]; flagCount: number;
@@ -56,6 +56,17 @@ const uniq = <T,>(xs: T[]) => [...new Set(xs)];
 const STEP_LABEL = { assess: 'ASSESS', claim: 'CLAIM', challenge: 'CHALLENGE', gap: 'GAP' } as const;
 function step(key: string, tag: string, kind: Step['kind'], text: string, evidence: string[] = [], running = false): Step {
   return { key, tag, kind, label: STEP_LABEL[kind], text, evidence, running };
+}
+
+// A stage that did not complete says which phase and why: a challenge refused
+// by the spending cap leaves a valid assessment, which is not "missing".
+const PHASE_LABEL: Record<string, string> = { assessment: 'Assessment', challenge: 'Challenge', synthesis: 'Synthesis' };
+export function gapLabel(r: CouncilPart): string {
+  if (r.status === 'stopped' || r.cause === 'stopped') return 'Review interrupted';
+  const phase = PHASE_LABEL[r.phase] ?? r.phase;
+  if (r.cause === 'budget') return `${phase} not run · spending cap reached`;
+  if (r.cause === 'context') return `${phase} not run · evidence too large for the model`;
+  return r.phase === 'assessment' ? 'Assessment missing' : `${phase} failed`;
 }
 
 function roleView(role: (typeof ROLES)[number], index: number, all: CouncilPart[], finished: boolean, peek: boolean): RoleView {
@@ -77,13 +88,17 @@ function roleView(role: (typeof ROLES)[number], index: number, all: CouncilPart[
       const a = parseAssessment(r.detail);
       if (!peek) steps.push(step(r.key, '', r.phase === 'challenge' ? 'challenge' : 'claim', 'Findings hidden'));
       else for (const [i, f] of (a?.findings ?? []).entries()) steps.push(step(`${r.key}:${i}`, tag(), r.phase === 'challenge' ? 'challenge' : 'claim', f.claim, f.evidenceIds));
-    } else steps.push(step(r.key, '', 'gap', r.status === 'stopped' ? 'Review interrupted' : peek && r.detail ? r.detail : 'Assessment missing'));
+    } else steps.push(step(r.key, '', 'gap', r.status === 'stopped' ? 'Review interrupted' : peek && r.detail ? `${gapLabel(r)}: ${r.detail}` : gapLabel(r)));
   }
+  const bad = runs.find((r) => r.status === 'failed' || r.status === 'stopped');
+  const hasAssessment = done.some((r) => r.phase === 'assessment');
   const phaseNote = state === 'running' ? (challenged ? 'Testing the other assessments' : 'Forming an independent assessment')
     : state === 'completed' ? (challenged ? 'Assessed · challenged' : 'Assessed')
-    : state === 'failed' ? 'Assessment missing' : state === 'stopped' ? 'Review interrupted' : state === 'queued' ? 'Waiting for a research slot' : 'Did not run';
+    : (state === 'failed' || state === 'stopped') && bad ? (hasAssessment && bad.phase !== 'assessment' ? `Assessed · ${gapLabel(bad).replace(/^Challenge/, 'challenge')}` : gapLabel(bad))
+    : state === 'queued' ? 'Waiting for a research slot' : 'Did not run';
+  const stateLabel = (state === 'failed' || state === 'stopped') && hasAssessment ? 'Partial' : STATE_LABEL[state];
   return {
-    id: role.id, label: role.label, short: role.short, focus: role.focus, index, state, challenged, phaseNote,
+    id: role.id, label: role.label, short: role.short, focus: role.focus, index, state, stateLabel, challenged, phaseNote,
     claim: peek ? first?.claim ?? '' : '',
     evidence: peek && findings.length ? uniq(findings.flatMap((f) => f.evidenceIds)).length : null,
     against: peek && findings.length ? findings.reduce((s, f) => s + f.counterevidence.length, 0) : null,

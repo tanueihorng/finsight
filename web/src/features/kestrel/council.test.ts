@@ -45,7 +45,7 @@ test('running, failed, queued and not-run states stay truthful', () => {
   assert.equal(live.roles[0]!.state, 'running');
   assert.equal(live.roles[0]!.steps[0]!.running, true);
   assert.equal(live.roles[1]!.state, 'failed');
-  assert.deepEqual(live.roles[1]!.steps.map((s) => [s.kind, s.text]), [['gap', 'source down']]);
+  assert.deepEqual(live.roles[1]!.steps.map((s) => [s.kind, s.text]), [['gap', 'Assessment missing: source down']]);
   assert.equal(live.roles[2]!.state, 'queued');
   assert.equal(live.chair.waiting, 'Waiting for Business & Growth');
   assert.equal(live.activeLabel, 'Assess · Business');
@@ -74,4 +74,26 @@ test('figure warnings remain available in both views and hide details under UNPE
   assert.deepEqual(visible.chair.flags, ['private chair detail']);
   assert.equal(hidden.roles[0]!.flagCount, 1); assert.deepEqual(hidden.roles[0]!.flags, []);
   assert.equal(hidden.chair.flagCount, 1); assert.deepEqual(hidden.chair.flags, []);
+});
+
+// TSM demo audit 2026-10-31: the risk assessment completed and only its
+// challenge was refused by the spending cap. The card must not say the
+// assessment is missing, live or on replay.
+test('a challenge stopped by the spending cap keeps the assessment and names the phase and cause', () => {
+  const runs = all().map((r) => r.role === 'risk' && r.phase === 'challenge' ? { ...r, status: 'failed', detail: 'Council turn budget cannot cover next call', cause: 'budget' as const, costUsd: 0 } : r);
+  for (const peek of [true, false]) {
+    const risk = councilModel(runs, true, peek).roles[2]!;
+    assert.equal(risk.state, 'failed');
+    assert.equal(risk.stateLabel, 'Partial');
+    assert.equal(risk.phaseNote, 'Assessed · challenge not run · spending cap reached');
+    assert.ok(!JSON.stringify(risk.steps).includes('Assessment missing'));
+    assert.equal(risk.steps.at(-1)!.text, peek ? 'Challenge not run · spending cap reached: Council turn budget cannot cover next call' : 'Challenge not run · spending cap reached');
+  }
+  // A genuinely failed assessment still says so.
+  const failed = all().map((r) => r.role === 'risk' && r.phase === 'assessment' ? { ...r, status: 'failed', cause: 'model' as const } : r).filter((r) => !(r.role === 'risk' && r.phase === 'challenge'));
+  const risk = councilModel(failed, true, true).roles[2]!;
+  assert.equal(risk.phaseNote, 'Assessment missing'); assert.equal(risk.stateLabel, 'Failed');
+  // A challenge that failed for another reason is not blamed on the budget.
+  const model = all().map((r) => r.role === 'macro' && r.phase === 'challenge' ? { ...r, status: 'failed', cause: 'model' as const } : r);
+  assert.equal(councilModel(model, true, false).roles[1]!.phaseNote, 'Assessed · challenge failed');
 });

@@ -111,6 +111,35 @@ test('the council service retrieves planned evidence before specialists and pers
   s.db.close();
 });
 
+// TSM audit 2026-10-31: a foreign issuer's plan records the 6-K and 20-F it
+// used and the ADR valuation basis, and specialists are offered web research.
+test('a TSM council records the 6-K results release, the 20-F and the ADR basis, and offers web search', async () => {
+  const s = setup('Entry price range for TSM from earnings, guidance and valuation?', { kind: 'explicit', subjects: [{ mention: 'TSM', symbol: 'TSM' }], clarification: '' });
+  const out = await runStoredCouncil(s.args);
+  assert.ok(out.runs.every((r) => r.status === 'completed'));
+  const first = JSON.parse((s.requests[1]!.messages[0]!.blocks[0] as { text: string }).text);
+  const plan = JSON.parse(first.question).evidencePlan as { key: string; status: string; detail?: string; evidenceId?: string }[];
+  const by = Object.fromEntries(plan.map((c) => [c.key, c]));
+  assert.equal(by['earnings8k:TSM']!.status, 'retrieved');
+  assert.equal(by['earnings8k:TSM']!.detail, '6-K earnings release filed 2026-10-15; latest 20-F filed 2026-04-16');
+  assert.match(by['valuation:TSM']!.detail!, /metric gap/);
+  const valuation = first.evidence.find((e: { id: string }) => e.id === by['valuation:TSM']!.evidenceId).content;
+  assert.equal(valuation.marketCap, 10000); assert.equal(valuation.adr.ordinaryPerAdr, 5);
+  const growth = s.requests.find((r) => /Council role: growth/.test(r.system) && r.tools.length)!;
+  assert.ok(growth.tools.some((t) => t.name === 'web_search') && growth.tools.some((t) => t.name === 'fetch_url'));
+  const risk = s.requests.find((r) => /Council role: risk/.test(r.system) && r.tools.length)!;
+  assert.ok(!risk.tools.some((t) => t.name === 'web_search'));
+  s.db.close();
+});
+
+test('with web search disabled in config, Council specialists are not offered it', async () => {
+  const s = setup(); s.ctx.cfg = { ...s.ctx.cfg, searchProvider: 'none' };
+  await runStoredCouncil(s.args);
+  assert.ok(s.requests.every((r) => !r.tools.some((t) => t.name === 'web_search')));
+  assert.ok(s.requests.some((r) => r.tools.some((t) => t.name === 'fetch_url')));
+  s.db.close();
+});
+
 test('council receives bounded prior text as untrusted context, with the chosen system lens', async () => {
  const s=setup('Review the comparison', {kind:'general',subjects:[],clarification:''});
  store.appendMessage(s.db,s.ctx.threadId!,'user',[{type:'text',text:'Compare long-term risks with the bond alternative.'},{type:'notice',kind:'private',text:'do not include notice'}]);

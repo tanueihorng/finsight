@@ -21,7 +21,20 @@ test('unavailable sources and unchecked qualitative claims prevent a ready statu
 test('the audited live case (two refused challenges) is partial, never a clean success', () => {
   const r = councilReadiness(all(['macro', 'risk']), [cov('retrieved')]);
   assert.equal(r.level, 'partial');
-  assert.deepEqual(r.reasons, ['5 of 7 stages completed', 'qualitative claims have not been independently verified']);
+  assert.deepEqual(r.reasons, ['5 of 7 stages completed (Macro challenge: model call failed; Risk challenge: model call failed)', 'qualitative claims have not been independently verified']);
+});
+
+// TSM audit 2026-10-31: the risk challenge was refused by the turn cap, not a
+// provider failure. The cause and the cap's source reach the answer.
+test('a stage refused by the spending cap is named with its cause and the cap source', () => {
+  const runs = all(['risk']); runs[5] = { ...runs[5]!, error: 'Council turn budget cannot cover next call: needs up to US$0.0178', cause: 'budget' };
+  const r = councilReadiness(runs, [cov('retrieved')], { capUsd: 0.05, capSource: 'limits.turnUsd (limits.councilTurnUsd is not set)' });
+  assert.equal(r.level, 'partial');
+  assert.deepEqual(r.stageIssues, ['Risk challenge: stopped by the spending cap']);
+  assert.equal(r.reasons[0], '6 of 7 stages completed (Risk challenge: stopped by the spending cap)');
+  assert.match(readinessLine(r), /Spending cap: US\$0\.05 per Council turn from limits\.turnUsd \(limits\.councilTurnUsd is not set\)\./);
+  // No budget line when nothing was refused by the cap.
+  assert.equal(councilReadiness(all(), [], { capUsd: 0.05, capSource: 'x' }).budget, undefined);
 });
 
 test('failed evidence and unverified figures are partial; no chair synthesis is insufficient', () => {
