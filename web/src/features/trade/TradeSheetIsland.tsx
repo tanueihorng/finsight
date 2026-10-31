@@ -20,7 +20,7 @@ const store = () => window.FinSight.store;
 const FRACS: [number, string][] = [[0.25, '25%'], [0.5, '50%'], [0.75, '75%'], [1, 'All']];
 const qty = (n: number) => fmt(n, n % 1 ? 4 : 0);
 
-// PAPER mode routes Buy/Sell to the paper order ticket instead (FEAT-011).
+// PAPER mode routes Buy/Sell to the paper order ticket instead (FEAT-012).
 export default function TradeSheetHost() { return useBook() === 'paper' ? null : <TradeSheetIsland />; }
 
 function TradeSheetIsland() {

@@ -1,4 +1,4 @@
-// Paper trading tools (FEAT-011, ADR-002). Kestrel can read the Alpaca paper
+// Paper trading tools (FEAT-012). Kestrel can read the Alpaca paper
 // account and place or cancel PAPER orders through FinSight. FinSight applies
 // the user's approval mode (ask: a pending ticket the user approves; auto:
 // sent at once) and limits; Kestrel can read those settings but not change them.

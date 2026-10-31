@@ -1068,7 +1068,7 @@
       }
     }
   };
-  // open orders (paper trade desk, FEAT-011): host passes tradeData.orders =
+  // open orders (paper trade desk, FEAT-012): host passes tradeData.orders =
   // [{ side, price, label }]; each is a dashed line at its limit price
   PriceChart.prototype._drawOrders = function () {
     const list = this.tradeData && this.tradeData.orders; if (!list || !list.length) return;

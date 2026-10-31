@@ -304,7 +304,7 @@ export default function App() {
       <Host island="command" className="cmdbar" />
       <Host island="status" />
 
-      {/* FEAT-011: the paper trade desk, full width above the panels, PAPER mode only (styles.css hides it in REAL). */}
+      {/* FEAT-012: the paper trade desk, full width above the panels, PAPER mode only (styles.css hides it in REAL). */}
       <Host island="paper" id="paper-panel" className="paper-desk" />
       <main className="grid">
         <Column side="left">

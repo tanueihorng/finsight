@@ -3,7 +3,7 @@ import { showToast } from '../../ui/toast.tsx';
 import { loadBook, switchBook, useBook, type Book } from './book.ts';
 import s from './Paper.module.css';
 
-// REAL | PAPER switch in the top bar (FEAT-011). Switching reloads the page in
+// REAL | PAPER switch in the top bar (FEAT-012). Switching reloads the page in
 // the other book; the choice is the server's, so other tabs and Kestrel follow.
 export default function BookIsland() {
   const current = useBook();

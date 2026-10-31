@@ -1,4 +1,4 @@
-// FEAT-011 paper trading: REAL/PAPER switch in the top bar and on the lock
+// FEAT-012 paper trading: REAL/PAPER switch in the top bar and on the lock
 // screen, Alpaca paper connect (offline fake broker), the trade desk (chart
 // linked to the ticket, fills and open limit orders on it), an order that
 // fills and lands in the book, and Kestrel's order as a live pending ticket

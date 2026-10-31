@@ -1,4 +1,4 @@
-// Paper trading tools (FEAT-011): Kestrel's orders go to FinSight's paper order
+// Paper trading tools (FEAT-012): Kestrel's orders go to FinSight's paper order
 // route with its thread id; FinSight's answer (placed, pending, refused) and
 // error reasons come back unchanged; the tools reach no other write route.
 import { test } from 'node:test';

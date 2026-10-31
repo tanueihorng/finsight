@@ -34,11 +34,9 @@ To maintain architectural integrity and prevent task fragmentation across runs:
 1. **No Personal Data in the Repo:**
    * The repo is strictly generic open-source code.
    * Personal holdings, API keys, PIN credentials, tokens (`agent-link.json`), and markdown records (`INVESTMENT_POLICY.md`, `INVESTOR_PROFILE.md`) live exclusively in `~/FinSightData/`.
-2. **Never Execute Live Trades (ADR-001):**
-   * The agent has zero direct trade execution authority. Order recommendations must be structured as staged tickets awaiting human action.
-3. **No LLM Arithmetic:**
+2. **No LLM Arithmetic:**
    * All figures, returns, weights, and sizing must come from deterministic tool execution (`query_positions`, `get_exposures`, `size_position`).
-4. **Read-Only Toward the User's World:**
+3. **Read-Only Toward the User's World:**
    * The agent cannot contact anyone or change FinSight data or the user's records. Durable facts the user states go to `propose_record_update` (a proposal only).
 
 ---
@@ -59,4 +57,4 @@ When external AI assistants or tools connect to FinSight's tool registry over MC
 - **Numbers come exclusively from tool calls:** All totals, allocations, and sizes must be retrieved via `query_positions`, `get_exposures`, and `size_position`. Never perform LLM mental arithmetic.
 - **Data Timestamps:** Always cite `asOf` or `retrievedAt`. Explicitly report missing or unverified data.
 - **Strategy Evidence:** Signals come only from `run_strategy` and `scan_strategies`. Label non-accepted strategies as research only.
-- **Untrusted Web Data:** Cite source URLs and retrieval dates for web facts. Adhere strictly to ADR-001 (zero live trade execution authority; propose updates only via `propose_record_update`).
+- **Untrusted Web Data:** Cite source URLs and retrieval dates for web facts. Propose record updates only via `propose_record_update`.

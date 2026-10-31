@@ -67,7 +67,7 @@ Most of the machinery already exists in this repo. The plan wires it together ra
   - the new limits above
 - **Pause all:** one button cancels Kestrel's open orders and stops new cycles. It leaves positions as they are.
 - **Visibility:** the last cycles, with their trigger, the shortlist, the decisions with reasons, the orders placed and the cost, plus the scorecard.
-- **Chat:** stays as it is. Asking Kestrel to trade in chat produces the same `TradeProposal` and goes through the same gate.
+- **Chat:** Kestrel acts directly in an ordinary conversation, as it already can on the paper branch (user decision, 2026-10-31). It buys, sells, closes and cancels on request, or on its own initiative when the conversation calls for it. No cycle is needed. Chat orders go through the same gate and approval setting as cycle orders. When proposals arrive (slice 1), chat orders also carry a stop, a target and a thesis.
 
 ## Slices
 

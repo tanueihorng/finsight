@@ -32,7 +32,7 @@ The Kestrel panel redesign and search-provider picker (`KESTRELUI-001` / `SEARCH
 | Demo defaults to supported Intelligent UI views | `DEMOPARITY-001` | Integrated on main at `dc8a7c9`; explicit settings and model gates remain effective |
 | Council research reliability and source grounding ([FEAT-002](features/FEAT-002-investment-council-lenses.md)) | `COUNCILQUALITY-001` | In progress on feature/council-quality: subject routing, evidence planning, denominator checks, traces and honest partial status implemented; primary fund evidence, qualitative verification and equal-source evaluation remain pending |
 
-| [FEAT-011](features/FEAT-011-paper-trading.md) Paper trading mode: REAL/PAPER books, Alpaca paper orders, trade desk with chart, Kestrel paper orders with ask/auto approval and optional limits ([ADR-002](decisions/ADR-002-agentic-paper-trading.md)) | `PAPER-001` | On branch `feat/paper-trading`, not merged; verified offline against a fake broker; live run with the user's Alpaca paper keys pending |
+| [FEAT-012](features/FEAT-012-paper-trading.md) Paper trading mode: REAL/PAPER books, Alpaca paper orders, trade desk with chart, Kestrel paper orders with ask/auto approval and optional limits | `PAPER-001` | On branch `feat/paper-trading`, not merged; verified offline against a fake broker; live run with the user's Alpaca paper keys pending |
 | [FEAT-010](features/FEAT-010-market-discover.md) Market Discover: movers and earnings among holdings + watchlist, US market movers (Yahoo screens), US IPO calendar (Nasdaq) | `DISCOVER-001` | Merged locally into `main` at `cefd2ff` (commits `5727d97`, `67cf0b0`); not pushed or deployed; live run 2026-10-31 recorded in the spec; defaults await owner review; SG/HK and licensed providers deferred |
 | [FEAT-009](features/FEAT-009-kestrel-terminal-redesign.md) Kestrel terminal redesign: panel states, light mode, start screen, conversation, council Cards / Chain of thought | `KESTRELUX-001` | Merged on GitHub in PR #1; local integration into the council-quality checkout in progress |
 
@@ -49,6 +49,7 @@ The Kestrel panel redesign and search-provider picker (`KESTRELUI-001` / `SEARCH
 | Spec | Proposal | Execution relationship | Gate |
 |---|---|---|---|
 | [FEAT-001](features/FEAT-001-ibkr-mcp-integration.md) | IBKR MCP integration and live sync | Deferred architecture captured alongside `MULTIAGENT-001`; distinct from CSV import | Explicit user selection and verified design |
+| [FEAT-011](features/FEAT-011-agent-data-sources.md) | Agent data sources: insider/13F/congress/short interest, news, fundamentals cross-check, GDELT, EDGAR MCP servers (no sentiment) | None yet; feeds the paper-trading agent | Explicit user selection |
 
 ---
 

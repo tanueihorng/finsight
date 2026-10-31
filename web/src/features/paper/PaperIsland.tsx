@@ -16,7 +16,7 @@ import {
 } from './paper.ts';
 import s from './Paper.module.css';
 
-// The PAPER trade desk (FEAT-011), laid out like a broker's trading screen:
+// The PAPER trade desk (FEAT-012), laid out like a broker's trading screen:
 // account strip, the symbol's chart (fills as B/S markers, open limit orders
 // as price lines) with the order ticket docked beside it, and tabs below for
 // positions, open orders, history, Kestrel's tickets and Kestrel's settings.

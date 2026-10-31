@@ -29,7 +29,7 @@ export const TOKEN_READ_PATHS = new Set([
   '/api/watchlist', '/api/alerts', '/api/news', '/api/fred', '/api/journal', '/api/calendar', '/api/markets', '/api/search', '/api/fund', '/api/quote-details',
   '/api/paper/state', '/api/paper/settings', '/api/book',
 ]);
-// Paper orders (FEAT-011, ADR-002): the token may place and cancel Alpaca PAPER
+// Paper orders (FEAT-012): the token may place and cancel Alpaca PAPER
 // orders. FinSight applies the user's approval mode and limits to them; the
 // token can't change those settings, approve tickets or touch keys.
 export const TOKEN_WRITE_PATHS = new Set(['/api/paper/orders', '/api/paper/orders/cancel']);

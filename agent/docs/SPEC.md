@@ -448,7 +448,7 @@ TypeScript strict mode; lint + format in CI; module boundaries enforced (no cros
 macOS is primary. Nothing uses macOS-only features except the Keychain, which sits behind a secret-store interface with an env-file fallback.
 
 ### 8.6 Prohibited capabilities (all autonomy levels)
-The system MUST NOT: place real-money orders or trades (paper orders on an Alpaca paper account are allowed under ADR-002 / FEAT-011, subject to the user's approval mode and limits); move, transfer or convert funds; connect to broker or bank accounts for writes; send emails or messages on the user's behalf; modify FinSight data; modify accepted policy or the decision log except by appending a user-accepted entry; publish anything; or install software. There are no tools for these, and the tool registry rejects any plugin that declares such permissions.
+The system MUST NOT: move, transfer or convert funds; connect to bank accounts for writes; send emails or messages on the user's behalf; modify FinSight data; modify accepted policy or the decision log except by appending a user-accepted entry; publish anything; or install software. There are no tools for these, and the tool registry rejects any plugin that declares such permissions.
 
 ---
 
@@ -562,7 +562,7 @@ Every slice ends runnable and demoable. **Definition of done:** acceptance crite
 ---
 
 ## 14. Out of scope (v0.x)
-Real-money trade execution; live broker/bank write connections (the Alpaca paper account of FEAT-011 is the only broker connection); multi-user or hosted deployment; mobile app; embeddings/vector DB (until evals justify them); fine-tuning; automatic policy changes; publishing.
+Bank write connections; multi-user or hosted deployment; mobile app; embeddings/vector DB (until evals justify them); fine-tuning; automatic policy changes; publishing.
 
 ## 15. Future requirements (specified, not built in MVP)
 - **L2 triggers:** earnings within N days, FinSight alert fired, new strategy card, new filing for a holding. Triggers enqueue workflows; at most one trigger per event key per day (idempotent).

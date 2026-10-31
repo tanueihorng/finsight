@@ -9,7 +9,6 @@ Start with [AGENTS.md](../AGENTS.md) for coding instructions. Load the documents
 | Understand the current code | [System overview](architecture/SYSTEM.md), [developer/API reference](../DOCS.md) |
 | Change Kestrel | [Agent specification](../agent/docs/SPEC.md), [agent setup](../agent/README.md) |
 | Understand product intent | [PRD](product/PRD.md) |
-| Check the trade authority boundary | [ADR-001](decisions/ADR-001-trade-execution-boundary.md) |
 | Check integrated changes | [Changelog](../CHANGELOG.md) and Git history |
 
 The backlog owns requirements. When this checkout is inside the investment workspace, its

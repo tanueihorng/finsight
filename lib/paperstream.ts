@@ -1,4 +1,4 @@
-// Alpaca paper trade_updates stream (FEAT-011). Node's built-in WebSocket, no
+// Alpaca paper trade_updates stream (FEAT-012). Node's built-in WebSocket, no
 // dependency. Protocol as in Alpaca's official SDK (alpaca-trade-api v5,
 // streaming/tradingStream.ts): send {action:"authenticate", data:{key_id,
 // secret_key}}, wait for stream "authorization" status "authorized", then

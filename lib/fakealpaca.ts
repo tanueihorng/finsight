@@ -1,4 +1,4 @@
-// Offline fake of the Alpaca paper API (FEAT-011), used with FINSIGHT_FAKE_MARKET=1
+// Offline fake of the Alpaca paper API (FEAT-012), used with FINSIGHT_FAKE_MARKET=1
 // (lib/fakemarket.ts routes paper-api.alpaca.markets here). Deterministic:
 // market orders fill at once at the fixture quote; limit orders fill when the
 // quote is marketable. Trade updates go straight to paperstream's event bus,

@@ -12,6 +12,7 @@ import { asks, brief, eventTime, greeting, pctText, portfolioLine, prevClose, sy
 import { Icon, type IconName } from './icons.tsx';
 import { costLabel, ctxButton, LS, ls, prettyArgs, type PageContext } from './labels.ts';
 import { md } from './md.ts';
+import { useBook } from '../paper/book.ts';
 import { citeHost, type Turn } from './turns.ts';
 
 const UiView = lazy(() => import('./ui/UiView.tsx'));
@@ -322,7 +323,7 @@ function Briefing({ b, now, lines, onAsk }: { b: Brief; now: number; lines: { po
   );
 }
 function Welcome({ onTry, onCommand }: { onTry: (s: string) => void; onCommand: () => void }) {
-  const s = useStore(chat);
+  const s = useStore(chat), book = useBook();
   const portfolio = usePortfolio(), events = useEvents(), calendar = useCalendar();
   const positions = portfolio.data?.positions || [];
   const bars = useIntraday(positions.map((p) => p.symbol)).data?.results;
@@ -374,7 +375,7 @@ function Welcome({ onTry, onCommand }: { onTry: (s: string) => void; onCommand: 
           <Icon name="slash" size={14} /><span className="t">Commands and skills</span><span className="when">/cost · /skills · /strategies</span>
         </button>
       </div>
-      <div className="kx-foot"><span>Answers cite sources and data times. {s.name} never trades.</span>
+      <div className="kx-foot"><span>Answers cite sources and data times. {book === 'paper' ? `${s.name} can place paper orders (fake money) under your approval setting.` : `${s.name} never trades real money.`}</span>
         <span className="kx-keys" aria-hidden="true"><kbd>⌘/</kbd> toggle <kbd>⌘⇧/</kbd> full page <kbd>/</kbd> skills</span></div>
     </div>
   );

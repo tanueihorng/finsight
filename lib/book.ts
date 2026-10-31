@@ -1,4 +1,4 @@
-// Which book the terminal shows (FEAT-011): REAL (DATA_DIR/portfolio.json, the
+// Which book the terminal shows (FEAT-012): REAL (DATA_DIR/portfolio.json, the
 // user's own portfolio) or PAPER (DATA_DIR/paper/portfolio.json, a mirror of
 // the Alpaca paper account). The choice lives in DATA_DIR/book.json and is
 // global, so every tab and the local agent see the same book. Code that must

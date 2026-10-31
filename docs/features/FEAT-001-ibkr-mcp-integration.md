@@ -3,7 +3,7 @@
 - **ID:** FEAT-001
 - **Status:** Deferred proposal; not selected for implementation
 - **Priority:** High
-- **Related:** `MULTIAGENT-001` (deferred architecture), `ADR-001`; CSV trade import is separately FEAT-008 / IBKRTRADES-001
+- **Related:** `MULTIAGENT-001` (deferred architecture); CSV trade import is separately FEAT-008 / IBKRTRADES-001
 
 > Draft requirements below are proposals, not accepted implementation or execution authority. Broker endpoints, authentication, routing and model behavior require verification when this work is explicitly selected. Current read-only rules remain in force.
 
@@ -24,7 +24,6 @@ Integrate Interactive Brokers into FinSight using the Model Context Protocol (MC
 - [ ] Normalize all multi-currency amounts (USD, HKD, EUR) to the user's base reporting currency (SGD).
 
 ### B. Trade Execution Safety & Staged Order Flow
-- [ ] **Strict adherence to ADR-001:** No autonomous trade execution authority.
 - [ ] Read tools (`ibkr_get_positions`, `ibkr_get_balances`, `ibkr_get_margin`) mounted in standard chat tool loop.
 - [ ] Write tools (`ibkr_place_order`, `ibkr_preview_order`) strictly isolated behind the staged order flow.
 - [ ] When a trade idea passes the pre-trade checklist against `INVESTMENT_POLICY.md`, render an interactive **Staged Order Ticket** (`render_ui`).

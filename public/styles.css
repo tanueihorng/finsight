@@ -988,7 +988,7 @@ textarea:focus-visible, [tabindex]:focus-visible, summary:focus-visible {
   .sx-boot li, .sx-area, .sx-last, .sx-beacon { opacity: 1; } .sx-trace { stroke-dashoffset: 0; } .sx-scan { display: none; }
 }
 
-/* ---- PAPER mode (FEAT-011; data-book="paper" on <html>) ----------------------
+/* ---- PAPER mode (FEAT-012; data-book="paper" on <html>) ----------------------
    A distinct gold stripe and label so the paper book is never mistaken for the
    real one. Book edits that PAPER refuses are hidden; the paper panel shows
    only in PAPER. */

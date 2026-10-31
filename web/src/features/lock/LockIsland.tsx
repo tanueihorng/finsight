@@ -16,7 +16,7 @@ export default function LockIsland() {
   useEffect(() => { const host = document.getElementById('lock-screen'); host?.setAttribute('role', 'region'); host?.setAttribute('aria-label', 'FinSight lock screen'); }, []);
   const lock = useStore(store(), (s) => s.lock);
   const [pin, setPin] = useState(''), [pin2, setPin2] = useState('');
-  // REAL or PAPER (FEAT-011): which book the terminal opens in.
+  // REAL or PAPER (FEAT-012): which book the terminal opens in.
   const known = useStore(book, (b) => b.book);
   const [choice, setChoice] = useState<Book>(known);
   useEffect(() => { void loadBook().then(setChoice); }, []);

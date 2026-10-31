@@ -1,4 +1,4 @@
-// Paper trading (FEAT-011): REAL/PAPER book switch, Alpaca paper connect,
+// Paper trading (FEAT-012): REAL/PAPER book switch, Alpaca paper connect,
 // orders and fills mirrored into the PAPER book, and Kestrel's orders under
 // the user's approval mode and limits. Runs the real server against the
 // offline fake broker (lib/fakealpaca.ts); no network.

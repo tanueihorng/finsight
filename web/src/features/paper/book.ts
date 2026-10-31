@@ -2,7 +2,7 @@ import { useSyncExternalStore } from 'react';
 import { createStore } from 'zustand/vanilla';
 import { api } from '../../api/client.ts';
 
-// REAL / PAPER book (FEAT-011). The server owns the choice (DATA_DIR/book.json)
+// REAL / PAPER book (FEAT-012). The server owns the choice (DATA_DIR/book.json)
 // so every tab and Kestrel agree; this mirrors it, marks <html data-book> for
 // styling, and switches by asking the server and reloading the page, so no
 // query keeps data from the other book.

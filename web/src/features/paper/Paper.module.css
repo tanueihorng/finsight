@@ -1,4 +1,4 @@
-/* Paper trading (FEAT-011): the REAL | PAPER switch and the PAPER trade desk. */
+/* Paper trading (FEAT-012): the REAL | PAPER switch and the PAPER trade desk. */
 .book { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--border-2); border-radius: 4px; background: var(--btn-bg); }
 .bookBtn { border: 0; background: transparent; color: var(--muted); font-family: inherit; font-size: 11px; letter-spacing: .5px; padding: 2px 8px; border-radius: 3px; cursor: pointer; }
 .bookBtn:hover:not(:disabled) { color: var(--text); }

@@ -1,4 +1,4 @@
-// Paper trading (FEAT-011, ADR-002): order entry for the user and Kestrel,
+// Paper trading (FEAT-012): order entry for the user and Kestrel,
 // Kestrel's approval mode and limits, pending tickets, and the PAPER book,
 // which mirrors the Alpaca paper account by replaying its fills.
 import fs from 'node:fs';

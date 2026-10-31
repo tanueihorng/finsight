@@ -1,4 +1,4 @@
-// Alpaca PAPER trading client (FEAT-011). Paper only: the base URL is a
+// Alpaca PAPER trading client (FEAT-012). Paper only: the base URL is a
 // constant and there is no live-trading URL anywhere in FinSight. Tests and the
 // offline fake (lib/fakealpaca.ts) may point it at a loopback host only.
 // Keys stay on the server (DATA_DIR/alpaca-paper.json, 0600, or env) and are

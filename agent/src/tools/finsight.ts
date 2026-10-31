@@ -1,6 +1,6 @@
 // FinSight client. Uses the service token that FinSight writes to
 // <FinSightData>/agent-link.json: GET on a fixed read allowlist, and POST only
-// to the paper order routes (FEAT-011, ADR-002). FinSight stays the single
+// to the paper order routes (FEAT-012). FinSight stays the single
 // owner of portfolio data, calculations, market data and the user's paper
 // approval settings and limits.
 import fs from 'node:fs';

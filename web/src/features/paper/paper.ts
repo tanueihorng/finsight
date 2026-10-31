@@ -1,4 +1,4 @@
-// Paper trading view helpers (FEAT-011): wire shapes of /api/paper/state and
+// Paper trading view helpers (FEAT-012): wire shapes of /api/paper/state and
 // the pure text and form logic the panel uses, unit-tested without a DOM.
 export type Approval = 'ask' | 'auto';
 export interface Limits { maxOrderUsd: number | null; maxOrdersPerDay: number | null; maxPositionPct: number | null; symbols: string[] | null }

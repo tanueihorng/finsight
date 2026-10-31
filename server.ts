@@ -198,7 +198,7 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
 
     if (p === '/api/agent-status' && req.method === 'GET') return sendJson(res, 200, agentproc.status());
 
-    // ---- REAL / PAPER book (FEAT-011) ----
+    // ---- REAL / PAPER book (FEAT-012) ----
     if (p === '/api/book' && req.method === 'GET') return sendJson(res, 200, { book: chosenBook() });
     if (p === '/api/book' && req.method === 'POST') {
       const b = await readBody(req);

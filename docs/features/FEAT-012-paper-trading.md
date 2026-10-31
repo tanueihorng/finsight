@@ -1,7 +1,7 @@
-# FEAT-011: Paper trading mode (Alpaca paper) with Kestrel order placement
+# FEAT-012: Paper trading mode (Alpaca paper) with Kestrel order placement
 
 Status: In progress on branch `feat/paper-trading` · 2026-10-31  
-Execution task: `PAPER-001` (selected by the user 2026-10-31). Decision record: [ADR-002](../decisions/ADR-002-agentic-paper-trading.md).
+Execution task: `PAPER-001` (selected by the user 2026-10-31). No separate decision record: the trade ban (ADR-001) was withdrawn on main in `7bb7cc9`, so Kestrel's paper orders need no exception. Next step: [FEAT-013](FEAT-013-agentic-trading.md) agentic trading plan. Agent data sources and evaluation references: [FEAT-011](FEAT-011-agent-data-sources.md).
 
 ## Intent
 

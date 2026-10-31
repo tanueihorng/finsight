@@ -15,7 +15,7 @@ The earlier draft with unverified release numbers is preserved in `docs/archive/
 
 ## Unreleased
 
-- `PAPER-001` ([FEAT-011](docs/features/FEAT-011-paper-trading.md), [ADR-002](docs/decisions/ADR-002-agentic-paper-trading.md)), on branch `feat/paper-trading`, not merged.
+- `PAPER-001` ([FEAT-012](docs/features/FEAT-012-paper-trading.md)), on branch `feat/paper-trading`, not merged.
   - A PAPER book next to the real one, switched on the lock screen or in the top bar. The real book is untouched.
   - Alpaca paper only: the user's own paper keys, and live keys are refused. The book mirrors Alpaca fills and updates live through `trade_updates` and SSE.
   - A trade desk with a chart linked to the order ticket, fills and open limit orders drawn on the chart, and positions, orders, history and Kestrel tabs.
