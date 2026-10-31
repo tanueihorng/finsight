@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { bookSymbol, chartOrders, dayChange, emptyForm, estimate, fillText, formOrder, limitsBody, limitsText, orderLabel, quickAmount, usd, type PaperOrder } from './paper.ts';
+import { keyStats, bookSymbol, chartOrders, dayChange, emptyForm, estimate, fillText, formOrder, limitsBody, limitsText, orderLabel, quickAmount, usd, type PaperOrder } from './paper.ts';
 
 test('order labels and fills read as the panel shows them', () => {
   assert.equal(orderLabel({ side: 'buy', symbol: 'NVDA', type: 'market', qty: 4, notional: null, limitPrice: null, tif: 'day' }), 'BUY 4 NVDA · market · day');
@@ -56,4 +56,13 @@ test('open limit orders become chart lines for their symbol only', () => {
   assert.equal(bookSymbol('BRK.B'), 'BRK-B');
   assert.deepEqual(chartOrders([o, { ...o, id: '2', symbol: 'AAPL' }, { ...o, id: '3', type: 'market', limitPrice: null }], 'BRK-B'),
     [{ side: 'buy', price: 410.5, label: 'BUY LMT 5 @ 410.50 · KESTREL' }]);
+});
+
+test('key stats read from the quote and details; gaps show a dash, past earnings are dropped', () => {
+  const now = Date.parse('2026-11-01T00:00:00Z');
+  const stats = Object.fromEntries(keyStats({ prevClose: 180.71, dayLow: 180.7, dayHigh: 183.13, weekLow52: 120, weekHigh52: 190.5, volume: 1_160_000 },
+    { marketCap: 4.43e12, trailingPE: 52.34, forwardPE: 0, dividendYield: 0.02, earningsStart: Date.parse('2026-11-19T21:00:00Z'), earningsEstimated: true }, now));
+  assert.deepEqual(stats, { 'Prev close': '180.71', 'Day range': '180.70 – 183.13', '52W range': '120.00 – 190.50', Volume: '1.16M', 'Mkt cap': '4.43T', 'P/E': '52.3', 'Fwd P/E': '—', Earnings: 'Nov 19 (est.)', 'Div yield': '0.02%' });
+  assert.equal(Object.fromEntries(keyStats(null, { earningsStart: Date.parse('2026-10-01') }, now)).Earnings, '—');
+  assert.ok(keyStats(null, null).every(([, v]) => v === '—'));
 });

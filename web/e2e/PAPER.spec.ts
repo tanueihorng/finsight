@@ -2,7 +2,8 @@
 // screen, Alpaca paper connect (offline fake broker), the trade desk (chart
 // linked to the ticket, fills and open limit orders on it), an order that
 // fills and lands in the book, and Kestrel's order as a live pending ticket
-// the user approves. The book choice is server-wide, so every test returns to REAL.
+// the user approves, and the desk's watchlist, key stats and news before
+// any keys are entered. The book choice is server-wide, so every test returns to REAL.
 import { test, expect, type Page } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -111,4 +112,30 @@ test('the lock screen opens the terminal in the chosen book', async ({ page }) =
   await expect(page.locator('html')).toHaveAttribute('data-book', 'real');
   await expect(page.locator('.brand-real')).toBeVisible();
   await expect(page.locator('body')).not.toHaveClass(/\blocked\b/);
+});
+
+test('before connecting, the desk still shows a watchlist, key stats, news and follows the terminal', async ({ page }) => {
+  await unlock(page);
+  await toPaper(page);
+  const panel = page.locator('#paper-panel');
+  await expect(panel).toContainText('Not connected');
+  await expect(panel.getByRole('form', { name: 'Connect Alpaca paper' })).toBeVisible();
+  const watch = panel.getByRole('complementary', { name: 'Watchlist' });
+
+  await page.locator('#paper-watch-add').fill('aapl');
+  await page.locator('#paper-watch-add').press('Enter');
+  await expect(watch.getByRole('button', { name: /^AAPL/ })).toBeVisible();
+  await expect(panel.getByRole('button', { name: '★ Watching' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(panel.locator('dl[aria-label="AAPL key stats"]')).toContainText('Mkt cap');
+  await panel.getByRole('tab', { name: 'News' }).click();
+  await expect(panel.getByRole('region', { name: 'AAPL news' }).getByRole('link').first()).toBeVisible();
+
+  // A symbol picked elsewhere in the terminal becomes the desk's symbol.
+  await page.evaluate(() => (window as unknown as { FinSight: { store: { setState: (s: object) => void } } }).FinSight.store.setState({ selected: 'MSFT' }));
+  await expect(panel.locator('dl[aria-label="MSFT key stats"]')).toBeVisible();
+  await panel.getByRole('button', { name: '☆ Watch' }).click();
+  await expect(watch.getByRole('button', { name: /^MSFT/ })).toBeVisible();
+  await watch.getByRole('button', { name: 'Remove AAPL from the watchlist' }).click();
+  await watch.getByRole('button', { name: 'Remove MSFT from the watchlist' }).click();
+  await expect(watch).toContainText('Add symbols above');
 });

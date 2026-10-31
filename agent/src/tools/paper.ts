@@ -43,7 +43,7 @@ const paperPlace: ToolDef<typeof order> = {
 };
 const paperCancel: ToolDef = {
   name: 'paper_cancel_order',
-  description: 'Cancel an open order on the Alpaca PAPER account by its order id (from paper_account).',
+  description: 'Cancel an open order on the Alpaca PAPER account by its order id (from paper_account). With approval set to ask, only orders you placed can be cancelled; FinSight refuses the user\'s own orders with a reason.',
   input: z.object({ id: z.string().regex(/^[A-Za-z0-9-]{8,64}$/) }),
   async handler({ id }, ctx) { return post(ctx, '/api/paper/orders/cancel', { id }); },
 };

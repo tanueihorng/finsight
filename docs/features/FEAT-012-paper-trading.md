@@ -27,12 +27,26 @@ The user asked for the paper screen to follow what professional trading screens 
 In FinSight, the desk is a full-width section above the panels and is shown in PAPER mode only:
 
 - **Account strip:** equity, day P/L, cash, buying power and the order-stream state.
+- **Watchlist (left column):** an add box with symbol search, the paper positions, then the paper book's watchlist with last price and day change. A click charts the symbol; ✕ removes it. Under 1200 px it becomes a row of chips above the chart.
+- **Symbol header:** a ☆ Watch / ★ Watching toggle and key stats (previous close, day and 52-week range, volume, market cap, P/E, forward P/E, next earnings in New York time, dividend yield) from `/api/quote-details`.
 - **Kestrel's pending tickets:** a highlighted bar with Approve and Reject.
 - **Chart:** the existing chart engine (`public/chart.js`) runs as its own instance with its own saved settings (`cfgKey`). It draws the paper book's fills as B/S markers with the average-cost line. Open limit orders are dashed price lines (new `tradeData.orders`).
 - **Ticket:** docked on the right; it stacks below the chart under 900 px.
-- **Tabs:** Positions (a click selects the symbol; Buy, Sell and Close prefill the ticket, and Close still needs the Sell press), Open orders (Cancel), History, Kestrel (all tickets with status and note) and Settings (Kestrel approval and limits, account, Disconnect).
+- **Tabs:** Positions (a click selects the symbol; Buy, Sell and Close prefill the ticket, and Close still needs the Sell press), Open orders (Cancel), History, News (the symbol's headlines), Kestrel (all tickets with status and note) and Settings (Kestrel approval and limits, account, Disconnect).
+- **Linked to the terminal:** a symbol picked anywhere in the terminal becomes the desk's symbol, and a symbol picked on the desk updates the terminal's detail panel.
+- **Before connecting:** the watchlist, chart, key stats and News still show; the ticket slot holds the Connect form. The desk is for research as well as orders.
 
 The estimate is only a guide; a market order fills at Alpaca's price.
+
+## Security (review 2026-11-01)
+
+- **Keys:** server-side only (`alpaca-paper.json`, 0600, written atomically), never returned to the browser or Kestrel. Live keys (`AK…`) are refused. The Alpaca base URL is the paper constant; an override must be loopback (tests).
+- **Kestrel's reach:** its bearer token may read a fixed GET list and POST only `/api/paper/orders` and `/api/paper/orders/cancel`. It cannot change settings or limits, approve tickets, or connect keys. Its orders pass the user's limits first; in ask mode they become tickets.
+- **Cancels:** in ask mode Kestrel may cancel only orders it placed; the user's own orders need the user. In auto mode it may cancel any open paper order.
+- **Races:** a ticket is claimed inside the orders lock, so a double click or a second tab sends one order. Kestrel's orders run one at a time, so concurrent calls cannot pass the daily count together.
+- **CSRF:** SameSite=Strict does not stop another port on localhost (same site). Every browser write under `/api/` must come from this origin (`Sec-Fetch-Site` and `Origin` are checked when sent). DNS rebinding is refused by the Host check.
+- **Display:** news links are kept only if they are http(s); React escapes Kestrel's notes and all feed text.
+- **Prompt injection:** Kestrel reads web pages and news, which could try to steer it to trade. Ask mode (the default) puts the user in front of every order; auto mode is bounded by the limits the user sets, and by paper money.
 
 ## Out of scope for this slice
 
@@ -48,4 +62,5 @@ Ticked items are verified offline against the fake broker (`FINSIGHT_FAKE_MARKET
 - [x] Kestrel: `ask` creates a pending ticket that can be approved or rejected; `auto` places directly; each limit refuses with its reason; the agent cannot change settings.
 - [x] Deterministic tests against a loopback fake Alpaca (no network); E2E covers the mode switch, an order fill and a Kestrel pending ticket.
 - [x] Trade desk: the chart follows the ticket's symbol, shows paper fills and open limit orders, and drops a cancelled order's line; the desk stacks on a phone with no horizontal scroll.
+- [x] Desk research: before and after connecting, the user can add and remove watchlist symbols, see key stats and news, and the desk follows the terminal's selected symbol.
 - [ ] Live run with the user's Alpaca paper keys (real `trade_updates` stream) and a real Kestrel model placing a paper order.

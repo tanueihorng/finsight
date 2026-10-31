@@ -15,7 +15,7 @@ The earlier draft with unverified release numbers is preserved in `docs/archive/
 
 ## Unreleased
 
-- Kestrel limits are user-editable (on `feat/paper-trading`, not merged).
+- Kestrel limits are user-editable (merged locally at `aa373b7`).
   - Click the "Today" spend in the chat list, or type `/limits`, to edit:
     - the daily cap and the per-reply and per-council cost ceilings
     - steps and time per reply
@@ -25,10 +25,12 @@ The earlier draft with unverified release numbers is preserved in `docs/archive/
   - Higher defaults: US$0.25 per reply (was 0.05), US$5 per day (was 2), 25 steps (was 12), 300 s (was 120), 20 searches (was 10), 25 pages (was 15), 8 council research calls (was a fixed 4).
 - The holdings ticker's buttons now have accessible names that include their visible text. Visual baselines were re-captured after the ticker moved the page by a sub-pixel.
 
-- `PAPER-001` ([FEAT-012](docs/features/FEAT-012-paper-trading.md)), on branch `feat/paper-trading`, not merged.
+- `PAPER-001` ([FEAT-012](docs/features/FEAT-012-paper-trading.md)), merged locally at `aa373b7`; not pushed.
   - A PAPER book next to the real one, switched on the lock screen or in the top bar. The real book is untouched.
   - Alpaca paper only: the user's own paper keys, and live keys are refused. The book mirrors Alpaca fills and updates live through `trade_updates` and SSE.
   - A trade desk with a chart linked to the order ticket, fills and open limit orders drawn on the chart, and positions, orders, history and Kestrel tabs.
+  - Security review fixes (on `feat/paper-trading`, not merged): one order per approved ticket under double clicks; in ask mode Kestrel cancels only its own orders; Kestrel's orders are serialized so limits hold under concurrent calls; browser writes under `/api/` must be same-origin (another localhost port shares the cookie); news links limited to http(s); non-finite limit prices refused.
+  - The desk also helps research before an order (on `feat/paper-trading`, not merged): a watchlist column with search, a Watch toggle, key stats (ranges, volume, market cap, P/E, earnings, dividend yield), a News tab, and two-way symbol linking with the terminal. All of it shows before keys are entered.
   - Kestrel can place paper orders through new tools. The user chooses ask-first or autonomous and sets optional limits.
   - Verified offline against a fake broker; a live run with real paper keys is pending.
 

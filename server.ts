@@ -36,7 +36,7 @@ import * as charts from './lib/charts.ts';
 import * as journal from './lib/journal.ts';
 import { portfolioPerformance } from './lib/performance.ts';
 import {
-  sessions, failState, loadAuth, setPin, verifyPin, newSession, sessionValid, getCookie, setSessionCookie, PIN_RE,
+  sessions, failState, loadAuth, setPin, verifyPin, newSession, sessionValid, getCookie, setSessionCookie, PIN_RE, sameOriginWrite,
 } from './lib/auth.ts';
 import * as agentlink from './lib/agentlink.ts';
 import * as agentproc from './lib/agentproc.ts';
@@ -138,6 +138,12 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
   }
   const u = new URL(req.url!, `http://${req.headers.host}`); // always set on a server request
   const p = u.pathname;
+  // CSRF: SameSite=Strict still sends the cookie from another port on
+  // localhost (same site), so a browser write must come from this origin.
+  // Non-browser clients (the agent's bearer token, tests) send neither header.
+  if (p.startsWith('/api/') && req.method !== 'GET' && req.method !== 'HEAD' && !sameOriginWrite(req)) {
+    return sendJson(res, 403, { error: 'Cross-origin request refused' });
+  }
   try {
     if (p === '/api/health') return sendJson(res, 200, { ok: true, time: Date.now() });
 
@@ -218,7 +224,7 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
             ? await paper.placeKestrelOrder(b, typeof b.threadId === 'string' ? b.threadId.slice(0, 64) : undefined)
             : await paper.placeUserOrder(b));
         }
-        if (p === '/api/paper/orders/cancel') return sendJson(res, 200, await paper.cancelOrder(b.id));
+        if (p === '/api/paper/orders/cancel') return sendJson(res, 200, await paper.cancelOrder(b.id, agentToken === 'ok' ? 'kestrel' : 'user'));
         if (p === '/api/paper/tickets/decide') return sendJson(res, 200, await paper.decideTicket(b.id, b.approve === true));
         if (p === '/api/paper/settings') return sendJson(res, 200, paper.setSettings(b));
         if (p === '/api/paper/connect') return sendJson(res, 200, await paper.connect(b.keyId, b.secret));

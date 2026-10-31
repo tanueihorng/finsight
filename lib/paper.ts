@@ -88,7 +88,7 @@ export function normalizeOrder(raw: Record<string, any>): OrderInput {
   if (qty != null && !(qty > 0 && Number.isFinite(qty))) throw new Error('Quantity must be above 0');
   if (notional != null && !(notional >= 1 && Number.isFinite(notional))) throw new Error('A USD amount must be at least 1');
   if (notional != null && type !== 'market') throw new Error('A USD amount works with market orders only');
-  if (type === 'limit' && !(limitPrice != null && limitPrice > 0)) throw new Error('A limit order needs a limit price above 0');
+  if (type === 'limit' && !(limitPrice != null && limitPrice > 0 && Number.isFinite(limitPrice))) throw new Error('A limit order needs a limit price above 0');
   if (type === 'market' && limitPrice != null) throw new Error('A market order has no limit price');
   const fractional = notional != null || (qty != null && qty % 1 !== 0);
   let tif = String(raw.tif || raw.time_in_force || 'day').toLowerCase();
@@ -104,7 +104,7 @@ const toAlpaca = (o: OrderInput, clientOrderId: string) => ({
 
 // ---- order records (origin, tickets) ------------------------------------------
 export interface OrderMeta { origin: Origin; threadId?: string; at: number; ticketId?: string }
-export type TicketStatus = 'pending' | 'approved' | 'rejected' | 'failed';
+export type TicketStatus = 'pending' | 'approving' | 'approved' | 'rejected' | 'failed';
 export interface Ticket { id: string; status: TicketStatus; order: OrderInput; origin: 'kestrel'; threadId?: string; note?: string; createdAt: number; decidedAt?: number; orderId?: string; error?: string; estimate?: Estimate }
 interface OrdersFile { meta: Record<string, OrderMeta>; tickets: Ticket[] }
 const readOrders = (): OrdersFile => { const j = readJson<Partial<OrdersFile>>(ORDERS_FILE(), {}); return { meta: j.meta || {}, tickets: Array.isArray(j.tickets) ? j.tickets : [] }; };
@@ -168,8 +168,16 @@ async function kestrelContext(o: OrderInput) {
   const p = pos.find((x) => x.symbol === o.symbol);
   return { kestrelOrdersToday, equity: Number(acct.equity), positionValue: p ? Math.abs(Number(p.market_value)) : 0 };
 }
+// Kestrel's orders run one at a time, so concurrent calls cannot both pass
+// the daily-count and position checks before either is recorded.
+let kestrelQueue: Promise<unknown> = Promise.resolve();
 /** Kestrel's order: limits first, then a ticket (ask) or straight to Alpaca (auto). */
-export async function placeKestrelOrder(raw: Record<string, any>, threadId?: string) {
+export function placeKestrelOrder(raw: Record<string, any>, threadId?: string) {
+  const r = kestrelQueue.then(() => placeKestrelOrderNow(raw, threadId));
+  kestrelQueue = r.catch(() => {});
+  return r;
+}
+async function placeKestrelOrderNow(raw: Record<string, any>, threadId?: string) {
   const o = normalizeOrder(raw), s = getSettings();
   const est = await estimate(o);
   const breach = await limitBreach(o, s, est, await kestrelContext(o));
@@ -185,11 +193,16 @@ export async function placeKestrelOrder(raw: Record<string, any>, threadId?: str
   return { placed: true, order, approval: 'auto' };
 }
 export async function decideTicket(id: unknown, approve: boolean) {
-  const t = readOrders().tickets.find((x) => x.id === id);
-  if (!t) throw new Error('No such ticket');
-  if (t.status !== 'pending') throw new Error(`This ticket was already ${t.status}`);
+  // Claim the ticket inside the orders lock: a double click or a second tab
+  // must not send the same order twice.
+  const t = await withOrders((f) => {
+    const x = f.tickets.find((y) => y.id === id);
+    if (!x) throw new Error('No such ticket');
+    if (x.status !== 'pending') throw new Error(`This ticket was already ${x.status}`);
+    Object.assign(x, { status: approve ? 'approving' : 'rejected', decidedAt: Date.now() });
+    return { ...x };
+  });
   if (!approve) {
-    await withOrders((f) => { const x = f.tickets.find((y) => y.id === id); if (x) Object.assign(x, { status: 'rejected', decidedAt: Date.now() }); });
     notify('tickets', { ticketId: id });
     return { ticketId: id, status: 'rejected' as const };
   }
@@ -205,9 +218,15 @@ export async function decideTicket(id: unknown, approve: boolean) {
     throw e;
   }
 }
-export async function cancelOrder(id: unknown) {
+export async function cancelOrder(id: unknown, by: Origin = 'user') {
   const oid = String(id || '');
   if (!/^[A-Za-z0-9-]{8,64}$/.test(oid)) throw new Error('Unknown order id');
+  // In ask mode Kestrel may cancel only the orders it placed; the user's own
+  // orders are cancelled by the user. In auto mode it may cancel any.
+  if (by === 'kestrel' && getSettings().approval === 'ask') {
+    const o = await alpaca.getOrder(oid), meta = readOrders().meta[o.client_order_id];
+    if (meta?.origin !== 'kestrel') return { cancelled: null, refused: true, reason: 'This order was not placed by Kestrel. With approval set to ask, only the user can cancel it in the terminal.' };
+  }
   await alpaca.cancelOrder(oid);
   notify('order', { orderId: oid });
   scheduleSync();
