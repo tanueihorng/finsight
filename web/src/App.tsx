@@ -183,6 +183,11 @@ const PANELS: Record<string, () => ReactNode> = {
       <Host island="markets" id="markets" className="markets" />
     </Panel>
   ),
+  discover: () => (
+    <Panel pid="discover" title={<span className="panel-title">DISCOVER · HOLDINGS + WATCHLIST</span>} head={<span className="dim small" data-island-slot="discover:head"></span>}>
+      <Host island="discover" id="discover" className="discover" />
+    </Panel>
+  ),
   calendar: () => (
     <Panel pid="calendar" title={<span className="panel-title">ECON CALENDAR · FED · CPI · PCE</span>} head={<span className="dim small">no key</span>}>
       <Host island="calendar" id="calendar" className="calendar" />

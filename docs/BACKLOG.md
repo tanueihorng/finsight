@@ -32,6 +32,7 @@ The Kestrel panel redesign and search-provider picker (`KESTRELUI-001` / `SEARCH
 | Demo defaults to supported Intelligent UI views | `DEMOPARITY-001` | Integrated on main at `dc8a7c9`; explicit settings and model gates remain effective |
 | Council research reliability and source grounding ([FEAT-002](features/FEAT-002-investment-council-lenses.md)) | `COUNCILQUALITY-001` | In progress on feature/council-quality: subject routing, evidence planning, denominator checks, traces and honest partial status implemented; primary fund evidence, qualitative verification and equal-source evaluation remain pending |
 
+| [FEAT-010](features/FEAT-010-market-discover.md) Market Discover, first slice: movers and earnings among holdings + watchlist | `DISCOVER-001` | Implemented on `feat/discover`, not merged; first-slice defaults recorded in the spec await owner review; provider-backed scope deferred |
 | [FEAT-009](features/FEAT-009-kestrel-terminal-redesign.md) Kestrel terminal redesign: panel states, light mode, start screen, conversation, council Cards / Chain of thought | `KESTRELUX-001` | Merged on GitHub in PR #1; local integration into the council-quality checkout in progress |
 
 ## Council delivered — 2026-10-29

@@ -153,6 +153,13 @@ export function useEvents() {
   return useQuery({ queryKey: ['events', base, account], enabled, staleTime: 900_000, refetchInterval: 900_000,
     queryFn: ({ signal }) => api<import('../../../shared/types.ts').EventsResponse>(`/api/events?base=${encodeURIComponent(base)}&account=${encodeURIComponent(account)}`, { signal }) });
 }
+// Discover (FEAT-010): holdings + watchlist movers and their earnings. Quotes
+// are cached 15 s server-side; a minute is enough for a ranking.
+export function useDiscover() {
+  const { account, enabled } = useScope();
+  return useQuery({ queryKey: ['discover', account], enabled, staleTime: 60_000, refetchInterval: 60_000,
+    queryFn: ({ signal }) => api<import('../../../shared/types.ts').DiscoverResponse>(`/api/discover?account=${encodeURIComponent(account)}`, { signal }) });
+}
 export function useWorldBank(country: string, indicator: string) {
   const { enabled } = useScope();
   return useQuery({ queryKey: ['worldbank', country, indicator], enabled, staleTime: 900_000, refetchInterval: 900_000,

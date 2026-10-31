@@ -168,6 +168,25 @@ export interface CalendarResponse {
 }
 /** lib/dividends.ts upcomingEvents. */
 export interface EventsResponse { events: EventItem[]; ok: boolean }
+/** lib/discover.ts rankMovers: one ranked symbol (regular session vs previous close). */
+export interface DiscoverMover {
+  symbol: string; name: string; exchange: string; currency: string;
+  price: number; prevClose: number | null; change: number | null; changePct: number;
+  marketTime: number | null; held: boolean; watched: boolean;
+  stale: boolean; staleReason: 'cached-after-failure' | 'old-session' | null;
+}
+/** lib/discover.ts: a symbol left out of the ranking, and why. */
+export interface DiscoverExcluded { symbol: string; reason: 'index' | 'fx' | 'futures' | 'crypto' | 'no-quote' | 'no-change' | 'limit'; detail?: string }
+/** lib/discover.ts earningsRows: day is the exchange-local date in tz. */
+export interface DiscoverEarning { symbol: string; t: number; day: string; tz: string; inDays: number; estimated: boolean; held: boolean; watched: boolean }
+/** lib/discover.ts discover, server.ts GET /api/discover. Holdings + watchlist only. */
+export interface DiscoverResponse {
+  scope: { account: string; held: number; watched: number; eligible: number; ranked: number; unchanged: number };
+  basis: { source: 'Yahoo Finance'; session: 'regular'; baseline: 'previous-close'; delayed: true };
+  asOf: number | null; retrievedAt: number;
+  gainers: DiscoverMover[]; losers: DiscoverMover[]; excluded: DiscoverExcluded[];
+  earnings: { ok: boolean; horizonDays: number; items: DiscoverEarning[] };
+}
 
 /** lib/market.ts fetchSearch. */
 export interface SearchItem { symbol: string; name: string; exchange: string; type: string }

@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../../../web/src/features/markets/markets.ts"],
+  "sourcesContent": ["import type { Markets } from '../../../../shared/types.ts';\n\n// Same rules as the legacy loadMarkets() (public/app.js at 31437a0).\nexport const priceDecimals = (price: number | null | undefined) => (price != null && price < 10 ? 4 : 2);\n\nexport const updatedLabel = (ms: number) => 'upd ' + new Date(ms).toLocaleTimeString('en-US', { hour12: false });\n\n// Topbar pill: LIVE while the S&P 500 quote is under 6 minutes old, else CLOSED.\n// null leaves the pill as it is (no S&P quote or no market time).\nexport function marketState(groups: Markets, now: number): { text: 'LIVE' | 'CLOSED'; className: string } | null {\n  const sp = groups.Indices?.find((q) => q.symbol === '^GSPC');\n  if (!sp || !('marketTime' in sp) || !sp.marketTime) return null;\n  const fresh = now - sp.marketTime < 6 * 60000;\n  return fresh ? { text: 'LIVE', className: 'pill open' } : { text: 'CLOSED', className: 'pill closed' };\n}\n"],
+  "mappings": "AAGO,IAAMA,EAAiBC,GAAsCA,GAAS,MAAQA,EAAQ,GAAK,EAAI,EAEzFC,EAAgBC,GAAe,OAAS,IAAI,KAAKA,CAAE,EAAE,mBAAmB,QAAS,CAAE,OAAQ,EAAM,CAAC,EAIxG,SAASC,EAAYC,EAAiBC,EAAoE,CAC/G,IAAMC,EAAKF,EAAO,SAAS,KAAMG,GAAMA,EAAE,SAAW,OAAO,EAC3D,MAAI,CAACD,GAAM,EAAE,eAAgBA,IAAO,CAACA,EAAG,WAAmB,KAC7CD,EAAMC,EAAG,WAAa,EAAI,IACzB,CAAE,KAAM,OAAQ,UAAW,WAAY,EAAI,CAAE,KAAM,SAAU,UAAW,aAAc,CACvG",
+  "names": ["priceDecimals", "price", "updatedLabel", "ms", "marketState", "groups", "now", "sp", "q"]
+}
