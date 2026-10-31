@@ -48,6 +48,7 @@ The Kestrel panel redesign and search-provider picker (`KESTRELUI-001` / `SEARCH
 | Spec | Proposal | Execution relationship | Gate |
 |---|---|---|---|
 | [FEAT-001](features/FEAT-001-ibkr-mcp-integration.md) | IBKR MCP integration and live sync | Deferred architecture captured alongside `MULTIAGENT-001`; distinct from CSV import | Explicit user selection and verified design |
+| [FEAT-011](features/FEAT-011-agent-data-sources.md) | Agent data sources: insider/13F/congress/short interest, news, fundamentals cross-check, GDELT, EDGAR MCP servers (no sentiment) | None yet; feeds the paper-trading agent | Explicit user selection |
 
 ---
 

@@ -356,7 +356,7 @@ These appear in the mockups but are not in today's contract:
 
 ## 10. Guardrails
 
-- Kestrel never trades (ADR-001); keep the footer line "Kestrel never trades".
+- Kestrel never trades; keep the footer line "Kestrel never trades".
 - No numbers from the model: every figure on these screens comes from tool output or run metadata.
 - No personal data in this repo: the mockup figures are samples and must not become fixtures that look like real holdings.
 - Keyboard: every control is a real `<button>` or `<a>`; touch targets are at least 44px on narrow layouts; the council board keeps its `aria` labels and `aria-expanded` states.
