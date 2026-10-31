@@ -1,7 +1,8 @@
 // Link to the optional local agent service (a separate, private program).
 //  - agent-link.json in DATA_DIR holds two random secrets (0600):
 //      token        lets the agent READ a fixed allowlist of GET endpoints
-//                   (no PIN session; any other method or path is refused)
+//                   and POST paper orders (no PIN session; any other method
+//                   or path is refused)
 //      proxySecret  FinSight adds it when proxying the chat panel's
 //                   /api/agent/* calls to the agent, which rejects calls
 //                   without it.
@@ -26,7 +27,12 @@ export const TOKEN_READ_PATHS = new Set([
   '/api/portfolio', '/api/accounts', '/api/quote', '/api/history', '/api/history/batch', '/api/categories',
   '/api/events', '/api/dividends', '/api/realized', '/api/portfolio/performance', '/api/fx-risk', '/api/ledger',
   '/api/watchlist', '/api/alerts', '/api/news', '/api/fred', '/api/journal', '/api/calendar', '/api/markets', '/api/search', '/api/fund', '/api/quote-details',
+  '/api/paper/state', '/api/paper/settings', '/api/book',
 ]);
+// Paper orders (FEAT-011, ADR-002): the token may place and cancel Alpaca PAPER
+// orders. FinSight applies the user's approval mode and limits to them; the
+// token can't change those settings, approve tickets or touch keys.
+export const TOKEN_WRITE_PATHS = new Set(['/api/paper/orders', '/api/paper/orders/cancel']);
 
 let cached: AgentLink | null = null;
 export function ensureLink(): AgentLink {
@@ -58,7 +64,8 @@ export function tokenCheck(req: IncomingMessage, pathname: string): 'none' | 'ok
   if (!h.startsWith('Bearer ')) return 'none';
   const { token } = ensureLink();
   if (!safeEqual(h.slice(7).trim(), token)) return 'deny';
-  return req.method === 'GET' && TOKEN_READ_PATHS.has(pathname) ? 'ok' : 'deny';
+  if (req.method === 'GET' && TOKEN_READ_PATHS.has(pathname)) return 'ok';
+  return req.method === 'POST' && TOKEN_WRITE_PATHS.has(pathname) ? 'ok' : 'deny';
 }
 
 function sameOrigin(req: IncomingMessage): boolean {

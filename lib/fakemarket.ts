@@ -6,6 +6,7 @@
 // today, so the same request gives the same numbers across restarts.
 import fs from 'node:fs';
 import path from 'node:path';
+import * as fakeAlpaca from './fakealpaca.ts';
 
 // Shapes of the fixture files in test/fixtures/market.
 interface FixSymbol {
@@ -292,10 +293,12 @@ export function install(): void {
   if (installed) return;
   installed = true;
   loadFixtures();
+  fakeAlpaca.setPriceSource(async (sym) => lookup(sym)?.price ?? null);
   const realFetch = globalThis.fetch;
   globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
     const u = new URL(typeof input === 'string' || input instanceof URL ? String(input) : input.url);
     if (LOOPBACK.has(u.hostname)) return realFetch(input, init);
+    if (u.hostname === 'paper-api.alpaca.markets') return fakeAlpaca.handle(u, init);
     const r = route(u, Date.now());
     if (!r) throw new TypeError(`fetch blocked: FINSIGHT_FAKE_MARKET=1 has no fixture for ${u.hostname}`);
     return respond(...r);
