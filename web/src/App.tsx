@@ -293,6 +293,7 @@ export default function App() {
         </div>
       </header>
 
+      <Host island="ticker" className="ticker" />
       <Host island="command" className="cmdbar" />
       <Host island="status" />
 

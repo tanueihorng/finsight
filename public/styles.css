@@ -111,6 +111,23 @@ body {
   padding: 2px 6px; font-family: inherit; font-size: 11px; font-weight: 700; outline: none; cursor: pointer;
 }
 
+/* ---------------- holdings ticker (under the top bar) ---------------- */
+.ticker:empty { display: none; }
+.ticker { overflow: hidden; background: var(--head); border-bottom: 1px solid var(--border); font-size: 11px; letter-spacing: .5px; white-space: nowrap;
+  mask-image: linear-gradient(90deg, transparent, #000 3%, #000 97%, transparent); -webkit-mask-image: linear-gradient(90deg, transparent, #000 3%, #000 97%, transparent); }
+.tk-track { display: inline-flex; animation: tk-scroll var(--tk-duration, 40s) linear infinite; }
+.ticker:hover .tk-track, .ticker:focus-within .tk-track { animation-play-state: paused; }
+.tk-run { display: inline-flex; }
+.tk-item { background: none; border: 0; border-right: 1px solid var(--border); padding: 4px 14px; color: var(--muted); font: inherit; letter-spacing: inherit; cursor: pointer; font-variant-numeric: tabular-nums; }
+.tk-item b { color: var(--text); margin-right: 4px; }
+.tk-item:hover b, .tk-item:focus-visible b { color: var(--amber); }
+.tk-item .up { color: var(--up); } .tk-item .down { color: var(--down); }
+@keyframes tk-scroll { to { transform: translateX(-50%); } }
+@media (prefers-reduced-motion: reduce) {
+  .ticker { overflow-x: auto; mask-image: none; -webkit-mask-image: none; }
+  .tk-track { animation: none; } .tk-run[aria-hidden] { display: none; }
+}
+
 /* ---------------- command bar ---------------- */
 .cmdbar {
   display: flex; align-items: center; gap: 8px;

@@ -10,6 +10,7 @@ import * as ImportIsland from './features/ledger/ImportIsland.tsx';
 import * as CommandIsland from './features/command/CommandIsland.tsx';
 import * as StatusIsland from './features/command/StatusIsland.tsx';
 import * as FooterIsland from './features/command/FooterIsland.tsx';
+import * as TickerIsland from './features/ticker/TickerIsland.tsx';
 import * as AccountIsland from './features/topbar/AccountIsland.tsx';
 import * as AccountsModalIsland from './features/topbar/AccountsModalIsland.tsx';
 import * as BaseIsland from './features/topbar/BaseIsland.tsx';
@@ -79,6 +80,7 @@ export const islands: IslandRegistry = preloadable({
   command: () => Promise.resolve(CommandIsland),
   status: () => Promise.resolve(StatusIsland),
   footer: () => Promise.resolve(FooterIsland),
+  ticker: () => Promise.resolve(TickerIsland),
   account: () => Promise.resolve(AccountIsland),
   accounts: () => Promise.resolve(AccountsModalIsland),
   base: () => Promise.resolve(BaseIsland),

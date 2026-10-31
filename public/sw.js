@@ -2,7 +2,7 @@
    shell instantly. Only static files are cached. API responses (your portfolio)
    are never stored in the browser: they stay behind the PIN on the server. */
 'use strict';
-const SHELL = 'finsight-shell-v57'; // v57: keep the session rail visible in docked mode
+const SHELL = 'finsight-shell-v58'; // v58: holdings ticker under the top bar
 const FILES = ['/', '/index.html', '/styles.css', '/chart.js', '/chartgrid.js', '/strategy.js', '/strategies.js', '/indicators.js', '/journal.js', '/agent-panel.css', '/fonts/source-serif-4/SourceSerif4Variable-Roman.ttf.woff2', '/fonts/source-serif-4/SourceSerif4Variable-Italic.ttf.woff2', '/app/manifest.json', '/icon.png', '/icon-192.png', '/manifest.webmanifest'];
 // Content-hashed chunk URLs (esbuild 8-char hash): immutable, so a cached copy
 // is exactly the bytes the loaded manifest asked for.
