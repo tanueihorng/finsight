@@ -8,17 +8,17 @@ export interface Columns { left: string[]; right: string[] }
 // Default order, as in the pre-X1 index.html (Kestrel's dock sits after the detail).
 export const DEFAULT_COLUMNS: Columns = {
   left: ['positions', 'performance', 'wealth', 'allocation', 'heatmap', 'watchlist', 'alerts', 'fxrisk', 'dividends', 'activity'],
-  right: ['detail', 'kestrel', 'news', 'markets', 'calendar', 'worldbank', 'fred', 'inflation'],
+  right: ['detail', 'kestrel', 'news', 'markets', 'discover', 'calendar', 'worldbank', 'fred', 'inflation'],
 };
 // ⚙ Layout's show/hide list: [body id, label]; the body id is what finsight-panels stores.
 export const PANELS: [string, string][] = [
   ['perf-body', 'Performance'], ['alloc-body', 'Allocation'], ['heatmap-body', 'Sector Heatmap'],
   ['fxrisk', 'FX Risk'], ['dividends', 'Dividends'], ['watchlist', 'Watchlist'], ['alerts', 'Price Alerts'], ['activity', 'Recent Activity'],
-  ['news', 'News'], ['markets', 'World Markets'], ['calendar', 'Econ Calendar'], ['wb-body', 'World Bank'], ['fred-body', 'US Fed (FRED)'], ['infl-body', 'US Inflation Gauges'],
+  ['news', 'News'], ['markets', 'World Markets'], ['discover', 'Discover'], ['calendar', 'Econ Calendar'], ['wb-body', 'World Bank'], ['fred-body', 'US Fed (FRED)'], ['infl-body', 'US Inflation Gauges'],
 ];
 export const HIDE_ID: Record<string, string> = {
   performance: 'perf-body', allocation: 'alloc-body', heatmap: 'heatmap-body', fxrisk: 'fxrisk', dividends: 'dividends', watchlist: 'watchlist',
-  alerts: 'alerts', activity: 'activity', news: 'news', markets: 'markets', calendar: 'calendar', worldbank: 'wb-body', fred: 'fred-body', inflation: 'infl-body',
+  alerts: 'alerts', activity: 'activity', news: 'news', markets: 'markets', discover: 'discover', calendar: 'calendar', worldbank: 'wb-body', fred: 'fred-body', inflation: 'infl-body',
 };
 export interface SavedLayout { left?: string[]; right?: string[] }
 const LAYOUT_KEY = 'finsight-layout', PANELS_KEY = 'finsight-panels';

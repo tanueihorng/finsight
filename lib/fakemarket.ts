@@ -22,12 +22,14 @@ const FIX = path.join(import.meta.dirname, '..', 'test', 'fixtures', 'market');
 const load = (f: string): any => JSON.parse(fs.readFileSync(path.join(FIX, f), 'utf8')); // fixture JSON, typed by the callers below
 const DAY = 24 * 60 * 60 * 1000;
 
-let fx: Record<string, number>, symbols: Record<string, FixSymbol>, news: FixNews[], calendar: FixEvent[], macro: FixMacro;
+interface FixIpo { dealID: string; proposedTickerSymbol: string | null; companyName: string; status: 'upcoming' | 'priced' | 'filed' | 'withdrawn'; dayOffset: number; [k: string]: unknown }
+let fx: Record<string, number>, symbols: Record<string, FixSymbol>, news: FixNews[], calendar: FixEvent[], macro: FixMacro, ipos: FixIpo[];
 function loadFixtures() {
   ({ fx, symbols } = load('quotes.json') as { fx: Record<string, number>; symbols: Record<string, FixSymbol> });
   news = (load('news.json') as { items: FixNews[] }).items;
   calendar = (load('calendar.json') as { events: FixEvent[] }).events;
   macro = load('macro.json') as FixMacro;
+  ipos = (load('ipos.json') as { deals: FixIpo[] }).deals;
 }
 
 // --- seeded walk ---------------------------------------------------------------
@@ -220,6 +222,40 @@ function forexFactory(now: number): Reply {
     date: new Date(today + e.dayOffset * DAY + e.hourUtc * 3600000).toISOString() }))];
 }
 
+// Yahoo predefined screen: fixture equities ranked by their fake day change.
+function screener(q: URLSearchParams, now: number): Reply {
+  const id = q.get('scrIds') || '', count = Number(q.get('count')) || 25;
+  if (id !== 'day_gainers' && id !== 'day_losers') return [400, { finance: { result: null, error: { code: 'Bad Request' } } }];
+  const rows = Object.entries(symbols).filter(([sym, s]) => (s.type || 'EQUITY') === 'EQUITY' && !/\./.test(sym)).map(([sym, s]) => {
+    const m = meta(sym, s, now);
+    return { symbol: sym, shortName: s.name, longName: s.name, quoteType: 'EQUITY', currency: s.currency, exchange: s.exchange, fullExchangeName: s.exchange,
+      regularMarketPrice: m.regularMarketPrice, regularMarketPreviousClose: m.chartPreviousClose,
+      regularMarketChangePercent: (m.regularMarketPrice / m.chartPreviousClose - 1) * 100, regularMarketTime: m.regularMarketTime,
+      regularMarketVolume: m.regularMarketVolume, averageDailyVolume3Month: m.regularMarketVolume, marketCap: Math.round(m.regularMarketPrice * 1e9) };
+  }).filter((r) => (id === 'day_gainers' ? r.regularMarketChangePercent > 0 : r.regularMarketChangePercent < 0))
+    .sort((a, b) => (id === 'day_gainers' ? b.regularMarketChangePercent - a.regularMarketChangePercent : a.regularMarketChangePercent - b.regularMarketChangePercent));
+  const title = id === 'day_gainers' ? 'Day Gainers' : 'Day Losers';
+  return [200, { finance: { result: [{ title, description: `Fake ${title}`, total: rows.length, quotes: rows.slice(0, count) }], error: null } }];
+}
+
+// Nasdaq IPO calendar for one month (date=YYYY-MM): fixture deals whose date falls in it.
+function nasdaqIpos(q: URLSearchParams, now: number): Reply {
+  const month = q.get('date') || '';
+  const et = (offset: number) => {
+    const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+    const t = new Date(day + 'T12:00:00Z'); t.setUTCDate(t.getUTCDate() + offset);
+    return t.toISOString().slice(0, 10);
+  };
+  const us = (iso: string) => `${Number(iso.slice(5, 7))}/${Number(iso.slice(8, 10))}/${iso.slice(0, 4)}`;
+  const inMonth = ipos.map((d) => ({ d, iso: et(d.dayOffset) })).filter((x) => x.iso.startsWith(month));
+  const pick = (status: FixIpo['status'], field: string) => inMonth.filter((x) => x.d.status === status)
+    .map(({ d, iso }) => { const { status: _s, dayOffset: _o, ...row } = d; return { ...row, [field]: us(iso) }; });
+  return [200, { data: {
+    priced: { rows: pick('priced', 'pricedDate') }, upcoming: { upcomingTable: { rows: pick('upcoming', 'expectedPriceDate') }, lastUpdatedTime: `LAST UPDATED: ${us(et(0))}* - Source: fixture` },
+    filed: { rows: pick('filed', 'filedDate') }, withdrawn: { rows: pick('withdrawn', 'withdrawDate') },
+  }, status: { rCode: 200 } }];
+}
+
 // --- fetch shim ----------------------------------------------------------------
 function respond(status: number, body: unknown, type = 'application/json', setCookie: string[] = []) {
   const text = typeof body === 'string' ? body : JSON.stringify(body);
@@ -239,12 +275,14 @@ function route(u: URL, now: number): Reply | null {
     const fund = u.pathname.match(/^\/v10\/finance\/quoteSummary\/(.+)$/);
     if (fund) return fundSummary(decodeURIComponent(fund[1]!));
     if (u.pathname === '/v1/test/getcrumb') return [200, 'fakecrumb', 'text/plain'];
+    if (u.pathname === '/v1/finance/screener/predefined/saved') return screener(u.searchParams, now);
     return [404, { error: 'Not found' }];
   }
   if (host === 'fc.yahoo.com') return [404, '', 'text/html', ['A3=fake; Path=/']];
   if (host === 'fred.stlouisfed.org') return fred(u.searchParams, now);
   if (host === 'api.worldbank.org') return worldBank(u.pathname, now);
   if (host === 'nfs.faireconomy.media') return forexFactory(now);
+  if (host === 'api.nasdaq.com' && u.pathname === '/api/ipo/calendar') return nasdaqIpos(u.searchParams, now);
   return null;
 }
 

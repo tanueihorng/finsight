@@ -388,6 +388,25 @@ const MARKET_GROUPS: Record<string, [string, string][]> = {
   ],
 };
 
+// Yahoo's predefined screens (day_gainers, day_losers): key-less, US-listed
+// equities only (the region parameter is ignored), filtered by Yahoo's own
+// criteria. Cached 60 s; a failed refresh serves the last list for 15 min.
+export interface ScreenerQuote {
+  symbol?: string; shortName?: string; longName?: string; quoteType?: string; currency?: string; exchange?: string; fullExchangeName?: string;
+  regularMarketPrice?: number; regularMarketChangePercent?: number; regularMarketChange?: number; regularMarketPreviousClose?: number;
+  regularMarketTime?: number; marketCap?: number; regularMarketVolume?: number; averageDailyVolume3Month?: number; marketState?: string;
+}
+export interface Screen { id: string; title: string; description: string; total: number; quotes: ScreenerQuote[] }
+export async function getScreen(id: 'day_gainers' | 'day_losers', count = 25) {
+  return cachedWithStatus(`screen:${id}:${count}`, 60000, async (): Promise<Screen> => {
+    const data = await yahooFetch<{ finance?: { result?: { title?: string; description?: string; total?: number; quotes?: ScreenerQuote[] }[] | null } }>(
+      `/v1/finance/screener/predefined/saved?scrIds=${id}&count=${count}&formatted=false&lang=en-US&region=US`);
+    const r = data?.finance?.result?.[0];
+    if (!r || !Array.isArray(r.quotes)) throw new Error(`No screener data for ${id}`);
+    return { id, title: r.title || id, description: r.description || '', total: Number(r.total) || r.quotes.length, quotes: r.quotes };
+  }, { stale: 15 * 60000 });
+}
+
 export function getMarkets(): Promise<Markets> {
   return cached('markets', 30000, fetchMarkets, { stale: 5 * 60000 });
 }

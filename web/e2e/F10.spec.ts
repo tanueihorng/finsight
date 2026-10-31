@@ -10,7 +10,7 @@ test('⚙ Layout opens and closes three ways; panels editor lists every panel wi
   await expect(modal).toBeVisible();
   const rows = page.locator('#panels-list .card-edit-row');
   await expect(rows).toHaveText(['Performance', 'Allocation', 'Sector Heatmap', 'FX Risk', 'Dividends', 'Watchlist', 'Price Alerts', 'Recent Activity',
-    'News', 'World Markets', 'Econ Calendar', 'World Bank', 'US Fed (FRED)', 'US Inflation Gauges']);
+    'News', 'World Markets', 'Discover', 'Econ Calendar', 'World Bank', 'US Fed (FRED)', 'US Inflation Gauges']);
   await page.locator('#panels-list input[data-panel="news"]').uncheck();
   await expect(rows.filter({ hasText: 'News' })).toHaveClass(/\boff\b/);
   await expect(page.locator('.panel[data-pid="news"]')).toBeHidden();

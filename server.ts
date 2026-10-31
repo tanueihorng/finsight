@@ -29,6 +29,7 @@ import {
   alertsWithStatus, importCsv, resetPortfolio,
 } from './lib/portfolio.ts';
 import { dividendsReport, upcomingEvents, setWithholding } from './lib/dividends.ts';
+import { discover } from './lib/discover.ts';
 import { chartTrades, ledger, editBuy, deleteBuy, realizedReport } from './lib/ledger.ts';
 import { undo, undoInfo } from './lib/store.ts';
 import * as charts from './lib/charts.ts';
@@ -356,6 +357,7 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
       return sendJson(res, 200, await dividendsReport(base, acct));
     }
     if (p === '/api/events') return sendJson(res, 200, await upcomingEvents(acct));
+    if (p === '/api/discover') return sendJson(res, 200, await discover(acct));
     if (p === '/api/settings/withholding' && req.method === 'POST') {
       const b = await readBody(req); return sendJson(res, 200, { withholding: await setWithholding(b.market, b.pct) });
     }

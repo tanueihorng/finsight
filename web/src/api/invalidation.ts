@@ -1,4 +1,4 @@
-const holdings = ['portfolio', 'dividends', 'fx-risk', 'performance', 'wealth', 'ledger', 'realized', 'accounts', 'chart-trades', 'events', 'categories'] as const;
+const holdings = ['portfolio', 'dividends', 'fx-risk', 'performance', 'wealth', 'ledger', 'realized', 'accounts', 'chart-trades', 'events', 'categories', 'discover'] as const;
 const scoped = [...holdings, 'alerts', 'detail'] as const;
 // Endpoint writes -> readers (docs/frontend-migration/COUPLING.md §A6). Keys are
 // refreshed in order: 'accounts' comes first where a write can remove the
@@ -11,7 +11,7 @@ export const mutationInvalidations = {
   cash: ['portfolio', 'fx-risk', 'wealth'],
   withholding: ['dividends', 'realized'],
   // Intended fix (Phase 2 audit): the company calendar also includes watched symbols.
-  'watchlist-add': ['watchlist', 'chart-watch', 'events'], 'watchlist-remove': ['watchlist', 'chart-watch', 'events'],
+  'watchlist-add': ['watchlist', 'chart-watch', 'events', 'discover'], 'watchlist-remove': ['watchlist', 'chart-watch', 'events', 'discover'],
   'alerts-add': ['alerts', 'chart-alerts'], 'alerts-update': ['alerts', 'chart-alerts'], 'alerts-remove': ['alerts', 'chart-alerts'],
   // Adding or renaming changes names and counts only; switching is a store change (keys include the account).
   'account-add': ['accounts'], 'account-rename': ['accounts'],

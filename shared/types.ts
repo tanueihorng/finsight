@@ -168,6 +168,51 @@ export interface CalendarResponse {
 }
 /** lib/dividends.ts upcomingEvents. */
 export interface EventsResponse { events: EventItem[]; ok: boolean }
+/** lib/discover.ts rankMovers: one ranked symbol (regular session vs previous close). */
+export interface DiscoverMover {
+  symbol: string; name: string; exchange: string; currency: string;
+  price: number; prevClose: number | null; change: number | null; changePct: number;
+  marketTime: number | null; held: boolean; watched: boolean;
+  stale: boolean; staleReason: 'cached-after-failure' | 'old-session' | null;
+}
+/** lib/discover.ts: a symbol left out of the ranking, and why. */
+export interface DiscoverExcluded { symbol: string; reason: 'index' | 'fx' | 'futures' | 'crypto' | 'no-quote' | 'no-change' | 'limit'; detail?: string }
+/** lib/discover.ts earningsRows: day is the exchange-local date in tz. */
+export interface DiscoverEarning { symbol: string; t: number; day: string; tz: string; inDays: number; estimated: boolean; held: boolean; watched: boolean }
+/** lib/discover.ts marketMover: a row from Yahoo's US day gainers/losers screens. */
+export interface MarketMover {
+  symbol: string; name: string; exchange: string; currency: string;
+  price: number; prevClose: number | null; changePct: number; marketTime: number | null;
+  marketCap: number | null; volume: number | null; avgVolume3m: number | null; held: boolean; watched: boolean;
+}
+/** lib/discover.ts marketMovers: market-wide (US) movers, each list with its own status. */
+export interface DiscoverMarket {
+  ok: boolean; source: 'Yahoo Finance screener'; region: 'US'; session: 'regular'; delayed: true;
+  criteria: string; asOf: number | null; cachedAt: string | null; stale: boolean; error: string | null;
+  gainers: MarketMover[]; losers: MarketMover[]; totals: { gainers: number | null; losers: number | null };
+}
+/** lib/discover.ts ipoCalendar: one Nasdaq IPO calendar deal. Dates are US Eastern calendar days. */
+export interface IpoDeal {
+  id: string; symbol: string | null; company: string; exchange: string | null;
+  status: 'expected' | 'priced' | 'filed' | 'withdrawn'; date: string | null;
+  priceLow: number | null; priceHigh: number | null; shares: number | null; offerAmount: number | null;
+  url: string; secUrl: string;
+}
+/** lib/discover.ts ipoCalendar. expected dates are tentative. */
+export interface DiscoverIpos {
+  ok: boolean; source: 'Nasdaq IPO calendar'; region: 'US'; months: string[]; lastUpdated: string | null;
+  cachedAt: string | null; stale: boolean; error: string | null;
+  upcoming: IpoDeal[]; priced: IpoDeal[]; counts: { filed: number; withdrawn: number };
+}
+/** lib/discover.ts discover, server.ts GET /api/discover. gainers/losers/earnings: holdings + watchlist only; market and ipos: US-wide. */
+export interface DiscoverResponse {
+  scope: { account: string; held: number; watched: number; eligible: number; ranked: number; unchanged: number };
+  basis: { source: 'Yahoo Finance'; session: 'regular'; baseline: 'previous-close'; delayed: true };
+  asOf: number | null; retrievedAt: number;
+  gainers: DiscoverMover[]; losers: DiscoverMover[]; excluded: DiscoverExcluded[];
+  earnings: { ok: boolean; horizonDays: number; items: DiscoverEarning[] };
+  market: DiscoverMarket; ipos: DiscoverIpos;
+}
 
 /** lib/market.ts fetchSearch. */
 export interface SearchItem { symbol: string; name: string; exchange: string; type: string }
