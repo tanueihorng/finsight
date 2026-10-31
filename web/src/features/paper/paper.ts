@@ -9,12 +9,13 @@ export interface PaperOrder {
   filledQty: number | null; filledAvgPrice: number | null; status: string; createdAt: string; filledAt: string | null; origin: 'user' | 'kestrel' | 'alpaca'; threadId: string | null;
 }
 export interface Ticket { id: string; status: 'pending' | 'approved' | 'rejected' | 'failed'; order: OrderInput; note?: string; createdAt: number; error?: string; estimate?: { valueUsd: number | null; priceSource: string } }
+export interface PaperPosition { symbol: string; bookSymbol: string; qty: number; side: string; avgEntryPrice: number; currentPrice: number; marketValue: number; unrealizedPl: number }
 export interface PaperState {
   connected: boolean; keySource: 'env' | 'file' | null; settings: Settings; tickets: Ticket[];
   stream: { state: 'off' | 'connecting' | 'live' | 'retrying' | 'auth_failed'; message?: string };
   sync: { syncedAt: number | null; error: string | null; skipped: { symbol: string; side: string; qty: number; reason: string }[]; drift: string[] };
   account: { number: string; status: string; cash: number; equity: number; buyingPower: number; lastEquity: number | null } | null;
-  positions: { symbol: string; qty: number; side: string; marketValue: number; unrealizedPl: number }[];
+  positions: PaperPosition[];
   openOrders: PaperOrder[]; recentOrders: PaperOrder[]; error?: string; retrievedAt?: string;
 }
 
@@ -68,3 +69,31 @@ export const limitsText = (l: Limits) => {
     l.maxPositionPct != null && `≤ ${l.maxPositionPct}% of equity per position`, l.symbols && `only ${l.symbols.join(', ')}`].filter(Boolean);
   return parts.length ? parts.join(' · ') : 'no limits';
 };
+
+/** Alpaca writes class shares with a dot (BRK.B); the book and charts use Yahoo's dash. */
+export const bookSymbol = (alpacaSymbol: string) => alpacaSymbol.replace('.', '-');
+
+/** The ticket's summary: the price it is estimated at, the order's value and
+ *  buying power after it. An estimate only: a market order fills at Alpaca's price. */
+export function estimate(f: Form, last: number | null, buyingPower: number | null): { price: number | null; qty: number | null; value: number | null; after: number | null } {
+  const limit = Number(f.limitPrice), amount = Number(f.amount);
+  const price = f.type === 'limit' ? (limit > 0 ? limit : null) : last != null && last > 0 ? last : null;
+  if (!(amount > 0) || price == null) return { price, qty: null, value: null, after: null };
+  const qty = f.sizeBy === 'usd' ? amount / price : amount, value = f.sizeBy === 'usd' ? amount : amount * price;
+  const after = buyingPower == null ? null : f.side === 'buy' ? buyingPower - value : buyingPower;
+  return { price, qty, value, after };
+}
+/** Quick size buttons: a share of buying power (buy) or of the position (sell). */
+export function quickAmount(f: Form, pct: number, last: number | null, buyingPower: number | null, held: number): string {
+  if (f.side === 'sell') { const q = held * pct / 100; return q > 0 ? String(f.sizeBy === 'usd' && last ? +(q * last).toFixed(2) : +q.toFixed(6)) : ''; }
+  if (buyingPower == null || buyingPower <= 0) return '';
+  const usdAmt = buyingPower * pct / 100;
+  if (f.sizeBy === 'usd') return String(Math.floor(usdAmt * 100) / 100);
+  const price = f.type === 'limit' && Number(f.limitPrice) > 0 ? Number(f.limitPrice) : last;
+  return price ? String(Math.floor(usdAmt / price)) : '';
+}
+/** Open limit orders for one symbol, as price lines on the desk chart. */
+export function chartOrders(orders: PaperOrder[], symbol: string) {
+  return orders.filter((o) => bookSymbol(o.symbol) === symbol && o.limitPrice != null)
+    .map((o) => ({ side: o.side, price: o.limitPrice!, label: `${o.side.toUpperCase()} LMT ${o.qty != null ? qtyText(o.qty) : usd(o.notional)} @ ${n2(o.limitPrice!)}${o.origin === 'kestrel' ? ' · KESTREL' : ''}` }));
+}

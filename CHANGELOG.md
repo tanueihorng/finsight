@@ -15,6 +15,13 @@ The earlier draft with unverified release numbers is preserved in `docs/archive/
 
 ## Unreleased
 
+- `PAPER-001` ([FEAT-011](docs/features/FEAT-011-paper-trading.md), [ADR-002](docs/decisions/ADR-002-agentic-paper-trading.md)), on branch `feat/paper-trading`, not merged.
+  - A PAPER book next to the real one, switched on the lock screen or in the top bar. The real book is untouched.
+  - Alpaca paper only: the user's own paper keys, and live keys are refused. The book mirrors Alpaca fills and updates live through `trade_updates` and SSE.
+  - A trade desk with a chart linked to the order ticket, fills and open limit orders drawn on the chart, and positions, orders, history and Kestrel tabs.
+  - Kestrel can place paper orders through new tools. The user chooses ask-first or autonomous and sets optional limits.
+  - Verified offline against a fake broker; a live run with real paper keys is pending.
+
 - `DISCOVER-001` ([FEAT-010](docs/features/FEAT-010-market-discover.md)), merged locally at `cefd2ff` (`5727d97`, `67cf0b0`); not pushed or deployed: Discover panel and read-only `GET /api/discover`. **Your symbols** ranks gainers and losers among held and watched symbols (regular session vs previous close), with exclusions, stale flags and exchange-local earnings dates. **US market** shows Yahoo's Day Gainers / Day Losers screens (top 25, Yahoo's criteria). **IPOs** shows Nasdaq's US IPO calendar, with tentative expected dates, deals priced in the last 14 days, and Nasdaq and SEC links. Both new sources are key-less, unofficial and US-only. A live run against real data is recorded in the spec.
 
 - Personal Council upgrade, 2026-10-31: `a186117` adds a separate Council budget; `5bb31bf` handles a matching issuer name and ticker; `c3ce194` uses the model context bound. Activated from the retained `feature/council-quality` worktree. A live AMD review completed all seven stages, but research remains partial and qualitative support needs review; completion is not investment qualification. Details remain in the private workspace run packet.

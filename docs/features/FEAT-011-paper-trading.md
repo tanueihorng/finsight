@@ -20,14 +20,32 @@ Give FinSight a second mode next to the real portfolio: a **paper trading** book
   - Settings are changed only from the terminal (PIN session); the agent can read them but not change them.
 - **Every order records its origin** (`user` or `kestrel`, with the Kestrel thread) and is listed in the orders panel.
 
+## Trade desk (UI, 2026-10-31)
+
+The user asked for the paper screen to follow what professional trading screens do (chart, ticket and orders together). Patterns taken from broker and exchange terminals (TradingView's order panel, Binance/OKX/Kraken Pro spot screens, Webull, DXtrade): chart in the centre with the order ticket docked beside it, one symbol linked across chart, ticket and tables, BUY/SELL tabs, order-type tabs, size in shares or USD with 25/50/75/100% quick sizes, an estimate block (price, cost or proceeds, buying power and buying power after), one large side-coloured submit button, and a tabbed strip below for positions, open orders and history. Fills and open orders are drawn on the chart.
+
+In FinSight, the desk is a full-width section above the panels and is shown in PAPER mode only:
+
+- **Account strip:** equity, day P/L, cash, buying power and the order-stream state.
+- **Kestrel's pending tickets:** a highlighted bar with Approve and Reject.
+- **Chart:** the existing chart engine (`public/chart.js`) runs as its own instance with its own saved settings (`cfgKey`). It draws the paper book's fills as B/S markers with the average-cost line. Open limit orders are dashed price lines (new `tradeData.orders`).
+- **Ticket:** docked on the right; it stacks below the chart under 900 px.
+- **Tabs:** Positions (a click selects the symbol; Buy, Sell and Close prefill the ticket, and Close still needs the Sell press), Open orders (Cancel), History, Kestrel (all tickets with status and note) and Settings (Kestrel approval and limits, account, Disconnect).
+
+The estimate is only a guide; a market order fills at Alpaca's price.
+
 ## Out of scope for this slice
 
 Live (real-money) trading of any kind; short selling and options in the book; Alpaca market-data streaming; scheduled or recurring agent runs; multi-account paper.
 
 ## Acceptance
 
-- [ ] Mode switch on the lock screen and in the top bar; reload lands in the chosen mode; REAL data is untouched by anything done in PAPER.
-- [ ] Connect flow: paper keys verified and stored server-side; live keys or bad keys refused; disconnect removes them.
-- [ ] Orders: place, list, cancel from the terminal; fills appear in positions, ledger and P&L without a manual refresh.
-- [ ] Kestrel: `ask` creates a pending ticket that can be approved or rejected; `auto` places directly; each limit refuses with its reason; the agent cannot change settings.
-- [ ] Deterministic tests against a loopback fake Alpaca (no network); E2E covers the mode switch, an order fill and a Kestrel pending ticket.
+Ticked items are verified offline against the fake broker (`FINSIGHT_FAKE_MARKET=1`). A run with the user's own Alpaca paper keys and a real Kestrel model run are still pending.
+
+- [x] Mode switch on the lock screen and in the top bar; reload lands in the chosen mode; REAL data is untouched by anything done in PAPER.
+- [x] Connect flow: paper keys verified and stored server-side; live keys or bad keys refused; disconnect removes them.
+- [x] Orders: place, list, cancel from the terminal; fills appear in positions, ledger and P&L without a manual refresh.
+- [x] Kestrel: `ask` creates a pending ticket that can be approved or rejected; `auto` places directly; each limit refuses with its reason; the agent cannot change settings.
+- [x] Deterministic tests against a loopback fake Alpaca (no network); E2E covers the mode switch, an order fill and a Kestrel pending ticket.
+- [x] Trade desk: the chart follows the ticket's symbol, shows paper fills and open limit orders, and drops a cancelled order's line; the desk stacks on a phone with no horizontal scroll.
+- [ ] Live run with the user's Alpaca paper keys (real `trade_updates` stream) and a real Kestrel model placing a paper order.

@@ -998,8 +998,8 @@ textarea:focus-visible, [tabindex]:focus-visible, summary:focus-visible {
 :root[data-book="paper"] .brand-real { display: none; }
 :root[data-book="paper"] .brand-paper { display: inline; color: var(--paper); font-weight: 700; }
 :root[data-book="paper"] .topbar { box-shadow: inset 0 3px 0 var(--paper); }
-:root:not([data-book="paper"]) .panel[data-pid="paper"] { display: none !important; }
-:root[data-book="paper"] .panel[data-pid="paper"] { border-color: var(--paper); }
+:root:not([data-book="paper"]) #paper-panel { display: none !important; }
+#paper-panel { margin: 10px 10px 0; border: 1px solid var(--paper); border-radius: 4px; background: var(--panel); }
 :root[data-book="paper"] :is(#cash-btn, #import-btn, #undo-btn, #wealth-cash-btn) { display: none; }
 .lock-book { display: flex; gap: 4px; margin: 4px 0 10px; padding: 3px; border: 1px solid var(--border-2); border-radius: 6px; }
 .lock-book button { flex: 1; height: 30px; border: 0; border-radius: 4px; background: transparent; color: var(--muted); font: inherit; font-size: 12px; letter-spacing: .6px; cursor: pointer; }

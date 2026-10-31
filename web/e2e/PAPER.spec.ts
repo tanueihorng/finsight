@@ -1,7 +1,8 @@
 // FEAT-011 paper trading: REAL/PAPER switch in the top bar and on the lock
-// screen, Alpaca paper connect (offline fake broker), an order that fills and
-// lands in the book, and Kestrel's order as a live pending ticket the user
-// approves. The book choice is server-wide, so every test returns to REAL.
+// screen, Alpaca paper connect (offline fake broker), the trade desk (chart
+// linked to the ticket, fills and open limit orders on it), an order that
+// fills and lands in the book, and Kestrel's order as a live pending ticket
+// the user approves. The book choice is server-wide, so every test returns to REAL.
 import { test, expect, type Page } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -37,10 +38,45 @@ test('switch to PAPER, connect, place an order and see it fill into the book', a
   await expect(panel).toContainText('Order stream live');
 
   await page.locator('#paper-symbol').fill('aapl');
+  await page.locator('#paper-symbol').press('Enter');
   await page.locator('#paper-amount').fill('3');
+  await expect(panel.getByRole('form', { name: 'Paper order ticket' })).toContainText(/Est\. cost\s*US\$694\.50/);
+  await expect(page.locator('#paper-submit')).toHaveText('Buy 3 AAPL');
   await page.locator('#paper-submit').click();
-  await expect(panel.getByRole('region', { name: 'Recent paper orders' })).toContainText(/BUY 3 AAPL · market · day · 3 @ 231\.50/);
+  await panel.getByRole('tab', { name: 'History' }).click();
+  await expect(panel.getByRole('region', { name: 'Recent paper orders' })).toContainText(/BUY 3 AAPL · market · day\s*3 @ 231\.50/);
+  await panel.getByRole('tab', { name: /Positions/ }).click();
+  await expect(panel.getByRole('region', { name: 'Paper positions' })).toContainText('AAPL');
   await expect(page.locator('#positions-view')).toContainText('AAPL');
+});
+
+test('the desk chart follows the ticket and shows fills and open limit orders', async ({ page }) => {
+  await unlock(page);
+  await toPaper(page);
+  expect((await page.request.post('/api/paper/connect', { data: KEY })).ok()).toBe(true);
+  await page.reload();
+  const panel = page.locator('#paper-panel');
+  const chart = () => page.evaluate(() => {
+    const c = (document.querySelector('#paper-chart .pc-root') as unknown as { __priceChart: { symbol: string; tradeData: { trades?: unknown[]; orders?: { side: string; price: number }[] } | null } }).__priceChart;
+    return { symbol: c.symbol, trades: c.tradeData?.trades?.length ?? 0, orders: c.tradeData?.orders ?? [] };
+  });
+  await page.locator('#paper-symbol').fill('MSFT');
+  await page.locator('#paper-symbol').press('Enter');
+  await expect.poll(async () => (await chart()).symbol).toBe('MSFT');
+  await page.locator('#paper-amount').fill('2');
+  await page.locator('#paper-submit').click();
+  await expect.poll(async () => (await chart()).trades).toBe(1);
+
+  await panel.getByRole('button', { name: 'Limit', exact: true }).click();
+  await panel.getByLabel('Limit price').fill('300');
+  await page.locator('#paper-amount').fill('1');
+  await page.locator('#paper-submit').click();
+  await expect.poll(async () => (await chart()).orders).toEqual([{ side: 'buy', price: 300, label: 'BUY LMT 1 @ 300.00' }]);
+  await panel.getByRole('tab', { name: /Open orders/ }).click();
+  const open = panel.getByRole('region', { name: 'Open paper orders' });
+  await open.getByRole('button', { name: 'Cancel' }).click();
+  await expect(open).toContainText('No open orders.');
+  await expect.poll(async () => (await chart()).orders).toEqual([]);
 });
 
 test('Kestrel\'s order waits as a live ticket until the user approves it', async ({ page }) => {
@@ -59,8 +95,9 @@ test('Kestrel\'s order waits as a live ticket until the user approves it', async
   await expect(pending).toContainText('E2E: Kestrel proposes MSFT');
   await pending.getByRole('button', { name: 'Approve' }).click();
   await expect(pending).toBeHidden();
+  await panel.getByRole('tab', { name: 'History' }).click();
   const recent = panel.getByRole('region', { name: 'Recent paper orders' });
-  await expect(recent.locator('li').filter({ hasText: 'MSFT' })).toContainText('KESTREL');
+  await expect(recent.locator('tr').filter({ hasText: 'KESTREL' }).filter({ hasText: 'BUY 2 MSFT' })).toContainText('2 @'); // the earlier test also traded MSFT
 });
 
 test('the lock screen opens the terminal in the chosen book', async ({ page }) => {

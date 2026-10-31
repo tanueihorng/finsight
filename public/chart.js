@@ -1068,6 +1068,26 @@
       }
     }
   };
+  // open orders (paper trade desk, FEAT-011): host passes tradeData.orders =
+  // [{ side, price, label }]; each is a dashed line at its limit price
+  PriceChart.prototype._drawOrders = function () {
+    const list = this.tradeData && this.tradeData.orders; if (!list || !list.length) return;
+    const c = this.ctx, P = this.panes.price, self = this;
+    c.save(); c.font = this.font; c.textBaseline = 'middle'; c.lineWidth = 1;
+    list.forEach(function (o) {
+      if (!(o.price > 0)) return;
+      const y = Math.round(self.yPrice(o.price)) + 0.5; if (y < P.y || y > P.y + P.h) return;
+      const col = o.side === 'sell' ? '#ff6d00' : '#2962ff';
+      c.strokeStyle = col; c.setLineDash([4, 4]); c.beginPath(); c.moveTo(P.x, y); c.lineTo(P.x + P.w, y); c.stroke(); c.setLineDash([]);
+      const txt = o.label || ((o.side === 'sell' ? 'SELL' : 'BUY') + ' LMT ' + fmtPrice(o.price));
+      const w = c.measureText(txt).width + 10, x = P.x + P.w - w - 4;
+      c.fillStyle = col; c.fillRect(x, y - 8, w, 15);
+      c.fillStyle = '#fff'; c.textAlign = 'left'; c.fillText(txt, x + 5, y);
+      c.fillStyle = col; c.fillRect(P.x + P.w + 1, y - 7, self.axisR - 2, 14);
+      c.fillStyle = '#fff'; c.fillText(self._axisLabel(o.price), P.x + P.w + 5, y);
+    });
+    c.restore();
+  };
   PriceChart.prototype._dirty = function () { this._dirtyStatic = true; this.requestRender(); };
 
   // ---- indicators ------------------------------------------------------------
@@ -1577,6 +1597,7 @@
     if (this.strat) this._drawStrategy();
     c.restore();
     this._drawTrades();
+    this._drawOrders();
     this._drawLastPrice();
   };
   // last index a series may be drawn to: past the last bar into the right

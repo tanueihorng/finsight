@@ -104,12 +104,6 @@ function KestrelDock() {
 }
 
 const PANELS: Record<string, () => ReactNode> = {
-  // FEAT-011: shown in PAPER mode only (styles.css hides it in REAL).
-  paper: () => (
-    <Panel pid="paper" id="paper-panel" title={<span className="panel-title">PAPER TRADING &nbsp;·&nbsp; ALPACA</span>} head={<span className="dim small">fake money</span>}>
-      <Host island="paper" id="paper-body" />
-    </Panel>
-  ),
   positions: () => (
     <Panel pid="positions" title={<span className="panel-title">PORTFOLIO &nbsp;·&nbsp; POSITIONS</span>} head={
       <div className="head-btns">
@@ -310,6 +304,8 @@ export default function App() {
       <Host island="command" className="cmdbar" />
       <Host island="status" />
 
+      {/* FEAT-011: the paper trade desk, full width above the panels, PAPER mode only (styles.css hides it in REAL). */}
+      <Host island="paper" id="paper-panel" className="paper-desk" />
       <main className="grid">
         <Column side="left">
           <Summary />
