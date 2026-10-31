@@ -104,6 +104,12 @@ function KestrelDock() {
 }
 
 const PANELS: Record<string, () => ReactNode> = {
+  // FEAT-011: shown in PAPER mode only (styles.css hides it in REAL).
+  paper: () => (
+    <Panel pid="paper" id="paper-panel" title={<span className="panel-title">PAPER TRADING &nbsp;·&nbsp; ALPACA</span>} head={<span className="dim small">fake money</span>}>
+      <Host island="paper" id="paper-body" />
+    </Panel>
+  ),
   positions: () => (
     <Panel pid="positions" title={<span className="panel-title">PORTFOLIO &nbsp;·&nbsp; POSITIONS</span>} head={
       <div className="head-btns">
@@ -283,10 +289,11 @@ export default function App() {
 
       <header className="topbar">
         <div className="brand">
-          <img className="logo-img" src="/icon.png" alt="" aria-hidden="true" /> FINSIGHT<span className="dim">//</span><span className="amber">PERSONAL&nbsp;TERMINAL</span>
+          <img className="logo-img" src="/icon.png" alt="" aria-hidden="true" /> FINSIGHT<span className="dim">//</span><span className="amber brand-real">PERSONAL&nbsp;TERMINAL</span><span className="brand-paper">PAPER&nbsp;TRADING</span>
         </div>
         <div className="topbar-right">
           <span id="agent-toggle-slot" style={{ display: 'contents' }}></span>
+          <Host as="span" island="book" style={contents} />
           <Host as="label" island="account" className="base-sel" title="Account / portfolio — each holds its own positions" />
           <Host as="span" island="profile" style={contents} />
           <Host as="span" island="peek" style={contents} />

@@ -7,7 +7,7 @@ export type Side = 'left' | 'right';
 export interface Columns { left: string[]; right: string[] }
 // Default order, as in the pre-X1 index.html (Kestrel's dock sits after the detail).
 export const DEFAULT_COLUMNS: Columns = {
-  left: ['positions', 'performance', 'wealth', 'allocation', 'heatmap', 'watchlist', 'alerts', 'fxrisk', 'dividends', 'activity'],
+  left: ['paper', 'positions', 'performance', 'wealth', 'allocation', 'heatmap', 'watchlist', 'alerts', 'fxrisk', 'dividends', 'activity'],
   right: ['detail', 'kestrel', 'news', 'markets', 'discover', 'calendar', 'worldbank', 'fred', 'inflation'],
 };
 // ⚙ Layout's show/hide list: [body id, label]; the body id is what finsight-panels stores.

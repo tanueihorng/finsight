@@ -987,3 +987,22 @@ textarea:focus-visible, [tabindex]:focus-visible, summary:focus-visible {
   .sx-shell, .sx-shell *, .sx-shell *::before, .sx-shell *::after, #setup-modal *, #setup-modal *::before, #setup-modal *::after { animation: none !important; transition: none !important; }
   .sx-boot li, .sx-area, .sx-last, .sx-beacon { opacity: 1; } .sx-trace { stroke-dashoffset: 0; } .sx-scan { display: none; }
 }
+
+/* ---- PAPER mode (FEAT-011; data-book="paper" on <html>) ----------------------
+   A distinct gold stripe and label so the paper book is never mistaken for the
+   real one. Book edits that PAPER refuses are hidden; the paper panel shows
+   only in PAPER. */
+:root { --paper: #f5b301; }
+:root[data-mode="light"] { --paper: #c98a00; }
+.brand-paper { display: none; }
+:root[data-book="paper"] .brand-real { display: none; }
+:root[data-book="paper"] .brand-paper { display: inline; color: var(--paper); font-weight: 700; }
+:root[data-book="paper"] .topbar { box-shadow: inset 0 3px 0 var(--paper); }
+:root:not([data-book="paper"]) .panel[data-pid="paper"] { display: none !important; }
+:root[data-book="paper"] .panel[data-pid="paper"] { border-color: var(--paper); }
+:root[data-book="paper"] :is(#cash-btn, #import-btn, #undo-btn, #wealth-cash-btn) { display: none; }
+.lock-book { display: flex; gap: 4px; margin: 4px 0 10px; padding: 3px; border: 1px solid var(--border-2); border-radius: 6px; }
+.lock-book button { flex: 1; height: 30px; border: 0; border-radius: 4px; background: transparent; color: var(--muted); font: inherit; font-size: 12px; letter-spacing: .6px; cursor: pointer; }
+.lock-book button[aria-pressed="true"] { background: var(--panel-2); color: var(--amber); }
+.lock-book button.paper[aria-pressed="true"] { background: var(--paper); color: #111; font-weight: 700; }
+.lock-book button:focus-visible { outline: 2px solid var(--amber); outline-offset: 1px; }

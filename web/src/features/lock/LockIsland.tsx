@@ -4,6 +4,7 @@ import { api } from '../../api/client.ts';
 import { lockTitle, pinProblem } from './lock.ts';
 import { Clock, Stage, Tape, type BootLine } from './Stage.tsx';
 import { profile } from '../topbar/profile.ts';
+import { applyBook, book, loadBook, type Book } from '../paper/book.ts';
 
 // The PIN lock screen's form (F9). Legacy startup still decides when to lock
 // (checkAuth, showLock, a 401) and writes store.lock; a fresh lock clears and
@@ -15,6 +16,10 @@ export default function LockIsland() {
   useEffect(() => { const host = document.getElementById('lock-screen'); host?.setAttribute('role', 'region'); host?.setAttribute('aria-label', 'FinSight lock screen'); }, []);
   const lock = useStore(store(), (s) => s.lock);
   const [pin, setPin] = useState(''), [pin2, setPin2] = useState('');
+  // REAL or PAPER (FEAT-011): which book the terminal opens in.
+  const known = useStore(book, (b) => b.book);
+  const [choice, setChoice] = useState<Book>(known);
+  useEffect(() => { void loadBook().then(setChoice); }, []);
   const pinRef = useRef<HTMLInputElement>(null), pin2Ref = useRef<HTMLInputElement>(null);
   const say = (msg: string) => store().setState({ lock: { ...store().getState().lock, msg } });
   useEffect(() => {
@@ -28,8 +33,11 @@ export default function LockIsland() {
     const p = pin.trim(), problem = pinProblem(lock.mode, p, pin2.trim());
     if (problem) return say(problem);
     try {
-      await api(lock.mode === 'create' ? '/api/auth/setup' : '/api/auth/login',
-        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin: p }) });
+      const json = { 'Content-Type': 'application/json' };
+      await api(lock.mode === 'create' ? '/api/auth/setup' : '/api/auth/login', { method: 'POST', headers: json, body: JSON.stringify({ pin: p, book: choice }) });
+      if (lock.mode === 'create' && choice === 'paper') await api('/api/book', { method: 'POST', headers: json, body: JSON.stringify({ book: 'paper' }) });
+      // The page was built for the other book: reload into the chosen one.
+      if (choice !== known) { applyBook(choice); return window.location.reload(); }
       window.FinSight.auth.unlock();
     } catch (e) { say((e as Error).message); setPin(''); pinRef.current?.focus(); }
   }
@@ -56,6 +64,12 @@ export default function LockIsland() {
           <span className="sx-kicker">ACCESS · LOCAL VAULT</span>
           <span className="sx-hello" aria-hidden="true">{hello}</span>
           <div id="lock-title" role="heading" aria-level={1} className="lock-title">{lockTitle(lock.mode)}</div>
+          {!offline && (
+            <div className="lock-book" role="group" aria-label="Open in">
+              <button type="button" id="lock-book-real" aria-pressed={choice === 'real'} onClick={() => setChoice('real')}>REAL PORTFOLIO</button>
+              <button type="button" id="lock-book-paper" className="paper" aria-pressed={choice === 'paper'} onClick={() => setChoice('paper')}>PAPER TRADING</button>
+            </div>
+          )}
           <input id="lock-pin" aria-label={create ? 'Create PIN' : 'PIN'} ref={pinRef} className={'lock-input' + (offline ? ' hidden' : '')} type="password" inputMode="numeric" autoComplete="off" maxLength={12} placeholder="● ● ● ●"
             value={pin} onChange={(e) => setPin(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') { if (create) pin2Ref.current?.focus(); else void submit(); } }} />
