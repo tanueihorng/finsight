@@ -15,6 +15,8 @@ The earlier draft with unverified release numbers is preserved in `docs/archive/
 
 ## Unreleased
 
+- Personal Council upgrade, 2026-10-31: `a186117` adds a separate Council budget; `5bb31bf` handles a matching issuer name and ticker; `c3ce194` uses the model context bound. Activated from the retained `feature/council-quality` worktree. A live AMD review completed all seven stages, but research remains partial and qualitative support needs review; completion is not investment qualification. Details remain in the private workspace run packet.
+
 - Council challenge packets preserve canonical tool data as structured JSON and include all specialist assessments and cited evidence. Optional Council-specific spending and output limits allow a fuller review without changing ordinary chat limits. Budget-refusal traces include reservation and available-budget details; live-provider research-quality confirmation remains pending.
 
 - `COUNCILQUALITY-001`: isolated integration `53c6709` combines GitHub main `f215b4cd` with the local observability snapshot and council-quality work. Unavailable sources and unverified qualitative claims prevent a ready research status. Concurrent daily budget reservations wait for in-flight calls before refusing work. These changes are not deployed; the AMD turn-budget issue and full research qualification remain open.
