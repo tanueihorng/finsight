@@ -1,6 +1,6 @@
 # FEAT-010: Market Discover
 
-Status: First slice plus US market movers and US IPO calendar implemented on `feat/discover` (not merged) · 2026-10-31  
+Status: First slice plus US market movers and US IPO calendar merged locally into `main` at `cefd2ff` (not pushed, not deployed) · 2026-10-31  
 Execution task: `DISCOVER-001` (selected by the user 2026-10-31; market-wide movers and IPOs added at the user's request the same day).
 
 ## Intent
