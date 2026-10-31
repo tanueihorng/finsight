@@ -17,6 +17,34 @@ export const logs: string[] = [];
 setLogSink((l) => logs.push(l));
 process.env.AGENT_NO_KEYCHAIN = '1';
 
+// SEC EDGAR is never reached from tests: sec.gov requests get synthetic data
+// (AMD is the only registrant) and every other host goes to the real fetch,
+// which tests point only at loopback fakes.
+export const SEC_CALLS: string[] = [];
+const realFetch = globalThis.fetch;
+globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+  const url = new URL(typeof input === 'string' || input instanceof URL ? input : input.url);
+  if (!/(^|\.)sec\.gov$/.test(url.hostname)) return realFetch(input, init);
+  SEC_CALLS.push(url.pathname);
+  const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+  if (url.pathname === '/files/company_tickers.json') return json(200, { 0: { cik_str: 2488, ticker: 'AMD', title: 'Synthetic Micro Devices' } });
+  if (url.pathname === '/submissions/CIK0000002488.json') return json(200, { filings: { recent: { form: ['8-K', '10-Q', '8-K'], accessionNumber: ['0000002488-26-000003', '0000002488-26-000001', '0000002488-26-000002'], filingDate: ['2026-09-28', '2026-08-01', '2026-08-04'], reportDate: ['', '2026-06-30', ''], primaryDocument: ['k3.htm', 'q2.htm', 'k2.htm'], primaryDocDescription: ['8-K', '10-Q', '8-K'], items: ['8.01', '', '2.02,9.01'] } } });
+  if (url.pathname === '/api/xbrl/companyfacts/CIK0000002488.json') return json(200, { facts: {
+    dei: { EntityCommonStockSharesOutstanding: { units: { shares: [{ end: '2026-07-25', val: 1000, filed: '2026-08-01' }] } } },
+    'us-gaap': {
+      // Like AMD: an abandoned concept listed first must not shadow the current one.
+      Revenues: { label: 'Revenues', units: { USD: [{ form: '10-K', fp: 'FY', fy: 2017, start: '2017-01-01', end: '2017-12-31', val: 999999, filed: '2018-02-01' }] } },
+      RevenueFromContractWithCustomerExcludingAssessedTax: { label: 'Revenue', units: { USD: [{ form: '10-K', fp: 'FY', fy: 2024, start: '2024-01-01', end: '2024-12-31', val: 744, filed: '2025-02-01' }, { form: '10-K', fp: 'FY', fy: 2025, start: '2025-01-01', end: '2025-12-31', val: 1000, filed: '2026-02-01' }] } },
+      // Four discrete quarters: TTM diluted EPS 0.5 + 0.5 + 0.25 + 0.25 = 1.5.
+      EarningsPerShareDiluted: { label: 'EPS', units: { 'USD/shares': [['2025-07-01', '2025-09-30', 0.5], ['2025-10-01', '2025-12-31', 0.5], ['2026-01-01', '2026-03-31', 0.25], ['2026-04-01', '2026-06-30', 0.25]].map(([start, end, val]) => ({ form: '10-Q', start, end, val, filed: '2026-08-01' })) } },
+    } } });
+  if (url.pathname === '/Archives/edgar/data/2488/000000248826000003/index.json') return json(200, { directory: { item: [{ name: 'k3.htm' }] } });
+  if (url.pathname === '/Archives/edgar/data/2488/000000248826000002/index.json') return json(200, { directory: { item: [{ name: 'k2.htm' }, { name: 'ex99-1.htm' }] } });
+  if (url.pathname === '/Archives/edgar/data/2488/000000248826000003/k3.htm') return new Response('<html><body><p>Synthetic Micro Devices entered into a definitive merger agreement to acquire Synthetic Labs for stock. The transaction is expected to close by year end, subject to customary closing conditions.</p></body></html>', { status: 200 });
+  if (url.pathname === '/Archives/edgar/data/2488/000000248826000002/ex99-1.htm') return new Response('<html><body><p>Synthetic quarterly results: revenue rose.</p></body></html>', { status: 200 });
+  return json(404, {});
+}) as typeof fetch;
+
 export const TOKEN = 'test-token-0123456789abcdef0123456789abcdef';
 export const PROXY_SECRET = 'test-proxy-secret-0123456789abcdef01234567';
 
@@ -60,11 +88,21 @@ export async function fakeFinsight(options: { scopedAccounts?: boolean; naturalH
         return j(200, { ...PORTFOLIO, account, positions, cash, summary: { totalValue, cashBase, netWorth: totalValue + cashBase, totalCost: positions.reduce((n, p) => n + p.cost, 0), totalUnrealized: positions.reduce((n, p) => n + p.unrealized, 0), realizedPnl: account === 'a1' ? 100 : account === 'a2' ? 20 : 0 } });
       }
       case '/api/accounts': return j(200, { accounts: [{ id: 'a1', name: 'IBKR', type: 'Brokerage', count: 2 }, { id: 'a2', name: 'DBS', type: 'Bank', count: 1 }], activeId: 'a1' });
-      case '/api/categories': return j(200, { NVDA: { category: 'Technology' }, VOO: { category: 'ETF' }, 'D05.SI': { category: 'Financial Services' } });
+      case '/api/categories': return j(200, { NVDA: { symbol: 'NVDA', sector: 'Technology', type: 'EQUITY', category: 'Technology' }, VOO: { symbol: 'VOO', sector: null, type: 'ETF', category: 'ETF / Fund' }, 'D05.SI': { symbol: 'D05.SI', category: 'Other' } });
       case '/api/events': return j(200, { events: [{ symbol: 'NVDA', type: 'Earnings', time: Date.now() + 5 * 864e5 }] });
+      case '/api/fund': return u.searchParams.get('symbol') === 'VOO'
+        ? j(200, { symbol: 'VOO', family: 'Synthetic Funds', category: 'Large Blend', legalType: 'Exchange Traded Fund', expenseRatioPct: 0.03, totalAssets: 1e11, currency: 'USD', assetMix: { stocksPct: 99.5, bondsPct: 0, cashPct: 0.5, otherPct: 0 }, topHoldings: [{ symbol: 'NVDA', name: 'NVIDIA', weightPct: 7.5 }, { symbol: 'SYNB', name: 'Synthetic B', weightPct: 6 }], topHoldingsPct: 13.5, sectorWeights: [{ sector: 'technology', weightPct: 33 }] })
+        : j(404, { error: 'No fund profile' });
+      case '/api/fred': return j(200, { series: u.searchParams.get('series'), transform: 'lin', points: Array.from({ length: 30 }, (_, i) => ({ date: new Date(Date.UTC(2026, 0, 1) + i * 7 * 864e5).toISOString().slice(0, 10), value: 4 + (i % 7) / 10 })) });
+      case '/api/search': {
+        const instruments = [{symbol:'AMD',name:'Advanced Micro Devices, Inc.'},{symbol:'NVDA',name:'NVIDIA Corporation'},{symbol:'TSM',name:'Taiwan Semiconductor Manufacturing Company Limited'},{symbol:'VOO',name:'Vanguard S&P 500 ETF'}];
+        const q = (u.searchParams.get('q') || '').toLowerCase();
+        return j(200, instruments.filter(x=>x.symbol.toLowerCase()===q || x.name.toLowerCase().includes(q)).map(x=>({...x,exchange:'NASDAQ',type:'EQUITY'})));
+      }
+      case '/api/quote-details': return j(200, { details: Object.fromEntries((u.searchParams.get('symbols') || '').split(',').map((symbol) => [symbol.toUpperCase(), { earningsStart: Date.UTC(2026, 10, 3, 21), earningsEnd: null, earningsEstimated: false }])) });
       case '/api/quote': return j(200, { quotes: (u.searchParams.get('symbols') || '').split(',').map((symbol) => {
         const p = PORTFOLIO.positions.find((p) => p.symbol === symbol);
-        return { symbol, name: p?.name || symbol, price: p?.last ?? 10, currency: p?.currency || 'USD', change: 1, changePct: 1 };
+        return { symbol, name: p?.name || symbol, type: symbol === 'VOO' ? 'ETF' : 'EQUITY', price: p?.last ?? 10, currency: p?.currency || 'USD', change: 1, changePct: 1 };
       }) });
       case '/api/history': {
         if (options.naturalHistory) {

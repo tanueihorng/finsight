@@ -1,7 +1,7 @@
 // G1–G3: Kestrel chat against the fake agent. Written against legacy
 // agent-panel.js first. Prompt words drive the fake: "tools", "markdown", "fail".
 import { test, expect, type Page } from '@playwright/test';
-import { seeded, answerDialog } from './helpers';
+import { seeded, answerDialog, chatMenu, replySettings } from './helpers';
 
 const input = (page: Page) => page.locator('.agent-input:visible');
 const lastTurn = (page: Page) => page.locator('.agent-turn:visible').last();
@@ -29,8 +29,12 @@ test('welcome, suggestion chips, page context on the message, model list', async
   await expect(page.locator('.kx-hello .hi')).toHaveText(/^Good (morning|afternoon|evening)$/);
   await expect(page.locator('.agent-try .agent-chip')).toHaveCount(4);
   await expect(page.locator('.agent-try .kx-strategy')).toHaveText('What do my strategies say about VOO right now?');
-  await expect(page.locator('.agent-ctx:visible')).toHaveText('◉ VOO 1d');
+  await expect(page.locator('.agent-ctx:visible')).toHaveText('VOO 1d');
+  await expect(page.locator('.agent-ctx:visible')).toHaveAttribute('aria-pressed', 'true');
+  await replySettings(page);
   await expect(page.locator('.agent-model:visible option')).toHaveText(['Fake model $']);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.kx-pop')).toHaveCount(0);
   await expect(input(page)).toHaveAttribute('placeholder', 'Ask Kestrel anything…  (/ for skills)');
   await page.locator('.agent-try .agent-chip').nth(2).click();
   await expect(page.locator('.agent-user:visible').last().locator('.q')).toHaveText('What is my currency and sector exposure?');
@@ -38,7 +42,7 @@ test('welcome, suggestion chips, page context on the message, model list', async
   await expect(lastTurn(page).locator('.agent-text')).toHaveText('Echo: What is my currency and sector exposure?');
   await expect(lastTurn(page).locator('.agent-meta')).toContainText('Fake model');
   await page.locator('.agent-ctx:visible').click();
-  await expect(page.locator('.agent-ctx:visible')).toHaveText('○ no context');
+  await expect(page.locator('.agent-ctx:visible')).toHaveText('No context');
   await send(page, 'no ctx');
   await expect(page.locator('.agent-user:visible').last().locator('.meta')).toHaveCount(0);
   await page.locator('.agent-ctx:visible').click();
@@ -153,7 +157,8 @@ test('KESTRELUI-002 start screen: briefing tiles, colour-coded questions, keyboa
   await cmd.click();
   await expect(input(page)).toHaveValue('/');
   await expect(page.locator('.agent-menu:visible')).toBeVisible();
-  expect(await page.locator('.agent-tools-row:visible select').evaluateAll((els) => els.map((e) => e.getAttribute('aria-label')))).toEqual(['Model', 'Web search']);
+  await replySettings(page);
+  expect(await page.locator('.kx-pop:visible select').evaluateAll((els) => els.map((e) => e.getAttribute('aria-label')))).toEqual(['Model', 'Web search']);
   await input(page).fill('');
   await rows.first().click();
   await expect(lastTurn(page).locator('.agent-text')).toHaveText('Echo: jump chat');
@@ -167,6 +172,7 @@ test('wide panel: the chat rail sits beside the chat; search provider is picked 
   await expect(rail).toBeVisible();
   await expect(page.locator('.kx-start:visible')).toBeVisible();
   await expect(page.locator('.kx-jump-row:not(.cmd)')).toHaveCount(0); // the rail lists the chats instead
+  await replySettings(page);
   const search = page.locator('.agent-search:visible');
   await expect(search.locator('option')).toHaveText(['Auto (Tavily)', 'DeepSeek', 'Tavily', 'Brave · no key']);
   await expect(search).toHaveValue('auto');
@@ -184,6 +190,7 @@ test('wide panel: the chat rail sits beside the chat; search provider is picked 
   await page.locator('.agent-icon-btn[title="Chats"]:visible').click();
   await expect(page.locator('.kx-rail')).toHaveCount(0);
   await page.reload();
+  await replySettings(page);
   await expect(page.locator('.agent-search:visible')).toHaveValue('deepseek');
   await expect(page.locator('.kx-rail')).toHaveCount(0);
   await page.locator('.agent-icon-btn[title="Chats"]:visible').click();
@@ -201,7 +208,7 @@ test('⌘/ and Esc open and close; Esc keeps a typed message; width presets pers
   await input(page).press('Escape');
   await expect(page.locator('body')).toHaveClass(/\bagent-open\b/);
   await input(page).fill('');
-  await page.locator('.agent-icon-btn[title^="Panel width"]').click();
+  await chatMenu(page, /^Panel width/);
   expect(await page.evaluate(() => localStorage.getItem('finsight-agent-w'))).toBe('560');
   await page.locator('.agent-resize').dblclick();
   expect(await page.evaluate(() => localStorage.getItem('finsight-agent-w'))).toBe('440');
@@ -212,7 +219,7 @@ test('⌘/ and Esc open and close; Esc keeps a typed message; width presets pers
 
 test('dock mode: collapse persists across reload, height keys, the dock is a draggable panel', async ({ page }) => {
   await open(page);
-  await page.locator('.agent-icon-btn[title="Dock into the terminal"]').click();
+  await chatMenu(page, 'Dock into the terminal');
   const dock = page.locator('#agent-dock');
   await expect(dock).toBeVisible();
   await expect(dock).toHaveAttribute('data-pid', 'kestrel');
@@ -229,7 +236,7 @@ test('dock mode: collapse persists across reload, height keys, the dock is a dra
   await page.keyboard.press('ArrowDown');
   expect(await page.evaluate(() => localStorage.getItem('finsight-agent-dock-h'))).toBe('600');
   await page.locator('.agent-dock-resize').dblclick();
-  await page.locator('.agent-icon-btn[title="Pop out to the side panel"]').click();
+  await chatMenu(page, 'Pop out to the side panel');
   await expect(page.locator('body')).toHaveClass(/\bagent-open\b/);
   await expect(page.locator('#agent-dock')).toBeHidden();
 });

@@ -28,6 +28,7 @@ export type SendInput = { threadId: string; content: string; lens?: LensId; brai
 
 import { UI_GUIDANCE } from '../ui/schema.ts';
 import { bytePrefix, inputBudget, selectContext } from './context.ts';
+import { basisNote } from './council-metrics.ts';
 const PACK_TTL_MS = 15 * 60_000;
 
 export class ChatEngine {
@@ -84,7 +85,7 @@ export class ChatEngine {
     if (council && (brain.kind !== 'api' || brain.manifest.capabilities.nativeSearch)) throw new AgentError('BAD_INPUT', 'Council requires a supported API model without native search');
     if (council && !content.replace(/^\/(committee|debate)\s*/, '').trim()) throw new AgentError('BAD_INPUT', 'Provide a council question');
     if (brain.kind === 'api' && (this.councilRunning || (council && this.running.size > 0))) throw new AgentError('CONFLICT', 'Finish or stop active replies before starting another council/API reply', 409);
-    if (council && (cfg.limits.turnSteps < 10 || (input.attachmentIds?.length ?? 0) > 0)) throw new AgentError('BAD_INPUT', 'Council needs at least 10 permitted steps and currently accepts text questions only');
+    if (council && (input.attachmentIds?.length ?? 0) > 0) throw new AgentError('BAD_INPUT', 'Council currently accepts text questions only');
     const effort = input.effort ?? brain.manifest.thinking?.default;
     if (effort !== undefined && (!Effort.safeParse(effort).success || !brain.manifest.thinking?.levels.includes(effort))) throw new AgentError('BAD_INPUT', 'Thinking effort is not supported by this model', 400);
     if (council && brain.manifest.transport !== 'mock' && (brain.manifest.id !== 'deepseek-flash' || effort !== 'none')) throw new AgentError('COUNCIL_MODEL_UNQUALIFIED', 'Council release qualification currently covers DeepSeek Flash with thinking off only. Choose that model and effort.', 400);
@@ -108,7 +109,7 @@ export class ChatEngine {
     if (input.brain && input.brain !== thread.defaultBrain) store.updateThread(this.db, thread.id, { defaultBrain: input.brain });
     this.bus.emit(thread.id, 'turn.started', { turnId: turn.id, brain: brainId, label: brain.manifest.label, skill: skill?.name, effort, search: cfg.searchProvider, lens: lens + ':1' });
     audit('turn.start', { turnId: turn.id, threadId: thread.id, brain: brainId, content, attachments: input.attachmentIds ?? [], skill: skill?.name, effort, search: cfg.searchProvider, pageContext: input.pageContext });
-    void auditContext.run({ turnId: turn.id, threadId: thread.id }, () => this.run(thread.id, turn.id, brain, ctrl, cfg, effort)).finally(() => {
+    void auditContext.run({ ...(auditContext.getStore() ?? {}), turnId: turn.id, threadId: thread.id }, () => this.run(thread.id, turn.id, brain, ctrl, cfg, effort)).finally(() => {
       if (council) this.councilRunning = false;
       if (this.running.get(thread.id)?.turnId === turn.id) this.running.delete(thread.id);
     });
@@ -133,17 +134,20 @@ export class ChatEngine {
     const citations: CitationBlock[] = [];
     const ctx: ToolCtx = { cfg, db: this.db, finsight: this.finsight, signal: ctrl.signal, turnId, threadId,
       budget: { searches: this.cfg.limits.searchesPerTurn, fetches: this.cfg.limits.fetchesPerTurn }, citations };
-    let streamed = '', step = 0, costUsd = 0, councilUnknown = false;
+    let streamed = '', step = 0, costUsd = 0, councilUnknown = false, councilReadiness: string | null = null;
     const usageTotal: Usage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0 };
     const onText = (d: string) => { streamed += d; this.bus.delta(threadId, turnId, d); };
     try {
       const question = store.listMessages(this.db, threadId).filter((m) => m.turnId === turnId).flatMap((m) => m.blocks).find((b) => b.type === 'text');
       if (brain.kind === 'api' && question?.type === 'text' && /^\/(committee|debate)(?:\s|$)/.test(question.text)) {
         const scopeNotice = store.listMessages(this.db, threadId).filter((m) => m.turnId === turnId).flatMap((m) => m.blocks).find((b) => b.type === 'notice' && b.kind === 'page_context');
-        const result = await runStoredCouncil({ db: this.db, bus: this.bus, tools: this.tools, ctx, brain, system: this.system(), question: question.text.replace(/^\/(committee|debate)\s*/, ''), usageTotal, effort, scope: scopeNotice?.type === 'notice' ? JSON.parse(scopeNotice.text) : undefined });
+        const lensNotice = store.listMessages(this.db, threadId).filter((m) => m.turnId === turnId).flatMap((m) => m.blocks).find((b) => b.type === 'notice' && b.kind === 'lens');
+        const lens = LENSES.find((l) => l.id === (lensNotice?.type === 'notice' ? lensNotice.text.split(':')[0] : 'balanced'))!;
+        const councilSystem = this.system() + (lens.id === 'balanced' ? '' : '\nAnalytical lens (subordinate to core rules, accepted policy and capabilities): ' + JSON.stringify(lens));
+        const result = await runStoredCouncil({ db: this.db, bus: this.bus, tools: this.tools, ctx, brain, system: councilSystem, question: question.text.replace(/^\/(committee|debate)\s*/, ''), usageTotal, effort, scope: scopeNotice?.type === 'notice' ? JSON.parse(scopeNotice.text) : undefined });
         step = result.steps;
         ctrl.signal.throwIfAborted();
-        onText(result.text); councilUnknown = result.costUsd === null; costUsd = result.costUsd ?? 0;
+        onText(result.text); councilReadiness = result.readiness?.level ?? null; councilUnknown = result.costUsd === null; costUsd = result.costUsd ?? 0;
         store.appendMessage(this.db, threadId, 'assistant', [{ type: 'text', text: result.text }], { brain: brain.manifest.id, turnId });
       } else {
         await this.attachContextPack(threadId, ctx);
@@ -154,8 +158,9 @@ export class ChatEngine {
         }
       }
       this.emitCitations(threadId, turnId, citations);
-      store.finishTurn(this.db, turnId, 'succeeded', 'end');
-      audit('turn.end', { turnId, threadId, status: 'succeeded', steps: step, costUsd: councilUnknown ? null : round6(costUsd), usage: usageTotal, ms: Date.now() - t0 });
+      // Execution succeeded; a council's research readiness is recorded separately.
+      store.finishTurn(this.db, turnId, 'succeeded', councilReadiness && councilReadiness !== 'ready' ? 'council_' + councilReadiness : 'end');
+      audit('turn.end', { turnId, threadId, status: 'succeeded', researchReadiness: councilReadiness, steps: step, costUsd: councilUnknown ? null : round6(costUsd), usage: usageTotal, ms: Date.now() - t0 });
       this.bus.emit(threadId, 'turn.finished', { turnId, usage: usageTotal, costUsd: councilUnknown ? null : round6(costUsd), steps: step, ms: Date.now() - t0 });
     } catch (e) {
       const aborted = ctrl.signal.aborted;
@@ -264,7 +269,7 @@ export class ChatEngine {
         warnedContext = true;
         this.bus.emit(threadId, 'budget.warning', { turnId, scope: 'context', note: 'Some earlier conversation or document text is outside the current context. Original messages and documents remain available through search and document tools.' });
       }
-      audit('model.request', { turnId, threadId, step, brain: brain.manifest.id, model: brain.manifest.model, effort, final, tools: final ? [] : tools.map((x) => x.name),
+      audit('model.request', { turnId, threadId, step, brain: brain.manifest.id, model: brain.manifest.model, effort, final, system, tools: final ? [] : tools.map((x) => x.name),
         messages: messages.map((m) => ({ role: m.role, blocks: m.blocks.map((b) => (b.type === 'image' ? { type: 'image', mime: b.mime, name: b.name, bytes: b.data.length } : b)) })) });
       let res: StepResult;
       try {
@@ -276,7 +281,7 @@ export class ChatEngine {
       audit('model.response', { turnId, step, brain: brain.manifest.id, ms: Date.now() - t, stopReason: res.stopReason, usage: res.usage, blocks: res.blocks });
       const c = costOf(brain.manifest, res.usage, res.searches);
       costUsd += c; addUsage(usageTotal, res.usage);
-      store.addTraceStep(this.db, turnId, step, { kind: 'brain', name: brain.manifest.id, usage: res.usage, costUsd: c, ms: Date.now() - t, ok: true });
+      store.addTraceStep(this.db, turnId, step * 100, { kind: 'brain', name: brain.manifest.id, usage: res.usage, costUsd: c, ms: Date.now() - t, ok: true });
       store.addCost(this.db, { brain: brain.manifest.id, kind: 'tokens', units: (res.usage.inputTokens ?? 0) + (res.usage.outputTokens ?? 0), usd: c, priceVersion: brain.manifest.pricing.version, turnId, threadId });
       step++;
       const calls = res.blocks.filter((b): b is Extract<Block, { type: 'tool_call' }> => b.type === 'tool_call');
@@ -290,7 +295,7 @@ export class ChatEngine {
         const ts = Date.now();
         const r = await this.tools.execute(call.name, call.args, { ...ctx, callId: call.id });
         const ms = Date.now() - ts;
-        store.addTraceStep(this.db, turnId, step * 100 + calls.indexOf(call), { kind: 'tool', name: call.name, args: redactValue(call.args), resultSummary: r.content.slice(0, 500), ok: r.ok, ms });
+        store.addTraceStep(this.db, turnId, (step - 1) * 100 + calls.indexOf(call) + 1, { kind: 'tool', name: call.name, args: redactValue(call.args), resultSummary: redactValue(r.content.slice(0, 500)), ok: r.ok, ms });
         this.bus.emit(threadId, 'tool.finished', { turnId, callId: call.id, name: call.name, ok: r.ok, resultSummary: summarizeResult(r.content), ms });
         if (r.ok && call.name === 'render_ui') {
           const view = store.getUiView(this.db, turnId, call.id);
@@ -332,6 +337,7 @@ export class ChatEngine {
         if (!transient || emitted || attempt >= 3 || req.signal.aborted) throw e;
         const wait = Math.min(8000, 500 * 2 ** attempt) * (0.5 + Math.random());
         attempt++;
+        audit('model.retry', { turnId, attempt, waitMs: Math.round(wait), code: e.code });
         this.bus.emit(threadId, 'turn.retry', { turnId, attempt, waitMs: Math.round(wait), code: e.code });
         await new Promise((r) => setTimeout(r, wait));
       }
@@ -373,7 +379,7 @@ function toModelMsg(m: StoredMsg, resolve: (b: Extract<Block, { type: 'attachmen
       continue;
     }
     if (b.type === 'notice') {
-      if (b.kind === 'page_context') blocks.push({ type: 'text', text: `[FinSight panel context: ${b.text}]` });
+      if (b.kind === 'page_context') blocks.push({ type: 'text', text: `[Optional FinSight panel context; the explicit question takes priority and may concern other companies: ${b.text}]` });
       else if (b.kind === 'context_pack') blocks.push({ type: 'text', text: `[Context snapshot from FinSight, computed by code. Use for orientation; call tools for detail]\n${b.text}` });
       else if (b.kind === 'limit') blocks.push({ type: 'text', text: b.text });
       else if (b.kind === 'error' || b.kind === 'stopped') blocks.push({ type: 'text', text: `[previous reply ${b.kind}]` });
@@ -395,7 +401,8 @@ const round6 = (n: number) => Math.round(n * 1e6) / 1e6;
 function summarizeArgs(a: unknown): string { const s = JSON.stringify(a ?? {}); return s === '{}' ? '' : s.slice(0, 160); }
 function summarizeResult(content: string): string {
   try { const j = JSON.parse(content); if (j.error) return `error: ${j.error.message}`.slice(0, 160); } catch { /* not JSON */ }
-  return `${Math.round(content.length / 100) / 10}k chars`;
+  const note = basisNote(content);
+  return `${Math.round(content.length / 100) / 10}k chars` + (note ? ` · ${note}` : '');
 }
 
 async function mapLimit<T, R>(items: T[], limit: number, fn: (x: T) => Promise<R>): Promise<R[]> {

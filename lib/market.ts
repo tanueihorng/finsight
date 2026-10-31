@@ -1,7 +1,7 @@
 // Market data from Yahoo Finance (free, no key): quotes, history, FX, search,
 // world markets, news and sector categories.
 import { UA } from './config.ts';
-import { cacheGet, cacheSet, cached } from './cache.ts';
+import { cacheGet, cacheSet, cached, cachedWithStatus } from './cache.ts';
 import { install as installFakeMarket } from './fakemarket.ts';
 import type { QuotedQuote, Quote, History, HistoryPoint, SearchResult, NewsItem, Category, Markets } from '../shared/types.ts';
 // E2E only: answer every market fetch from local fixtures (see lib/fakemarket.ts).
@@ -107,13 +107,14 @@ function normalizeQuote(symbol: string, meta: YahooMeta): QuotedQuote {
   };
 }
 
-export function getQuote(symbol: string): Promise<QuotedQuote> {
-  return cached(`q:${symbol}`, 15000, async () => {
+export async function getQuote(symbol: string): Promise<QuotedQuote> {
+  const result = await cachedWithStatus(`q:${symbol}`, 15000, async () => {
     const data = await yahooFetch<YahooChart>(`/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=1d`);
     const result = data?.chart?.result?.[0];
     if (!result?.meta) throw new Error(`No data for ${symbol}`);
     return normalizeQuote(symbol, result.meta);
   }, { stale: 0, persist: true }); // last price survives restarts / outages (served only if a fetch fails)
+  return { ...result.value, cache: result.cache };
 }
 
 export async function getQuotes(symbols: string[]): Promise<Quote[]> {
@@ -220,13 +221,14 @@ export async function weeklyFxVol(from: string | null | undefined, to: string | 
   return cacheSet(key, Math.sqrt(variance), 6 * 60 * 60000);
 }
 
-export function getHistory(symbol: string, range = '1mo', interval = '1d'): Promise<History> {
+export async function getHistory(symbol: string, range = '1mo', interval = '1d'): Promise<History> {
   // Intraday bars move; daily/weekly history of a long range barely does, so it
   // can be served stale while it refreshes, and persisted across restarts.
   const intraday = /m$|h$/.test(interval);
   const ttl = intraday ? 60000 : (range === '1d' || range === '5d') ? 5 * 60000 : 15 * 60000;
-  return cached(`h:${symbol}:${range}:${interval}`, ttl, () => fetchHistory(symbol, range, interval),
+  const result = await cachedWithStatus(`h:${symbol}:${range}:${interval}`, ttl, () => fetchHistory(symbol, range, interval),
     { stale: intraday ? 0 : 7 * 24 * 60 * 60000, persist: !intraday });
+  return { ...result.value, cache: result.cache };
 }
 async function fetchHistory(symbol: string, range: string, interval: string): Promise<History> {
   const data = await yahooFetch<YahooChart>(
@@ -312,6 +314,47 @@ export function getQuoteDetails(symbols: string[]): Promise<Record<string, Quote
     throw lastErr;
   }, { stale: 3 * 24 * 60 * 60000, persist: true });
 }
+// Fund profile and top holdings (cached 24h). Yahoo aggregates these; it is not
+// the issuer, so callers must label it and keep the issuer factsheet as a gap.
+// Holdings cover only the listed top positions; their sum is reported, not 100%.
+export interface FundProfile {
+  symbol: string; family: string | null; category: string | null; legalType: string | null;
+  expenseRatioPct: number | null; totalAssets: number | null; currency: string | null;
+  assetMix: { stocksPct: number | null; bondsPct: number | null; cashPct: number | null; otherPct: number | null };
+  topHoldings: { symbol: string | null; name: string; weightPct: number }[]; topHoldingsPct: number | null;
+  // Aggregator's holdings-weighted equity multiples; undated.
+  equityValuation: { priceToEarnings: number | null; priceToBook: number | null; priceToSales: number | null };
+  sectorWeights: { sector: string; weightPct: number }[];
+}
+const num = (v: unknown) => { const n = pickRaw(v); return Number.isFinite(n) ? Math.round(n * 100) / 100 : null; };
+const pct100 = (v: unknown) => { const n = pickRaw(v); return Number.isFinite(n) ? Math.round(n * 10000) / 100 : null; };
+export function getFundProfile(symbol: string): Promise<FundProfile> {
+  symbol = symbol.toUpperCase();
+  return cached(`fund:${symbol}`, 24 * 60 * 60000, async () => {
+    let lastErr: unknown;
+    for (const force of [false, true]) {
+      try {
+        const { cookie, crumb } = await yahooCrumb(force);
+        const data = await fetchJson<{ quoteSummary?: { result?: any[] } }>(`https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=topHoldings,fundProfile,summaryDetail&crumb=${encodeURIComponent(crumb)}`, { headers: { Cookie: cookie } });
+        const r = data?.quoteSummary?.result?.[0];
+        if (!r?.topHoldings && !r?.fundProfile) throw new Error(`No fund profile for ${symbol}`);
+        const th = r.topHoldings || {}, fp = r.fundProfile || {}, sd = r.summaryDetail || {};
+        const topHoldings = (th.holdings || []).map((h: any) => ({ symbol: h.symbol || null, name: String(h.holdingName || h.symbol || ''), weightPct: pct100(h.holdingPercent) })).filter((h: any) => h.name && h.weightPct !== null);
+        const sectorWeights = (th.sectorWeightings || []).flatMap((o: any) => Object.entries(o).map(([sector, v]) => ({ sector, weightPct: pct100(v) }))).filter((x: any) => x.weightPct !== null);
+        const sum = topHoldings.reduce((s: number, h: any) => s + h.weightPct, 0);
+        return {
+          symbol, family: fp.family || null, category: fp.categoryName || null, legalType: fp.legalType || null,
+          expenseRatioPct: pct100(fp.feesExpensesInvestment?.annualReportExpenseRatio), totalAssets: pickRaw(sd.totalAssets) ?? null, currency: sd.currency || null,
+          assetMix: { stocksPct: pct100(th.stockPosition), bondsPct: pct100(th.bondPosition), cashPct: pct100(th.cashPosition), otherPct: pct100(th.otherPosition) },
+          topHoldings, topHoldingsPct: topHoldings.length ? Math.round(sum * 100) / 100 : null, sectorWeights,
+          equityValuation: { priceToEarnings: num(th.equityHoldings?.priceToEarnings), priceToBook: num(th.equityHoldings?.priceToBook), priceToSales: num(th.equityHoldings?.priceToSales) },
+        };
+      } catch (e) { lastErr = e; if ((e as HttpError).status !== 401 && (e as HttpError).status !== 403) break; }
+    }
+    throw lastErr;
+  }, { stale: 7 * 24 * 60 * 60000, persist: true });
+}
+
 // Dividend payments per share over ~5 years: [{ t (ex-date ms), amount }].
 export function getDividendHistory(symbol: string): Promise<DividendPayment[]> {
   return cached(`dh:${symbol}`, 12 * 60 * 60000, async () => {

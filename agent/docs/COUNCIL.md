@@ -19,17 +19,34 @@ See the dated rollout record below; earlier proposal sections are historical.
 
 API brains only; native paid search and CLI brains are rejected. Three initial
 analysts (Business & Growth, Macro & Valuation, Portfolio Risk), concurrency two,
-one challenge call per analyst and one separate chair. Up to two tool requests
-and one follow-up model call per initial analyst: at most ten model calls total.
-A turn must permit at least ten steps. No recursive delegation, automatic council
+one challenge call per analyst and one separate chair. Up to four tool requests
+and one follow-up model call per initial analyst, with one validation repair per
+stage. There is no global model-call count cap; turn and daily dollar budgets,
+the context bound, deadline and per-stage limits still apply. No recursive delegation, automatic council
 routing, retries, attachments or restart/resume. Text questions must state their
 scope. Simple questions keep the normal single-agent route.
+
+Research readiness remains partial while qualitative claim support lacks an
+independent check, and unavailable planned sources also prevent a ready status.
+Stage completion and numeric checks alone do not establish research quality.
+
+Challenge calls receive all specialist assessments, including their own, and the
+complete evidence packet selected for their role and the cited sources. Canonical
+JSON tool results are passed as structured JSON instead of nested escaped text;
+noncanonical or precision-sensitive results remain verbatim. This saves request
+space without dropping evidence. The optional `limits.councilTurnUsd` and
+`limits.councilOutputTokens` settings give Council its own turn ceiling and
+output allowance; omitted settings preserve the ordinary turn ceiling and the
+2,000-token default. The provider model's maximum, daily ceiling, deadline and
+context bound still apply. Budget
+refusal traces include the requested reservation, input bytes and budget snapshot.
 
 Growth/macro can read quotes, histories and SEC filings/financials; risk can read
 exposures, positions, cash and policy. Paid web search/fetch are excluded in this
 first implementation. Every tool is checked both in offered schemas and at
-execution. Context is bounded at 60k serialized bytes; oversized packets fail
-explicitly rather than silently dropping evidence. Core rules remain shared;
+execution. Serialized input bytes, protocol allowance and reserved output must
+fit the model's context window; oversized packets fail explicitly rather than
+silently dropping evidence. Cost reservations also apply. Core rules remain shared;
 missing policy, valuations and sources remain gaps rather than assumed facts.
 
 Initial assessments have separate histories, without peer conclusions. Later
@@ -51,6 +68,23 @@ Cancellation aborts the full tree; late provider results cannot complete a run.
 Persisted notices/events reconstruct child status by stable ID. On reload with
 no active parent, formerly running children are labelled interrupted/stopped.
 Automatic restart and duplicate paid-call replay are unsupported.
+
+## Local observability work in progress — 2026-10-29
+
+Source changes record council model requests, responses, cost, rejection and
+stage outcomes with run, role, phase, stage and call identifiers. Research
+tool logs link call and evidence identifiers; skipped, denied and repair events
+are explicit. Normal API turns record their system instructions and tool call
+identifiers. These are bounded, redacted interaction logs in the existing
+private log directory, subject to configured retention and field caps. The trace
+viewer can load earlier retained events and hides event detail under UNPEEK.
+Model-reported findings are not hidden reasoning, and a trace is not proof that
+an answer is accurate. Historical traces may lack these fields or have expired.
+
+This source work is not a release or a research-quality qualification. Some
+pre-dispatch and interrupted paths, cross-process attribution beyond the agent
+proxy, and full provider/CLI coverage need further verification. See the
+workspace work packet for current test evidence and remaining work.
 
 ## Rollout gates still required
 
@@ -179,3 +213,46 @@ Every requested tool-call ID receives a protocol result. Skipped calls add no
 evidence. The existing final assessment call must disclose missing research;
 step, output, time and spending limits are unchanged. Forbidden calls still
 fail the role, including forbidden calls beyond the execution cap.
+
+
+## Question subjects and optional chart context — 2026-10-29
+
+Implementation `4e1aa3b` adds a bounded subject-resolution step before council
+specialists. The current question defines its subjects; an attached chart is
+supplementary context and never a whitelist. Company names and lowercase tickers
+are checked through FinSight instrument search. Up to three explicit subjects
+can be compared. A matching positive-price quote for every requested symbol is
+required before specialists start; lookup failures or ambiguous listings return
+an explicit gap or clarification, without substituting the chart.
+
+“This stock” uses the selected chart when available. “Its risks” uses the latest
+saved research scope; multiple prior subjects require clarification for a singular
+reference. A superseding unresolved topic prevents resurrection of an older one.
+General portfolio questions do not inherit a chart subject. Older conversations
+without subject metadata may require clarification. Resolved subjects, quote
+coverage IDs, status and optional panel symbol persist for replay. The displayed
+chart does not change. Normal chat receives the same precedence instruction and
+a read-only `search_instruments` tool, rather than the council's admission step.
+
+The planning call uses existing cost reservations, traces, output/deadline/stop
+controls and the global twelve-call ceiling, reducing repair headroom by one.
+At most three instrument searches and one batched quote run before specialists.
+No paid web search, extra model qualification or financial-write authority is
+added. Conservative identity matching can ask for a ticker for aliases it cannot
+verify; the model's interpretation of arbitrary prose is not guaranteed.
+
+Verification:145 agent tests plus secret scan,216 app unit tests, typechecks and
+four real-API/engine/store browser tests. A baseline regression demonstrates AMD
+receiving TSM evidence before the fix. These checks establish routing behavior,
+not full investment research or source entailment. Broader council research
+quality remains open under COUNCILQUALITY-001. Preview deployment uses the PR1
+UI at9cd2414 plus this backend fix; PR1 is not merged by this change.
+
+## Call-count change — 2026-10-30
+
+The user requested removing the Council's global model-call-count cap, superseding the twelve-call limit stated in the historical production-hardening notes. Council still has fixed phases, at most one repair per phase, bounded research calls, and existing time, daily and per-turn spending caps. The ordinary chat turn-step setting continues to apply to ordinary chat. More Council calls can increase cost and latency within those caps.
+
+
+## Research and output allowances — 2026-10-30
+
+The user requested deeper research and output. This supersedes the earlier historical two-tool and 1,200-token limits: each specialist may request at most four allowed tools in one batch, receives one tool-free follow-up, and may return up to four evidence-backed findings. Output is limited to 2,000 tokens per call or the model maximum, whichever is lower. Tool allowlists, validation, refusal handling, context bounds, time and spending caps remain. More retrieval or text does not guarantee evidence quality.

@@ -89,3 +89,15 @@ export async function answerDialog(page: Page, { accept = true, text, title }: {
   await dlg.locator(accept ? '#app-dialog-ok' : '#app-dialog-cancel').click();
   await expect(dlg).toHaveCount(0);
 }
+
+// Kestrel: open the reply settings (model, thinking, web search) under the composer.
+export async function replySettings(page: Page): Promise<void> {
+  const btn = page.locator('.kx-model-btn:visible');
+  if (await btn.getAttribute('aria-expanded') !== 'true') await btn.click();
+  await expect(page.locator('.kx-pop:visible')).toBeVisible();
+}
+// Kestrel: pick an item from the header's More menu.
+export async function chatMenu(page: Page, name: string | RegExp): Promise<void> {
+  await page.locator('[aria-label="More chat options"]:visible').click();
+  await page.getByRole('menuitem', { name }).click();
+}

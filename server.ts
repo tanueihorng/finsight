@@ -21,7 +21,7 @@ import { URL } from 'node:url';
 
 import { PORT, HOST, PUBLIC_DIR, PORTFOLIO_FILE } from './lib/config.ts';
 import { persistNow } from './lib/cache.ts';
-import { getQuotes, getHistory, search, getMarkets, getNews, getCategories } from './lib/market.ts';
+import { getQuotes, getQuoteDetails, getHistory, search, getMarkets, getNews, getCategories, getFundProfile } from './lib/market.ts';
 import { worldBank, getFred, getCalendar } from './lib/macro.ts';
 import {
   buy, sell, del, listAccounts, accountAdd, accountRename, accountRemove, portfolioWithQuotes, fxRisk, setCash,
@@ -211,10 +211,22 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
       }
     }
 
+    if (p === '/api/fund') {
+      const symbol = (u.searchParams.get('symbol') || '').trim();
+      if (!/^[A-Za-z0-9.^=-]{1,24}$/.test(symbol)) return sendJson(res, 400, { error: 'symbol required' });
+      try { return sendJson(res, 200, await getFundProfile(symbol)); }
+      catch (e) { return sendJson(res, 404, { error: String((e as Error).message || e).slice(0, 200) }); }
+    }
     if (p === '/api/quote') {
       const symbols = (u.searchParams.get('symbols') || '').split(',').map((s) => s.trim()).filter(Boolean);
       if (!symbols.length) return sendJson(res, 400, { error: 'symbols required' });
       return sendJson(res, 200, { quotes: await getQuotes(symbols) });
+    }
+    // Earnings and dividend dates for any symbols (not only holdings).
+    if (p === '/api/quote-details') {
+      const symbols = (u.searchParams.get('symbols') || '').split(',').map((s) => s.trim()).filter(Boolean).slice(0, 20);
+      if (!symbols.length) return sendJson(res, 400, { error: 'symbols required' });
+      return sendJson(res, 200, { details: await getQuoteDetails(symbols) });
     }
     if (p === '/api/history') {
       const symbol = u.searchParams.get('symbol');
@@ -384,7 +396,7 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
 // Background alert checker — evaluates alerts on a timer and fires desktop
 // notifications even when no browser is open. Override cadence with ALERT_INTERVAL (seconds).
 const ALERT_INTERVAL = Math.max(15, Number(process.env.ALERT_INTERVAL) || 60) * 1000;
-setInterval(() => { evaluateAlerts(true).catch(() => {}); }, ALERT_INTERVAL);
+setInterval(() => { evaluateAlerts(true).catch(() => console.warn('Alert evaluation failed; see application diagnostics.')); }, ALERT_INTERVAL);
 
 agentlink.ensureLink(); // creates DATA_DIR/agent-link.json (0600) for the optional local agent
 // PORT may be a numeric string from the environment; listen() accepts that.

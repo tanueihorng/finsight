@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>FinSight with Kestrel panel</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="./fonts/fonts.css">
+<style>
+body{margin:0}
+a{color:#a78bfa}a:hover{color:#c4b5fd}
+.m{font-family:'JetBrains Mono','SF Mono',Menlo,ui-monospace,monospace;font-variant-numeric:tabular-nums}
+.serif{font-family:'Source Serif 4',Georgia,serif}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes blink{50%{opacity:0}}
+@keyframes wave{0%,100%{transform:scaleY(.3)}50%{transform:scaleY(1)}}
+@keyframes bounce{0%,80%,100%{transform:translateY(0);opacity:.35}40%{transform:translateY(-3px);opacity:1}}
+@keyframes pulse{0%{transform:scale(1);opacity:.7}100%{transform:scale(2.6);opacity:0}}
+@keyframes glow{0%,100%{opacity:.5}50%{opacity:1}}
+@keyframes sweep{0%{transform:translateX(-120%)}100%{transform:translateX(320%)}}
+@keyframes slidein{from{opacity:0;transform:translateX(24px)}to{opacity:1;transform:none}}
+@keyframes popup{from{opacity:0;transform:translateY(16px) scale(.96)}to{opacity:1;transform:none}}
+@keyframes open{from{opacity:0;max-height:0}to{opacity:1;max-height:320px}}
+.spin{display:inline-block;width:9px;height:9px;border-radius:50%;border:1.5px solid currentColor;border-right-color:transparent;animation:spin .8s linear infinite}
+.caret{display:inline-block;width:6px;height:12px;margin-left:1px;vertical-align:-2px;animation:blink 1s steps(1) infinite}
+.bar{display:inline-block;width:2px;height:10px;border-radius:1px;animation:wave .9s ease-in-out infinite}
+.d3{display:inline-block;width:4px;height:4px;border-radius:50%;animation:bounce 1.2s ease-in-out infinite}
+.ping{position:absolute;inset:0;border-radius:50%;animation:pulse 1.8s ease-out infinite}
+.glow{animation:glow 1.6s ease-in-out infinite}
+.sweep{animation:sweep 1.6s linear infinite}
+.slidein{animation:slidein .4s cubic-bezier(.2,.8,.2,1) both}
+.popup{animation:popup .4s cubic-bezier(.2,.9,.3,1.2) both}
+.open{animation:open .45s cubic-bezier(.2,.8,.2,1) both;overflow:hidden}
+.row{cursor:pointer}
+.row:hover{filter:brightness(1.12)}
+@media (prefers-reduced-motion:reduce){.spin,.caret,.bar,.d3,.ping,.glow,.sweep,.slidein,.popup,.open{animation:none}}
+</style>
+</helmet>
+<div style="width:1440px;height:900px;box-sizing:border-box;display:flex;flex-direction:column;background:{{t.bg}};color:{{t.text}};font-family:'JetBrains Mono','SF Mono',Menlo,monospace;font-size:13px;overflow:hidden;position:relative">
+
+  <!-- FinSight top bar -->
+  <div style="height:38px;flex:none;display:flex;align-items:center;gap:12px;padding:0 12px;background:{{t.head}};border-bottom:1px solid {{t.accent}};font-size:11.5px;color:{{t.muted}};position:relative">
+    <span style="font-weight:700;letter-spacing:1px;color:{{t.text}}">FINSIGHT <span style="color:{{t.muted}}">//</span> PERSONAL TERMINAL</span>
+    <div style="flex:1"></div>
+    <span style="padding:2px 8px;border:1px solid {{t.up}};border-radius:3px;color:{{t.up}};font-size:11px;letter-spacing:.5px">NYSE OPEN</span>
+    <span style="color:{{t.accent}};letter-spacing:1px">10:42:18 ET</span>
+    <span style="font-size:10px;letter-spacing:1px">BASE <b style="padding:2px 6px;border:1px solid {{t.accent}};border-radius:3px;color:{{t.accent}}">USD</b></span>
+    <button onClick="{{toggleTheme}}" class="m" style="height:24px;padding:0 9px;border:1px solid {{t.border2}};border-radius:3px;background:{{t.btn}};color:{{t.muted}};font-size:11px;cursor:pointer">◐ {{themeLabel}}</button>
+    <button onClick="{{toggleAsk}}" aria-pressed="{{sideOn}}" class="m" style="height:24px;display:inline-flex;align-items:center;gap:7px;padding:0 10px;border:1px solid {{t.accent}};border-radius:3px;background:{{askBg}};color:{{askC}};font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.5px">
+      <span style="position:relative;width:7px;height:7px"><i class="ping" style="background:{{t.accent}}"></i><i style="position:absolute;inset:0;border-radius:50%;background:{{t.accent}}"></i></span>↗ ASK <span style="font-weight:400;color:{{t.muted}}">⌘/</span>
+    </button>
+    <!-- thin activity line: the council is working even when the panel is hidden -->
+    <span aria-hidden="true" style="position:absolute;left:0;right:0;bottom:-1px;height:2px;overflow:hidden"><i class="sweep" style="position:absolute;top:0;bottom:0;width:30%;background:linear-gradient(90deg,transparent,{{t.accent2}},transparent)"></i></span>
+  </div>
+
+  <!-- command bar -->
+  <div style="height:36px;flex:none;display:flex;align-items:center;gap:8px;padding:0 12px;background:{{t.cmd}};border-bottom:1px solid {{t.border}}">
+    <span style="color:{{t.accent}};font-weight:700">›</span>
+    <label for="ks-cmd" style="position:absolute;left:-9999px">Command</label>
+    <input id="ks-cmd" placeholder="NVDA &lt;GO&gt; · WATCH ADD AMD · /ask …" style="flex:1;border:0;outline:0;background:transparent;color:{{t.accent2}};font:400 13px 'JetBrains Mono',monospace;letter-spacing:.5px">
+    <button style="height:22px;padding:0 14px;border:0;border-radius:2px;background:{{t.accent}};color:{{t.onAccent}};font:700 12px 'JetBrains Mono',monospace;cursor:pointer">GO</button>
+  </div>
+
+  <div style="flex:1;min-height:0;display:flex">
+    <!-- main view: never covered, only narrowed -->
+    <main style="flex:1;min-width:0;display:grid;grid-template-columns:minmax(0,1.62fr) minmax(0,1fr);grid-template-rows:minmax(0,1.4fr) minmax(0,1fr);gap:10px;padding:10px">
+      <section style="grid-row:span 2;background:{{t.panel}};border:1px solid {{t.border}};border-radius:3px;display:flex;flex-direction:column;min-height:0">
+        <div style="height:30px;display:flex;align-items:center;gap:10px;padding:0 10px;border-bottom:1px solid {{t.border}};background:{{t.head}};font-size:11px;letter-spacing:1px">
+          <b style="color:{{t.accent}}">NVDA</b><span style="color:{{t.muted}}">NVIDIA CORP · 1D</span><div style="flex:1"></div><span style="color:{{t.up}}">+1.20%</span>
+        </div>
+        <div style="flex:1;position:relative;padding:12px">
+          <svg viewBox="0 0 600 300" preserveAspectRatio="none" aria-hidden="true" style="width:100%;height:100%">
+            <line x1="0" y1="75" x2="600" y2="75" stroke="{{t.border}}" stroke-width="1"/><line x1="0" y1="150" x2="600" y2="150" stroke="{{t.border}}" stroke-width="1"/><line x1="0" y1="225" x2="600" y2="225" stroke="{{t.border}}" stroke-width="1"/>
+            <line x1="0" y1="190" x2="600" y2="190" stroke="{{t.muted}}" stroke-width="1" stroke-dasharray="4 4"/>
+            <path d="M0,200 L30,196 L60,205 L90,188 L120,192 L150,170 L180,176 L210,158 L240,164 L270,140 L300,146 L330,128 L360,134 L390,118 L420,124 L450,104 L480,110 L510,96 L540,100 L570,86 L600,90 L600,300 L0,300 Z" fill="{{t.upFill}}"/>
+            <path d="M0,200 L30,196 L60,205 L90,188 L120,192 L150,170 L180,176 L210,158 L240,164 L270,140 L300,146 L330,128 L360,134 L390,118 L420,124 L450,104 L480,110 L510,96 L540,100 L570,86 L600,90" fill="none" stroke="{{t.up}}" stroke-width="1.6" vector-effect="non-scaling-stroke"/>
+          </svg>
+          <span style="position:absolute;right:16px;top:16px;font-size:11px;color:{{t.muted}}">sample data</span>
+        </div>
+      </section>
+      <section style="background:{{t.panel}};border:1px solid {{t.border}};border-radius:3px;overflow:hidden">
+        <div style="height:30px;display:flex;align-items:center;padding:0 10px;border-bottom:1px solid {{t.border}};background:{{t.head}};font-size:11px;letter-spacing:1px;color:{{t.accent}};font-weight:700">WATCHLIST</div>
+        <sc-for list="{{watch}}" as="w" hint-placeholder-count="5">
+          <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));padding:7px 10px;font-size:12px;background:{{w.bg}}"><b>{{w.s}}</b><span style="text-align:right">{{w.p}}</span><span style="text-align:right;color:{{w.c}}">{{w.ch}}</span></div>
+        </sc-for>
+      </section>
+      <section style="background:{{t.panel}};border:1px solid {{t.border}};border-radius:3px;overflow:hidden">
+        <div style="height:30px;display:flex;align-items:center;padding:0 10px;border-bottom:1px solid {{t.border}};background:{{t.head}};font-size:11px;letter-spacing:1px;color:{{t.accent}};font-weight:700">POSITIONS</div>
+        <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));padding:7px 10px;font-size:11px;color:{{t.muted}}"><span>SYM</span><span style="text-align:right">WT</span><span style="text-align:right">P&amp;L</span></div>
+        <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));padding:7px 10px;font-size:12px;background:{{t.sel}}"><b>NVDA</b><span style="text-align:right;color:{{t.down}}">14.0% ▲cap</span><span style="text-align:right;color:{{t.up}}">+$1,912</span></div>
+        <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));padding:7px 10px;font-size:12px"><b>SMH</b><span style="text-align:right">9.0%</span><span style="text-align:right;color:{{t.up}}">+$402</span></div>
+        <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));padding:7px 10px;font-size:12px;background:{{t.rowAlt}}"><b>AMD</b><span style="text-align:right">5.0%</span><span style="text-align:right;color:{{t.down}}">−$188</span></div>
+      </section>
+    </main>
+
+    <!-- Kestrel side panel -->
+    <sc-if value="{{sideOn}}" hint-placeholder-val="{{ true }}">
+      <aside class="slidein" aria-label="Kestrel" style="width:470px;flex:none;display:flex;flex-direction:column;background:{{t.bg}};border-left:1px solid {{t.border2}};font-family:Inter,-apple-system,system-ui,sans-serif;font-size:13px;min-height:0">
+        <div style="height:44px;flex:none;display:flex;align-items:center;gap:6px;padding:0 8px 0 14px;border-bottom:1px solid {{t.border}}">
+          <span style="font-weight:600;font-size:14px">Kestrel</span><span style="color:{{t.muted}}">·</span><span style="color:{{t.muted}};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Trim NVDA before earnings?</span>
+          <div style="flex:1"></div>
+          <a href="KestrelFull.dc.html" aria-label="Expand to full page" title="Expand to full page" style="width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;border-radius:6px;color:{{t.muted}};text-decoration:none"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg></a>
+          <button onClick="{{collapse}}" aria-label="Collapse to capsule" title="Collapse — keeps running" style="width:30px;height:30px;border:0;border-radius:6px;background:transparent;color:{{t.muted}};display:inline-flex;align-items:center;justify-content:center;cursor:pointer"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 19h14"/></svg></button>
+        </div>
+
+        <div style="flex:1;min-height:0;overflow:hidden;padding:12px 12px 0;display:flex;flex-direction:column;gap:10px">
+          <div style="align-self:flex-end;max-width:360px;background:{{t.panel2}};border:1px solid {{t.border}};padding:8px 12px;border-radius:12px 12px 3px 12px;font-size:13px">Should I trim NVDA before earnings? <span class="m" style="font-size:10.5px;color:{{t.accent}}">/council</span></div>
+
+          <!-- the chair, on top: the answer forming -->
+          <section aria-label="The Chair" style="background:{{t.panel}};border:1px solid {{t.accentLine}};border-radius:8px;padding:11px 13px;display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="position:relative;width:8px;height:8px"><i class="ping" style="background:{{t.accent}}"></i><i style="position:absolute;inset:0;border-radius:50%;background:{{t.accent}}"></i></span>
+              <span class="m" style="font-size:10.5px;font-weight:700;letter-spacing:1.1px;color:{{t.accent}}">THE CHAIR</span>
+              <span class="m" style="font-size:10.5px;color:{{t.muted}}">R2 cross-exam · 4/5 heard</span>
+              <div style="flex:1"></div>
+              <span style="display:flex;gap:3px"><sc-for list="{{dots}}" as="d" hint-placeholder-count="5"><i style="width:8px;height:8px;border-radius:50%;box-sizing:border-box;background:{{d.fill}};border:1.5px solid {{d.c}}"></i></sc-for></span>
+            </div>
+            <div class="serif" style="font-size:14.5px;line-height:1.55">{{chair}}<i class="caret" style="background:{{t.accent}};height:14px"></i></div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+              <span class="m" style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:3px;background:{{t.upBg}};color:{{t.up}}">AGREED · over 10% cap</span>
+              <span class="m glow" style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:3px;background:{{t.hfBg}};color:{{t.lhf}}">LIVE DEBATE · timing vs thesis</span>
+            </div>
+          </section>
+
+          <!-- perspectives: one live line each, expand for the chain of thought -->
+          <section aria-label="Lenses" style="display:flex;flex-direction:column;gap:4px">
+            <sc-for list="{{lenses}}" as="l" hint-placeholder-count="5">
+              <div style="background:{{t.panel}};border:1px solid {{l.border}};border-radius:6px;overflow:hidden">
+                <button class="row" onClick="{{l.toggle}}" aria-expanded="{{l.open}}" style="width:100%;display:flex;flex-direction:column;gap:4px;padding:8px 11px;border:0;background:transparent;text-align:left;color:{{t.text}};font:inherit">
+                  <span style="display:flex;align-items:center;gap:8px;width:100%">
+                    <span style="width:7px;height:7px;border-radius:50%;background:{{l.c}}"></span>
+                    <span class="m" style="font-size:10.5px;font-weight:700;letter-spacing:.8px">{{l.name}}</span>
+                    <sc-if value="{{l.isDone}}" hint-placeholder-val="{{ false }}"><span class="m" style="font-size:10px;color:{{l.c}}">✓</span></sc-if>
+                    <sc-if value="{{l.isSpeak}}" hint-placeholder-val="{{ false }}"><span style="display:inline-flex;gap:2px;align-items:center"><i class="bar" style="background:{{l.c}}"></i><i class="bar" style="background:{{l.c}};animation-delay:.12s"></i><i class="bar" style="background:{{l.c}};animation-delay:.24s"></i></span></sc-if>
+                    <sc-if value="{{l.isThink}}" hint-placeholder-val="{{ false }}"><span style="display:inline-flex;gap:3px"><i class="d3" style="background:{{l.c}}"></i><i class="d3" style="background:{{l.c}};animation-delay:.15s"></i><i class="d3" style="background:{{l.c}};animation-delay:.3s"></i></span></sc-if>
+                    <span style="flex:1"></span>
+                    <span class="m" style="font-size:10px;font-weight:600;padding:1px 6px;border-radius:3px;border:1px solid {{l.c}};color:{{l.c}}">{{l.stance}}</span>
+                    <span class="m" style="font-size:11px;color:{{t.muted}}">{{l.chev}}</span>
+                  </span>
+                  <span style="font-size:12.5px;line-height:1.45;color:{{l.lineC}};padding-left:15px">{{l.line}}<sc-if value="{{l.live}}" hint-placeholder-val="{{ false }}"><i class="caret" style="background:{{l.c}}"></i></sc-if></span>
+                </button>
+                <sc-if value="{{l.open}}" hint-placeholder-val="{{ false }}">
+                  <div class="open" style="padding:0 11px 9px 26px;display:flex;flex-direction:column;gap:5px">
+                    <sc-for list="{{l.steps}}" as="s" hint-placeholder-count="3">
+                      <div style="display:flex;gap:8px;font-size:12px;line-height:1.4"><span class="m" style="font-size:10px;color:{{l.c}};flex:none;width:72px">{{s.tag}} {{s.kind}}</span><span style="color:{{t.sub}}">{{s.text}}</span></div>
+                    </sc-for>
+                    <a href="KestrelFull.dc.html" class="m" style="font-size:10.5px;color:{{t.accent}};text-decoration:none">See every lens side by side ⤢</a>
+                  </div>
+                </sc-if>
+              </div>
+            </sc-for>
+          </section>
+        </div>
+
+        <div style="padding:10px 12px 12px;flex:none">
+          <div style="border:1px solid {{t.border2}};border-radius:10px;background:{{t.panel}};padding:9px 10px 8px 12px;display:flex;flex-direction:column;gap:7px">
+            <label for="ks-msg" style="position:absolute;left:-9999px">Message</label>
+            <input id="ks-msg" placeholder="Interject — @growth, @chair, or a constraint…" style="border:0;outline:0;background:transparent;color:{{t.text}};font:400 13.5px Inter,sans-serif">
+            <div class="m" style="display:flex;align-items:center;gap:12px;font-size:10.5px;color:{{t.muted}}">
+              <span>+ attach</span><span style="color:{{t.accent}}">◉ NVDA</span><span>exa ▾</span><span>sonnet · think ▾</span>
+              <div style="flex:1"></div>
+              <button aria-label="Stop" style="width:28px;height:28px;border:0;border-radius:7px;background:{{t.text}};color:{{t.bg}};display:inline-flex;align-items:center;justify-content:center;cursor:pointer"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><rect width="10" height="10" rx="2" fill="currentColor"/></svg></button>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </sc-if>
+  </div>
+
+  <!-- collapsed: a capsule that keeps you posted without covering the terminal -->
+  <sc-if value="{{capsuleOn}}" hint-placeholder-val="{{ false }}">
+    <div class="popup" role="status" aria-label="Kestrel council running" style="position:absolute;right:18px;bottom:18px;width:430px;background:{{t.panel}};border:1px solid {{t.accentLine}};border-radius:12px;box-shadow:{{t.shadow}};padding:11px 12px 10px 14px;display:flex;flex-direction:column;gap:8px;font-family:Inter,-apple-system,system-ui,sans-serif">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="position:relative;width:8px;height:8px"><i class="ping" style="background:{{t.accent}}"></i><i style="position:absolute;inset:0;border-radius:50%;background:{{t.accent}}"></i></span>
+        <span class="m" style="font-size:10.5px;font-weight:700;letter-spacing:1px;color:{{t.accent}}">COUNCIL · R2 CROSS-EXAM</span>
+        <span style="display:flex;gap:3px;margin-left:4px"><sc-for list="{{dots}}" as="d" hint-placeholder-count="5"><i style="width:7px;height:7px;border-radius:50%;box-sizing:border-box;background:{{d.fill}};border:1.5px solid {{d.c}}"></i></sc-for></span>
+        <div style="flex:1"></div>
+        <button onClick="{{expand}}" class="m" style="height:24px;padding:0 9px;border:1px solid {{t.border2}};border-radius:3px;background:transparent;color:{{t.text}};font-size:10.5px;cursor:pointer">⇱ OPEN</button>
+        <a href="KestrelFull.dc.html" class="m" style="height:24px;display:inline-flex;align-items:center;padding:0 9px;border:1px solid {{t.border2}};border-radius:3px;color:{{t.text}};font-size:10.5px;text-decoration:none">⤢ FULL</a>
+      </div>
+      <div style="font-size:12.5px;line-height:1.45;color:{{t.sub}}"><b class="m" style="font-size:10.5px;color:{{t.lgro}}">GROWTH → HEDGE FUND</b>&#160; {{capLine}}<i class="caret" style="background:{{t.lgro}}"></i></div>
+      <div style="height:3px;border-radius:2px;background:{{t.border}};overflow:hidden;position:relative"><i style="position:absolute;left:0;top:0;bottom:0;width:58%;background:{{t.accent}};overflow:hidden"><i class="sweep" style="position:absolute;top:0;bottom:0;width:40%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.6),transparent)"></i></i></div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"mode":{"editor":"enum","options":["side","collapsed"],"default":"side"},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { n: 0, theme: null, mode: null, open: 'hf' };
+  }
+  componentDidMount() {
+    const reduce = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduce) { this.setState({ n: 99999, still: true }); return; }
+    this.timer = setInterval(() => this.setState((s) => ({ n: s.n + 1 })), 55);
+  }
+  componentWillUnmount() { clearInterval(this.timer); }
+  renderVals() {
+    const dark = (this.state.theme || this.props.theme || 'dark') === 'dark';
+    const mode = this.state.mode || this.props.mode || 'side';
+    const t = dark
+      ? { bg: '#08080f', panel: '#0d0d18', panel2: '#12121f', head: '#0b0b14', cmd: '#000000', btn: '#14181e', rowAlt: '#0e0e1a', sel: '#1b1633', border: '#20203a', border2: '#2d2d4d', text: '#d7dadf', sub: '#b9bccb', muted: '#8a8aa3', accent: '#a78bfa', accent2: '#c4b5fd', accentLine: '#3b2f6b', up: '#2ec27e', down: '#f87171', onAccent: '#08080f', upFill: 'rgba(46,194,126,.10)', upBg: 'rgba(46,194,126,.14)', hfBg: 'rgba(244,114,182,.14)', shadow: '0 18px 50px rgba(0,0,0,.55)',
+          lbal: '#38bdf8', lmac: '#fb923c', lhf: '#f472b6', lgro: '#2ec27e', lspe: '#fbbf24' }
+      : { bg: '#f3f3f8', panel: '#ffffff', panel2: '#f7f7fb', head: '#ebebf3', cmd: '#ffffff', btn: '#ffffff', rowAlt: '#f7f7fb', sel: '#ece7fd', border: '#dedeea', border2: '#c8c8da', text: '#16162a', sub: '#3c3c55', muted: '#5a5a72', accent: '#6d4ee0', accent2: '#5a3dc8', accentLine: '#cfc4f6', up: '#0f7a52', down: '#c93434', onAccent: '#ffffff', upFill: 'rgba(15,122,82,.08)', upBg: 'rgba(15,122,82,.10)', hfBg: 'rgba(190,24,93,.09)', shadow: '0 18px 50px rgba(22,22,42,.16)',
+          lbal: '#0369a1', lmac: '#c2410c', lhf: '#be185d', lgro: '#0f7a52', lspe: '#a16207' };
+    const n = this.state.n;
+    const stream = (full, speed, offset) => {
+      if (this.state.still) return { text: full, typing: false };
+      const len = full.length, p = Math.max(0, Math.floor(n * speed - offset)) % (len + 70);
+      return { text: full.slice(0, Math.min(len, p)), typing: p < len };
+    };
+    const growthReply = 'A collar is fine if you won’t sell, but it caps exactly the upside the thesis depends on.';
+    const L = [
+      { id: 'bal', name: 'BALANCED', state: 'done', stance: 'TRIM TO 10%', line: 'Policy breach is the deciding fact; trim about 4 points.',
+        steps: [['B2', 'READ', 'NVDA is 14.0% of the book.'], ['B3', 'READ', 'Policy: no single name above 10%.'], ['B5', 'POSITION', 'Trim about 4 points.']] },
+      { id: 'mac', name: 'MACRO', state: 'done', stance: 'TRIM', line: 'Rising real yields make a miss hurt more. Trim before Nov 19.',
+        steps: [['M2', 'READ', '10Y at 4.12%, real yields rising.'], ['M3', 'CLAIM', 'Long-duration names react harder to misses.'], ['M4', 'POSITION', 'Trim before the print.']] },
+      { id: 'hf', name: 'HEDGE FUND', state: 'speak', stance: 'TRIM OR HEDGE', live: 'Drafting a zero-cost collar: sell a 10% OTM call, buy an 8% OTM put…', sp: 0.9, off: 0,
+        steps: [['H2', 'READ', 'Options imply a ±8.9% move (sample).'], ['H3', 'CLAIM', 'Positioning is crowded; skew prices upside.'], ['H4', 'CHALLENGE', '@Growth: why hold it naked instead of collaring it?']] },
+      { id: 'gro', name: 'GROWTH', state: 'speak', stance: 'HOLD', live: growthReply, sp: 1.1, off: 60,
+        steps: [['G2', 'READ', 'Data-centre share of revenue still rising.'], ['G3', 'CLAIM', 'Selling into the event is timing, not thesis.'], ['G4', 'REPLY', '@Hedge Fund: ' + growthReply]] },
+      { id: 'spe', name: 'SPECULATIVE', state: 'think', stance: 'PENDING', live: 'Pulling the last eight post-earnings moves…', sp: 0.7, off: 30,
+        steps: [['S1', 'PLAN', 'Map payoff scenarios around the print.'], ['S2', 'READ', 'Last eight post-earnings moves (nasdaq.com).']] }
+    ];
+    const lenses = L.map((l) => {
+      const c = t['l' + l.id], open = this.state.open === l.id;
+      const st = l.live ? stream(l.live, l.sp, l.off) : { text: l.line };
+      return {
+        ...l, c, open, chev: open ? '▾' : '▸',
+        line: st.text, live: !!l.live, lineC: l.state === 'done' ? t.muted : t.text,
+        isDone: l.state === 'done', isSpeak: l.state === 'speak', isThink: l.state === 'think',
+        border: l.state === 'speak' ? (dark ? c + '55' : c + '44') : t.border,
+        steps: l.steps.map(([tag, kind, text]) => ({ tag, kind, text })),
+        toggle: () => this.setState({ open: this.state.open === l.id ? null : l.id })
+      };
+    });
+    const dots = ['bal', 'mac', 'hf', 'gro', 'spe'].map((id) => ({ c: t['l' + id], fill: id === 'spe' ? 'transparent' : t['l' + id] }));
+    const chair = stream('The council agrees you are over your own 10% cap, and that matters most. The open question is how to get back under it: trim about four points, or collar the position through the print.', 1.6, 20).text;
+    const up = t.up, down = t.down;
+    const watch = [
+      { s: 'NVDA', p: '138.42', ch: '+1.20%', c: up }, { s: 'AMD', p: '151.06', ch: '−3.10%', c: down }, { s: 'TSM', p: '192.77', ch: '+0.30%', c: up },
+      { s: 'SMH', p: '248.15', ch: '+0.60%', c: up }, { s: 'SPY', p: '581.30', ch: '+0.31%', c: up }
+    ].map((w, i) => ({ ...w, bg: i % 2 ? t.rowAlt : 'transparent' }));
+    const sideOn = mode === 'side';
+    return {
+      t, lenses, dots, chair, watch, sideOn, capsuleOn: !sideOn,
+      capLine: stream(growthReply, 1.1, 60).text,
+      askBg: sideOn ? t.accent : 'transparent', askC: sideOn ? t.onAccent : t.accent,
+      themeLabel: dark ? 'DARK' : 'LIGHT',
+      toggleTheme: () => this.setState({ theme: dark ? 'light' : 'dark' }),
+      toggleAsk: () => this.setState({ mode: sideOn ? 'collapsed' : 'side' }),
+      collapse: () => this.setState({ mode: 'collapsed' }),
+      expand: () => this.setState({ mode: 'side' })
+    };
+  }
+}
+</script>
+</body>
+</html>

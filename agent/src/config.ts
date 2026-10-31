@@ -28,13 +28,15 @@ const FileConfig = z.object({
     turnSteps: z.number().int().min(1).max(50).optional(),
     turnSeconds: z.number().int().min(5).max(900).optional(),
     turnUsd: z.number().positive().optional(),
+    councilTurnUsd: z.number().positive().optional(),
+    councilOutputTokens: z.number().int().positive().optional(),
     dayUsd: z.number().positive().optional(),
     searchesPerTurn: z.number().int().min(0).max(50).optional(),
     fetchesPerTurn: z.number().int().min(0).max(50).optional(),
   }).strict().optional(),
 }).strict();
 
-export type Limits = { turnSteps: number; turnSeconds: number; turnUsd: number; dayUsd: number; searchesPerTurn: number; fetchesPerTurn: number };
+export type Limits = { turnSteps: number; turnSeconds: number; turnUsd: number; councilTurnUsd?: number; councilOutputTokens?: number; dayUsd: number; searchesPerTurn: number; fetchesPerTurn: number };
 export type Config = {
   council?: boolean;
   uiViews?: boolean; // default off; global env/config gate and qualified brain both required
@@ -76,6 +78,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       turnSteps: file.limits?.turnSteps ?? 12,
       turnSeconds: file.limits?.turnSeconds ?? 120,
       turnUsd: file.limits?.turnUsd ?? 0.05,
+      councilTurnUsd: file.limits?.councilTurnUsd,
+      councilOutputTokens: file.limits?.councilOutputTokens,
       dayUsd: file.limits?.dayUsd ?? 2,
       searchesPerTurn: file.limits?.searchesPerTurn ?? 10,
       fetchesPerTurn: file.limits?.fetchesPerTurn ?? 15,

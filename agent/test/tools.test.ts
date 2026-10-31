@@ -136,3 +136,142 @@ test('private strategy plugins: valid one loads; escapes are denied', async () =
   assert.match(JSON.stringify(f.json), /fetch is not a function|error/);
   fs.rmSync(root, { recursive: true, force: true });
 });
+
+test('weights name their basis; both denominators come from one snapshot and liabilities stay unknown', async () => {
+  const p = await run('get_portfolio', {});
+  assert.equal(p.json.weightBasis, 'securities');
+  assert.equal(p.json.denominators.securities.value, 6000);
+  assert.equal(p.json.denominators.securities_plus_cash.value, 10350);
+  assert.equal(p.json.denominators.liabilities, 'not tracked');
+  const voo = p.json.positions.find((x: any) => x.symbol === 'VOO');
+  assert.equal(voo.weightPct, 45); // displayed meaning unchanged
+  assert.equal(voo.weightInclCashPct, 26.09);
+  const q = await run('query_positions', { currency: 'USD' });
+  assert.equal(q.json.weightBasis, 'securities');
+  assert.equal(q.json.totals.weightInclCashPct, 52.18);
+  const e = await run('get_exposures', { by: 'currency' });
+  assert.equal(e.json.weightBasis, 'securities_plus_cash');
+  assert.equal(e.json.denominator.value, e.json.total);
+});
+
+test('portfolio_weights computes single and combined weights on both bases in code', async () => {
+  const r = await run('portfolio_weights', { symbols: ['voo', 'NVDA', 'ZZZZ'] });
+  assert.equal(r.ok, true);
+  assert.deepEqual(r.json.rows.map((x: any) => [x.symbol, x.securitiesPct, x.weightInclCashPct]), [['VOO', 45, 26.09], ['NVDA', 45, 26.09]]);
+  assert.deepEqual([r.json.combined.marketValue, r.json.combined.securitiesPct, r.json.combined.weightInclCashPct], [5400, 90, 52.17]);
+  assert.deepEqual(r.json.notHeld, ['ZZZZ']);
+  assert.equal(r.json.denominators.liabilities, 'not tracked');
+});
+
+test('sector exposure lists members, separates sector from instrument type and never hides failed lookups as Other', async () => {
+  const r = await run('get_exposures', { by: 'sector' });
+  const row = (g: string) => r.json.rows.find((x: any) => x.group === g);
+  assert.deepEqual(row('ETF / Fund').members.map((m: any) => [m.symbol, m.classification]), [['VOO', 'instrument_type']]);
+  assert.deepEqual(row('Technology').members.map((m: any) => [m.symbol, m.classification]), [['NVDA', 'sector']]);
+  assert.deepEqual(row('Unclassified').members.map((m: any) => m.symbol), ['D05.SI']);
+  assert.equal(row('Other'), undefined);
+  for (const x of r.json.rows) assert.ok(Math.abs(x.members.reduce((s: number, m: any) => s + m.value, 0) - x.value) < 0.01, x.group);
+  assert.deepEqual([r.json.coverage.bySectorPct, r.json.coverage.byInstrumentTypePct, r.json.coverage.unclassifiedPct], [45, 45, 10]);
+  assert.deepEqual(r.json.coverage.funds, ['VOO']);
+  assert.equal(r.json.coverage.fundLookThrough, 'unknown');
+  assert.equal(r.json.lookThrough, false);
+});
+
+test('get_fund_profile labels an aggregator source and partial look-through; non-funds fail plainly', async () => {
+  const r = await run('get_fund_profile', { symbol: 'VOO' });
+  assert.equal(r.ok, true);
+  assert.equal(r.json.sourceClass, 'aggregator');
+  assert.equal(r.json.lookThrough.coveragePct, 13.5);
+  assert.equal(r.json.expenseRatioPct, 0.03);
+  const miss = await run('get_fund_profile', { symbol: 'NVDA' });
+  assert.equal(miss.ok, false);
+});
+
+test('get_history labels price return and derives range distances in code', async () => {
+  const r = await run('get_history', { symbol: 'NVDA', range: '1y' });
+  assert.equal(r.json.returnKind, 'price');
+  assert.equal(r.json.lastVsHighPct, Math.round((r.json.lastClose / r.json.high - 1) * 10000) / 100);
+  assert.ok(r.json.lastVsLowPct >= 0 && r.json.lastVsHighPct <= 0);
+});
+
+test('get_macro_series summarises in code instead of returning every daily point', async () => {
+  const r = await run('get_macro_series', { series: 'DGS10', start: '2026-01-01' });
+  assert.equal(r.json.observations, 30);
+  assert.deepEqual([r.json.first.date, r.json.last.date], ['2026-01-01', '2026-07-23']);
+  assert.equal(r.json.high.value, 4.6); assert.equal(r.json.low.value, 4);
+  assert.equal(r.json.changeFromFirst, Math.round((r.json.last.value - r.json.first.value) * 100) / 100);
+  assert.equal(r.json.recent.length, 10); assert.equal(r.json.monthEnd.length, 7);
+  assert.equal(r.json.points, undefined);
+  assert.equal((await run('get_macro_series', { series: 'DGS10', start: '2026-01-01', full: true })).json.points.length, 30);
+});
+
+test('valuation_metrics derives trailing EPS, P/E, earnings yield and market cap in code from SEC data and the live quote', async () => {
+  const r = await run('valuation_metrics', { ticker: 'AMD' });
+  assert.equal(r.ok, true, JSON.stringify(r.json));
+  assert.equal(r.json.ttm.epsDiluted.value, 1.5);
+  assert.equal(r.json.ttm.epsDiluted.method, 'sum of last four discrete quarters');
+  assert.equal(r.json.price.value, 10);
+  assert.equal(r.json.peTrailing, 6.67); assert.equal(r.json.earningsYieldPct, 15);
+  assert.equal(r.json.marketCap, 10000); assert.equal(r.json.psTrailing, 10);
+  assert.equal(r.json.ttm.revenue.concept, 'RevenueFromContractWithCustomerExcludingAssessedTax');
+  assert.deepEqual(r.json.sharesOutstanding, { value: 1000, asOf: '2026-07-25', filed: '2026-08-01' });
+});
+
+test('edgar_recent_8k reads the earnings exhibit when present, bounded and marked untrusted', async () => {
+  const r = await run('edgar_recent_8k', { ticker: 'AMD', limit: 2 });
+  assert.equal(r.ok, true, JSON.stringify(r.json));
+  assert.match(r.json.notice, /UNTRUSTED/);
+  assert.deepEqual(r.json.reports.map((x: any) => [x.filed, x.items, x.exhibit]), [['2026-09-28', '8.01', false], ['2026-08-04', '2.02,9.01', true]]);
+  assert.match(r.json.reports[1].text, /Synthetic quarterly results/);
+  assert.ok(r.json.reports.every((x: any) => x.text.length <= 3000 && x.url.startsWith('https://www.sec.gov/Archives/edgar/data/2488/')));
+});
+
+// AMD council audit 2026-10-31: the tools now carry the facts the answer got wrong.
+test('edgar_recent_8k finds the latest earnings release by item and flags a pending agreement', async () => {
+  const latest = await run('edgar_recent_8k', { ticker: 'AMD', limit: 1 });
+  assert.equal(latest.json.reports[0].eventStatus, 'pending');
+  assert.match(latest.json.reports[0].eventNote, /potential/);
+  const earnings = await run('edgar_recent_8k', { ticker: 'AMD', limit: 1, items: ['2.02'], maxChars: 8000 });
+  assert.deepEqual(earnings.json.reports.map((x: any) => [x.filed, x.exhibit, x.eventStatus]), [['2026-08-04', true, undefined]]);
+  const none = await run('edgar_recent_8k', { ticker: 'AMD', items: ['5.02'] });
+  assert.deepEqual(none.json.reports, []); assert.match(none.json.note, /No recent 8-K reports item 5\.02/);
+});
+
+test('edgar_financials computes the annual change, and valuation_metrics marks combined EPS approximate', async () => {
+  const f = await run('edgar_financials', { ticker: 'AMD', concepts: ['RevenueFromContractWithCustomerExcludingAssessedTax'] });
+  const annual = f.json.concepts.RevenueFromContractWithCustomerExcludingAssessedTax.annual;
+  assert.deepEqual(annual.map((x: any) => [x.fy, x.changePctFromPriorYear]), [[2025, 34.41], [2024, undefined]]);
+  const v = await run('valuation_metrics', { ticker: 'AMD' });
+  assert.equal(v.json.epsApproximate, true);
+  assert.match(v.json.epsMethodNote, /approximate/);
+});
+
+test('get_earnings_dates reports whether each date is past or upcoming', async () => {
+  const r = await run('get_earnings_dates', { symbols: ['amd'] });
+  assert.equal(r.ok, true, JSON.stringify(r.json));
+  assert.deepEqual(r.json.rows.map((x: any) => [x.symbol, x.earningsDate, x.estimated]), [['AMD', '2026-11-03T21:00:00.000Z', false]]);
+  assert.ok(['past', 'upcoming'].includes(r.json.rows[0].timing));
+});
+
+test('portfolio weights and exposures name their account scope', async () => {
+  assert.equal((await run('portfolio_weights', { symbols: ['NVDA'] })).json.accountScope, 'All accounts combined');
+  assert.equal((await run('portfolio_weights', { symbols: ['NVDA'], account: 'a1' })).json.accountScope, 'Account a1 only');
+  assert.equal((await run('get_exposures', { by: 'sector' })).json.accountScope, 'All accounts combined');
+});
+
+test('the EX-99 release is found under filer-specific names', async () => {
+  const { exhibit99 } = await import('../src/tools/web.ts');
+  const amd = [{ name: '0000002488-26-000121-index.html', size: '' }, { name: 'amd-20260804.htm', size: '30308' }, { name: 'amdq22026earningsslidesf.htm', size: '35590' }, { name: 'q22026991.htm', size: '448891' }, { name: 'R1.htm', size: '38073' }];
+  assert.equal(exhibit99(amd, 'amd-20260804.htm'), 'q22026991.htm');
+  assert.equal(exhibit99([{ name: 'k2.htm' }, { name: 'ex99-1.htm' }], 'k2.htm'), 'ex99-1.htm');
+  assert.equal(exhibit99([{ name: 'k3.htm' }], 'k3.htm'), undefined);
+});
+
+test('an exhibit in an SEC SGML envelope still yields its text', async () => {
+  const { secHtml, htmlToText } = await import('../src/tools/web.ts');
+  const body = '<html><head><title>Document</title></head><body><p>' + 'Second quarter revenue was $11.5 billion. '.repeat(10) + '</p></body></html>';
+  const raw = '<DOCUMENT>\n<TYPE>EX-99.1\n<SEQUENCE>2\n<FILENAME>q22026991.htm\n<TEXT>\n' + body;
+  assert.equal(htmlToText(raw, 'u').text, '');
+  assert.match(htmlToText(secHtml(raw), 'u').text, /Second quarter revenue/);
+  assert.equal(secHtml(body), body);
+});

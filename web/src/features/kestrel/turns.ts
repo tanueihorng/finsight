@@ -7,10 +7,12 @@ export type Part =
   | { kind: 'text'; text: string; open: boolean }
   | { kind: 'tool'; key: string; name: string; args: string; state: 'running' | 'ok' | 'err'; res: string; detail: string }
   | { kind: 'ui'; key: string; view: unknown }
-  | { kind: 'council'; key: string; role: string; phase: string; status: string; model: string; costUsd: number | null; ms: number; detail: string }
+  | { kind: 'council'; key: string; role: string; phase: string; status: string; model: string; costUsd: number | null; ms: number; detail: string; flags: string[] }
   | { kind: 'notice'; text: string; cls: string };
 export interface Meta { label?: string; costUsd?: number | null; ms?: number | null }
-export interface Turn { id: string; label: string; search?: string; parts: Part[]; cites: Citation[]; meta: Meta | null; allText: string }
+// Council research readiness, separate from whether the turn ran (COUNCILQUALITY-001).
+export interface Readiness { level: 'ready' | 'partial' | 'insufficient'; stages: { completed: number; expected: number }; evidence: Record<string, number>; unverifiedFigures: number; reasons: string[] }
+export interface Turn { id: string; label: string; search?: string; parts: Part[]; cites: Citation[]; meta: Meta | null; allText: string; readiness?: Readiness }
 export const newTurn = (id: string): Turn => ({ id, label: '', parts: [], cites: [], meta: null, allText: '' });
 
 const closeText = (parts: Part[]) => parts.map((p) => (p.kind === 'text' && p.open ? { ...p, open: false } : p));
@@ -51,12 +53,25 @@ export function addUi(t: Turn, callId: string, view: unknown): Turn {
   return { ...t, parts: i < 0 ? [...closeText(t.parts), part] : t.parts.map((p, j) => j === i ? part : p) };
 }
 
+// Unresolved figure-check issues from the council's deterministic check.
+const figureFlags = (x: unknown): string[] => Array.isArray(x) ? x.filter((f): f is string => typeof f === 'string' && !!f).slice(0, 20).map((f) => f.slice(0, 300)) : [];
+
+const count = (n: unknown) => (typeof n === 'number' && Number.isInteger(n) && n >= 0 && n < 1000 ? n : 0);
+function readiness(r: Record<string, any>): Readiness | undefined {
+  if (!['ready', 'partial', 'insufficient'].includes(r.level)) return undefined;
+  const evidence: Record<string, number> = {};
+  for (const k of ['retrieved', 'failed', 'not_applicable', 'unavailable', 'skipped_limit']) evidence[k] = count(r.evidence?.[k]);
+  return { level: r.level, stages: { completed: count(r.stages?.completed), expected: count(r.stages?.expected) }, evidence, unverifiedFigures: count(r.unverifiedFigures),
+    reasons: Array.isArray(r.reasons) ? r.reasons.filter((x: unknown) => typeof x === 'string').slice(0, 8).map((x: string) => x.slice(0, 160)) : [] };
+}
+
 // Parse persisted public run summaries; never expose model scratch reasoning.
 export function addCouncil(t: Turn, raw: string): Turn {
   try {
     const r = JSON.parse(raw);
+    if (r.kind === 'readiness') return { ...t, readiness: readiness(r) ?? t.readiness };
     if (typeof r.id !== 'string' || !['growth','macro','risk','chair'].includes(r.role) || !['assessment','challenge','synthesis'].includes(r.phase) || !['running','completed','failed','stopped'].includes(r.status)) return t;
-    const part: Extract<Part, {kind: 'council'}> = { kind: 'council', key: r.id, role: r.role, phase: r.phase, status: r.status, model: String(r.model), costUsd: typeof r.costUsd === 'number' && Number.isFinite(r.costUsd) ? r.costUsd : null, ms: typeof r.ms === 'number' ? r.ms : 0, detail: r.findings ? JSON.stringify(r.findings, null, 2) : String(r.error || '') };
+    const part: Extract<Part, {kind: 'council'}> = { kind: 'council', key: r.id, role: r.role, phase: r.phase, status: r.status, model: String(r.model), costUsd: typeof r.costUsd === 'number' && Number.isFinite(r.costUsd) ? r.costUsd : null, ms: typeof r.ms === 'number' ? r.ms : 0, detail: r.findings ? JSON.stringify(r.findings, null, 2) : String(r.error || ''), flags: figureFlags(r.metricIssues) };
     const i = t.parts.findIndex((p) => p.kind === 'council' && p.key === part.key);
     return { ...t, parts: i < 0 ? [...closeText(t.parts), part] : t.parts.map((p,j) => j === i ? part : p) };
   } catch { return t; }

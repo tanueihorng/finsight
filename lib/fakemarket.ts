@@ -168,6 +168,20 @@ function quoteDetails(q: URLSearchParams, now: number): Reply {
   return [200, { quoteResponse: { result, error: null } }];
 }
 
+// Synthetic fund profile for fund-type instruments only.
+function fundSummary(sym: string): Reply {
+  const s = lookup(sym);
+  if (!s || !['ETF', 'MUTUALFUND'].includes(String(s.type))) return [200, { quoteSummary: { result: [{}], error: null } }];
+  const raw = (v: number) => ({ raw: v, fmt: String(v) });
+  return [200, { quoteSummary: { error: null, result: [{
+    fundProfile: { family: 'Synthetic Funds', categoryName: 'Synthetic Blend', legalType: 'Exchange Traded Fund', feesExpensesInvestment: { annualReportExpenseRatio: raw(0.0005) } },
+    summaryDetail: { totalAssets: raw(1e10), currency: s.currency },
+    topHoldings: { stockPosition: raw(0.99), bondPosition: raw(0), cashPosition: raw(0.01), otherPosition: raw(0),
+      holdings: [{ symbol: 'SYNA', holdingName: 'Synthetic A', holdingPercent: raw(0.07) }, { symbol: 'SYNB', holdingName: 'Synthetic B', holdingPercent: raw(0.05) }],
+      sectorWeightings: [{ technology: raw(0.3) }, { healthcare: raw(0.12) }], equityHoldings: { priceToEarnings: raw(24.5), priceToBook: raw(4.8), priceToSales: raw(3.1) } },
+  }] } }];
+}
+
 // Monthly FRED CSV from `cosd` to now.
 function fred(q: URLSearchParams, now: number): Reply {
   const id = (q.get('id') || 'DGS10').toUpperCase();
@@ -222,6 +236,8 @@ function route(u: URL, now: number): Reply | null {
     if (c) return chart(decodeURIComponent(c[1]!), u.searchParams, now);
     if (u.pathname === '/v1/finance/search') return searchHandler(u.searchParams, now);
     if (u.pathname === '/v7/finance/quote') return quoteDetails(u.searchParams, now);
+    const fund = u.pathname.match(/^\/v10\/finance\/quoteSummary\/(.+)$/);
+    if (fund) return fundSummary(decodeURIComponent(fund[1]!));
     if (u.pathname === '/v1/test/getcrumb') return [200, 'fakecrumb', 'text/plain'];
     return [404, { error: 'Not found' }];
   }

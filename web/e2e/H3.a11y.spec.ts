@@ -4,7 +4,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import fs from 'node:fs';
-import { ensurePin, seeded } from './helpers';
+import { chatMenu, ensurePin, seeded } from './helpers';
 
 const DUMP = process.env.H3_DUMP;
 const SERIOUS = new Set(['serious', 'critical']);
@@ -25,6 +25,19 @@ for (const theme of ['amber', 'teal', 'phosphor']) {
     await seeded(page); await scan(page, 'theme-' + theme);
   });
 }
+for (const theme of ['violet', 'amber', 'teal', 'phosphor']) {
+  test('axe: light ' + theme, async ({ page }) => {
+    await page.addInitScript((t) => { localStorage.setItem('finsight-theme', t); localStorage.setItem('finsight-mode', 'light'); }, theme);
+    await seeded(page); await scan(page, 'light-' + theme);
+  });
+}
+test('axe: light kestrel full page', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('finsight-mode', 'light'));
+  await seeded(page); await page.click('#agent-toggle');
+  await page.getByRole('button', { name: 'Open full page' }).click();
+  await expect(page.locator('body')).toHaveClass(/agent-full/);
+  await scan(page, 'light-kestrel-full');
+});
 test('axe: lock', async ({ page, context }) => {
   await ensurePin(page.request); await context.clearCookies(); await page.goto('/');
   await expect(page.locator('#lock-pin')).toBeVisible(); await scan(page, 'lock');
@@ -47,7 +60,7 @@ test('axe: modals', async ({ page }) => {
 test('axe: kestrel', async ({ page }) => {
   await seeded(page);
   await page.click('#agent-toggle'); await expect(page.locator('.agent-offline').first()).toBeVisible(); await scan(page, 'kestrel-side');
-  await page.getByRole('button', { name: 'Dock into the terminal' }).click();
+  await chatMenu(page, 'Dock into the terminal');
   await expect(page.locator('#agent-dock')).toBeVisible(); await scan(page, 'kestrel-dock');
 });
 test('axe: chart max', async ({ page }) => {

@@ -1,0 +1,6 @@
+/* Local copies of the fonts the FEAT-009 mockups use (all SIL Open Font License 1.1; see LICENSE files).
+   Latin subsets of the variable fonts; Source Serif 4 is the same file FinSight ships as "Kestrel Serif". */
+@font-face { font-family: "Inter"; src: url("inter/InterVariable-latin.woff2") format("woff2"); font-weight: 100 900; font-style: normal; font-display: swap; }
+@font-face { font-family: "JetBrains Mono"; src: url("jetbrains-mono/JetBrainsMonoVariable-latin.woff2") format("woff2"); font-weight: 100 800; font-style: normal; font-display: swap; }
+@font-face { font-family: "Source Serif 4"; src: url("source-serif-4/SourceSerif4Variable-Roman.ttf.woff2") format("woff2"); font-weight: 200 900; font-style: normal; font-display: swap; }
+@font-face { font-family: "Source Serif 4"; src: url("source-serif-4/SourceSerif4Variable-Italic.ttf.woff2") format("woff2"); font-weight: 200 900; font-style: italic; font-display: swap; }

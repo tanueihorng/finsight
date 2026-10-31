@@ -31,6 +31,8 @@ test.describe('motion evidence', () => {
   await page.getByRole('button',{name:'Complete',exact:true}).click();
   await expect(page.locator('[data-orb][data-active=true]')).toHaveCount(0);
   await expect(page.getByRole('heading',{name:'Review complete',exact:true})).toBeVisible();
+  await expect(page.locator('[data-readiness=partial]')).toContainText('Qualitative claims have not been independently verified');
+  await expect(page.locator('[data-readiness=partial]')).toContainText('1 unavailable');
   await page.locator('[data-council-result]').scrollIntoViewIfNeeded();
   await page.waitForTimeout(1100); // Capture the final synthesis entrance and reading frame.
   await page.screenshot({path:info.outputPath('complete.png'),fullPage:true,animations:'disabled'});
@@ -50,4 +52,20 @@ test('narrow layout, reduced motion and failed branches preserve truthful status
  await expect(page.getByRole('button',{name:'Inspect Macro & Valuation',exact:true})).toHaveCount(0);
  await page.getByRole('button',{name:'Expand council activity',exact:true}).click();
  await expect(page.getByRole('button',{name:'Inspect Macro & Valuation',exact:true})).toBeVisible();
+});
+test('chain of thought: reduced motion is static and a live council causes no long tasks', async ({ page }) => {
+ await preview(page);
+ const long = await page.evaluate(() => new Promise<number>((resolve) => {
+  let n = 0; const o = new PerformanceObserver((l) => { n += l.getEntries().length; }); o.observe({ type: 'longtask', buffered: false });
+  setTimeout(() => { o.disconnect(); resolve(n); }, 3000);
+ }));
+ expect(long).toBe(0);
+ await page.getByRole('button', { name: 'Full page view', exact: true }).click();
+ await page.getByRole('button', { name: '≡ Chain of thought', exact: true }).click();
+ await expect(page.locator('[data-council-board][data-view=chain]')).toBeVisible();
+ await expect(page.getByLabel('Business & Growth lane')).toHaveAttribute('data-state', 'running');
+ await page.emulateMedia({ reducedMotion: 'reduce' });
+ for (const sel of ['[aria-label="Business & Growth lane"] [data-running=true]', '[aria-label="Business & Growth lane"] .kx-spin, [aria-label="Business & Growth lane"] i']) {
+  expect(await page.locator(sel).first().evaluate((el) => getComputedStyle(el).animationName)).toBe('none');
+ }
 });

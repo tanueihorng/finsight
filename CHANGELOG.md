@@ -15,6 +15,25 @@ The earlier draft with unverified release numbers is preserved in `docs/archive/
 
 ## Unreleased
 
+- Personal Council upgrade, 2026-10-31: `a186117` adds a separate Council budget; `5bb31bf` handles a matching issuer name and ticker; `c3ce194` uses the model context bound. Activated from the retained `feature/council-quality` worktree. A live AMD review completed all seven stages, but research remains partial and qualitative support needs review; completion is not investment qualification. Details remain in the private workspace run packet.
+
+- Council challenge packets preserve canonical tool data as structured JSON and include all specialist assessments and cited evidence. Optional Council-specific spending and output limits allow a fuller review without changing ordinary chat limits. Budget-refusal traces include reservation and available-budget details; live-provider research-quality confirmation remains pending.
+
+- `COUNCILQUALITY-001`: isolated integration `53c6709` combines GitHub main `f215b4cd` with the local observability snapshot and council-quality work. Unavailable sources and unverified qualitative claims prevent a ready research status. Concurrent daily budget reservations wait for in-flight calls before refusing work. These changes are not deployed; the AMD turn-budget issue and full research qualification remain open.
+
+- Council specialists may request four research tools in their single research batch (previously two); model output is capped at 2,000 tokens per call or the model maximum, whichever is lower. Up to four evidence-backed findings may be returned. Time and spending caps are unchanged.
+
+- Council no longer has a global model-call-count cap, per user request. Fixed phases, one repair per phase, the existing time and spending caps, and research-tool bounds remain. Duplicate figure warnings across a specialist’s phases are displayed once.
+
+- `KESTRELUX-001` ([FEAT-009](docs/features/FEAT-009-kestrel-terminal-redesign.md)), on `claude/chatbot-ui-concepts-b7a075`, not merged:
+  - Colour tokens with dark mode pixel-unchanged, plus light mode (`data-mode`, ◐ top-bar button, APPEARANCE control, a darker light variant per accent, contrast-checked).
+  - Kestrel full page (`⌘⇧/`), a capsule while a hidden run continues, and a busy ASK button and top-bar sweep.
+  - Clickable briefing tiles, a tool log card, a streaming caret, and a full-page workspace column for views, alongside the Council toggle and reply settings from PR 2.
+  - Council Cards and Chain of thought views on one UNPEEK-safe view model, with the switch saved and `⌘.` to toggle.
+  - No agent or API change.
+
+- Council review fixes: resolve and verify requested subjects before research; carry the selected lens and bounded conversation context; label portfolio weight bases and flag unresolved figure checks in the report and UI. Subject resolution adds a model call. Figure checks do not establish source entailment or full investment research readiness.
+
 - Isolate the standalone and demo launchers in separate data directories and agent ports, and reject agent configurations that redirect them to another data directory. Show Kestrel's name and connection errors, and keep its chat rail available in the dock. These changes do not migrate existing data.
 
 - `UIUPGRADE-001` (`dc8a7c9`): natural view-selection guidance, source-bound exposure charts, snapshot chart range and pointer controls, and user-invoked navigation or unsaved alert drafts. Live model qualification remains limited to the recorded synthetic sample.
@@ -70,3 +89,9 @@ Setup and other application dialogs now stay above Kestrel and expanded charts w
 - Preserve dependency symlink identities in esbuild so canonical and worktree builds produce the same chunk hashes and source maps. Both checkout checks pass60 files;61 artifacts including index are byte-identical.
 - Shellv52 isolates the normalized bundle. The corrected bundle passes213 unit,111 agent + secret scan,253 browser checks, with1 existing live-fixture skip.
 - Corrects the post-merge build mismatch in the first publication; no application/backend behavior or financial records changed by this build correction.
+
+
+### Council subject routing — 2026-10-29 (local preview)
+
+- `4e1aa3b`: explicit companies in the question determine council research; names/tickers are verified through instrument lookup and matching quotes before specialists. Attached charts are optional context. Comparisons and saved subject references are supported; ambiguity and outages cannot substitute an unrelated chart.
+-145 agent tests plus secret scan,216 app unit tests, typechecks and4 real-backend browser checks pass. Deployed to the isolated PR1 preview (UI9cd2414 + backend4e1aa3b); PR1 is unmerged and personal services are unchanged. Comprehensive council research quality remains open.

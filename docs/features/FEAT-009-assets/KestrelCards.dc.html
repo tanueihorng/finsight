@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Kestrel council cards</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="./fonts/fonts.css">
+<style>
+body{margin:0}
+a{color:#a78bfa}a:hover{color:#c4b5fd}
+.m{font-family:'JetBrains Mono','SF Mono',Menlo,ui-monospace,monospace;font-variant-numeric:tabular-nums}
+.serif{font-family:'Source Serif 4',Georgia,serif}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes spinr{to{transform:rotate(-360deg)}}
+@keyframes bloom{0%,100%{transform:scale(.92);opacity:.55}50%{transform:scale(1.12);opacity:1}}
+@keyframes pulse{0%{transform:scale(1);opacity:.7}100%{transform:scale(2.6);opacity:0}}
+@keyframes glow{0%,100%{opacity:.45}50%{opacity:1}}
+@keyframes dash{to{stroke-dashoffset:-24}}
+@keyframes arrive{from{opacity:0;transform:translateY(16px) scale(.98)}to{opacity:1;transform:none}}
+@keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
+@keyframes sweep{0%{transform:translateX(-120%)}100%{transform:translateX(320%)}}
+.ringA{position:absolute;inset:4px;border-radius:50%;border:1.5px dashed var(--c);opacity:.55}
+.ringB{position:absolute;inset:14px;border-radius:50%;border:1.5px solid var(--c);border-right-color:transparent;border-left-color:transparent}
+.core{position:absolute;inset:26px;border-radius:50%}
+.aura{position:absolute;inset:-6px;border-radius:50%}
+.live .ringA{animation:spin 9s linear infinite}
+.live .ringB{animation:spinr 2.4s linear infinite}
+.live .aura{animation:bloom 2.8s ease-in-out infinite}
+.ping{position:absolute;inset:0;border-radius:50%;animation:pulse 1.8s ease-out infinite}
+.glow{animation:glow 1.6s ease-in-out infinite}
+.flow{stroke-dasharray:4 8;animation:dash 1.2s linear infinite}
+.arrive{animation:arrive .6s cubic-bezier(.2,.8,.2,1) both}
+.skel{border-radius:4px;background-size:200% 100%;animation:shimmer 1.8s linear infinite}
+.sweep{animation:sweep 1.8s linear infinite}
+.card{transition:flex .45s cubic-bezier(.2,.8,.2,1),border-color .2s,transform .2s;cursor:pointer}
+.card:hover{transform:translateY(-2px)}
+@media (prefers-reduced-motion:reduce){.live .ringA,.live .ringB,.live .aura,.ping,.glow,.flow,.arrive,.skel,.sweep{animation:none}.card{transition:none}.card:hover{transform:none}}
+</style>
+</helmet>
+<div style="width:1440px;height:900px;box-sizing:border-box;display:flex;flex-direction:column;background:{{t.bg}};color:{{t.text}};font-family:Inter,-apple-system,system-ui,sans-serif;overflow:hidden">
+
+  <div class="m" style="height:36px;flex:none;display:flex;align-items:center;gap:14px;padding:0 14px;background:{{t.head}};border-bottom:1px solid {{t.accent}};font-size:11.5px;color:{{t.muted}}">
+    <span style="font-weight:700;letter-spacing:1px;color:{{t.text}}">FINSIGHT <span style="color:{{t.muted}}">//</span> PERSONAL TERMINAL</span>
+    <span style="padding:1px 7px;border:1px solid {{t.up}};border-radius:3px;color:{{t.up}};font-size:10.5px;letter-spacing:.5px">NYSE OPEN</span>
+    <span style="color:{{t.accent}};letter-spacing:1px">10:42:18 ET</span>
+    <div style="flex:1"></div>
+    <button onClick="{{toggleTheme}}" class="m" style="height:22px;padding:0 9px;border:1px solid {{t.border2}};border-radius:3px;background:{{t.panel2}};color:{{t.muted}};font-size:10.5px;cursor:pointer">◐ {{themeLabel}}</button>
+  </div>
+
+  <header style="height:52px;flex:none;display:flex;align-items:center;gap:14px;padding:0 16px;border-bottom:1px solid {{t.border}};background:{{t.panel}}">
+    <span class="m" style="font-size:11px;font-weight:700;letter-spacing:1.2px;color:{{t.accent}}">KESTREL · COUNCIL</span>
+    <span style="font-size:14.5px;font-weight:600">Should I trim NVDA before earnings?</span>
+    <div style="flex:1"></div>
+    <nav aria-label="Council view" class="m" style="display:flex;border:1px solid {{t.border2}};border-radius:3px;overflow:hidden;font-size:11px">
+      <span aria-current="page" style="height:26px;display:inline-flex;align-items:center;padding:0 10px;background:{{t.accent}};color:{{t.onAccent}};font-weight:700">◫ CARDS</span>
+      <a href="KestrelFull.dc.html" style="height:26px;display:inline-flex;align-items:center;padding:0 10px;color:{{t.muted}};text-decoration:none">≡ CHAIN OF THOUGHT</a>
+    </nav>
+    <button onClick="{{toggleStage}}" class="m" style="height:28px;padding:0 10px;border:1px solid {{t.border2}};border-radius:3px;background:transparent;color:{{t.text}};font-size:11px;cursor:pointer">{{stageBtn}}</button>
+    <a href="KestrelSide.dc.html" class="m" style="height:28px;display:inline-flex;align-items:center;padding:0 10px;border:1px solid {{t.border2}};border-radius:3px;color:{{t.text}};text-decoration:none;font-size:11px">⇲ SIDE PANEL</a>
+  </header>
+
+  <!-- stages -->
+  <div class="m" style="height:40px;flex:none;display:flex;align-items:center;gap:12px;padding:0 16px;font-size:11px;color:{{t.muted}}">
+    <sc-for list="{{stages}}" as="s" hint-placeholder-count="3">
+      <span style="display:inline-flex;align-items:center;gap:7px;color:{{s.c}};font-weight:{{s.w}}"><i style="width:20px;height:20px;border-radius:4px;border:1px solid {{s.bc}};background:{{s.bg}};display:inline-flex;align-items:center;justify-content:center;font-style:normal;font-size:10px">{{s.mark}}</i>{{s.label}}</span>
+      <i style="width:36px;height:1px;background:{{t.border2}}"></i>
+    </sc-for>
+    <div style="flex:1"></div>
+    <span>3 specialists · 1 chair · {{costLabel}}</span>
+  </div>
+
+  <!-- specialist cards -->
+  <section aria-label="Specialists" style="flex:none;display:flex;gap:12px;padding:0 16px;height:372px">
+    <sc-for list="{{roles}}" as="r" hint-placeholder-count="3">
+      <button class="card arrive" onClick="{{r.toggle}}" aria-expanded="{{r.open}}" aria-label="{{r.aria}}" style="flex:{{r.flex}} 1 0;min-width:0;display:flex;flex-direction:column;gap:12px;padding:14px 16px;text-align:left;font:inherit;color:{{t.text}};background:{{t.panel}};border:1px solid {{r.border}};border-radius:10px;overflow:hidden;position:relative;animation-delay:{{r.delay}}">
+        <span style="display:flex;align-items:flex-start;gap:14px;width:100%">
+          <span class="{{r.orbCls}}" aria-hidden="true" style="position:relative;width:78px;height:78px;flex:none;--c:{{r.c}}">
+            <i class="aura" style="background:radial-gradient(circle,{{r.cSoft}},transparent 68%)"></i>
+            <i class="ringA"></i><i class="ringB"></i>
+            <i class="core" style="background:radial-gradient(circle at 32% 28%,{{t.text}},{{r.c}} 30%,{{t.bg}} 92%)"></i>
+          </span>
+          <span style="display:flex;flex-direction:column;gap:4px;min-width:0;flex:1;padding-top:6px">
+            <span class="m" style="font-size:10px;letter-spacing:1.2px;color:{{r.c}};font-weight:700">{{r.eyebrow}}</span>
+            <span style="font-size:18px;font-weight:600;letter-spacing:-.3px">{{r.label}}</span>
+            <span style="font-size:12px;color:{{t.muted}}">{{r.focus}}</span>
+          </span>
+          <span class="m" style="display:inline-flex;align-items:center;gap:6px;font-size:10.5px;color:{{r.stateC}};padding-top:8px;white-space:nowrap"><i class="{{r.dotCls}}" style="width:6px;height:6px;border-radius:50%;background:{{r.stateC}}"></i>{{r.stateLabel}}</span>
+        </span>
+
+        <span style="display:flex;align-items:center;gap:10px">
+          <span class="m" style="font-size:13px;font-weight:700;letter-spacing:.8px;padding:4px 10px;border-radius:4px;background:{{r.cSoft}};color:{{r.c}}">{{r.stance}}</span>
+          <span style="font-size:12px;color:{{t.muted}}">{{r.phaseNote}}</span>
+        </span>
+
+        <span style="font-size:14.5px;line-height:1.5;font-weight:500">{{r.claim}}</span>
+
+        <span style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">
+          <span style="display:flex;flex-direction:column;gap:4px;padding:8px 10px;border-radius:6px;background:{{t.panel2}};border:1px solid {{t.border}}"><span class="m" style="font-size:9.5px;letter-spacing:.8px;color:{{t.muted}}">EVIDENCE</span><span class="m" style="font-size:18px;font-weight:600">{{r.ev}}</span></span>
+          <span style="display:flex;flex-direction:column;gap:4px;padding:8px 10px;border-radius:6px;background:{{t.panel2}};border:1px solid {{t.border}}"><span class="m" style="font-size:9.5px;letter-spacing:.8px;color:{{t.muted}}">AGAINST</span><span class="m" style="font-size:18px;font-weight:600">{{r.counter}}</span></span>
+          <span style="display:flex;flex-direction:column;gap:6px;padding:8px 10px;border-radius:6px;background:{{t.panel2}};border:1px solid {{t.border}}"><span class="m" style="font-size:9.5px;letter-spacing:.8px;color:{{t.muted}}">UNCERTAINTY</span>
+            <span style="display:flex;gap:3px;margin-top:4px"><sc-for list="{{r.unc}}" as="u" hint-placeholder-count="3"><i style="flex:1;height:6px;border-radius:2px;background:{{u.bg}}"></i></sc-for></span>
+            <span class="m" style="font-size:10px;color:{{t.muted}}">{{r.uncLabel}}</span></span>
+        </span>
+
+        <sc-if value="{{r.open}}" hint-placeholder-val="{{ false }}">
+          <span class="arrive" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 18px;font-size:12.5px;line-height:1.45">
+            <span><b class="m" style="display:block;font-size:9.5px;letter-spacing:.8px;color:{{t.muted}};margin-bottom:3px">ASSUMES</b>{{r.assume}}</span>
+            <span><b class="m" style="display:block;font-size:9.5px;letter-spacing:.8px;color:{{t.muted}};margin-bottom:3px">OPPOSING EVIDENCE</b>{{r.against}}</span>
+            <span><b class="m" style="display:block;font-size:9.5px;letter-spacing:.8px;color:{{t.muted}};margin-bottom:3px">STILL NEEDED</b>{{r.missing}}</span>
+            <span><b class="m" style="display:block;font-size:9.5px;letter-spacing:.8px;color:{{t.muted}};margin-bottom:3px">CHALLENGE ROUND</b>{{r.challenge}}</span>
+          </span>
+        </sc-if>
+
+        <span style="flex:1"></span>
+        <span style="display:flex;align-items:center;gap:8px;border-top:1px solid {{t.border}};padding-top:10px;font-size:11.5px;color:{{t.muted}}">
+          <span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Would change if: {{r.invalid}}</span>
+          <span class="m" style="color:{{r.c}}">{{r.openLabel}}</span>
+        </span>
+        <sc-if value="{{r.running}}" hint-placeholder-val="{{ false }}"><i aria-hidden="true" style="position:absolute;left:0;right:0;top:0;height:2px;overflow:hidden"><i class="sweep" style="position:absolute;top:0;bottom:0;width:30%;background:linear-gradient(90deg,transparent,{{r.c}},transparent)"></i></i></sc-if>
+      </button>
+    </sc-for>
+  </section>
+
+  <!-- flows into the chair -->
+  <svg viewBox="0 0 1408 46" preserveAspectRatio="none" aria-hidden="true" style="display:block;width:1408px;height:46px;margin:0 16px;flex:none">
+    <path d="M234 0 C234 30 704 14 704 46" fill="none" stroke="{{t.border2}}" stroke-width="1"/>
+    <path d="M704 0 V46" fill="none" stroke="{{t.border2}}" stroke-width="1"/>
+    <path d="M1174 0 C1174 30 704 14 704 46" fill="none" stroke="{{t.border2}}" stroke-width="1"/>
+    <path d="M234 0 C234 30 704 14 704 46" fill="none" stroke="{{t.lgrowth}}" stroke-width="1.6" class="flow"/>
+    <path d="M704 0 V46" fill="none" stroke="{{t.lmacro}}" stroke-width="1.6" class="flow"/>
+    <path d="M1174 0 C1174 30 704 14 704 46" fill="none" stroke="{{t.lrisk}}" stroke-width="1.6" class="flow"/>
+    <circle cx="704" cy="42" r="4" fill="{{t.accent}}"/>
+  </svg>
+
+  <!-- the chair -->
+  <section aria-label="Kestrel Chair" style="flex:1;min-height:0;margin:0 16px;display:flex;gap:20px;padding:16px 18px;background:{{t.chairBg}};border:1px solid {{t.accentLine}};border-radius:10px;overflow:hidden">
+    <div style="width:210px;flex:none;display:flex;flex-direction:column;gap:10px">
+      <span class="{{chairOrb}}" aria-hidden="true" style="position:relative;width:84px;height:84px;--c:{{t.accent}}">
+        <i class="aura" style="background:radial-gradient(circle,{{t.accentSoft}},transparent 68%)"></i>
+        <i class="ringA"></i><i class="ringB"></i>
+        <i class="core" style="inset:30px;border-radius:5px;transform:rotate(45deg);background:linear-gradient(135deg,{{t.accent2}},{{t.accent}})"></i>
+      </span>
+      <span class="m" style="font-size:10.5px;letter-spacing:1.2px;font-weight:700;color:{{t.accent}}">KESTREL CHAIR</span>
+      <span style="font-size:12.5px;color:{{t.muted}};line-height:1.45">{{chairNote}}</span>
+    </div>
+
+    <sc-if value="{{done}}" hint-placeholder-val="{{ false }}">
+      <div class="arrive" style="flex:1;min-width:0;display:flex;flex-direction:column;gap:12px">
+        <p class="serif" style="margin:0;font-size:21px;line-height:1.4;font-weight:500">You are over your own 10% single-name limit, and that matters more than the event. Get back under it before Nov 19, either by trimming about 4 points or by collaring the excess.</p>
+        <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px">
+          <div style="padding:10px 12px;border-radius:8px;background:{{t.panel}};border:1px solid {{t.border}};display:flex;flex-direction:column;gap:5px"><span class="m" style="font-size:9.5px;letter-spacing:.8px;color:{{t.up}}">AGREED BY 3/3</span><span style="font-size:13px;line-height:1.4">NVDA is 14% of the book against a 10% cap.</span></div>
+          <div style="padding:10px 12px;border-radius:8px;background:{{t.panel}};border:1px solid {{t.border}};display:flex;flex-direction:column;gap:5px"><span class="m" style="font-size:9.5px;letter-spacing:.8px;color:{{t.lmacro}}">STILL NEEDED</span><span style="font-size:13px;line-height:1.4">Your tax lots, to pick which shares to trim.</span></div>
+          <div style="padding:10px 12px;border-radius:8px;background:{{t.panel}};border:1px solid {{t.border}};display:flex;flex-direction:column;gap:5px"><span class="m" style="font-size:9.5px;letter-spacing:.8px;color:{{t.lgrowth}}">WHAT CHANGES THE VIEW</span><span style="font-size:13px;line-height:1.4">If you treat the cap as a guideline, Growth’s hold case gets stronger.</span></div>
+        </div>
+      </div>
+    </sc-if>
+    <sc-if value="{{running}}" hint-placeholder-val="{{ true }}">
+      <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:12px;justify-content:center">
+        <div class="m" style="font-size:11px;color:{{t.muted}};display:flex;align-items:center;gap:8px"><span style="position:relative;width:8px;height:8px"><i class="ping" style="background:{{t.accent}}"></i><i style="position:absolute;inset:0;border-radius:50%;background:{{t.accent}}"></i></span>Waiting for Business &amp; Growth’s challenge, then weighing all three</div>
+        <i class="skel" style="display:block;height:20px;width:92%;background-image:linear-gradient(90deg,{{t.skel}} 0%,{{t.skel2}} 50%,{{t.skel}} 100%)"></i>
+        <i class="skel" style="display:block;height:20px;width:74%;background-image:linear-gradient(90deg,{{t.skel}} 0%,{{t.skel2}} 50%,{{t.skel}} 100%);animation-delay:.2s"></i>
+        <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:6px">
+          <i class="skel" style="display:block;height:60px;background-image:linear-gradient(90deg,{{t.skel}} 0%,{{t.skel2}} 50%,{{t.skel}} 100%)"></i>
+          <i class="skel" style="display:block;height:60px;background-image:linear-gradient(90deg,{{t.skel}} 0%,{{t.skel2}} 50%,{{t.skel}} 100%);animation-delay:.15s"></i>
+          <i class="skel" style="display:block;height:60px;background-image:linear-gradient(90deg,{{t.skel}} 0%,{{t.skel2}} 50%,{{t.skel}} 100%);animation-delay:.3s"></i>
+        </div>
+      </div>
+    </sc-if>
+  </section>
+
+  <footer class="m" style="height:44px;flex:none;display:flex;align-items:center;gap:10px;padding:0 16px;font-size:11px;color:{{t.muted}}">
+    <span>Evidence over votes · figures from tools · sample content</span>
+    <div style="flex:1"></div>
+    <span>⏎ open card · ⌘. switch view · esc stop</span>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"stage":{"editor":"enum","options":["running","done"],"default":"running"},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { theme: null, stage: null, open: null }; }
+  renderVals() {
+    const dark = (this.state.theme || this.props.theme || 'dark') === 'dark';
+    const done = (this.state.stage || this.props.stage || 'running') === 'done';
+    const t = dark
+      ? { bg: '#08080f', panel: '#0d0d18', panel2: '#12121f', head: '#0b0b14', chairBg: '#110e22', border: '#20203a', border2: '#2d2d4d', text: '#d7dadf', muted: '#8a8aa3', accent: '#a78bfa', accent2: '#c4b5fd', accentLine: '#3b2f6b', accentSoft: 'rgba(167,139,250,.35)', up: '#2ec27e', onAccent: '#08080f', skel: '#17172a', skel2: '#26264a',
+          lgrowth: '#38bdf8', lmacro: '#fb923c', lrisk: '#2ec27e' }
+      : { bg: '#f3f3f8', panel: '#ffffff', panel2: '#f7f7fb', head: '#ebebf3', chairBg: '#f4f1fe', border: '#dedeea', border2: '#c8c8da', text: '#16162a', muted: '#5a5a72', accent: '#6d4ee0', accent2: '#8b6cf0', accentLine: '#cfc4f6', accentSoft: 'rgba(109,78,224,.22)', up: '#0f7a52', onAccent: '#ffffff', skel: '#ececf4', skel2: '#dcdcea',
+          lgrowth: '#0369a1', lmacro: '#c2410c', lrisk: '#0f7a52' };
+    const R = [
+      { id: 'growth', eyebrow: 'SPECIALIST 01', label: 'Business & Growth', focus: 'Quality & growth', stance: 'HOLD', running: !done,
+        phaseNote: done ? 'Assessed · challenged' : 'Challenging Portfolio Risk', claim: 'The data-centre thesis is intact; trimming into the print is a timing call, not a thesis change.',
+        ev: 4, counter: 2, unc: 2, assume: 'Data-centre demand keeps growing through 2027.', against: 'Positioning is crowded; a miss would hit hard.', missing: 'Next-quarter guidance.',
+        challenge: done ? 'Accepts the cap is breached; argues for a smaller trim.' : 'In progress — testing Risk’s case for a full trim.', invalid: 'Guidance cuts data-centre growth.' },
+      { id: 'macro', eyebrow: 'SPECIALIST 02', label: 'Macro & Valuation', focus: 'Value & economic forces', stance: 'TRIM', running: false,
+        phaseNote: 'Assessed · challenged', claim: 'Rising real yields make a miss more costly for long-duration names like NVDA.',
+        ev: 3, counter: 1, unc: 2, assume: 'Real yields stay near current levels into Nov 19.', against: 'Valuation already compressed after the summer.', missing: 'Fed path after the next CPI.',
+        challenge: 'Agrees with Risk; flags Growth’s timing point as fair.', invalid: 'A sharp fall in real yields before the print.' },
+      { id: 'risk', eyebrow: 'SPECIALIST 03', label: 'Portfolio Risk', focus: 'Exposure & downside', stance: 'TRIM TO CAP', running: false,
+        phaseNote: 'Assessed · challenged', claim: 'NVDA is 14% of the book against your 10% cap; semis overall are 31%.',
+        ev: 5, counter: 0, unc: 1, assume: 'Your written 10% cap still applies.', against: 'None found in the supplied evidence.', missing: 'Tax lots for choosing which shares to sell.',
+        challenge: 'Holds firm: the cap is a written rule.', invalid: 'You change the cap in your policy.' }
+    ];
+    const open = this.state.open;
+    const roles = R.map((r, i) => {
+      const c = t['l' + r.id];
+      const isOpen = open === r.id;
+      return {
+        ...r, c, cSoft: dark ? c + '26' : c + '18', open: isOpen,
+        flex: isOpen ? 1.9 : 1, delay: (i * 0.08) + 's',
+        border: isOpen || r.running ? c : t.border,
+        orbCls: r.running ? 'live' : '',
+        stateLabel: r.running ? 'WORKING' : 'READY', stateC: r.running ? c : t.up, dotCls: r.running ? 'glow' : '',
+        unc: [0, 1, 2].map((k) => ({ bg: k < r.unc ? c : t.border })),
+        uncLabel: ['', 'LOW', 'MEDIUM', 'HIGH'][r.unc],
+        openLabel: isOpen ? 'Close ▴' : 'Open ▸',
+        aria: (isOpen ? 'Close ' : 'Open ') + r.label,
+        toggle: () => this.setState({ open: this.state.open === r.id ? null : r.id })
+      };
+    });
+    const st = (label, state) => state === 'done'
+      ? { label, mark: '✓', c: t.up, bc: t.up, bg: 'transparent', w: 400 }
+      : state === 'now' ? { label, mark: '●', c: t.text, bc: t.accent, bg: dark ? 'rgba(167,139,250,.14)' : 'rgba(109,78,224,.10)', w: 700 }
+      : { label, mark: '○', c: t.muted, bc: t.border2, bg: 'transparent', w: 400 };
+    const stages = done
+      ? [st('01 ASSESS', 'done'), st('02 CHALLENGE', 'done'), st('03 SYNTHESIZE', 'done')]
+      : [st('01 ASSESS', 'done'), st('02 CHALLENGE', 'now'), st('03 SYNTHESIZE', 'todo')];
+    return {
+      t, roles, stages, done, running: !done,
+      chairOrb: done ? '' : 'live',
+      chairNote: done ? 'Synthesis ready · evidence over votes' : 'Receives all assessments and challenges',
+      costLabel: done ? '$0.1840 recorded' : 'cost pending',
+      stageBtn: done ? '↺ REPLAY RUNNING' : '▸ SHOW RESULT',
+      themeLabel: dark ? 'DARK' : 'LIGHT',
+      toggleTheme: () => this.setState({ theme: dark ? 'light' : 'dark' }),
+      toggleStage: () => this.setState({ stage: done ? 'running' : 'done' })
+    };
+  }
+}
+</script>
+</body>
+</html>

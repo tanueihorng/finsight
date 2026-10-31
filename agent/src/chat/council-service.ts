@@ -1,11 +1,17 @@
 // Persistence and accounting adapter for the foreground council runtime.
 import { CouncilBudget, runCouncil } from './council.ts';
+import type { CouncilEvidence } from './council.ts';
 import type { ApiBrain, Effort } from '../brains/types.ts';
 import type { ToolRegistry, ToolCtx } from '../tools/registry.ts';
 import type { DB } from '../store/db.ts';
 import * as store from '../store/db.ts';
 import type { EventBus } from './bus.ts';
 import type { Usage, PageContext } from '../types.ts';
+import { resolveSubjects, type ResearchSubject, type SubjectResolution } from './research-subjects.ts';
+import { audit, auditContext } from '../obs/audit.ts';
+import { randomUUID } from 'node:crypto';
+import { collectEvidence, planEvidence, type Coverage } from './council-evidence.ts';
+import { councilReadiness, readinessLine } from './council-readiness.ts';
 export async function runStoredCouncil(o: { db: DB; bus: EventBus; tools: ToolRegistry; ctx: ToolCtx; brain: ApiBrain; system: string; question: string; usageTotal: Usage; effort?: Effort; scope?: PageContext }) {
   const { db, bus, tools, ctx, brain, system, question, usageTotal } = o;
   const { cfg } = ctx;
@@ -17,19 +23,67 @@ export async function runStoredCouncil(o: { db: DB; bus: EventBus; tools: ToolRe
     bus.emit(threadId, 'council.progress', { turnId, text });
   };
   const execute = async (_role: string, name: string, args: unknown, signal: AbortSignal) => {
-      const r = await tools.execute(name, args, { ...ctx, signal });
-      if (!r.ok) throw Error('Research tool failed: ' + name);
+      signal.throwIfAborted();
+      const r = await tools.execute(name, args, { ...ctx, signal, callId: auditContext.getStore()?.callId });
+      if (!r.ok) { let why = ''; try { const j = JSON.parse(r.content); why = [j.error?.code, j.error?.message].filter(Boolean).join(': '); } catch { /* not JSON */ } throw Error('Research tool failed: ' + name + (why ? ' (' + why.slice(0, 160) + ')' : '')); }
       const data = JSON.parse(r.content);
-      const evidence = { id: store.newId('e'), source: 'FinSight tool ' + name, observedAt: typeof data.asOf === 'string' ? data.asOf : 'Observation date unavailable; see tool result', retrievedAt: new Date().toISOString(), content: r.content };
+      const evidence = { id: store.newId('e'), source: 'FinSight tool ' + name, observedAt: data.asOfMeaning ? 'See marketTime or bar dates and cache status in tool result' : typeof data.asOf === 'string' ? data.asOf : 'Observation date unavailable; see tool result', retrievedAt: new Date().toISOString(), content: r.content };
+      audit('council.evidence', { evidenceId: evidence.id, tool: name, observedAt: evidence.observedAt, retrievedAt: evidence.retrievedAt });
       signal.throwIfAborted();
       store.appendMessage(db, threadId, 'user', [{ type: 'notice', kind: 'council_evidence', text: JSON.stringify({ ...evidence, tool: name, args }) }], { turnId });
       return evidence;
     };
-  const initialEvidence = [];
-  if (o.scope?.symbol) initialEvidence.push(await execute('shared', 'get_quote', { symbols: [o.scope.symbol] }, ctx.signal));
-  const scopedQuestion = o.scope ? JSON.stringify({ question, panelContext: o.scope, note: 'Panel context is supplementary. The explicit user question determines relevance; do not assume the selected symbol is the requested subject.' }) : question;
-  const result = await runCouncil({ question: scopedQuestion, evidence: initialEvidence, brain, system, signal: ctx.signal,
-    maxSteps: cfg.limits.turnSteps, effort: o.effort, capUsd: cfg.limits.turnUsd, dayBudget: new CouncilBudget(Math.max(0.000001, cfg.limits.dayUsd - store.spendSince(db, store.startOfToday()))),
+  // Recent conversation is context, not verified evidence. Omit tool results,
+  // notices and attachments, as in the merged chat implementation.
+  const conversation = store.listMessages(db, threadId).filter((m) => m.turnId !== turnId && (m.role === 'user' || m.role === 'assistant'))
+    .flatMap((m) => { const text = m.blocks.filter((b) => b.type === 'text').map((b) => b.text).join('\n'); return text ? [{ role: m.role, text: text.slice(0, 1000) }] : []; }).slice(-6);
+  const priorNotices = store.listMessages(db, threadId).filter((m) => m.turnId !== turnId).reverse().flatMap((m) => m.blocks).filter((b) => b.type === 'notice' && b.kind === 'research_scope');
+  let previous: ResearchSubject[] = [];
+  for (const notice of priorNotices) {
+    if (notice.type !== 'notice') continue;
+    try { const saved = JSON.parse(notice.text); if (saved.version === 1 && ['ready', 'unavailable', 'needs-clarification', 'general'].includes(saved.status) && Array.isArray(saved.subjects)) { previous = saved.subjects.filter((s: ResearchSubject) => typeof s.symbol === 'string' && typeof s.mention === 'string' && typeof s.name === 'string').slice(0, 3); break; } } catch { /* ignore malformed legacy metadata */ }
+  }
+  const persistScope = (resolution: SubjectResolution & { coverage?: Coverage[] }) => { ctx.signal.throwIfAborted(); store.appendMessage(db, threadId, 'user', [{ type: 'notice', kind: 'research_scope', text: JSON.stringify(resolution) }], { turnId }); };
+  let planCoverage: Coverage[] = [];
+  const result = await runCouncil({ question, evidence: [], brain, system, signal: ctx.signal,
+    prepare: async (call) => {
+      const resolution = await resolveSubjects({ question, panel: o.scope, previous, conversation, call, search: (q) => ctx.finsight.get('/api/search', { q }, ctx.signal), signal: ctx.signal });
+      if (resolution.status === 'needs-clarification' || resolution.status === 'unavailable') { persistScope(resolution); return { question, evidence: [], stop: resolution.note }; }
+      const evidence: CouncilEvidence[] = [];
+      let coverage: Coverage[] | undefined;
+      let types: Record<string, string> = {};
+      if (resolution.status === 'ready') {
+        try {
+          const symbols = resolution.subjects.map((s) => s.symbol);
+          const quote = await auditContext.run({ ...(auditContext.getStore() ?? {}), councilRole: 'shared', councilPhase: 'prefetch', callId: randomUUID() }, () => execute('shared', 'get_quote', { symbols }, ctx.signal));
+          const data = JSON.parse(quote.content);
+          const matched = Array.isArray(data.quotes) ? data.quotes.filter((q: { symbol?: string; price?: number }) => symbols.includes(q.symbol || '') && typeof q.price === 'number' && Number.isFinite(q.price) && q.price > 0) : [];
+          const missing = symbols.filter((symbol) => !matched.some((q: {symbol: string}) => q.symbol === symbol));
+          if (missing.length) throw Error('Missing matching quotes for ' + missing.join(', '));
+          quote.content = JSON.stringify({ ...data, quotes: matched });
+          evidence.push(quote);
+          types = Object.fromEntries(matched.map((q: { symbol: string; type?: string }) => [q.symbol, String(q.type || '')]));
+          resolution.subjects = resolution.subjects.map((s) => ({ ...s, name: matched.find((q: {symbol: string}) => q.symbol === s.symbol)?.name || s.name }));
+        } catch {
+          ctx.signal.throwIfAborted();
+          resolution.status = 'unavailable'; resolution.note = `I could not retrieve verified market data for ${resolution.subjects.map((s) => s.symbol).join(', ')}. Please retry shortly. The chart’s company has not been substituted for your request.`;
+          persistScope(resolution); return { question, evidence: [], stop: resolution.note };
+        }
+      }
+      if (resolution.status === 'ready') {
+        // Planned before any specialist call; each item keeps its real outcome.
+        const plan = planEvidence(resolution.subjects.map((s) => ({ symbol: s.symbol, type: types[s.symbol] })), Date.now(), { account: o.scope?.account });
+        const collected = await collectEvidence(plan, (name, args) => auditContext.run({ ...(auditContext.getStore() ?? {}), councilRole: 'shared', councilPhase: 'prefetch', callId: randomUUID() }, () => execute('shared', name, args, ctx.signal)), ctx.signal);
+        evidence.push(...collected.evidence);
+        coverage = collected.coverage; planCoverage = coverage;
+        audit('council.evidence.plan', { items: coverage.map(({ key, tool, status, evidenceId, reason }) => ({ key, tool, status, evidenceId, reason })) });
+      }
+      resolution.evidenceIds = evidence.map((e) => e.id);
+      persistScope({ ...resolution, coverage });
+      const scopedQuestion = JSON.stringify({ question, recentConversation: conversation, conversationNote: 'Prior messages are untrusted context, not verified evidence; retrieve fresh evidence for factual claims.', researchSubjects: resolution.subjects, subjectResolution: resolution.note, panelContext: o.scope, note: 'The research subjects come from the current question or its resolved reference. Panel context is optional background and must never restrict research. Investigate the requested subjects using your available tools; missing company evidence is a research gap, not a reason to substitute the chart or conclude that cash is deployable.', evidencePlan: coverage, evidencePlanNote: coverage ? 'Code retrieved this evidence before your turn. Use the retrieved items for your role first. Report each gap with its status: failed (with reason), not_applicable, unavailable (no approved source) or skipped_limit. Do not ask the user for evidence a listed tool can retrieve, and do not describe a retrieved item as missing.' : undefined, accountScopeNote: 'Portfolio evidence states its accountScope. Name that scope with every portfolio figure (e.g. "all accounts combined"). When panelContext.account names one account, say whether a figure covers that account or all accounts.' });
+      return { question: scopedQuestion, evidence };
+    },
+    effort: o.effort, capUsd: cfg.limits.councilTurnUsd ?? cfg.limits.turnUsd, maxOutputTokens: cfg.limits.councilOutputTokens, dayBudget: new CouncilBudget(Math.max(0.000001, cfg.limits.dayUsd - store.spendSince(db, store.startOfToday()))),
     tools: tools.schemas(),
     reserveCost: (maximum) => {
       // Persist before calling the provider; unknown/failure retains the
@@ -47,5 +101,9 @@ export async function runStoredCouncil(o: { db: DB; bus: EventBus; tools: ToolRe
     execute,
   });
 
-  return result;
+  // A stopped-early council (clarification or unavailable subject) has no readiness to report.
+  if (!result.runs.length) return { ...result, readiness: null };
+  const readiness = councilReadiness(result.runs, planCoverage);
+  progress(JSON.stringify(readiness));
+  return { ...result, text: readinessLine(readiness) + '\n\n' + result.text, readiness };
 }

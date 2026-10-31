@@ -45,20 +45,25 @@ function refresh<T>(key: string, ttl: number, fn: () => T | Promise<T>, opts: Ca
   return p;
 }
 
-export async function cached<T>(key: string, ttl: number, fn: () => T | Promise<T>, opts: CacheOptions = {}): Promise<T> {
+export type CacheStatus = { cachedAt: string; status: 'fresh' | 'stale-revalidating' | 'stale-fallback' };
+export async function cachedWithStatus<T>(key: string, ttl: number, fn: () => T | Promise<T>, opts: CacheOptions = {}): Promise<{ value: T; cache: CacheStatus }> {
   const hit = cache.get(key);
   const age = hit ? Date.now() - hit.at : Infinity;
-  if (hit && age < ttl) return hit.value as T;
+  if (hit && age < ttl) return { value: hit.value as T, cache: { cachedAt: new Date(hit.at).toISOString(), status: 'fresh' } };
   if (hit && age < ttl + (opts.stale || 0)) {
     refresh(key, ttl, fn, opts).catch(() => {}); // background revalidate
-    return hit.value as T;
+    return { value: hit.value as T, cache: { cachedAt: new Date(hit.at).toISOString(), status: 'stale-revalidating' } };
   }
   try {
-    return await refresh(key, ttl, fn, opts);
+    const value = await refresh(key, ttl, fn, opts);
+    return { value, cache: { cachedAt: new Date(cache.get(key)!.at).toISOString(), status: 'fresh' } };
   } catch (e) {
-    if (hit) return hit.value as T; // upstream down / rate-limited: last good value beats an error
+    if (hit) return { value: hit.value as T, cache: { cachedAt: new Date(hit.at).toISOString(), status: 'stale-fallback' } };
     throw e;
   }
+}
+export async function cached<T>(key: string, ttl: number, fn: () => T | Promise<T>, opts: CacheOptions = {}): Promise<T> {
+  return (await cachedWithStatus(key, ttl, fn, opts)).value;
 }
 
 // ---- persistence ------------------------------------------------------------
@@ -77,7 +82,7 @@ export function persistNow(): void {
     const tmp = CACHE_FILE + '.tmp.' + process.pid;
     fs.writeFileSync(tmp, JSON.stringify(out));
     fs.renameSync(tmp, CACHE_FILE);
-  } catch {}
+  } catch { console.warn('Market cache persistence failed.'); }
 }
 function loadPersisted() {
   if (!PERSIST) return;

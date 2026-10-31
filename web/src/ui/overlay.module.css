@@ -16,9 +16,9 @@
   font: 500 13px -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", sans-serif; cursor: pointer; transition: background .12s, border-color .12s; }
 .btn:hover { border-color: var(--muted); }
 .btn:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--glow); }
-.primary { background: var(--amber); border-color: var(--amber); color: #0b0b14; }
+.primary { background: var(--amber); border-color: var(--amber); color: var(--on-accent, #0b0b14); }
 .primary:hover { background: var(--amber-2); border-color: var(--amber-2); }
-.danger { background: var(--down); border-color: var(--down); color: #1a0606; }
+.danger { background: var(--down); border-color: var(--down); color: var(--on-down, #1a0606); }
 .danger:hover { filter: brightness(1.08); border-color: var(--down); }
 
 .toastDock { position: fixed; left: 16px; bottom: 40px; z-index: 1100; pointer-events: none; }
