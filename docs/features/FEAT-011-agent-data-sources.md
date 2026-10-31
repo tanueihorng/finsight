@@ -34,6 +34,22 @@ Free-tier limits and terms below come from vendor pages as of 2026-10-31 and mus
 - [ ] Python-only MCP servers run as external processes; FinSight stays Node/TypeScript.
 - [ ] The paper-trading agent can call these tools once that work lands.
 
+## Evaluating the paper-trading agent
+
+References for judging whether paper results justify replaying a strategy on the live account. Trading is
+medium term (days to about two months), so the evaluation favours multi-month runs over intraday metrics.
+
+| Reference | What it offers |
+|---|---|
+| [StockBench](https://github.com/ChenYXxxx/stockbench) ([paper](https://www.alphaxiv.org/abs/2510.02209)) | Multi-month trading evaluation on data the models cannot have memorised; closest to the medium-term holding style |
+| [Look-Ahead-Bench](https://github.com/benstaf/lookaheadbench) | Tests whether returns come from future knowledge absorbed in training; any backtest dated before the model's knowledge cutoff can look better than it is |
+| [DeepFund](https://github.com/HKUSTDial/DeepFund), [LiveTradeBench](https://github.com/ulab-uiuc/live-trade-bench) | Live-market agent arenas that avoid memorisation; templates for scoring the paper-trading agent |
+| [The Alpha Illusion](https://www.alphaxiv.org/abs/2605.16895v1) | Argues reported LLM-agent alpha is not deployment evidence |
+| [KTD-Fin](https://econpapers.repec.org/paper/arxpapers/2605.28359.htm) | Found most agent returns came from market and style exposure, not stock selection |
+
+Together these support comparing every paper result against a benchmark (for example buy-and-hold over the
+same period, after costs) and treating backtests before the model's knowledge cutoff as unreliable.
+
 ## Open questions
 
 - Which sources to take first (suggested: Equibles, then the EDGAR MCP comparison).
