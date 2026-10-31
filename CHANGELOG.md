@@ -29,8 +29,8 @@ The earlier draft with unverified release numbers is preserved in `docs/archive/
   - A PAPER book next to the real one, switched on the lock screen or in the top bar. The real book is untouched.
   - Alpaca paper only: the user's own paper keys, and live keys are refused. The book mirrors Alpaca fills and updates live through `trade_updates` and SSE.
   - A trade desk with a chart linked to the order ticket, fills and open limit orders drawn on the chart, and positions, orders, history and Kestrel tabs.
-  - Security review fixes (on `feat/paper-trading`, not merged): one order per approved ticket under double clicks; in ask mode Kestrel cancels only its own orders; Kestrel's orders are serialized so limits hold under concurrent calls; browser writes under `/api/` must be same-origin (another localhost port shares the cookie); news links limited to http(s); non-finite limit prices refused.
-  - The desk also helps research before an order (on `feat/paper-trading`, not merged): a watchlist column with search, a Watch toggle, key stats (ranges, volume, market cap, P/E, earnings, dividend yield), a News tab, and two-way symbol linking with the terminal. All of it shows before keys are entered.
+  - Security review fixes (merged locally at `bc26969`): one order per approved ticket under double clicks; in ask mode Kestrel cancels only its own orders; Kestrel's orders are serialized so limits hold under concurrent calls; browser writes under `/api/` must be same-origin (another localhost port shares the cookie); news links limited to http(s); non-finite limit prices refused.
+  - The desk also helps research before an order (merged locally at `bc26969`): a watchlist column with search, a Watch toggle, key stats (ranges, volume, market cap, P/E, earnings, dividend yield), a News tab, and two-way symbol linking with the terminal. All of it shows before keys are entered.
   - Kestrel can place paper orders through new tools. The user chooses ask-first or autonomous and sets optional limits.
   - Verified offline against a fake broker; a live run with real paper keys is pending.
 
