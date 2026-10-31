@@ -24,6 +24,8 @@ export const WEIGHT_BASIS = {
   securities_plus_cash: 'Share of securities plus cash (FinSight net worth). Liabilities are not tracked, so this is not net of debt.',
 } as const;
 export type WeightBasis = keyof typeof WEIGHT_BASIS;
+// Named with every all-account figure so it is not read as the account on screen.
+const SCOPE_ALL = 'All accounts combined';
 
 function compactPosition(p: Position, inclCash: number | null) {
   return {
@@ -179,7 +181,7 @@ const getExposures: ToolDef = {
       members: by === 'account' ? undefined : (members.get(group) ?? []).sort((a, b) => b.value - a.value).map((m) => ({ ...m, value: r2(m.value), weightInclCashPct: pct(m.value, total) })) }))
       .sort((a, b) => (b.value ?? 0) - (a.value ?? 0));
     // Every grouping here includes cash, so weights share the securities-plus-cash basis.
-    return { source: 'FinSight', asOf, base, by, total: r2(total), weightBasis: 'securities_plus_cash',
+    return { source: 'FinSight', asOf, base, by, account: 'ALL', accountScope: SCOPE_ALL, total: r2(total), weightBasis: 'securities_plus_cash',
       denominator: { scope: 'securities_plus_cash', value: r2(total), currency: base, asOf, constituents: groups.size, meaning: WEIGHT_BASIS.securities_plus_cash }, liabilities: 'not tracked', rows, coverage, lookThrough: false,
       note: by === 'sector' ? 'ETFs and funds are counted as single lines (no look-through). Each row lists its member holdings; an instrument-type group such as ETF / Fund is an administrative label, not an economic sector. Do not infer membership from names.' : undefined };
   },
@@ -209,6 +211,22 @@ const getQuote: ToolDef = {
   async handler({ symbols }, ctx) {
     const d = await ctx.finsight.get('/api/quote', { symbols: symbols.join(',') }, ctx.signal);
     return { source: 'FinSight /api/quote (Yahoo)', asOf: new Date().toISOString(), asOfMeaning: 'Tool retrieval time; quote marketTime is the market observation time. Check each quote cache status and cachedAt for freshness.', quotes: d.quotes };
+  },
+};
+
+const getEarningsDates: ToolDef = {
+  name: 'get_earnings_dates',
+  description: 'Next or most recent scheduled earnings date for any symbols (market-data aggregator, not the issuer), with whether the date is estimated and whether it is before or after now. Use it to tell whether a quarter has already been reported.',
+  input: z.object({ symbols: z.array(z.string().min(1).max(24)).min(1).max(20) }),
+  async handler({ symbols }, ctx) {
+    const d = await ctx.finsight.get<{ details?: Record<string, { earningsStart?: number | null; earningsEnd?: number | null; earningsEstimated?: boolean | null }> }>('/api/quote-details', { symbols: symbols.join(',') }, ctx.signal);
+    const now = Date.now(), iso = (ms: number | null | undefined) => (typeof ms === 'number' && Number.isFinite(ms) ? new Date(ms).toISOString() : null);
+    const rows = symbols.map((s: string) => s.toUpperCase()).map((symbol: string) => {
+      const x = d.details?.[symbol];
+      const start = x?.earningsStart ?? null;
+      return { symbol, earningsDate: iso(start), earningsWindowEnd: iso(x?.earningsEnd), estimated: x?.earningsEstimated ?? null, timing: start === null ? 'unknown' : start > now ? 'upcoming' : 'past' };
+    });
+    return { source: 'FinSight /api/quote-details (Yahoo)', sourceClass: 'aggregator', asOf: new Date(now).toISOString(), asOfMeaning: 'Tool retrieval time; timing compares each earnings date with it. Confirm dates against the issuer announcement.', rows };
   },
 };
 
@@ -280,7 +298,7 @@ const portfolioWeights: ToolDef = {
     const row = (symbol: string, value: number) => ({ symbol, marketValue: r2(value), securitiesPct: pct(value, den.securities.value), weightInclCashPct: pct(value, den.securities_plus_cash.value) });
     const rows = want.filter((s) => held.has(s)).map((s) => row(s, finite(held.get(s)!.marketValue)));
     const combinedValue = rows.reduce((s, r) => s + (r.marketValue ?? 0), 0);
-    return { source: 'FinSight /api/portfolio', asOf, base, account: account || 'ALL', denominators: den, rows,
+    return { source: 'FinSight /api/portfolio', asOf, base, account: account || 'ALL', accountScope: account ? `Account ${account} only` : SCOPE_ALL, denominators: den, rows,
       combined: rows.length > 1 ? row(rows.map((r) => r.symbol).join('+'), combinedValue) : undefined,
       notHeld: want.filter((s) => !held.has(s)), lookThrough: false };
   },
@@ -302,7 +320,7 @@ const acctBase = z.object({ account: Account, base: Base });
 const withAll = (i: any) => ({ ...i, account: i.account || 'ALL' });
 
 export const factsTools: ToolDef[] = [
-  getPortfolio, queryPositions, getExposures, portfolioWeights, getFundProfile, getCash, getAccounts, getQuote, getHistory,
+  getPortfolio, queryPositions, getExposures, portfolioWeights, getFundProfile, getCash, getAccounts, getQuote, getEarningsDates, getHistory,
   simple('search_instruments', 'Resolve a company name or ticker to market-data instruments. Use the explicit question before optional chart context; ask about materially ambiguous listings rather than silently substituting the chart.', '/api/search', z.object({ query: z.string().trim().min(1).max(120) }), (i) => ({ q: i.query })),
   simple('get_events', 'Upcoming earnings, dividends and ex-dates for holdings and watchlist.', '/api/events', z.object({ account: Account }), withAll),
   simple('get_dividends', 'Dividend income report (received, expected, withholding).', '/api/dividends', acctBase, withAll),

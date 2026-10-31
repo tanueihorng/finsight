@@ -10,7 +10,8 @@ export type Subject = { symbol: string; type?: string | null };
 export type PlanItem = { key: string; purpose: string; tool: string; args: Record<string, unknown>; roles: string[]; subject?: string };
 export type Coverage = Omit<PlanItem, 'args'> & { status: 'retrieved' | 'failed' | 'not_applicable' | 'unavailable' | 'skipped_limit'; evidenceId?: string; reason?: string };
 
-export const PLAN_LIMITS = { subjects: 3, items: 14, concurrency: 3 } as const;
+// Three equities need 5 items each plus 6 shared ones.
+export const PLAN_LIMITS = { subjects: 3, items: 22, concurrency: 3 } as const;
 
 export function subjectKind(type: string | null | undefined): SubjectKind {
   const t = String(type || '').toUpperCase();
@@ -25,7 +26,7 @@ export const secTicker = (symbol: string) => /^[A-Za-z]{1,6}(?:[.-][A-Ba-b])?$/.
 const yearAgo = (now: number) => new Date(now - 366 * 864e5).toISOString().slice(0, 10);
 
 /** Planned retrievals plus items known in advance to be inapplicable or unavailable. */
-export function planEvidence(subjects: Subject[], now = Date.now()): { items: PlanItem[]; coverage: Coverage[] } {
+export function planEvidence(subjects: Subject[], now = Date.now(), scope: { account?: string } = {}): { items: PlanItem[]; coverage: Coverage[] } {
   const items: PlanItem[] = [], coverage: Coverage[] = [];
   const add = (item: PlanItem) => { if (items.length < PLAN_LIMITS.items) items.push(item); else coverage.push({ ...strip(item), status: 'skipped_limit', reason: `Evidence plan limit of ${PLAN_LIMITS.items} items` }); };
   const kept = subjects.slice(0, PLAN_LIMITS.subjects);
@@ -40,6 +41,8 @@ export function planEvidence(subjects: Subject[], now = Date.now()): { items: Pl
       if (secTicker(sym)) {
         add({ key: `financials:${sym}`, purpose: 'Reported revenue, operating income, net income and diluted EPS (SEC XBRL)', tool: 'edgar_financials', args: { ticker: sym }, roles: ['growth', 'macro'], subject: sym });
         add({ key: `valuation:${sym}`, purpose: 'Trailing P/E, earnings yield, price-to-sales and market cap computed from SEC data and the live price', tool: 'valuation_metrics', args: { ticker: sym }, roles: ['growth', 'macro', 'risk'], subject: sym });
+        // The latest results release is not necessarily among the latest 8-Ks.
+        add({ key: `earnings8k:${sym}`, purpose: 'Latest earnings release (8-K item 2.02): segment results, margins and outlook', tool: 'edgar_recent_8k', args: { ticker: sym, limit: 1, items: ['2.02'], maxChars: 8000 }, roles: ['growth', 'macro'], subject: sym });
         add({ key: `8k:${sym}`, purpose: 'Text of the two most recent 8-K reports (earnings exhibit when present)', tool: 'edgar_recent_8k', args: { ticker: sym, limit: 2 }, roles: ['growth', 'macro'], subject: sym });
       } else {
         coverage.push({ key: `financials:${sym}`, purpose: 'Reported financials', tool: 'edgar_financials', roles: ['growth', 'macro'], subject: sym, status: 'not_applicable', reason: 'Not a US SEC registrant ticker; no approved primary filings source for this listing' });
@@ -48,8 +51,13 @@ export function planEvidence(subjects: Subject[], now = Date.now()): { items: Pl
     }
   }
   if (kept.length) {
-    add({ key: 'portfolio:weights', purpose: 'Whether the subjects are held and their weights on both bases', tool: 'portfolio_weights', args: { symbols: kept.map((s) => s.symbol) }, roles: ['risk'] });
-    add({ key: 'portfolio:sectors', purpose: 'Sector and instrument-type exposure with members and coverage', tool: 'get_exposures', args: { by: 'sector' }, roles: ['risk'] });
+    const equities = kept.filter((s) => subjectKind(s.type) !== 'fund').map((s) => s.symbol);
+    if (equities.length) add({ key: 'events:earnings', purpose: 'Scheduled earnings dates and whether each is past or upcoming', tool: 'get_earnings_dates', args: { symbols: equities }, roles: ['growth', 'macro'] });
+    add({ key: 'portfolio:weights', purpose: 'Whether the subjects are held and their weights on both bases, all accounts combined', tool: 'portfolio_weights', args: { symbols: kept.map((s) => s.symbol) }, roles: ['risk'] });
+    // The account on screen is reported separately, never instead of the total.
+    const account = scope.account && scope.account.toUpperCase() !== 'ALL' ? scope.account : null;
+    if (account) add({ key: 'portfolio:weights:selected', purpose: 'The same weights for the account selected on screen', tool: 'portfolio_weights', args: { symbols: kept.map((s) => s.symbol), account }, roles: ['risk'] });
+    add({ key: 'portfolio:sectors', purpose: 'Sector and instrument-type exposure with members and coverage, all accounts combined', tool: 'get_exposures', args: { by: 'sector' }, roles: ['risk'] });
     add({ key: 'portfolio:policy', purpose: 'Accepted investment policy, if any', tool: 'get_policy', args: {}, roles: ['risk'] });
     add({ key: 'macro:DGS10', purpose: 'US 10-year Treasury yield over the past year (discount-rate context)', tool: 'get_macro_series', args: { series: 'DGS10', start: yearAgo(now) }, roles: ['macro'] });
   }

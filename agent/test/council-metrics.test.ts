@@ -84,3 +84,56 @@ test('counterevidence must name a supplied evidence ID; opinion does not count',
   assert.deepEqual(metricIssues(f(['The cash weight is high (p)']), evidence), []);
   assert.deepEqual(metricIssues(f(["The 'Large Blend' label sits uneasily with its tech weight."]), evidence), ['finding 1: counterevidence 1 cites no supplied evidence ID; name its source ID or move it to assumptions']);
 });
+
+// AMD council audit 2026-10-31 (public issuer figures; no personal data).
+const fin = { id: 'f', content: JSON.stringify({ concepts: { Revenue: { annual: [{ fy: 2025, value: 34639000000, changePctFromPriorYear: 34.34 }, { fy: 2024, value: 25785000000 }] } } }) };
+const deal = { id: 'k', content: JSON.stringify({ reports: [{ filed: '2026-09-28', items: '1.01', eventStatus: 'pending' }] }) };
+const val = { id: 'v', content: JSON.stringify({ peTrailing: 129.44, epsApproximate: true, ttm: { epsDiluted: { value: 3.9 } } }) };
+const wts = { id: 'w', content: JSON.stringify({ account: 'ALL', accountScope: 'All accounts combined', rows: [{ symbol: 'AMD', securitiesPct: 4.12, weightInclCashPct: 3.8 }] }) };
+const amd = [fin, deal, val, wts];
+const one = (claim: string, ids: string[], counterevidence: string[] = []) => ({ findings: [{ claim, evidenceIds: ids, assumptions: [], uncertainty: 'u', counterevidence, invalidation: 'i', missingEvidence: [] }], unresolvedQuestions: [] });
+
+test('a qualitative change must agree with the figures it describes, in counterevidence too', () => {
+  const bad = metricIssues(one('Valuation is stretched.', ['f'], ['Revenue nearly doubled from $25.785bn to $34.639bn (f).']), amd);
+  assert.match(bad.join(), /"nearly doubled" contradicts its own figures, a 34\.34% change/);
+  assert.match(metricIssues(one('Revenue doubled last year.', ['f']), amd).join(), /states a change without the figures/);
+  assert.deepEqual(metricIssues(one('Revenue rose 34.34% from $25.785bn to $34.639bn.', ['f']), amd), []);
+  assert.deepEqual(metricIssues(one('Revenue doubled from $10bn to $20.4bn.', ['f']), amd), []);
+  assert.deepEqual(metricIssues(one('Management is doubling down on AI.', ['f']), amd), []);
+  assert.match(metricIssues(one('Fine.', ['f'], ['Revenue rose 50% (f).']), amd).join(), /counterevidence 1: 50% is not in its cited evidence/);
+});
+
+test('a pending agreement is not stated as settled dilution or untouched liquidity', () => {
+  const bad = metricIssues(one('Per-share dilution is confirmed and liquidity is untouched because consideration is stock.', ['k']), amd);
+  assert.equal(bad.length, 2);
+  assert.match(bad.join(), /has not closed/);
+  assert.deepEqual(metricIssues(one('The share issuance would dilute holders if the deal closes; cash effects depend on final terms.', ['k']), amd), []);
+  assert.deepEqual(metricIssues(one('Stock consideration alone does not establish that there is no cash effect.', ['k']), amd), []);
+  assert.match(metricIssues(one('Consideration is stock. There is no cash effect.', ['k']), amd).join(), /no cash effect/);
+  // Without a pending event in the packet the wording is not policed.
+  assert.deepEqual(metricIssues(one('Liquidity is untouched.', ['f']), [fin]), []);
+});
+
+test('all-account weights name their scope and an approximate P/E says so', () => {
+  assert.match(metricIssues(one('AMD is 4.12% of securities.', ['w']), amd).join(), /name its account scope/);
+  assert.deepEqual(metricIssues(one('AMD is 4.12% of securities across all accounts combined.', ['w']), amd), []);
+  // Live run 2026-10-31: scope named in the first sentence covers the next one.
+  assert.deepEqual(metricIssues(one('Figures are all accounts combined. AMD is 4.12% of securities.', ['w']), amd), []);
+  assert.match(metricIssues(one('AMD trades at 129.44x trailing earnings.', ['v']), amd).join(), /129\.44 is a trailing P\/E from approximate EPS/);
+  assert.deepEqual(metricIssues(one('AMD trades at roughly 129.44x trailing earnings.', ['v']), amd), []);
+});
+
+test('basisNote names account scope, approximate EPS and pending events', async () => {
+  const { basisNote } = await import('../src/chat/council-metrics.ts');
+  assert.equal(basisNote(wts.content), 'all accounts combined');
+  assert.equal(basisNote(val.content), 'trailing EPS and P/E approximate');
+  assert.equal(basisNote(deal.content), 'describes a pending agreement or event');
+});
+
+test('figures in cited filing text count as evidence, and a label is matched as a whole word', () => {
+  const k8 = { id: 'r', content: JSON.stringify({ reports: [{ text: 'Data Center segment revenue was $6.7 billion, up 107% year-over-year; gross margin 54%. Operating margin17%(2)%' }] }) };
+  assert.deepEqual(metricIssues(one('Data Center revenue rose 107%, gross margin was 54% and operating margin 17%.', ['r']), [k8]), []);
+  assert.match(metricIssues(one('Data Center revenue rose 120%.', ['r']), [k8]).join(), /120% is not in its cited evidence/);
+  const ex = { id: 's', content: JSON.stringify({ weightBasis: 'securities_plus_cash', rows: [{ group: 'Technology', members: [{ symbol: 'TSM' }] }, { group: 'Cash', members: [{ symbol: 'SGD cash' }] }] }) };
+  assert.deepEqual(metricIssues(one('Technology is large on the securities-plus-cash basis, led by TSM.', ['s']), [ex]), []);
+});

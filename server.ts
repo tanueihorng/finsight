@@ -21,7 +21,7 @@ import { URL } from 'node:url';
 
 import { PORT, HOST, PUBLIC_DIR, PORTFOLIO_FILE } from './lib/config.ts';
 import { persistNow } from './lib/cache.ts';
-import { getQuotes, getHistory, search, getMarkets, getNews, getCategories, getFundProfile } from './lib/market.ts';
+import { getQuotes, getQuoteDetails, getHistory, search, getMarkets, getNews, getCategories, getFundProfile } from './lib/market.ts';
 import { worldBank, getFred, getCalendar } from './lib/macro.ts';
 import {
   buy, sell, del, listAccounts, accountAdd, accountRename, accountRemove, portfolioWithQuotes, fxRisk, setCash,
@@ -221,6 +221,12 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
       const symbols = (u.searchParams.get('symbols') || '').split(',').map((s) => s.trim()).filter(Boolean);
       if (!symbols.length) return sendJson(res, 400, { error: 'symbols required' });
       return sendJson(res, 200, { quotes: await getQuotes(symbols) });
+    }
+    // Earnings and dividend dates for any symbols (not only holdings).
+    if (p === '/api/quote-details') {
+      const symbols = (u.searchParams.get('symbols') || '').split(',').map((s) => s.trim()).filter(Boolean).slice(0, 20);
+      if (!symbols.length) return sendJson(res, 400, { error: 'symbols required' });
+      return sendJson(res, 200, { details: await getQuoteDetails(symbols) });
     }
     if (p === '/api/history') {
       const symbol = u.searchParams.get('symbol');

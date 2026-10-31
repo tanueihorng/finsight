@@ -34,13 +34,13 @@ globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) =>
     'us-gaap': {
       // Like AMD: an abandoned concept listed first must not shadow the current one.
       Revenues: { label: 'Revenues', units: { USD: [{ form: '10-K', fp: 'FY', fy: 2017, start: '2017-01-01', end: '2017-12-31', val: 999999, filed: '2018-02-01' }] } },
-      RevenueFromContractWithCustomerExcludingAssessedTax: { label: 'Revenue', units: { USD: [{ form: '10-K', fp: 'FY', fy: 2025, start: '2025-01-01', end: '2025-12-31', val: 1000, filed: '2026-02-01' }] } },
+      RevenueFromContractWithCustomerExcludingAssessedTax: { label: 'Revenue', units: { USD: [{ form: '10-K', fp: 'FY', fy: 2024, start: '2024-01-01', end: '2024-12-31', val: 744, filed: '2025-02-01' }, { form: '10-K', fp: 'FY', fy: 2025, start: '2025-01-01', end: '2025-12-31', val: 1000, filed: '2026-02-01' }] } },
       // Four discrete quarters: TTM diluted EPS 0.5 + 0.5 + 0.25 + 0.25 = 1.5.
       EarningsPerShareDiluted: { label: 'EPS', units: { 'USD/shares': [['2025-07-01', '2025-09-30', 0.5], ['2025-10-01', '2025-12-31', 0.5], ['2026-01-01', '2026-03-31', 0.25], ['2026-04-01', '2026-06-30', 0.25]].map(([start, end, val]) => ({ form: '10-Q', start, end, val, filed: '2026-08-01' })) } },
     } } });
   if (url.pathname === '/Archives/edgar/data/2488/000000248826000003/index.json') return json(200, { directory: { item: [{ name: 'k3.htm' }] } });
   if (url.pathname === '/Archives/edgar/data/2488/000000248826000002/index.json') return json(200, { directory: { item: [{ name: 'k2.htm' }, { name: 'ex99-1.htm' }] } });
-  if (url.pathname === '/Archives/edgar/data/2488/000000248826000003/k3.htm') return new Response('<html><body><p>Synthetic other event.</p></body></html>', { status: 200 });
+  if (url.pathname === '/Archives/edgar/data/2488/000000248826000003/k3.htm') return new Response('<html><body><p>Synthetic Micro Devices entered into a definitive merger agreement to acquire Synthetic Labs for stock. The transaction is expected to close by year end, subject to customary closing conditions.</p></body></html>', { status: 200 });
   if (url.pathname === '/Archives/edgar/data/2488/000000248826000002/ex99-1.htm') return new Response('<html><body><p>Synthetic quarterly results: revenue rose.</p></body></html>', { status: 200 });
   return json(404, {});
 }) as typeof fetch;
@@ -99,6 +99,7 @@ export async function fakeFinsight(options: { scopedAccounts?: boolean; naturalH
         const q = (u.searchParams.get('q') || '').toLowerCase();
         return j(200, instruments.filter(x=>x.symbol.toLowerCase()===q || x.name.toLowerCase().includes(q)).map(x=>({...x,exchange:'NASDAQ',type:'EQUITY'})));
       }
+      case '/api/quote-details': return j(200, { details: Object.fromEntries((u.searchParams.get('symbols') || '').split(',').map((symbol) => [symbol.toUpperCase(), { earningsStart: Date.UTC(2026, 10, 3, 21), earningsEnd: null, earningsEstimated: false }])) });
       case '/api/quote': return j(200, { quotes: (u.searchParams.get('symbols') || '').split(',').map((symbol) => {
         const p = PORTFOLIO.positions.find((p) => p.symbol === symbol);
         return { symbol, name: p?.name || symbol, type: symbol === 'VOO' ? 'ETF' : 'EQUITY', price: p?.last ?? 10, currency: p?.currency || 'USD', change: 1, changePct: 1 };

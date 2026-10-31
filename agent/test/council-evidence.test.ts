@@ -6,9 +6,11 @@ import { collectEvidence, planEvidence, PLAN_LIMITS, secTicker, subjectKind } fr
 
 const keys = (p: ReturnType<typeof planEvidence>) => p.items.map((i) => i.key);
 
-test('equities get financials, valuation, 8-K text and price path; portfolio, policy and macro context are planned once', () => {
+test('equities get financials, valuation, the earnings release, 8-K text, earnings dates and price path; portfolio, policy and macro context are planned once', () => {
   const p = planEvidence([{ symbol: 'AMD', type: 'EQUITY' }], Date.UTC(2026, 9, 29));
-  assert.deepEqual(keys(p), ['history:AMD', 'financials:AMD', 'valuation:AMD', '8k:AMD', 'portfolio:weights', 'portfolio:sectors', 'portfolio:policy', 'macro:DGS10']);
+  assert.deepEqual(keys(p), ['history:AMD', 'financials:AMD', 'valuation:AMD', 'earnings8k:AMD', '8k:AMD', 'events:earnings', 'portfolio:weights', 'portfolio:sectors', 'portfolio:policy', 'macro:DGS10']);
+  // The latest results release is requested by item, not left to the latest two 8-Ks.
+  assert.deepEqual(p.items.find((i) => i.key === 'earnings8k:AMD')!.args, { ticker: 'AMD', limit: 1, items: ['2.02'], maxChars: 8000 });
   assert.deepEqual(p.items.find((i) => i.key === 'portfolio:weights')!.args, { symbols: ['AMD'] });
   assert.equal(p.items.find((i) => i.key === 'macro:DGS10')!.args.start, '2025-10-28');
   assert.deepEqual(p.coverage, []);
@@ -59,4 +61,16 @@ test('trailing twelve months falls back from quarters to fiscal year plus year-t
   assert.deepEqual([ttm([fy, ytd, prior])!.value, ttm([fy, ytd, prior])!.method], [120, 'fiscal year + current year-to-date - prior year-to-date']);
   assert.equal(ttm([fy])!.method, 'latest fiscal year (no comparable year-to-date)');
   assert.equal(ttm([{ end: '2026-06-30', val: 5 }]), null); // instants are not flows
+});
+
+test('the account on screen adds its own weights beside the all-account figures', () => {
+  const all = planEvidence([{ symbol: 'AMD', type: 'EQUITY' }]);
+  assert.ok(!keys(all).includes('portfolio:weights:selected'));
+  assert.ok(!keys(planEvidence([{ symbol: 'AMD', type: 'EQUITY' }], Date.now(), { account: 'ALL' })).includes('portfolio:weights:selected'));
+  const one = planEvidence([{ symbol: 'AMD', type: 'EQUITY' }], Date.now(), { account: 'a1' });
+  assert.deepEqual(one.items.find((i) => i.key === 'portfolio:weights:selected')!.args, { symbols: ['AMD'], account: 'a1' });
+  assert.deepEqual(one.items.find((i) => i.key === 'portfolio:weights')!.args, { symbols: ['AMD'] });
+  // Three equities and a selected account still fit without dropping shared context.
+  const three = planEvidence([{ symbol: 'A', type: 'EQUITY' }, { symbol: 'B', type: 'EQUITY' }, { symbol: 'C', type: 'EQUITY' }], Date.now(), { account: 'a1' });
+  assert.deepEqual(three.coverage.filter((c) => c.status === 'skipped_limit'), []);
 });

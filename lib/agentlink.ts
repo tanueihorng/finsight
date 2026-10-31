@@ -25,7 +25,7 @@ const AGENT_URL = new URL(process.env.AGENT_URL || 'http://127.0.0.1:8100');
 export const TOKEN_READ_PATHS = new Set([
   '/api/portfolio', '/api/accounts', '/api/quote', '/api/history', '/api/history/batch', '/api/categories',
   '/api/events', '/api/dividends', '/api/realized', '/api/portfolio/performance', '/api/fx-risk', '/api/ledger',
-  '/api/watchlist', '/api/alerts', '/api/news', '/api/fred', '/api/journal', '/api/calendar', '/api/markets', '/api/search', '/api/fund',
+  '/api/watchlist', '/api/alerts', '/api/news', '/api/fred', '/api/journal', '/api/calendar', '/api/markets', '/api/search', '/api/fund', '/api/quote-details',
 ]);
 
 let cached: AgentLink | null = null;

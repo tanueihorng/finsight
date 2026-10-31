@@ -225,3 +225,53 @@ test('edgar_recent_8k reads the earnings exhibit when present, bounded and marke
   assert.match(r.json.reports[1].text, /Synthetic quarterly results/);
   assert.ok(r.json.reports.every((x: any) => x.text.length <= 3000 && x.url.startsWith('https://www.sec.gov/Archives/edgar/data/2488/')));
 });
+
+// AMD council audit 2026-10-31: the tools now carry the facts the answer got wrong.
+test('edgar_recent_8k finds the latest earnings release by item and flags a pending agreement', async () => {
+  const latest = await run('edgar_recent_8k', { ticker: 'AMD', limit: 1 });
+  assert.equal(latest.json.reports[0].eventStatus, 'pending');
+  assert.match(latest.json.reports[0].eventNote, /potential/);
+  const earnings = await run('edgar_recent_8k', { ticker: 'AMD', limit: 1, items: ['2.02'], maxChars: 8000 });
+  assert.deepEqual(earnings.json.reports.map((x: any) => [x.filed, x.exhibit, x.eventStatus]), [['2026-08-04', true, undefined]]);
+  const none = await run('edgar_recent_8k', { ticker: 'AMD', items: ['5.02'] });
+  assert.deepEqual(none.json.reports, []); assert.match(none.json.note, /No recent 8-K reports item 5\.02/);
+});
+
+test('edgar_financials computes the annual change, and valuation_metrics marks combined EPS approximate', async () => {
+  const f = await run('edgar_financials', { ticker: 'AMD', concepts: ['RevenueFromContractWithCustomerExcludingAssessedTax'] });
+  const annual = f.json.concepts.RevenueFromContractWithCustomerExcludingAssessedTax.annual;
+  assert.deepEqual(annual.map((x: any) => [x.fy, x.changePctFromPriorYear]), [[2025, 34.41], [2024, undefined]]);
+  const v = await run('valuation_metrics', { ticker: 'AMD' });
+  assert.equal(v.json.epsApproximate, true);
+  assert.match(v.json.epsMethodNote, /approximate/);
+});
+
+test('get_earnings_dates reports whether each date is past or upcoming', async () => {
+  const r = await run('get_earnings_dates', { symbols: ['amd'] });
+  assert.equal(r.ok, true, JSON.stringify(r.json));
+  assert.deepEqual(r.json.rows.map((x: any) => [x.symbol, x.earningsDate, x.estimated]), [['AMD', '2026-11-03T21:00:00.000Z', false]]);
+  assert.ok(['past', 'upcoming'].includes(r.json.rows[0].timing));
+});
+
+test('portfolio weights and exposures name their account scope', async () => {
+  assert.equal((await run('portfolio_weights', { symbols: ['NVDA'] })).json.accountScope, 'All accounts combined');
+  assert.equal((await run('portfolio_weights', { symbols: ['NVDA'], account: 'a1' })).json.accountScope, 'Account a1 only');
+  assert.equal((await run('get_exposures', { by: 'sector' })).json.accountScope, 'All accounts combined');
+});
+
+test('the EX-99 release is found under filer-specific names', async () => {
+  const { exhibit99 } = await import('../src/tools/web.ts');
+  const amd = [{ name: '0000002488-26-000121-index.html', size: '' }, { name: 'amd-20260804.htm', size: '30308' }, { name: 'amdq22026earningsslidesf.htm', size: '35590' }, { name: 'q22026991.htm', size: '448891' }, { name: 'R1.htm', size: '38073' }];
+  assert.equal(exhibit99(amd, 'amd-20260804.htm'), 'q22026991.htm');
+  assert.equal(exhibit99([{ name: 'k2.htm' }, { name: 'ex99-1.htm' }], 'k2.htm'), 'ex99-1.htm');
+  assert.equal(exhibit99([{ name: 'k3.htm' }], 'k3.htm'), undefined);
+});
+
+test('an exhibit in an SEC SGML envelope still yields its text', async () => {
+  const { secHtml, htmlToText } = await import('../src/tools/web.ts');
+  const body = '<html><head><title>Document</title></head><body><p>' + 'Second quarter revenue was $11.5 billion. '.repeat(10) + '</p></body></html>';
+  const raw = '<DOCUMENT>\n<TYPE>EX-99.1\n<SEQUENCE>2\n<FILENAME>q22026991.htm\n<TEXT>\n' + body;
+  assert.equal(htmlToText(raw, 'u').text, '');
+  assert.match(htmlToText(secHtml(raw), 'u').text, /Second quarter revenue/);
+  assert.equal(secHtml(body), body);
+});
