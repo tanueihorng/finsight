@@ -16,6 +16,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import content  # noqa: E402
 import diagrams  # noqa: E402
+import domains  # noqa: E402
 
 ROOT = os.path.dirname(HERE)                       # docs/master
 REPO = os.path.dirname(os.path.dirname(ROOT))
@@ -41,7 +42,65 @@ def number_shots(doc):
     return out
 
 
-DOC = number_shots(content.DOC)
+DOMAIN_NAMES = {d[0]: d[2] for d in domains.DOMAINS}
+
+
+def prepare(doc):
+    """Normalise blocks for both renderers.
+
+    Numbers chapters (h1 with a key) and their h2s, numbers figures, builds the
+    domain coverage table and resolves {sec:key} / {fig:key} in every string.
+    Output shapes: ("part", letter, title, subtitle), ("h1", num, title, key, chip),
+    ("h2", num, title); other blocks keep their shape.
+    """
+    secs, figs, titles, cover = {}, {}, {}, {}
+    n = f = 0
+    for b in doc:
+        if b[0] == "h1" and len(b) > 2:
+            n += 1
+            secs[b[2]], titles[b[2]] = n, b[1]
+            for d in b[3]:
+                cover.setdefault(d, []).append(b[2])
+        elif b[0] == "fig":
+            f += 1
+            figs[b[1]] = f
+    missing = set(range(1, 25)) - set(cover)
+    assert not missing, f"domains without a chapter: {sorted(missing)}"
+
+    def res(x):
+        if isinstance(x, str):
+            x = re.sub(r"\{sec:(\w+)\}", lambda m: f"§{secs[m.group(1)]}", x)
+            return re.sub(r"\{fig:([\w-]+)\}", lambda m: f"Figure {figs[m.group(1)]}", x)
+        if isinstance(x, (list, tuple)):
+            return type(x)(res(i) for i in x)
+        return x
+
+    out, h1n, h2n = [], 0, 0
+    for b in doc:
+        k = b[0]
+        if k == "h1":
+            if len(b) > 2:
+                h1n, h2n = secs[b[2]], 0
+                chip = " · ".join(f"Domain {d:02d} {DOMAIN_NAMES[d]}" for d in b[3])
+                out.append(("h1", str(h1n), b[1], b[2], chip))
+            else:
+                h1n = 0
+                out.append(("h1", "", b[1], re.sub(r"[^a-z0-9]+", "-", b[1].lower()).strip("-"), ""))
+        elif k == "h2":
+            if h1n:
+                h2n += 1
+            out.append(("h2", f"{h1n}.{h2n}" if h1n else "", res(b[1])))
+        elif k == "fig":
+            out.append(("fig", b[1], f"Figure {figs[b[1]]} — " + res(b[2])))
+        elif k == "coverage":
+            rows = [[f"{d:02d}", DOMAIN_NAMES[d], "; ".join(f"§{secs[s]} {titles[s]}" for s in cover[d])] for d in sorted(cover)]
+            out.append(("table", ["No.", "Engineering domain", "Where this document covers it"], rows))
+        else:
+            out.append(res(b))
+    return out
+
+
+DOC = prepare(number_shots(content.DOC))
 
 
 # ------------------------------------------------------------------ HTML
@@ -87,11 +146,19 @@ body { font-family: Inter, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 
 .toc { break-after: page; }
 .toc h1 { border: 0; }
 .toc ol { list-style: none; padding: 0; margin: 0; columns: 2; column-gap: 10mm; }
-.toc li { padding: 1.6mm 0; border-bottom: 1px dotted var(--line); font-size: 10pt; break-inside: avoid; }
+.toc li { padding: 1.05mm 0; border-bottom: 1px dotted var(--line); font-size: 9.5pt; break-inside: avoid; }
 .toc li a { color: var(--ink); text-decoration: none; }
 .toc li .n { display: inline-block; min-width: 9mm; color: var(--v); font-weight: 700; font-family: 'JetBrains Mono', Menlo, monospace; font-size: 9pt; }
 h1 { font-size: 21pt; line-height: 1.15; margin: 0 0 5mm; padding-bottom: 3mm; border-bottom: 2.5px solid var(--v); letter-spacing: -.01em; break-after: avoid; }
 h1 .num { color: var(--v); }
+h1 { break-before: page; }
+.part + h1, .toc + h1 { break-before: auto; }
+.part { break-before: page; margin: 0 0 9mm; padding: 9mm 8mm 7mm; border-radius: 3mm; color: #fff; background: linear-gradient(135deg, #2a2140, #4b32b8); break-after: avoid; }
+.part .pl { font-family: 'JetBrains Mono', Menlo, monospace; font-size: 8pt; letter-spacing: .2em; opacity: .75; margin-bottom: 2mm; }
+.part .pt { font-size: 22pt; font-weight: 800; letter-spacing: -.01em; line-height: 1.15; }
+.part .ps { font-size: 10pt; opacity: .85; margin-top: 2mm; }
+.dchip { display: inline-block; margin: -2.5mm 0 4mm; padding: .8mm 2.6mm; border-radius: 3mm; background: var(--vw); color: var(--vd); font-family: 'JetBrains Mono', Menlo, monospace; font-size: 7.6pt; font-weight: 700; letter-spacing: .04em; }
+.toc li.pt { column-span: none; border: 0; padding: 3mm 0 1mm; font-size: 7.6pt; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--mut); break-after: avoid; }
 h2 { font-size: 13.5pt; margin: 7mm 0 2.5mm; color: var(--vd); break-after: avoid; }
 h3 { font-size: 11pt; margin: 5mm 0 2mm; color: var(--ink); break-after: avoid; }
 p { margin: 0 0 3mm; }
@@ -141,7 +208,6 @@ def render_html():
         with open(os.path.join(BUILD, "svg", k + ".svg"), "w") as f:
             f.write(fn())
     m = content.META
-    h1s = [b[1] for b in DOC if b[0] == "h1" and b[1] != "Document control"]
     parts = [f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><title>{html.escape(m['title'])} — {html.escape(m['subtitle'])}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
 <style>{CSS}</style></head><body>
@@ -155,19 +221,28 @@ def render_html():
 <div class="meta"><div><b>Version</b>{m['version']}</div><div><b>Date</b>{m['date']}</div><div><b>Owner</b>{m['owner']}</div><div><b>Status</b>{html.escape(m['status'])}</div></div>
 </div></section>
 <section class="toc"><h1>Contents</h1><ol>"""]
-    for t in ["Document control"] + h1s:
-        mt = re.match(r"^(\d+)\.\s+(.*)$", t)
-        n, label = (mt.group(1), mt.group(2)) if mt else ("", t)
-        parts.append(f'<li><a href="#{slug(t)}"><span class="n">{n}</span>{inline(label)}</a></li>')
+    for b in DOC:
+        if b[0] == "part":
+            parts.append(f'<li class="pt">{"Part " + b[1] + " · " if b[1] else ""}{inline(b[2])}</li>')
+        elif b[0] == "h1":
+            parts.append(f'<li><a href="#{b[3]}"><span class="n">{b[1]}</span>{inline(b[2])}</a></li>')
     parts.append("</ol></section>")
     for b in DOC:
         k = b[0]
-        if k == "h1":
-            mt = re.match(r"^(\d+\.)\s+(.*)$", b[1])
-            t = f'<span class="num">{mt.group(1)}</span> {inline(mt.group(2))}' if mt else inline(b[1])
-            parts.append(f'<h1 id="{slug(b[1])}">{t}</h1>')
-        elif k in ("h2", "h3"):
-            parts.append(f"<{k}>{inline(b[1])}</{k}>")
+        if k == "part":
+            label = f"PART {b[1]}" if b[1] else "FINSIGHT"
+            sub = f'<div class="ps">{inline(b[3])}</div>' if b[3] else ""
+            parts.append(f'<div class="part"><div class="pl">{label}</div><div class="pt">{inline(b[2])}</div>{sub}</div>')
+        elif k == "h1":
+            num = f'<span class="num">{b[1]}.</span> ' if b[1] else ""
+            parts.append(f'<h1 id="{b[3]}">{num}{inline(b[2])}</h1>')
+            if b[4]:
+                parts.append(f'<div class="dchip">{html.escape(b[4])}</div>')
+        elif k == "h2":
+            num = f'<span class="num">{b[1]}</span> ' if b[1] else ""
+            parts.append(f"<h2>{num}{inline(b[2])}</h2>")
+        elif k == "h3":
+            parts.append(f"<h3>{inline(b[1])}</h3>")
         elif k == "p":
             parts.append(f"<p>{inline(b[1])}</p>")
         elif k in ("ul", "ol"):
@@ -351,21 +426,43 @@ def render_docx():
     # ---- contents (static list of sections, same as the PDF)
     doc.add_heading("Contents", 1)
     for b in DOC:
-        if b[0] == "h1":
-            mt = re.match(r"^(\d+)\.\s+(.*)$", b[1])
-            p = doc.add_paragraph(); p.paragraph_format.space_after = Pt(3)
+        if b[0] == "part":
+            p = doc.add_paragraph(); p.paragraph_format.space_before = Pt(4); p.paragraph_format.space_after = Pt(0)
+            runs(p, (f"PART {b[1]} · " if b[1] else "") + b[2].upper(), 8, MUT, True)
+        elif b[0] == "h1":
+            p = doc.add_paragraph(); p.paragraph_format.space_after = Pt(0)
             p.paragraph_format.tab_stops.add_tab_stop(Cm(1.1))
-            if mt:
-                runs(p, mt.group(1), 10, V, True); runs(p, "\t" + mt.group(2), 10.5)
-            else:
-                runs(p, "\t" + b[1], 10.5)
+            runs(p, b[1], 9.5, V, True); runs(p, "\t" + b[2], 10)
     doc.add_paragraph().add_run().add_break(WD_BREAK.PAGE)
 
     png = os.path.join(BUILD, "png")
+    prev = None
     for b in DOC:
         k = b[0]
-        if k in ("h1", "h2", "h3"):
-            doc.add_heading(b[1].replace("**", "").replace("`", ""), int(k[1]))
+        if k == "part":
+            t = doc.add_table(rows=1, cols=1); cell_margins(t, 220, 260)
+            c = t.rows[0].cells[0]; shade(c, "2A2140")
+            p = c.paragraphs[0]; p.paragraph_format.page_break_before = True
+            runs(p, f"PART {b[1]}" if b[1] else "FINSIGHT", 8, RGBColor(0xC9, 0xBF, 0xF5), True)
+            p = c.add_paragraph(); runs(p, b[2], 22, RGBColor(0xFF, 0xFF, 0xFF), True); p.paragraph_format.space_after = Pt(2)
+            if b[3]:
+                p = c.add_paragraph(); runs(p, b[3], 10, RGBColor(0xE4, 0xDE, 0xFB)); p.paragraph_format.space_after = Pt(0)
+            doc.add_paragraph().paragraph_format.space_after = Pt(4)
+        elif k == "h1":
+            h = doc.add_heading("", 1)
+            if b[1]:
+                runs(h, b[1] + ".  ", None, V)
+            runs(h, b[2].replace("**", ""))
+            h.paragraph_format.page_break_before = prev not in ("part", None)
+            if b[4]:
+                c = doc.add_paragraph(); runs(c, b[4], 8, VD, True); c.paragraph_format.space_after = Pt(8)
+        elif k == "h2":
+            h = doc.add_heading("", 2)
+            if b[1]:
+                runs(h, b[1] + "  ", None, V)
+            runs(h, b[2].replace("**", ""))
+        elif k == "h3":
+            doc.add_heading(b[1].replace("**", "").replace("`", ""), 3)
         elif k == "p":
             runs(doc.add_paragraph(), b[1])
         elif k in ("ul", "ol"):
@@ -437,6 +534,7 @@ def render_docx():
             doc.add_paragraph().paragraph_format.space_after = Pt(2)
         else:
             raise ValueError(k)
+        prev = k
     out = os.path.join(ROOT, OUT_NAME + ".docx")
     doc.save(out)
     print("docx ok", out)
