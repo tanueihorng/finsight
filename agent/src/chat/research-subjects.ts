@@ -52,8 +52,16 @@ export async function resolveSubjects(o: {
   }
   if (!intent.subjects.length || intent.subjects.some((s) => !literal(intent.kind === 'reference' ? (o.conversation ?? []).map((m) => m.text).join(' ') : o.question, s.mention))) return { ...base, status: 'needs-clarification', subjects: [], note: 'Please name the company or tickers to research; the proposed subjects did not match your question.' };
   const subjects: ResearchSubject[] = [];
-  for (const target of intent.subjects) {
+  const grouped = new Map<string, typeof intent.subjects>();
+  for (const target of intent.subjects) grouped.set(target.symbol, [...(grouped.get(target.symbol) ?? []), target]);
+  const targets = [...grouped.values()].flatMap((group) => [...group].sort((a, b) => Number(fold(b.mention) === fold(b.symbol)) - Number(fold(a.mention) === fold(a.symbol))));
+  for (const target of targets) {
     o.signal.throwIfAborted();
+    // Models sometimes list both the ticker and company name as separate
+    // mentions of the same instrument. The first lookup already established
+    // the identity; do not require the broader name search to be unique again.
+    // A different name or symbol still goes through the full lookup below.
+    if (subjects.some((s) => s.symbol === target.symbol && company(s.name) === company(target.mention))) continue;
     // Validate every proposed identity, including lowercase tickers. A company
     // name can itself look like a ticker (Acme/ACME), so spelling alone is not proof.
     let candidates: SearchResult[];

@@ -20,6 +20,15 @@ test('company names require a source-backed listing and comparisons keep all exp
  assert.deepEqual(queries,['Nvidia','AMD']);assert.deepEqual(r.subjects.map(s=>s.symbol),['NVDA','AMD']);assert.equal(r.subjects[0]!.name,'NVIDIA Corporation');
  const full=await run('Research Advanced Micro Devices',intent([{mention:'Advanced Micro Devices',symbol:'AMD'}]),{search:async()=>[candidate('AMD','Advanced Micro Devices, Inc.')]});assert.equal(full.status,'ready');
 });
+test('a verified ticker and its matching company name do not require a second ambiguous search', async () => {
+ const queries:string[]=[];
+ const result=await run('Research AMD (Advanced Micro Devices)',intent([{mention:'AMD',symbol:'AMD'},{mention:'Advanced Micro Devices',symbol:'AMD'}]),{search:async q=>{queries.push(q);return [candidate('AMD','Advanced Micro Devices, Inc.')];}});
+ assert.equal(result.status,'ready'); assert.deepEqual(result.subjects.map(s=>s.symbol),['AMD']); assert.deepEqual(queries,['AMD']);
+ const reversed=await run('Research Advanced Micro Devices (AMD)',intent([{mention:'Advanced Micro Devices',symbol:'AMD'},{mention:'AMD',symbol:'AMD'}]),{search:async q=>q==='AMD'?[candidate('AMD','Advanced Micro Devices, Inc.')]:[candidate('AMD','Advanced Micro Devices, Inc.'),candidate('AMDB','Advanced Micro Devices Corp.')]});
+ assert.equal(reversed.status,'ready'); assert.deepEqual(reversed.subjects.map(s=>s.symbol),['AMD']);
+ const unrelated=await run('Compare AMD and Nvidia',intent([{mention:'AMD',symbol:'AMD'},{mention:'Nvidia',symbol:'AMD'}]),{search:async q=>q==='AMD'?[candidate('AMD','Advanced Micro Devices, Inc.')]:[candidate('NVDA','NVIDIA Corporation')]});
+ assert.equal(unrelated.status,'needs-clarification');
+});
 test('ambiguous listings, invented names and mismatched proposed tickers cannot become research subjects', async () => {
  const ambiguous=await run('Research Acme',intent([{mention:'Acme',symbol:'ACME'}]),{search:async()=>[candidate('ACME','Acme Inc.'),candidate('ACMB','Acme Corp.')]});assert.equal(ambiguous.status,'needs-clarification');assert.equal(ambiguous.subjects.length,0);
  const mismatch=await run('Research Nvidia',intent([{mention:'Nvidia',symbol:'AMD'}]),{search:async()=>[candidate('NVDA','NVIDIA Corporation')]});assert.equal(mismatch.status,'needs-clarification');
