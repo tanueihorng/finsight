@@ -15,6 +15,16 @@ The earlier draft with unverified release numbers is preserved in `docs/archive/
 
 ## Unreleased
 
+- Kestrel limits are user-editable (on `feat/paper-trading`, not merged).
+  - Click the "Today" spend in the chat list, or type `/limits`, to edit:
+    - the daily cap and the per-reply and per-council cost ceilings
+    - steps and time per reply
+    - web searches and pages read per reply
+    - council research calls and answer length
+  - Changes save to the agent's `config.json` and apply from the next reply; Kestrel's own token cannot change them.
+  - Higher defaults: US$0.25 per reply (was 0.05), US$5 per day (was 2), 25 steps (was 12), 300 s (was 120), 20 searches (was 10), 25 pages (was 15), 8 council research calls (was a fixed 4).
+- The holdings ticker's buttons now have accessible names that include their visible text. Visual baselines were re-captured after the ticker moved the page by a sub-pixel.
+
 - `PAPER-001` ([FEAT-012](docs/features/FEAT-012-paper-trading.md)), on branch `feat/paper-trading`, not merged.
   - A PAPER book next to the real one, switched on the lock screen or in the top bar. The real book is untouched.
   - Alpaca paper only: the user's own paper keys, and live keys are refused. The book mirrors Alpaca fills and updates live through `trade_updates` and SSE.

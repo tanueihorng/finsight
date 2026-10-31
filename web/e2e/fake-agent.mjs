@@ -19,6 +19,8 @@ const streams = new Map(); // thread id -> Set<res>
 const uploads = new Map();
 
 const json = (res, status, body) => { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(body)); };
+const LIMIT_DEFAULTS = { turnSteps: 25, turnSeconds: 300, turnUsd: 0.25, dayUsd: 5, searchesPerTurn: 20, fetchesPerTurn: 25, councilResearchCalls: 8 };
+const limitsSet = {};
 const readBody = (req) => new Promise((resolve) => { let b = ''; req.on('data', (c) => { b += c; }); req.on('end', () => { try { resolve(b ? JSON.parse(b) : {}); } catch { resolve({}); } }); });
 const publicThread = (t) => ({ id: t.id, title: t.title, version: t.version, defaultBrain: t.defaultBrain, updatedAt: t.updatedAt,
   preview: [...t.messages].reverse().find((x) => x.role === 'assistant')?.blocks[0]?.text?.slice(0, 120) || '' });
@@ -90,6 +92,10 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'GET' && p === '/search-providers') return json(res, 200, { default: 'tavily', providers: [
     { id: 'deepseek', label: 'DeepSeek', available: true }, { id: 'tavily', label: 'Tavily', available: true }, { id: 'brave', label: 'Brave', available: false, reason: 'Add BRAVE_API_KEY' }] });
   if (req.method === 'GET' && p === '/skills') return json(res, 200, { skills: [{ name: 'pre-trade-check', description: 'Check a trade against the policy' }] });
+  if (p === '/limits' && (req.method === 'GET' || req.method === 'PATCH')) {
+    if (req.method === 'PATCH') { const b = await readBody(req); for (const [k, v] of Object.entries(b)) { if (v === null) delete limitsSet[k]; else limitsSet[k] = v; } }
+    return json(res, 200, { limits: { ...LIMIT_DEFAULTS, ...limitsSet }, defaults: LIMIT_DEFAULTS, set: { ...limitsSet }, todayUsd: 0.5 });
+  }
   if (req.method === 'GET' && p === '/cost') return json(res, 200, { period: u.searchParams.get('period') || 'day', totalUsd: 0.5, capUsdPerDay: 2 });
   if (req.method === 'GET' && p === '/threads/delete-all/preview') return json(res, 200, { ids: [...threads.keys()].sort() });
   if (req.method === 'POST' && p === '/threads/delete-all') {
