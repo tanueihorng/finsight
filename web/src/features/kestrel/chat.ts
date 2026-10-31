@@ -1,5 +1,6 @@
 import { LENS_IDS } from '../../../../shared/council-lenses.ts';
 import { createStore } from 'zustand/vanilla';
+import { openLimits } from './limits.ts';
 import { confirmDialog } from '../../ui/dialog.tsx';
 import { agentApi, AgentError, type Brain, type Citation, type Message, type SearchProvider, type Skill, type Thread } from './api.ts';
 import { COMMANDS, ctxLabel, friendly, LS, ls, offlineWhy, randomVerb, suggestions, TOOL_VERBS, prettyTool, type PageContext } from './labels.ts';
@@ -309,6 +310,7 @@ async function slash(cmd: string) {
     chooseBrain(b.id); return sys(`Model set to ${b.label}.`);
   }
   if (c === 'cost') { const r = await agentApi<{ period: string; totalUsd: number; capUsdPerDay: number }>(`/cost?period=${arg === 'month' ? 'month' : 'day'}`); return sys(`Spend ${r.period === 'day' ? 'today' : 'this month'}: $${r.totalUsd.toFixed(4)} (daily cap $${r.capUsdPerDay}).`); }
+  if (c === 'limits') { openLimits(); return; }
   if (c === 'strategies') { const r = await agentApi<{ strategies: { name: string; id: string; status: string }[] }>('/strategies'); return sys(r.strategies.map((x) => `${x.name} (${x.id}) · ${x.status}`).join('\n')); }
   if (c === 'skills') return sys(s.skills.length ? s.skills.map((x) => `/${x.name} — ${x.description.slice(0, 90)}`).join('\n') : 'No skills installed.');
   if (c === 'logs') {
@@ -316,7 +318,7 @@ async function slash(cmd: string) {
     const bad = lines.filter((l) => l.ok === false || /error|failed/.test(String(l.kind)) || l.status === 'failed' || (Number(l.status) >= 500)).slice(-12);
     return sys(bad.length ? bad.map((l) => `${String(l.ts).slice(5, 19)} ${l.kind} ${l.tool || l.path || l.brain || ''} ${l.code || ''} ${l.error || l.message || ''}`.trim()).join('\n') : 'No recent errors in the interaction log.');
   }
-  return sys(`${s.name} answers from your FinSight data, strategy library, records and the web. Commands: /new · /clear · /delete · /model <id> · /cost [month] · /strategies · /skills · /logs. Skills: type / to browse. Attach files with ⊕, paste or drop.`);
+  return sys(`${s.name} answers from your FinSight data, strategy library, records and the web. Commands: /new · /clear · /delete · /model <id> · /cost [month] · /limits · /strategies · /skills · /logs. Skills: type / to browse. Attach files with ⊕, paste or drop.`);
 }
 export async function submit(text: string, pc: PageContext | undefined, restore: (t: string) => void) {
   const s = get();

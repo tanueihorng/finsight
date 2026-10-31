@@ -38,7 +38,7 @@ test('config preserves defaults and independently selects search/fetch; rejects 
   const { home } = fixture(), env = { AGENT_HOME: home, FINSIGHT_DATA_DIR: home };
   assert.equal(loadConfig(env).searchProvider, 'tavily'); assert.equal(loadConfig(env).fetchProvider, 'local');
   fs.writeFileSync(path.join(home, 'config.json'), JSON.stringify({ limits: { councilTurnUsd: .5, councilOutputTokens: 8000 } }));
-  const council = loadConfig(env); assert.equal(council.limits.councilTurnUsd, .5); assert.equal(council.limits.councilOutputTokens, 8000); assert.equal(council.limits.turnUsd, .05);
+  const council = loadConfig(env); assert.equal(council.limits.councilTurnUsd, .5); assert.equal(council.limits.councilOutputTokens, 8000); assert.equal(council.limits.turnUsd, .25);
   fs.writeFileSync(path.join(home, 'config.json'), JSON.stringify({ limits: { councilTurnUsd: -1 } })); assert.throws(() => loadConfig(env), /Invalid/);
   fs.writeFileSync(path.join(home, 'config.json'), JSON.stringify({ searchProvider: 'deepseek', fetchProvider: 'deepseek' }));
   assert.equal(loadConfig(env).searchProvider, 'deepseek'); assert.equal(loadConfig(env).fetchProvider, 'deepseek');

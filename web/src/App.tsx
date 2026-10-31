@@ -283,10 +283,11 @@ export default function App() {
 
       <header className="topbar">
         <div className="brand">
-          <img className="logo-img" src="/icon.png" alt="" aria-hidden="true" /> FINSIGHT<span className="dim">//</span><span className="amber">PERSONAL&nbsp;TERMINAL</span>
+          <img className="logo-img" src="/icon.png" alt="" aria-hidden="true" /> FINSIGHT<span className="dim">//</span><span className="amber brand-real">PERSONAL&nbsp;TERMINAL</span><span className="brand-paper">PAPER&nbsp;TRADING</span>
         </div>
         <div className="topbar-right">
           <span id="agent-toggle-slot" style={{ display: 'contents' }}></span>
+          <Host as="span" island="book" style={contents} />
           <Host as="label" island="account" className="base-sel" title="Account / portfolio — each holds its own positions" />
           <Host as="span" island="profile" style={contents} />
           <Host as="span" island="peek" style={contents} />
@@ -303,6 +304,8 @@ export default function App() {
       <Host island="command" className="cmdbar" />
       <Host island="status" />
 
+      {/* FEAT-012: the paper trade desk, full width above the panels, PAPER mode only (styles.css hides it in REAL). */}
+      <Host island="paper" id="paper-panel" className="paper-desk" />
       <main className="grid">
         <Column side="left">
           <Summary />

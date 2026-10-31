@@ -20,7 +20,7 @@ export const TOOL_VERBS: Record<string, string> = { get_portfolio: 'Opening the 
   get_events: 'Checking the calendar', get_policy: 'Re-reading the policy', use_skill: 'Opening the playbook', get_news: 'Reading the headlines' };
 export const randomVerb = () => VERBS[Math.floor(Math.random() * VERBS.length)]!;
 export const COMMANDS = [
-  { k: '/new', v: 'start a new chat' }, { k: '/model', v: 'switch model: /model deepseek-pro' }, { k: '/cost', v: 'spend today (/cost month)' },
+  { k: '/new', v: 'start a new chat' }, { k: '/model', v: 'switch model: /model deepseek-pro' }, { k: '/cost', v: 'spend today (/cost month)' }, { k: '/limits', v: 'spending and tool limits' },
   { k: '/strategies', v: 'list the strategy library' }, { k: '/skills', v: 'list installed skills' }, { k: '/logs', v: 'recent errors from the interaction log' }, { k: '/help', v: 'what I can do' }, { k: '/delete', v: 'delete this chat (asks first)' }, { k: '/clear', v: 'start a fresh chat; keep history' },
 ];
 

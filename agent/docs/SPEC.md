@@ -243,7 +243,7 @@ All facts tools are **read-only** and call FinSight with the GET-only token [D-Q
 |---|---|
 | FR-8.1 | A cost ledger records every billable event: model tokens by type, searches and paid API calls, with price-table version, task, thread, workflow and brain. |
 | FR-8.2 | Defaults: US$0.25 per task, US$2 per day for API brains. When the cap is reached, new API-brain work pauses with a clear message. CLI brains are capped by steps and time [D-Q10]. |
-| FR-8.3 | Turn limits (defaults): ≤ 12 tool-loop steps, ≤ 120 s, ≤ US$0.05 per chat turn. Hitting a limit ends the turn with what was found plus "limit reached; run as task?". |
+| FR-8.3 | Turn limits (defaults): ≤ 25 tool-loop steps, ≤ 300 s, ≤ US$0.25 per chat turn, US$5 per day; the user edits every limit in the terminal (Kestrel limits, PIN session; `PATCH /v1/limits`), and the agent cannot change them. Hitting a limit ends the turn with what was found plus "limit reached; run as task?". |
 | FR-8.4 | `/cost` shows spend by day/month × brain × workflow. Prices come from brain manifests and are versioned. |
 | FR-8.5 | A budget warning event fires at 80 % of any cap. |
 
@@ -583,7 +583,7 @@ Bank write connections; multi-user or hosted deployment; mobile app; embeddings/
 | P-7 | Workflow manifest with a tool allowlist | §6.4 |
 | P-8 | Brain manifest incl. pricing, capabilities and fallback | §6.5 |
 | P-9 | Panel shortcut `⌘/`; right-side panel, 320 px to 50 % | UI-1/2 |
-| P-10 | Turn limits: 12 steps / 120 s / US$0.05 | FR-8.3 |
+| P-10 | Turn limits: 25 steps / 300 s / US$0.25, user-editable | FR-8.3 |
 | P-11 | Eval set: Claude drafts 20 synthetic questions; the user adds 5 real ones | §12.3 |
 | P-12 | Liabilities source: add a small manual "liabilities" section to FinSight (generic feature, data in DATA_DIR) **or** read Finance HQ | FR-3.11 |
 | P-13 | Release slices 0–8 in the order above | §13 |

@@ -85,3 +85,20 @@ test('agent API: rejects bad Host (DNS rebinding), browser Origin, missing or wr
     assert.equal(del.status, 400, 'delete needs explicit confirm');
   } finally { api.close(); }
 });
+
+test('agent API: limits need the proxy secret, save from the terminal and refuse bad values', async () => {
+  const api = await startApi();
+  try {
+    const good = { host: `127.0.0.1:${api.port}`, 'x-agent-secret': PROXY_SECRET, 'content-type': 'application/json' };
+    assert.equal((await req(api.port, '/v1/limits', { host: good.host })).status, 401);
+    const before = JSON.parse((await req(api.port, '/v1/limits', good)).body);
+    assert.equal(before.limits.dayUsd, 5); assert.deepEqual(before.set, {}); assert.equal(before.defaults.councilResearchCalls, 8);
+    const saved = await req(api.port, '/v1/limits', good, 'PATCH', JSON.stringify({ dayUsd: 12, searchesPerTurn: 30 }));
+    assert.equal(saved.status, 200);
+    const after = JSON.parse(saved.body);
+    assert.equal(after.limits.dayUsd, 12); assert.deepEqual(after.set, { dayUsd: 12, searchesPerTurn: 30 });
+    assert.equal((await req(api.port, '/v1/limits', good, 'PATCH', JSON.stringify({ turnSteps: 999 }))).status, 400);
+    assert.equal((await req(api.port, '/v1/limits', good, 'PATCH', JSON.stringify({ dayUsd: 'x' }))).status, 400);
+    assert.equal(JSON.parse((await req(api.port, '/v1/limits', good)).body).limits.turnSteps, 25, 'a refused save changes nothing');
+  } finally { api.close(); }
+});

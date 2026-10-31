@@ -5,6 +5,7 @@
 import http from 'node:http';
 import crypto from 'node:crypto';
 import type { Config } from '../config.ts';
+import { LIMIT_DEFAULTS, saveLimits, setLimits } from '../config.ts';
 import type { DB } from '../store/db.ts';
 import * as store from '../store/db.ts';
 import type { ChatEngine } from '../chat/engine.ts';
@@ -166,6 +167,16 @@ async function route(d: ApiDeps, req: http.IncomingMessage, res: http.ServerResp
     return send(res, r.ok ? 200 : 502, JSON.parse(r.content));
   }
   if ((mt = p.match(/^\/v1\/turns\/(turn_[\w-]{6,})\/trace$/)) && m === 'GET') return send(res, 200, { steps: store.getTrace(d.db, mt[1]!) });
+  // Kestrel's spending and tool limits: effective values, defaults and which are set.
+  // FinSight proxies /api/agent/* for a PIN session only; Kestrel's own token cannot reach it.
+  if (p === '/v1/limits' && (m === 'GET' || m === 'PATCH')) {
+    if (m === 'PATCH') {
+      const patch = z.record(z.string(), z.number().nullable()).parse(await readJson(req));
+      saveLimits(d.cfg, patch);
+      audit('limits.changed', { fields: Object.keys(patch) });
+    }
+    return send(res, 200, { limits: d.cfg.limits, defaults: LIMIT_DEFAULTS, set: setLimits(d.cfg), todayUsd: store.spendSince(d.db, store.startOfToday()) });
+  }
   if (p === '/v1/cost' && m === 'GET') {
     const period = u.searchParams.get('period') === 'month' ? 'month' : 'day';
     const since = period === 'day' ? store.startOfToday() : (() => { const x = new Date(); x.setDate(1); x.setHours(0, 0, 0, 0); return x.getTime(); })();

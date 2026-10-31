@@ -15,6 +15,23 @@ The earlier draft with unverified release numbers is preserved in `docs/archive/
 
 ## Unreleased
 
+- Kestrel limits are user-editable (on `feat/paper-trading`, not merged).
+  - Click the "Today" spend in the chat list, or type `/limits`, to edit:
+    - the daily cap and the per-reply and per-council cost ceilings
+    - steps and time per reply
+    - web searches and pages read per reply
+    - council research calls and answer length
+  - Changes save to the agent's `config.json` and apply from the next reply; Kestrel's own token cannot change them.
+  - Higher defaults: US$0.25 per reply (was 0.05), US$5 per day (was 2), 25 steps (was 12), 300 s (was 120), 20 searches (was 10), 25 pages (was 15), 8 council research calls (was a fixed 4).
+- The holdings ticker's buttons now have accessible names that include their visible text. Visual baselines were re-captured after the ticker moved the page by a sub-pixel.
+
+- `PAPER-001` ([FEAT-012](docs/features/FEAT-012-paper-trading.md)), on branch `feat/paper-trading`, not merged.
+  - A PAPER book next to the real one, switched on the lock screen or in the top bar. The real book is untouched.
+  - Alpaca paper only: the user's own paper keys, and live keys are refused. The book mirrors Alpaca fills and updates live through `trade_updates` and SSE.
+  - A trade desk with a chart linked to the order ticket, fills and open limit orders drawn on the chart, and positions, orders, history and Kestrel tabs.
+  - Kestrel can place paper orders through new tools. The user chooses ask-first or autonomous and sets optional limits.
+  - Verified offline against a fake broker; a live run with real paper keys is pending.
+
 - `DISCOVER-001` ([FEAT-010](docs/features/FEAT-010-market-discover.md)), merged locally at `cefd2ff` (`5727d97`, `67cf0b0`); not pushed or deployed: Discover panel and read-only `GET /api/discover`. **Your symbols** ranks gainers and losers among held and watched symbols (regular session vs previous close), with exclusions, stale flags and exchange-local earnings dates. **US market** shows Yahoo's Day Gainers / Day Losers screens (top 25, Yahoo's criteria). **IPOs** shows Nasdaq's US IPO calendar, with tentative expected dates, deals priced in the last 14 days, and Nasdaq and SEC links. Both new sources are key-less, unofficial and US-only. A live run against real data is recorded in the spec.
 
 - Personal Council upgrade, 2026-10-31: `a186117` adds a separate Council budget; `5bb31bf` handles a matching issuer name and ticker; `c3ce194` uses the model context bound. Activated from the retained `feature/council-quality` worktree. A live AMD review completed all seven stages, but research remains partial and qualitative support needs review; completion is not investment qualification. Details remain in the private workspace run packet.

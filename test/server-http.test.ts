@@ -17,7 +17,7 @@ const listening = (port: number) => new Promise((r) => { const q = http.get({ ho
 
 test('the API fails closed before a PIN exists; setup issues a strict session cookie once', async (t) => {
   const s = await startServer(); t.after(() => s.stop());
-  assert.deepEqual((await s.req('GET', '/api/auth/status')).json, { pinSet: false, authed: false });
+  assert.deepEqual((await s.req('GET', '/api/auth/status')).json, { pinSet: false, authed: false, book: 'real' });
   const locked = await s.req('GET', '/api/portfolio');
   assert.equal(locked.status, 401); assert.deepEqual(locked.json, { error: 'Locked. Enter your PIN.' });
   assert.equal(locked.headers['cache-control'], 'no-store');
@@ -30,7 +30,7 @@ test('the API fails closed before a PIN exists; setup issues a strict session co
   assert.equal(ok.status, 200);
   assert.match(String(ok.headers['set-cookie']), /^sid=[0-9a-f]{48}; HttpOnly; SameSite=Strict; Path=\/$/);
   const c = cookieOf(ok);
-  assert.deepEqual((await s.req('GET', '/api/auth/status', json(c))).json, { pinSet: true, authed: true });
+  assert.deepEqual((await s.req('GET', '/api/auth/status', json(c))).json, { pinSet: true, authed: true, book: 'real' });
   assert.equal((await s.req('GET', '/api/portfolio', json(c))).status, 200);
 
   const again = await s.req('POST', '/api/auth/setup', json(null, { pin: '111111' }));
@@ -255,7 +255,7 @@ test('a restart keeps the PIN, holdings and persisted quotes but not sessions; S
   // Same store; every upstream fetch now fails, so a quote can only come from disk.
   const r = await startServer({ dataDir: s.dataDir, env: { FINSIGHT_CACHE_PERSIST: '', FETCH_PROBE_FAIL: '1' }, args: ['--import', PROBE] });
   t.after(() => r.stop());
-  assert.deepEqual((await r.req('GET', '/api/auth/status', json(c))).json, { pinSet: true, authed: false });
+  assert.deepEqual((await r.req('GET', '/api/auth/status', json(c))).json, { pinSet: true, authed: false, book: 'real' });
   assert.equal((await r.req('GET', '/api/portfolio', json(c))).status, 401);
   const c2 = cookieOf(await r.req('POST', '/api/auth/login', json(null, { pin: '482916' })));
   const pf: Portfolio = (await r.req('GET', '/api/portfolio?base=USD', json(c2))).json;

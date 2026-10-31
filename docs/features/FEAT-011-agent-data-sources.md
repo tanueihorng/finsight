@@ -2,7 +2,7 @@
 
 - **ID:** FEAT-011
 - **Status:** Deferred proposal; not selected for implementation · 2026-10-31
-- **Related:** paper trading (Alpaca) work in a separate session; FEAT-001 (IBKR MCP); FEAT-010 (Discover)
+- **Related:** [FEAT-012](FEAT-012-paper-trading.md) paper trading (Alpaca), [FEAT-013](FEAT-013-agentic-trading.md) agentic trading plan; FEAT-001 (IBKR MCP); FEAT-010 (Discover)
 
 ## Intent
 

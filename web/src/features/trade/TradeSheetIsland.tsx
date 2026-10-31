@@ -10,6 +10,7 @@ import type { Portfolio, Quote, SearchResult, Position } from '../../../../share
 import { buyStatus } from '../addform/addform.ts';
 import { booksFor, closeTrade, localDate, previewBuy, previewSell, sellQty, tradeError, tradeSheet, undoLabel, type Mode } from './trade.ts';
 import s from './Trade.module.css';
+import { useBook } from '../paper/book.ts';
 
 // Trade sheet: slides in from the right over the page (non-modal, so the
 // positions table stays visible) to buy more of or sell a holding, with a
@@ -19,7 +20,10 @@ const store = () => window.FinSight.store;
 const FRACS: [number, string][] = [[0.25, '25%'], [0.5, '50%'], [0.75, '75%'], [1, 'All']];
 const qty = (n: number) => fmt(n, n % 1 ? 4 : 0);
 
-export default function TradeSheetIsland() {
+// PAPER mode routes Buy/Sell to the paper order ticket instead (FEAT-012).
+export default function TradeSheetHost() { return useBook() === 'paper' ? null : <TradeSheetIsland />; }
+
+function TradeSheetIsland() {
   const sheet = useStore(tradeSheet, (x) => x.sheet);
   const account = useStore(store(), (x) => x.account);
   const base = useStore(store(), (x) => x.base);
