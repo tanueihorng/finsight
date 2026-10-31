@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { asOfLabel, earningsWhen, excludedSummary, excludedTitle, nextRow, staleNote, tzShort } from './discover.ts';
+import { asOfLabel, earningsWhen, excludedSummary, excludedTitle, ipoPrice, ipoWhen, nextRow, readTab, staleNote, tzShort } from './discover.ts';
 import type { DiscoverEarning, DiscoverMover } from '../../../../shared/types.ts';
 
 test('exclusions summarise by reason in a fixed order, with a per-symbol title', () => {
@@ -36,4 +36,18 @@ test('arrow keys move between rows and stop at the ends', () => {
   assert.equal(nextRow(rows, rows[1]!, 'Home'), rows[0]);
   assert.equal(nextRow(rows, {} as Element, 'ArrowDown'), null);
   assert.equal(asOfLabel(null), 'no trades');
+});
+
+test('IPO dates stay on the US Eastern day; expected dates are marked tentative; prices show ranges', () => {
+  assert.equal(ipoWhen({ date: '2026-11-03', status: 'expected' }), '~Tue, Nov 03');
+  assert.equal(ipoWhen({ date: '2026-10-29', status: 'priced' }), 'Thu, Oct 29');
+  assert.equal(ipoWhen({ date: null, status: 'expected' }), 'date TBA');
+  assert.equal(ipoPrice({ priceLow: 19, priceHigh: 21, status: 'expected' }), '$19.00–21.00');
+  assert.equal(ipoPrice({ priceLow: 10, priceHigh: 10, status: 'priced' }), '$10.00');
+  assert.equal(ipoPrice({ priceLow: null, priceHigh: null, status: 'expected' }), 'price TBA');
+  assert.equal(ipoPrice({ priceLow: null, priceHigh: null, status: 'priced' }), 'price n/a'); // Nasdaq leaves some priced deals blank
+});
+
+test('the remembered view falls back to "yours" when storage is missing or blocked', () => {
+  assert.equal(readTab(), 'yours'); // no localStorage under node
 });

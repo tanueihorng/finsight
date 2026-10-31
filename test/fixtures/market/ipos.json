@@ -1,0 +1,12 @@
+{
+  "_note": "Fake Nasdaq IPO calendar for FINSIGHT_FAKE_MARKET=1. dayOffset is relative to today (US Eastern). Companies are made up.",
+  "deals": [
+    { "dealID": "fx-1001", "proposedTickerSymbol": "NOVA", "companyName": "Novaline Robotics Inc.", "proposedExchange": "NASDAQ Global Select", "proposedSharePrice": "18.00-20.00", "sharesOffered": "12,500,000", "dollarValueOfSharesOffered": "$250,000,000", "status": "upcoming", "dayOffset": 3 },
+    { "dealID": "fx-1002", "proposedTickerSymbol": "QRTZ", "companyName": "Quartz Grid Energy Corp.", "proposedExchange": "NYSE", "proposedSharePrice": "11.00", "sharesOffered": "8,000,000", "dollarValueOfSharesOffered": "$88,000,000", "status": "upcoming", "dayOffset": 9 },
+    { "dealID": "fx-1003", "proposedTickerSymbol": "OLDX", "companyName": "Yesterday Deal Ltd", "proposedExchange": "NYSE", "proposedSharePrice": "15.00-17.00", "sharesOffered": "1,000,000", "dollarValueOfSharesOffered": "$17,000,000", "status": "upcoming", "dayOffset": -1 },
+    { "dealID": "fx-2001", "proposedTickerSymbol": "BRKW", "companyName": "Brookway Biotech Inc.", "proposedExchange": "NASDAQ Global", "proposedSharePrice": "14.00", "sharesOffered": "5,000,000", "dollarValueOfSharesOffered": "$70,000,000", "status": "priced", "dayOffset": -2 },
+    { "dealID": "fx-2002", "proposedTickerSymbol": "STAL", "companyName": "Stale Old Holdings", "proposedExchange": "NYSE", "proposedSharePrice": "10.00", "sharesOffered": "2,000,000", "dollarValueOfSharesOffered": "$20,000,000", "status": "priced", "dayOffset": -40 },
+    { "dealID": "fx-3001", "proposedTickerSymbol": "FILD", "companyName": "Filed Only Corp", "dollarValueOfSharesOffered": "$5,000,000", "status": "filed", "dayOffset": -5 },
+    { "dealID": "fx-4001", "proposedTickerSymbol": null, "companyName": "Withdrawn Co", "status": "withdrawn", "dayOffset": -7 }
+  ]
+}

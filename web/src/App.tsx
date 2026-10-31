@@ -184,7 +184,7 @@ const PANELS: Record<string, () => ReactNode> = {
     </Panel>
   ),
   discover: () => (
-    <Panel pid="discover" title={<span className="panel-title">DISCOVER · HOLDINGS + WATCHLIST</span>} head={<span className="dim small" data-island-slot="discover:head"></span>}>
+    <Panel pid="discover" title={<span className="panel-title">DISCOVER · MOVERS · EARNINGS · IPOS</span>} head={<span className="dim small" data-island-slot="discover:head"></span>}>
       <Host island="discover" id="discover" className="discover" />
     </Panel>
   ),

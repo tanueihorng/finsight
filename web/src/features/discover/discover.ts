@@ -1,4 +1,5 @@
-import type { DiscoverEarning, DiscoverExcluded, DiscoverMover } from '../../../../shared/types.ts';
+import type { DiscoverEarning, DiscoverExcluded, DiscoverMover, IpoDeal } from '../../../../shared/types.ts';
+import { fmt } from '../../ui/format.ts';
 
 // Display rules for the Discover panel (FEAT-010). Ranking is server-side
 // (lib/discover.ts); these only format what it returned.
@@ -41,4 +42,24 @@ export function nextRow(rows: Element[], current: Element, key: string): Element
   if (key === 'Home') return rows[0] ?? null;
   if (key === 'End') return rows[rows.length - 1] ?? null;
   return null;
+}
+
+// Views, and the last one chosen (per browser; storage may be blocked).
+export const TABS = ['yours', 'market', 'ipos'] as const;
+export type Tab = typeof TABS[number];
+const TAB_KEY = 'finsight-discover-tab';
+export function readTab(): Tab {
+  try { const v = localStorage.getItem(TAB_KEY); return (TABS as readonly string[]).includes(v || '') ? v as Tab : 'yours'; } catch { return 'yours'; }
+}
+export function saveTab(t: Tab) { try { localStorage.setItem(TAB_KEY, t); } catch { /* storage blocked */ } }
+
+// IPO date (a US Eastern calendar day), "TBA" without one; ~ marks expected.
+export function ipoWhen(d: Pick<IpoDeal, 'date' | 'status'>): string {
+  if (!d.date) return 'date TBA';
+  const s = new Date(d.date + 'T12:00:00Z').toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'short', month: 'short', day: '2-digit' });
+  return d.status === 'expected' ? '~' + s : s;
+}
+export function ipoPrice(d: Pick<IpoDeal, 'priceLow' | 'priceHigh' | 'status'>): string {
+  if (d.priceLow == null) return d.status === 'expected' ? 'price TBA' : 'price n/a';
+  return d.priceHigh != null && d.priceHigh !== d.priceLow ? `$${fmt(d.priceLow)}–${fmt(d.priceHigh)}` : `$${fmt(d.priceLow)}`;
 }

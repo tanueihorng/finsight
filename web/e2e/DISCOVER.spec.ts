@@ -8,6 +8,9 @@ import type { DiscoverResponse } from '../../shared/types.ts';
 const body = (page: Page) => page.locator('#discover');
 const api = async (page: Page) => (await (await page.request.get('/api/discover')).json()) as DiscoverResponse;
 
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => { if (!sessionStorage.getItem('discover-init')) { sessionStorage.setItem('discover-init', '1'); localStorage.removeItem('finsight-discover-tab'); } });
+});
 test.afterEach(async ({ page }) => {
   for (const symbol of ['TSLA', '^GSPC']) await page.request.post('/api/watchlist/remove', { data: { symbol } });
 });
@@ -77,4 +80,60 @@ test('a failed request shows an error in the panel only', async ({ page }) => {
   await seeded(page);
   await expect(body(page).getByRole('alert')).toContainText('Discover failed');
   await expect(page.locator('#markets [data-sym]').first()).toBeVisible();
+});
+
+test('US market view: Yahoo screen rows, sorted, with scope and source; a row opens the detail', async ({ page }) => {
+  await seeded(page);
+  const d = await api(page);
+  expect(d.market).toMatchObject({ ok: true, region: 'US', source: 'Yahoo Finance screener', stale: false, error: null });
+  const pcts = (rows: { changePct: number }[]) => rows.map((r) => r.changePct);
+  expect(pcts(d.market.gainers)).toEqual([...pcts(d.market.gainers)].sort((a, b) => b - a));
+  expect(pcts(d.market.losers)).toEqual([...pcts(d.market.losers)].sort((a, b) => a - b));
+  expect(d.market.gainers.every((r) => r.changePct > 0) && d.market.losers.every((r) => r.changePct < 0)).toBe(true);
+  expect(d.market.gainers.length).toBeGreaterThan(0);
+
+  await body(page).getByRole('tab', { name: 'US market' }).click();
+  await expect(body(page)).toContainText("Yahoo's predefined Day Gainers");
+  await expect(body(page)).toContainText('SG/HK not covered');
+  const first = body(page).locator('[aria-label="US GAINERS"] [data-row]').first();
+  await expect(first).toHaveAttribute('data-sym', d.market.gainers[0]!.symbol);
+  await first.click();
+  await expect(page.locator('#detail-title')).toHaveText(`${d.market.gainers[0]!.symbol} · DETAIL`);
+  // The chosen view is remembered across a reload.
+  await page.reload();
+  await expect(body(page).getByRole('tab', { name: 'US market' })).toHaveAttribute('aria-selected', 'true');
+});
+
+test('IPO view: upcoming deals are tentative and future-only, priced deals are recent, links go to Nasdaq and SEC', async ({ page }) => {
+  await seeded(page);
+  const d = await api(page);
+  expect(d.ipos).toMatchObject({ ok: true, source: 'Nasdaq IPO calendar', counts: { filed: 1, withdrawn: 1 } });
+  expect(d.ipos.upcoming.map((x) => x.symbol)).toEqual(['NOVA', 'QRTZ']);
+  expect(d.ipos.priced.map((x) => x.symbol)).toEqual(['BRKW']);
+
+  await body(page).getByRole('tab', { name: 'IPOs' }).click();
+  const up = body(page).locator('[aria-label="Upcoming IPOs"]');
+  await expect(up).toContainText('expected dates tentative');
+  await expect(up.locator('[data-deal="fx-1001"]')).toContainText('$250.00M');
+  await expect(up.locator('[data-deal="fx-1001"]')).toContainText('$18.00–20.00');
+  await expect(up.locator('[data-deal="fx-1001"]')).toContainText('~');
+  await expect(up.locator('[data-deal="fx-1003"]')).toHaveCount(0);
+  await expect(up.locator('[data-deal="fx-2002"]')).toHaveCount(0);
+  await expect(up.locator('[data-deal="fx-1001"] a', { hasText: 'Nasdaq' })).toHaveAttribute('href', 'https://www.nasdaq.com/market-activity/ipos/overview?dealId=fx-1001');
+  await expect(up.locator('[data-deal="fx-1001"] a', { hasText: 'SEC' })).toHaveAttribute('href', /^https:\/\/www\.sec\.gov\/cgi-bin\/browse-edgar\?action=getcompany&company=Novaline%20Robotics%20Inc\./);
+  await expect(page.locator('[data-island-slot="discover:head"]')).toHaveText('tentative dates');
+});
+
+test('tabs: arrow keys move selection and focus, Home/End jump', async ({ page }) => {
+  await seeded(page);
+  const tab = (name: string) => body(page).getByRole('tab', { name });
+  await tab('Your symbols').focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(tab('US market')).toBeFocused();
+  await expect(tab('US market')).toHaveAttribute('aria-selected', 'true');
+  await page.keyboard.press('End');
+  await expect(tab('IPOs')).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await expect(tab('Your symbols')).toHaveAttribute('aria-selected', 'true');
+  await expect(body(page).getByRole('tabpanel')).toContainText('not the whole market');
 });

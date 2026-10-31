@@ -15,3 +15,17 @@
 .rel { min-width: 52px; color: var(--muted); }
 .more { margin-top: 4px; }
 @media (max-width: 600px) { .row { padding: 6px 2px; font-size: 12px; } }
+.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); margin-bottom: 6px; }
+.tab { background: none; border: 0; border-bottom: 2px solid transparent; color: var(--muted); font: inherit; font-size: 10px; letter-spacing: .5px; padding: 4px 8px; cursor: pointer; }
+.tab:hover { color: var(--text); }
+.tab.on { color: var(--amber); border-bottom-color: var(--amber); }
+.tab:focus-visible { outline: 1px solid var(--amber); outline-offset: -1px; }
+.ipo { display: grid; grid-template-columns: 84px minmax(0, 1fr) auto auto; gap: 8px; align-items: baseline; padding: 3px 2px; font-size: 11px; border-bottom: 1px solid var(--row-line); }
+.ipo .when { text-align: left; }
+.co { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.links { white-space: nowrap; font-size: 10px; }
+.links a { color: var(--cyan); }
+@media (max-width: 600px) {
+  .ipo { grid-template-columns: 76px minmax(0, 1fr); }
+  .ipo .px, .ipo .links { grid-column: 2; text-align: left; }
+}
