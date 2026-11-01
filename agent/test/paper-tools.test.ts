@@ -4,6 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildRegistry } from '../src/tools/index.ts';
+import { mcpTools } from '../src/mcp/server.ts';
 import { finsightClient } from '../src/tools/finsight.ts';
 import { fakeFinsight, testConfig, testCtx, TOKEN } from './helpers.ts';
 
@@ -39,4 +40,12 @@ test('paper tools post orders with the thread id and pass FinSight\'s answer thr
 
   assert.equal((await reg.execute('paper_place_order', { symbol: 'AAPL', side: 'hold' }, ctx)).ok, false, 'schema refuses a bad side');
   assert.deepEqual([...new Set(sent.filter((x) => x.method === 'POST').map((x) => x.url))].sort(), ['/api/paper/orders', '/api/paper/orders/cancel']);
+});
+
+test('MCP exposes no tool that writes: paper order tools stay inside Kestrel', () => {
+  const reg = buildRegistry();
+  const names = mcpTools(reg).map((t) => t.name);
+  assert.ok(names.includes('paper_account'), 'read-only paper account stays available');
+  for (const w of ['paper_place_order', 'paper_cancel_order', 'render_ui']) assert.ok(!names.includes(w), `${w} must not be on MCP`);
+  assert.deepEqual(reg.list().filter((t) => t.writes).map((t) => t.name).sort(), ['paper_cancel_order', 'paper_place_order']);
 });
