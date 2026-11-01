@@ -37,7 +37,6 @@ const paperPlace: ToolDef<typeof order> = {
   description: 'Place an order on the Alpaca PAPER account (fake money). Depending on the user\'s setting it is either sent at once (auto) or becomes a pending ticket the user approves or rejects in the terminal (ask). FinSight refuses it with a reason if it breaks one of the user\'s limits. Report exactly what came back: placed, pending approval or refused. Never describe a paper order as a real trade.',
   input: order,
   timeoutMs: 30_000,
-  writes: true,
   async handler(input, ctx) {
     return post(ctx, '/api/paper/orders', { ...input, threadId: ctx.threadId });
   },
@@ -46,7 +45,6 @@ const paperCancel: ToolDef = {
   name: 'paper_cancel_order',
   description: 'Cancel an open order on the Alpaca PAPER account by its order id (from paper_account). With approval set to ask, only orders you placed can be cancelled; FinSight refuses the user\'s own orders with a reason.',
   input: z.object({ id: z.string().regex(/^[A-Za-z0-9-]{8,64}$/) }),
-  writes: true,
   async handler({ id }, ctx) { return post(ctx, '/api/paper/orders/cancel', { id }); },
 };
 

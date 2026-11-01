@@ -27,7 +27,7 @@ DOC = [
     ['Document', 'FinSight Terminal — Master Product & Engineering Document'],
     ['Version', '1.0 (1 November 2026)'],
     ['Owner', 'tanueihorng (product owner, sole user, final decision-maker)'],
-    ['Code baseline', '`main` on 1 November 2026: the FEAT-012 merge (`aa373b7`) plus the MCP read-only fix'],
+    ['Code baseline', '`main` on 1 November 2026: the FEAT-012 merge (`aa373b7`) (MCP exposes the full tool registry)'],
     ['Audience', 'New contributors, coding agents, reviewers, demo audiences and UAT testers (including Codex computer use)'],
     ['Companion files', '`docs/guide/finsight-guide.html` (interactive demo guide), `agent/docs/SPEC.md`, `docs/architecture/SYSTEM.md`, `docs/BACKLOG.md`'],
 ]),
@@ -142,7 +142,7 @@ DOC = [
     ['Demo audience', 'Friends, peers or reviewers watching a walkthrough', 'Understand value quickly without seeing real holdings (demo mode, UNPEEK)'],
     ['Contributor / coding agent', 'Developer or AI coding agent (Claude Code, Codex, Cursor) changing the code', 'Clear specs, boundaries, quality gates, docs-as-code process (AGENTS.md)'],
     ['UAT tester', 'Human or Codex computer-use agent executing acceptance scripts', 'Deterministic environment (demo + fake market), precise steps and expected results ({sec:uat})'],
-    ['External MCP client', 'Claude Code / Codex / Cursor using FinSight tools over MCP', 'Kestrel\'s read-only tools (paper order tools excluded) and the same citation rules'],
+    ['External MCP client', 'Claude Code / Codex / Cursor using FinSight tools over MCP', 'Kestrel\'s full tool registry, including paper orders under the same approval mode and limits, and the same citation rules'],
 ]),
 ('callout', 'note', 'Single-user by design', 'There is exactly one user class with full authority. There is no multi-tenancy, no roles and no remote access. All security controls assume an attacker is another process, web page or document on the same machine — not a second legitimate user.'),
 
@@ -331,7 +331,7 @@ DOC = [
     ['FR-K-7', 'Skills MUST load from `agent/skills/*/SKILL.md` and user skill folders; `/` lists commands and skills.'],
     ['FR-K-8', 'Durable facts the user states MUST become `propose_record_update` proposals; Kestrel MUST NOT edit records directly.'],
     ['FR-K-9', 'Attachments (PDF, DOCX, CSV, images) MUST be readable and treated as untrusted data.'],
-    ['FR-K-10', 'The tool registry MUST be exposed over MCP stdio read-only: tools that change state (`paper_place_order`, `paper_cancel_order`) MUST NOT be exposed.'],
+    ['FR-K-10', 'The tool registry MUST be exposed over MCP stdio. Paper orders placed over MCP MUST pass through the same approval mode (ask/auto) and limits as orders Kestrel places.'],
     ['FR-K-11', 'Chats MUST support new, clear, delete (with confirmation), rename, pin, search and bulk clear.'],
 ]),
 ('h3', 'Council'),
@@ -692,8 +692,8 @@ DOC = [
   'session and a same-origin request.',
   "**Kestrel `/v1/*`** — versioned REST/JSON with Zod-validated bodies, reachable only through FinSight's "
   'proxy with a shared secret; SSE for turn events.',
-  "**MCP (stdio)** — the agent's tool registry exposed to Claude Code, Codex or Cursor, read-only: "
-  'tools marked as writing (the paper order tools) are filtered out, and a test enforces it.']),
+  "**MCP (stdio)** — the agent's tool registry exposed to Claude Code, Codex or Cursor, including the paper order "
+  'tools; FinSight applies the approval mode and limits to those orders, whichever client sends them.']),
 ('h2', 'HTTP API (selected)'),
 ('table', ['Method & path', 'Purpose'], [
     ['GET /api/portfolio?base=', 'Portfolio with quotes, P&L, stock/FX split'],
@@ -774,7 +774,7 @@ DOC = [
   ['Kestrel (rotated agent token)',
    'Read portfolio facts; place and cancel **paper** orders through the gate',
    'Edit the real book, change settings, limits, approval mode or keys'],
-  ['MCP client', 'Call Kestrel\'s read-only tools', 'Place or cancel paper orders (those tools are not exposed), or write anything else'],
+  ['MCP client', 'Call Kestrel\'s tools, including placing and cancelling paper orders (subject to the approval mode and limits)', 'Bypass the approval mode or limits, or write anything outside the tool registry'],
   ['Unauthenticated', 'Load the UI shell and the lock screen', 'Read or change any data']]),
 ('p',
  'The agent token and the proxy secret are random values rotated at every server start and stored in '

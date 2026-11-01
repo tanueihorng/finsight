@@ -25,8 +25,6 @@ export type ToolDef<S extends z.ZodType = z.ZodType<any>> = {
   description: string;
   input: S;
   timeoutMs?: number;
-  /** Changes state outside the agent (e.g. places a paper order). Never exposed over MCP. */
-  writes?: true;
   handler: (input: z.infer<S>, ctx: ToolCtx) => Promise<unknown>;
 };
 
