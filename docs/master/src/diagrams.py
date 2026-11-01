@@ -353,9 +353,9 @@ def test_pyramid():
     b = text(30, 34, "Test strategy", 17, INK, 700)
     layers = [("UAT · computer-use scripts", "a", 300, "Codex / human walkthrough of the UAT catalogue"),
               ("Real-backend checks", "v", 420, "council against a live model · live fixtures"),
-              ("Browser E2E · Playwright (~262)", "v", 560, "fake market · fake Alpaca · fake agent · a11y · visual · perf · SW"),
-              ("Agent tests (~130) + secret scan", "g", 700, "tool loop · limits · council contract · netguard"),
-              ("Unit tests (~216) · node:test", "g", 840, "portfolio math · returns · CSV · cache · auth · paper gate")]
+              ("Browser E2E · Playwright (290)", "v", 560, "fake market · fake Alpaca · fake agent · a11y · visual · perf · SW"),
+              ("Agent tests (207) + secret scan", "g", 700, "tool loop · limits · council contract · netguard"),
+              ("Unit tests (265) · node:test", "g", 840, "portfolio math · returns · CSV · cache · auth · paper gate")]
     for i, (t, k, w, s) in enumerate(layers):
         c, bg = KIND[k]
         y = 60 + i * 74

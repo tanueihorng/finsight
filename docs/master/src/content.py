@@ -17,7 +17,7 @@ META = {
     "version": "1.0",
     "date": "1 November 2026",
     "owner": "tanueihorng",
-    "status": "Living document · reflects main at aa373b7",
+    "status": "Living document · reflects main on 1 November 2026",
 }
 
 DOC = [
@@ -27,7 +27,7 @@ DOC = [
     ['Document', 'FinSight Terminal — Master Product & Engineering Document'],
     ['Version', '1.0 (1 November 2026)'],
     ['Owner', 'tanueihorng (product owner, sole user, final decision-maker)'],
-    ['Code baseline', '`main` at `aa373b7` — Merge paper trading, trade desk, Kestrel limits (FEAT-012)'],
+    ['Code baseline', '`main` on 1 November 2026: the FEAT-012 merge (`aa373b7`) plus the MCP read-only fix'],
     ['Audience', 'New contributors, coding agents, reviewers, demo audiences and UAT testers (including Codex computer use)'],
     ['Companion files', '`docs/guide/finsight-guide.html` (interactive demo guide), `agent/docs/SPEC.md`, `docs/architecture/SYSTEM.md`, `docs/BACKLOG.md`'],
 ]),
@@ -38,7 +38,7 @@ DOC = [
  'The first part explains **the product**: the problem FinSight solves, what the terminal and the Kestrel '
  'agent do, and who they are for. The rest of the document is organised by the **24 software-engineering '
  'domains** a complete application has to address, from requirements to long-term ownership. Each domain has '
- 'its own chapter, written for FinSight specifically and checked against the code at `aa373b7`.'),
+ 'its own chapter, written for FinSight specifically and checked against `main` on 1 November 2026.'),
 ('ul',
  ['**Part A — Product and design foundations:** requirements and scope, user stories and flows, the '
   'functional and non-functional specifications, architecture, technology stack, frontend and UX.',
@@ -62,7 +62,7 @@ DOC = [
 ('h1', 'Executive summary', 'exec', []),
 ('p', "**FinSight** is a free, Bloomberg-style portfolio terminal that runs entirely on the owner's computer. It tracks a multi-currency, multi-account portfolio with live public market data, and it answers a question most tools hide: **how much of my return came from the stock, and how much from the currency?**"),
 ('p', 'On top of the terminal sits **↗ Kestrel**, a local AI research agent that can see what the user sees — holdings, cash, P&L, events, strategies and the chart in view — and answers with numbers produced by deterministic code, with sources and timestamps. For important decisions, Kestrel can convene an **investment council**: three specialists and a chair who assess, challenge and synthesise. A **paper-trading** mode, backed by an Alpaca paper account, lets the user and Kestrel practise with fake money under explicit approval and limits.'),
-('kpis', [('0', 'runtime deps (server)'), ('0', 'API keys for market data'), ('≈38', 'agent tools'), ('3 + 1', 'council specialists + chair'), ('2', 'books: REAL · PAPER'), ('~600', 'automated checks')]),
+('kpis', [('0', 'runtime deps (server)'), ('0', 'API keys for market data'), ('≈38', 'agent tools'), ('3 + 1', 'council specialists + chair'), ('2', 'books: REAL · PAPER'), ('762', 'automated tests')]),
 ('fig', 'capability-map', 'Capability map'),
 ('shot', 'terminal-detail.png', 'The FinSight Terminal running the demo portfolio: summary cards with the stock/FX P&L split, live positions, the NVDA chart and performance vs the S&P 500'),
 ('shot', 'g-k-live.png', 'Kestrel answering a portfolio question: each tool call is shown, the figures come from tools, and the answer carries an as-of time, sources and its cost', 'narrow'),
@@ -142,7 +142,7 @@ DOC = [
     ['Demo audience', 'Friends, peers or reviewers watching a walkthrough', 'Understand value quickly without seeing real holdings (demo mode, UNPEEK)'],
     ['Contributor / coding agent', 'Developer or AI coding agent (Claude Code, Codex, Cursor) changing the code', 'Clear specs, boundaries, quality gates, docs-as-code process (AGENTS.md)'],
     ['UAT tester', 'Human or Codex computer-use agent executing acceptance scripts', 'Deterministic environment (demo + fake market), precise steps and expected results ({sec:uat})'],
-    ['External MCP client', 'Claude Code / Codex / Cursor using FinSight tools over MCP', 'Same read-only tools and citation rules as Kestrel'],
+    ['External MCP client', 'Claude Code / Codex / Cursor using FinSight tools over MCP', 'Kestrel\'s read-only tools (paper order tools excluded) and the same citation rules'],
 ]),
 ('callout', 'note', 'Single-user by design', 'There is exactly one user class with full authority. There is no multi-tenancy, no roles and no remote access. All security controls assume an attacker is another process, web page or document on the same machine — not a second legitimate user.'),
 
@@ -331,7 +331,7 @@ DOC = [
     ['FR-K-7', 'Skills MUST load from `agent/skills/*/SKILL.md` and user skill folders; `/` lists commands and skills.'],
     ['FR-K-8', 'Durable facts the user states MUST become `propose_record_update` proposals; Kestrel MUST NOT edit records directly.'],
     ['FR-K-9', 'Attachments (PDF, DOCX, CSV, images) MUST be readable and treated as untrusted data.'],
-    ['FR-K-10', 'The tool registry MUST be exposed over MCP stdio with the same read-only semantics.'],
+    ['FR-K-10', 'The tool registry MUST be exposed over MCP stdio read-only: tools that change state (`paper_place_order`, `paper_cancel_order`) MUST NOT be exposed.'],
     ['FR-K-11', 'Chats MUST support new, clear, delete (with confirmation), rename, pin, search and bulk clear.'],
 ]),
 ('h3', 'Council'),
@@ -359,7 +359,7 @@ DOC = [
     ['Performance', 'Agent overhead before first provider byte p95 ≤ 150 ms; context pack ≤ 500 ms p95 warm; panel open ≤ 100 ms; no N+1 calls to FinSight; idle CPU ≈ 0 (event-driven)'],
     ['Availability', 'Terminal works offline from the persisted cache; failed upstream refreshes serve last-known-good with stale flags'],
     ['Reliability', 'A crash mid-turn leaves an `interrupted` partial message; the supervisor restarts the agent with backoff; DB integrity check and backup before migrations'],
-    ['Security & privacy', 'Loopback only; PIN; secrets in Keychain or 0600 files; no telemetry; nothing personal in the repo ({sec:security})'],
+    ['Security & privacy', 'Loopback by default (LAN is an explicit opt-in); PIN; secrets in Keychain or 0600 files; no telemetry; nothing personal in the repo ({sec:security})'],
     ['Usability', 'Keyboard command bar, ⌘/ for Kestrel, responsive layout to phone width, installable PWA'],
     ['Accessibility', 'Axe checks in the E2E suite, accessible names match visible text, keyboard-operable tabs, reduced-motion support, light mode, high-contrast-friendly tokens'],
     ['Maintainability', 'TypeScript strict, erasable syntax for native Node execution, module boundaries, specs before code, ADRs for significant decisions'],
@@ -692,8 +692,8 @@ DOC = [
   'session and a same-origin request.',
   "**Kestrel `/v1/*`** — versioned REST/JSON with Zod-validated bodies, reachable only through FinSight's "
   'proxy with a shared secret; SSE for turn events.',
-  "**MCP (stdio)** — the agent's tool registry exposed to Claude Code, Codex or Cursor with the same "
-  'read-only semantics.']),
+  "**MCP (stdio)** — the agent's tool registry exposed to Claude Code, Codex or Cursor, read-only: "
+  'tools marked as writing (the paper order tools) are filtered out, and a test enforces it.']),
 ('h2', 'HTTP API (selected)'),
 ('table', ['Method & path', 'Purpose'], [
     ['GET /api/portfolio?base=', 'Portfolio with quotes, P&L, stock/FX split'],
@@ -774,7 +774,7 @@ DOC = [
   ['Kestrel (rotated agent token)',
    'Read portfolio facts; place and cancel **paper** orders through the gate',
    'Edit the real book, change settings, limits, approval mode or keys'],
-  ['MCP client', 'Call the same read-only tools', 'Write anything'],
+  ['MCP client', 'Call Kestrel\'s read-only tools', 'Place or cancel paper orders (those tools are not exposed), or write anything else'],
   ['Unauthenticated', 'Load the UI shell and the lock screen', 'Read or change any data']]),
 ('p',
  'The agent token and the proxy secret are random values rotated at every server start and stored in '
@@ -964,7 +964,9 @@ DOC = [
 ]),
 ('h2', 'Security controls checklist'),
 ('ul', [
-    'Both services bind to `127.0.0.1`; no `0.0.0.0`.',
+    'Both services bind to `127.0.0.1` by default. The Kestrel service is always loopback-only; FinSight can be bound to the LAN with `HOST=0.0.0.0`, which also turns off the Host check (see below).',
+    '**LAN exception:** `HOST=0.0.0.0` is an explicit opt-in, not a supported security profile. Anyone on the network can reach the lock screen, and the PIN plus throttling is then the only barrier. Use it only on a trusted network.',
+    '**Same-user processes:** 0600 permissions stop other OS users, not other programs running as the owner. Malware running under the owner\'s account could read the data folder; this is accepted for a personal tool.',
     'Security headers: `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, Host header check.',
     'PIN: scrypt KDF off the event loop, brute-force throttling, optional idle lock.',
     'Agent link: random 32-byte token and proxy secret rotated at each server start (`agent-link.json`, 0600).',
@@ -1078,8 +1080,10 @@ DOC = [
 ('table',
  ['Target', 'Value'],
  [['Availability', 'Terminal up while the Mac is on (launchd restarts the server if it crashes)'],
-  ['Data loss (RPO)',
+  ['Data loss on a crash (RPO)',
    'None beyond the last in-flight write (atomic writes); agent DB backed up before migrations'],
+  ['Data loss on disk failure, deletion or a lost laptop',
+   "Back to the owner's last backup of the data folder. A full restore has not yet been rehearsed (engineering backlog P2)"],
   ['Recovery time (RTO)', 'Minutes: restart the server, or copy the data folder back from backup']]),
 ('h2', 'Health checks and supervision'),
 ('ul',
@@ -1132,10 +1136,11 @@ DOC = [
 ('h2', 'Test counts'),
 ('table',
  ['Suite', 'Size'],
- [['Root unit and integration tests (`test/`)', '29 files'],
-  ['Agent tests (`agent/test`)', '24 files'],
-  ['Playwright specs (`web/e2e`)', '48 specs, about 240 tests'],
-  ['UAT catalogue', '30 cases']]),
+ [['Unit and integration (`test/`, `web/src/**/*.test.ts`)', '265 tests in 55 files — all passed'],
+  ['Agent (`agent/test`) + secret scan', '207 tests in 23 files — all passed'],
+  ['Playwright E2E (`web/e2e`, default config)', '290 tests in 68 spec files (listed)'],
+  ['UAT catalogue', '30 cases (results are not recorded in this document)']]),
+('p', 'Unit and agent counts come from runs on 1 November 2026. The Playwright count is from `playwright test --list`; the E2E suite was not re-run for this revision.'),
 ('h2', 'Release gate'),
 ('p',
  '`npm run verify` runs the typecheck, unit tests, the web bundle check and the E2E suite; `npm run '
@@ -1273,8 +1278,8 @@ DOC = [
 ('ul',
  ['`npm run build` bundles the React app with esbuild into `public/app/` (content-hashed chunks plus a '
   'manifest). The output is committed, so users run FinSight without installing build tools.',
-  '`npm run check:web` rebuilds and fails if the committed bundle differs from the source: a '
-  'reproducible-build check.',
+  '`npm run check:web` rebuilds and fails if the committed bundle differs from the source. This is a '
+  'bundle-consistency check on the same machine, not an independent reproducible-build verification.',
   'Lockfiles pin every dependency; the agent installs with `npm ci`.']),
 ('h2', 'Pipeline'),
 ('table',
