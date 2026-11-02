@@ -119,6 +119,11 @@ test('all-account weights name their scope and an approximate P/E says so', () =
   assert.deepEqual(metricIssues(one('AMD is 4.12% of securities across all accounts combined.', ['w']), amd), []);
   // Live run 2026-10-31: scope named in the first sentence covers the next one.
   assert.deepEqual(metricIssues(one('Figures are all accounts combined. AMD is 4.12% of securities.', ['w']), amd), []);
+  // TSM audit item 5: a policy limit that happens to equal a weight is a rule, not a portfolio figure.
+  assert.deepEqual(metricIssues(one('The proposed single-name limit is 4.12% of securities.', ['w']), amd).filter((x) => /account scope/.test(x)), []);
+  assert.deepEqual(metricIssues(one('Adding would breach the 4.12% cap.', ['w']), amd).filter((x) => /account scope/.test(x)), []);
+  // A limit named after a comma does not excuse the weight before it.
+  assert.match(metricIssues(one('AMD is 4.12% of securities, under the 15% cap.', ['w']), amd).join(), /4\.12% is an all-account/);
   assert.match(metricIssues(one('AMD trades at 129.44x trailing earnings.', ['v']), amd).join(), /129\.44 is a trailing P\/E from approximate EPS/);
   assert.deepEqual(metricIssues(one('AMD trades at roughly 129.44x trailing earnings.', ['v']), amd), []);
 });

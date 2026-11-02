@@ -59,14 +59,21 @@ export function evidenceFacts(content: string): Facts {
 }
 
 const NUMBER = /(?<![\w.])-?\d{1,3}(?:,\d{3})+(?:\.\d+)?|(?<![\w.])-?\d+(?:\.\d+)?/g;
-type Figure = { value: number; percent: boolean; decimals: number; text: string };
+type Figure = { value: number; percent: boolean; decimals: number; text: string; limit: boolean };
+// A limit, cap or threshold named next to a percentage ("the 15% cap", "limit
+// of 15%") makes it a rule, not a holding's weight, even when the values match.
+const LIMIT_WORDS = /\b(?:limits?|caps?|ceilings?|thresholds?|max(?:imum)?|targets?|bands?|guidelines?|triggers?)\b/i;
 function figures(text: string): Figure[] {
-  const out: Figure[] = [];
-  for (const m of text.matchAll(NUMBER)) {
-    const raw = m[0], value = Number(raw.replace(/,/g, ''));
-    const percent = /^\s?(%|percent\b)/i.test(text.slice(m.index! + raw.length));
-    out.push({ value, percent, decimals: raw.split('.')[1]?.length ?? 0, text: raw });
-  }
+  const out: Figure[] = [], ms = [...text.matchAll(NUMBER)];
+  ms.forEach((m, k) => {
+    const raw = m[0], value = Number(raw.replace(/,/g, '')), end = m.index! + raw.length;
+    const percent = /^\s?(%|percent\b)/i.test(text.slice(end));
+    // Context runs to the neighbouring figure or clause break, so a limit named
+    // after a comma or beside another figure does not relabel this one.
+    const before = text.slice(k ? ms[k - 1]!.index! + ms[k - 1]![0].length : 0, m.index!).split(/[,;:()]/).at(-1)!.slice(-25);
+    const after = text.slice(end, ms[k + 1]?.index ?? text.length).split(/[,;:()]/)[0]!.slice(0, 25);
+    out.push({ value, percent, decimals: raw.split('.')[1]?.length ?? 0, text: raw, limit: percent && LIMIT_WORDS.test(before + ' ' + after) });
+  });
   return out;
 }
 // Extracted filing tables run cells together ("Operating margin17%"), so a
@@ -160,7 +167,7 @@ export function metricIssues(assessment: Assessment, evidence: readonly { id: st
       if (pending) pendingIssues(text).forEach(add);
       for (const sentence of sentences(text)) for (const fig of figures(sentence)) {
         // Scope stated once in the claim or entry covers its later sentences.
-        if (fig.percent && scopedWeights.some((l) => near(fig, l.value)) && !SCOPE_WORDS.test(text)) add(`${fig.text}% is an all-account or account-specific weight; name its account scope (e.g. "all accounts combined")`);
+        if (fig.percent && !fig.limit && scopedWeights.some((l) => near(fig, l.value)) && !SCOPE_WORDS.test(text)) add(`${fig.text}% is an all-account or account-specific weight; name its account scope (e.g. "all accounts combined")`);
         if (!fig.percent && approx.some((v) => near(fig, v)) && !APPROX_WORDS.test(sentence)) add(`${fig.text} is a trailing P/E from approximate EPS; call it approximate`);
       }
     }
