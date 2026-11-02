@@ -157,8 +157,20 @@ export function filerType(forms: unknown[]): FilerType {
 // issuer's own filings. A foreign issuer missing here gets no market cap or
 // per-share multiple: an ADR price times an ordinary-share count is wrong by
 // the ratio, so the metric is refused rather than guessed.
+// Ratios change (Trip.com went from eight ADSs per share to one), so each entry
+// names its filing. Dual-class issuers (PDD, BIDU, JD) are left out: the cover
+// share count may cover one class only, which would understate market cap.
 export const ADR_RATIOS: Record<string, { ordinaryPerAdr: number; source: string }> = {
   TSM: { ordinaryPerAdr: 5, source: 'TSMC Form 20-F and quarterly financial statements: one ADS represents five common shares' },
+  BABA: { ordinaryPerAdr: 8, source: 'Alibaba Form 20-F filed 2026-05-20, cover: each ADS represents eight ordinary shares' },
+  NTES: { ordinaryPerAdr: 5, source: 'NetEase Form 20-F filed 2026-04-15, cover: each ADS represents five ordinary shares' },
+  TM: { ordinaryPerAdr: 10, source: 'Toyota Form 20-F filed 2026-06-10, cover: each ADS represents ten shares of common stock' },
+  SONY: { ordinaryPerAdr: 1, source: 'Sony Form 20-F filed 2026-06-18: each ADS represents one share of common stock' },
+  SHEL: { ordinaryPerAdr: 2, source: 'Shell Form 20-F filed 2026-03-12, cover: each ADS represents two ordinary shares' },
+  INFY: { ordinaryPerAdr: 1, source: 'Infosys Form 20-F filed 2026-06-15, cover: each ADS represents one equity share' },
+  UL: { ordinaryPerAdr: 1, source: 'Unilever Form 20-F filed 2026-03-12, cover: each ADS represents one ordinary share' },
+  ARM: { ordinaryPerAdr: 1, source: 'Arm Holdings Form 20-F filed 2026-05-26, cover: each ADS represents one ordinary share' },
+  TCOM: { ordinaryPerAdr: 1, source: 'Trip.com Form 20-F filed 2026-04-28, cover: each ADS represents one ordinary share' },
 };
 
 // A 6-K is furnished for anything the issuer publishes at home: results, but

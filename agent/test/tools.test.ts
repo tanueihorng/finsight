@@ -315,6 +315,12 @@ test('valuation_metrics refuses market cap and P/E for a foreign issuer with an 
   } finally { delete ADR_RATIOS.FPX; }
 });
 
+test('ADR ratios come from filings and leave dual-class issuers out', () => {
+  assert.deepEqual([ADR_RATIOS.BABA?.ordinaryPerAdr, ADR_RATIOS.TM?.ordinaryPerAdr, ADR_RATIOS.SHEL?.ordinaryPerAdr], [8, 10, 2]);
+  for (const [t, r] of Object.entries(ADR_RATIOS)) assert.match(r.source, /20-F/, t);
+  for (const t of ['PDD', 'BIDU', 'JD']) assert.equal(ADR_RATIOS[t], undefined, t);
+});
+
 test('edgar_financials reads IFRS 20-F facts for a foreign private issuer', async () => {
   const f = await run('edgar_financials', { ticker: 'TSM', concepts: ['Revenues', 'EarningsPerShareDiluted'] });
   assert.equal(f.json.taxonomy, 'ifrs-full');
