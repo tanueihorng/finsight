@@ -14,9 +14,10 @@ export default function TickerIsland() {
     const dir = p.changePct == null || p.changePct === 0 ? '' : p.changePct > 0 ? 'up' : 'down';
     return (
       <button key={(copy ? 'c-' : '') + p.symbol} type="button" className="tk-item" tabIndex={copy ? -1 : 0}
-        aria-label={copy ? undefined : `View ${p.symbol}, ${fmt(p.last)} ${p.currency}, ${signStr(p.changePct)}% today`}
         onClick={() => selectSymbol(p.symbol)}>
-        <b>{p.symbol}</b> {fmt(p.last)} <span className={dir}>{dir === 'up' ? '▲' : dir === 'down' ? '▼' : ''}{signStr(p.changePct)}%</span>
+        {/* The accessible name is the visible text plus hidden context (axe label-content-name-mismatch). */}
+        <span className="sr-only">View </span><b>{p.symbol}</b> {fmt(p.last)}<span className="sr-only"> {p.currency},</span>{' '}
+        <span className={dir}><span aria-hidden="true">{dir === 'up' ? '▲' : dir === 'down' ? '▼' : ''}</span>{signStr(p.changePct)}%</span><span className="sr-only"> today</span>
       </button>
     );
   });

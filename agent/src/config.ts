@@ -9,6 +9,21 @@ import { z } from 'zod';
 const here = path.dirname(new URL(import.meta.url).pathname);
 export const REPO_ROOT = path.resolve(here, '..');
 
+// Kestrel's spending and tool limits. Editable in the terminal (PUT /v1/limits,
+// PIN session only); an unset field uses the default.
+export const LIMIT_DEFAULTS = { turnSteps: 25, turnSeconds: 300, turnUsd: 0.25, dayUsd: 5, searchesPerTurn: 20, fetchesPerTurn: 25, councilResearchCalls: 8 } as const;
+const LimitsFile = z.object({
+  turnSteps: z.number().int().min(1).max(50).optional(),
+  turnSeconds: z.number().int().min(5).max(900).optional(),
+  turnUsd: z.number().positive().max(100).optional(),
+  councilTurnUsd: z.number().positive().max(100).optional(),
+  councilOutputTokens: z.number().int().min(500).max(64000).optional(),
+  councilResearchCalls: z.number().int().min(1).max(20).optional(),
+  dayUsd: z.number().positive().max(1000).optional(),
+  searchesPerTurn: z.number().int().min(0).max(50).optional(),
+  fetchesPerTurn: z.number().int().min(0).max(50).optional(),
+}).strict();
+export type LimitsSet = z.infer<typeof LimitsFile>;
 const FileConfig = z.object({
   port: z.number().int().min(1024).max(65535).optional(),
   finsightUrl: z.url().optional(),
@@ -24,19 +39,10 @@ const FileConfig = z.object({
   searchProvider: z.enum(['tavily', 'brave', 'deepseek', 'none']).optional(),
   fetchProvider: z.enum(['local', 'deepseek']).optional(),
   edgarUserAgent: z.string().optional(),
-  limits: z.object({
-    turnSteps: z.number().int().min(1).max(50).optional(),
-    turnSeconds: z.number().int().min(5).max(900).optional(),
-    turnUsd: z.number().positive().optional(),
-    councilTurnUsd: z.number().positive().optional(),
-    councilOutputTokens: z.number().int().positive().optional(),
-    dayUsd: z.number().positive().optional(),
-    searchesPerTurn: z.number().int().min(0).max(50).optional(),
-    fetchesPerTurn: z.number().int().min(0).max(50).optional(),
-  }).strict().optional(),
+  limits: LimitsFile.optional(),
 }).strict();
 
-export type Limits = { turnSteps: number; turnSeconds: number; turnUsd: number; councilTurnUsd?: number; councilOutputTokens?: number; dayUsd: number; searchesPerTurn: number; fetchesPerTurn: number };
+export type Limits = { turnSteps: number; turnSeconds: number; turnUsd: number; councilTurnUsd?: number; councilOutputTokens?: number; councilResearchCalls: number; dayUsd: number; searchesPerTurn: number; fetchesPerTurn: number };
 export type Config = {
   council?: boolean;
   uiViews?: boolean; // default off; global env/config gate and qualified brain both required
@@ -74,16 +80,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     searchProvider: file.searchProvider || 'tavily',
     fetchProvider: file.fetchProvider || 'local',
     edgarUserAgent: file.edgarUserAgent || 'FinSight-Agent personal research (contact: set edgarUserAgent in config.json)',
-    limits: {
-      turnSteps: file.limits?.turnSteps ?? 12,
-      turnSeconds: file.limits?.turnSeconds ?? 120,
-      turnUsd: file.limits?.turnUsd ?? 0.05,
-      councilTurnUsd: file.limits?.councilTurnUsd,
-      councilOutputTokens: file.limits?.councilOutputTokens,
-      dayUsd: file.limits?.dayUsd ?? 2,
-      searchesPerTurn: file.limits?.searchesPerTurn ?? 10,
-      fetchesPerTurn: file.limits?.fetchesPerTurn ?? 15,
-    },
+    limits: resolveLimits(file.limits),
     scratchDir: path.join(home, 'scratch'),
     assistantName: env.AGENT_NAME || file.assistantName || 'Kestrel',
     timezone: file.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
@@ -91,4 +88,32 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     logsDir: path.join(home, 'logs'),
     logRetentionDays: file.logRetentionDays ?? 14,
   };
+}
+
+export const resolveLimits = (l: LimitsSet = {}): Limits => ({ ...LIMIT_DEFAULTS, ...l });
+
+/** Save the user's limits into config.json (other fields untouched; null
+ *  clears a field back to its default) and apply them to the running config,
+ *  which every turn reads afresh. */
+export function saveLimits(cfg: Config, patch: Record<string, number | null>): LimitsSet {
+  const cfgPath = path.join(cfg.home, 'config.json');
+  const raw = fs.existsSync(cfgPath) ? JSON.parse(fs.readFileSync(cfgPath, 'utf8')) as Record<string, unknown> : {};
+  const merged: Record<string, unknown> = { ...(raw.limits as object | undefined) };
+  for (const [k, v] of Object.entries(patch)) { if (v === null) delete merged[k]; else merged[k] = v; }
+  const limits = LimitsFile.parse(merged);
+  const next = FileConfig.parse({ ...raw, limits });
+  fs.mkdirSync(cfg.home, { recursive: true });
+  const tmp = `${cfgPath}.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(next, null, 2) + '\n', { mode: 0o600 });
+  fs.renameSync(tmp, cfgPath);
+  const resolved = resolveLimits(limits) as Limits & Record<string, unknown>;
+  for (const k of Object.keys(cfg.limits)) if (!(k in resolved) || resolved[k] === undefined) delete (cfg.limits as Record<string, unknown>)[k];
+  Object.assign(cfg.limits, resolved);
+  return limits;
+}
+/** The limits explicitly set in config.json (the rest are defaults). */
+export function setLimits(cfg: Config): LimitsSet {
+  const cfgPath = path.join(cfg.home, 'config.json');
+  if (!fs.existsSync(cfgPath)) return {};
+  return LimitsFile.parse((JSON.parse(fs.readFileSync(cfgPath, 'utf8')) as { limits?: unknown }).limits ?? {});
 }

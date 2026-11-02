@@ -32,6 +32,8 @@ import * as DividendsIsland from './features/dividends/DividendsIsland.tsx';
 import * as ActivityIsland from './features/activity/ActivityIsland.tsx';
 import * as FxRiskIsland from './features/fxrisk/FxRiskIsland.tsx';
 import * as TradeSheetIsland from './features/trade/TradeSheetIsland.tsx';
+import * as BookIsland from './features/paper/BookIsland.tsx';
+import * as PaperIsland from './features/paper/PaperIsland.tsx';
 import * as DialogIsland from './ui/dialog.tsx';
 import * as ToastIsland from './ui/toast.tsx';
 type IslandModule = { default: ComponentType };
@@ -105,6 +107,8 @@ export const islands: IslandRegistry = preloadable({
   activity: () => Promise.resolve(ActivityIsland),
   fxrisk: () => Promise.resolve(FxRiskIsland),
   trade: () => Promise.resolve(TradeSheetIsland),
+  book: () => Promise.resolve(BookIsland),
+  paper: () => Promise.resolve(PaperIsland),
   dialog: () => Promise.resolve(DialogIsland),
   toast: () => Promise.resolve(ToastIsland),
 });

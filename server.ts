@@ -36,10 +36,12 @@ import * as charts from './lib/charts.ts';
 import * as journal from './lib/journal.ts';
 import { portfolioPerformance } from './lib/performance.ts';
 import {
-  sessions, failState, loadAuth, setPin, verifyPin, newSession, sessionValid, getCookie, setSessionCookie, PIN_RE,
+  sessions, failState, loadAuth, setPin, verifyPin, newSession, sessionValid, getCookie, setSessionCookie, PIN_RE, sameOriginWrite,
 } from './lib/auth.ts';
 import * as agentlink from './lib/agentlink.ts';
 import * as agentproc from './lib/agentproc.ts';
+import { chosenBook, chooseBook, isBook } from './lib/book.ts';
+import * as paper from './lib/paper.ts';
 
 /** A parsed JSON request body: untrusted, {} when missing or malformed. The lib functions validate it. */
 type Body = Record<string, any>;
@@ -103,6 +105,21 @@ function serveStatic(req: IncomingMessage, res: ServerResponse, pathname: string
   });
 }
 
+// Book edits refused in PAPER mode (orders are the only way in). Watchlist,
+// alerts, charts and the journal stay editable.
+const PAPER_READONLY = /^\/api\/(portfolio\/(buy|sell|delete|import|reset|transfer)|accounts\/(add|rename|remove)|cash|ledger\/(edit|delete)|undo|settings\/withholding)$/;
+
+// Server-sent events for PAPER: order events, ticket and book changes, stream status.
+const paperClients = new Set<ServerResponse>();
+paper.bus.on('change', (e: unknown) => { const line = `data: ${JSON.stringify(e)}\n\n`; for (const r of paperClients) r.write(line); });
+setInterval(() => { for (const r of paperClients) r.write(': ping\n\n'); }, 25_000).unref();
+function paperStream(req: IncomingMessage, res: ServerResponse): void {
+  res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
+  res.write(`data: ${JSON.stringify({ kind: 'hello', at: Date.now() })}\n\n`);
+  paperClients.add(res);
+  req.on('close', () => paperClients.delete(res));
+}
+
 const server = http.createServer(async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
   // Applied to every response: the terminal must not be framed or MIME-sniffed.
   res.setHeader('X-Frame-Options', 'DENY');
@@ -121,12 +138,18 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
   }
   const u = new URL(req.url!, `http://${req.headers.host}`); // always set on a server request
   const p = u.pathname;
+  // CSRF: SameSite=Strict still sends the cookie from another port on
+  // localhost (same site), so a browser write must come from this origin.
+  // Non-browser clients (the agent's bearer token, tests) send neither header.
+  if (p.startsWith('/api/') && req.method !== 'GET' && req.method !== 'HEAD' && !sameOriginWrite(req)) {
+    return sendJson(res, 403, { error: 'Cross-origin request refused' });
+  }
   try {
     if (p === '/api/health') return sendJson(res, 200, { ok: true, time: Date.now() });
 
     // ---- auth (always reachable) ----
     if (p === '/api/auth/status') {
-      return sendJson(res, 200, { pinSet: !!loadAuth(), authed: sessionValid(getCookie(req, 'sid')) });
+      return sendJson(res, 200, { pinSet: !!loadAuth(), authed: sessionValid(getCookie(req, 'sid')), book: chosenBook() });
     }
     if (p === '/api/auth/setup' && req.method === 'POST') {
       if (loadAuth()) return sendJson(res, 400, { error: 'A PIN is already set' });
@@ -140,7 +163,11 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
       const f = failState(ip);
       if (Date.now() < f.until) return sendJson(res, 429, { error: `Too many tries — wait ${Math.ceil((f.until - Date.now()) / 1000)}s` });
       const b = await readBody(req);
-      if (await verifyPin(String(b.pin || ''))) { f.n = 0; setSessionCookie(res, newSession()); return sendJson(res, 200, { ok: true }); }
+      if (await verifyPin(String(b.pin || ''))) {
+        f.n = 0; setSessionCookie(res, newSession());
+        if (isBook(b.book)) chooseBook(b.book); // the lock screen's REAL / PAPER choice
+        return sendJson(res, 200, { ok: true, book: chosenBook() });
+      }
       f.n++;
       if (f.n >= 5) f.until = Date.now() + Math.min(300, 15 * (f.n - 4)) * 1000;
       return sendJson(res, 401, { error: 'Wrong PIN' });
@@ -176,6 +203,43 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
     }
 
     if (p === '/api/agent-status' && req.method === 'GET') return sendJson(res, 200, agentproc.status());
+
+    // ---- REAL / PAPER book (FEAT-012) ----
+    if (p === '/api/book' && req.method === 'GET') return sendJson(res, 200, { book: chosenBook() });
+    if (p === '/api/book' && req.method === 'POST') {
+      const b = await readBody(req);
+      if (!isBook(b.book)) return sendJson(res, 400, { error: 'Mode must be real or paper' });
+      return sendJson(res, 200, { book: chooseBook(b.book) });
+    }
+    if (p.startsWith('/api/paper/')) {
+      try {
+        if (p === '/api/paper/state' && req.method === 'GET') return sendJson(res, 200, await paper.paperState());
+        if (p === '/api/paper/settings' && req.method === 'GET') return sendJson(res, 200, paper.getSettings());
+        if (p === '/api/paper/stream' && req.method === 'GET') return paperStream(req, res);
+        if (req.method !== 'POST') return sendJson(res, 405, { error: 'Method not allowed' });
+        const b = await readBody(req);
+        // The agent token reaches only orders and cancels (lib/agentlink.ts); everything else is the user's.
+        if (p === '/api/paper/orders') {
+          return sendJson(res, 200, agentToken === 'ok'
+            ? await paper.placeKestrelOrder(b, typeof b.threadId === 'string' ? b.threadId.slice(0, 64) : undefined)
+            : await paper.placeUserOrder(b));
+        }
+        if (p === '/api/paper/orders/cancel') return sendJson(res, 200, await paper.cancelOrder(b.id, agentToken === 'ok' ? 'kestrel' : 'user'));
+        if (p === '/api/paper/tickets/decide') return sendJson(res, 200, await paper.decideTicket(b.id, b.approve === true));
+        if (p === '/api/paper/settings') return sendJson(res, 200, paper.setSettings(b));
+        if (p === '/api/paper/connect') return sendJson(res, 200, await paper.connect(b.keyId, b.secret));
+        if (p === '/api/paper/disconnect') return sendJson(res, 200, paper.disconnect());
+        if (p === '/api/paper/sync') return sendJson(res, 200, await paper.sync());
+      } catch (err) {
+        const status = (err as { status?: number }).status;
+        return sendJson(res, status && status >= 500 ? 502 : 400, { error: String(err && (err as Error).message || err) });
+      }
+      return sendJson(res, 404, { error: 'Unknown endpoint' });
+    }
+    // The PAPER book mirrors Alpaca: only orders change it.
+    if (chosenBook() === 'paper' && req.method === 'POST' && PAPER_READONLY.test(p)) {
+      return sendJson(res, 409, { error: 'PAPER mode mirrors your Alpaca paper account. Place an order instead, or switch to REAL to edit your own portfolio.' });
+    }
     // ---- chat panel -> local agent service (session-gated proxy, SSE passthrough) ----
     if (p.startsWith('/api/agent/')) return agentlink.proxy(req, res, p, u.search);
 
@@ -400,6 +464,7 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
 const ALERT_INTERVAL = Math.max(15, Number(process.env.ALERT_INTERVAL) || 60) * 1000;
 setInterval(() => { evaluateAlerts(true).catch(() => console.warn('Alert evaluation failed; see application diagnostics.')); }, ALERT_INTERVAL);
 
+paper.startPaper(); // Alpaca paper stream + book sync, when paper keys are connected
 agentlink.ensureLink(); // creates DATA_DIR/agent-link.json (0600) for the optional local agent
 // PORT may be a numeric string from the environment; listen() accepts that.
 server.listen(PORT as number, HOST, () => {

@@ -38,7 +38,7 @@ test('config preserves defaults and independently selects search/fetch; rejects 
   const { home } = fixture(), env = { AGENT_HOME: home, FINSIGHT_DATA_DIR: home };
   assert.equal(loadConfig(env).searchProvider, 'tavily'); assert.equal(loadConfig(env).fetchProvider, 'local');
   fs.writeFileSync(path.join(home, 'config.json'), JSON.stringify({ limits: { councilTurnUsd: .5, councilOutputTokens: 8000 } }));
-  const council = loadConfig(env); assert.equal(council.limits.councilTurnUsd, .5); assert.equal(council.limits.councilOutputTokens, 8000); assert.equal(council.limits.turnUsd, .05);
+  const council = loadConfig(env); assert.equal(council.limits.councilTurnUsd, .5); assert.equal(council.limits.councilOutputTokens, 8000); assert.equal(council.limits.turnUsd, .25);
   fs.writeFileSync(path.join(home, 'config.json'), JSON.stringify({ limits: { councilTurnUsd: -1 } })); assert.throws(() => loadConfig(env), /Invalid/);
   fs.writeFileSync(path.join(home, 'config.json'), JSON.stringify({ searchProvider: 'deepseek', fetchProvider: 'deepseek' }));
   assert.equal(loadConfig(env).searchProvider, 'deepseek'); assert.equal(loadConfig(env).fetchProvider, 'deepseek');
@@ -108,7 +108,9 @@ test('redirect guard failure prevents remote fetch; local reader remains keyless
 });
 test('Singapore billing boundary, ledger attribution, daily and per-turn fee caps', async (t) => {
   const start = Date.parse('2026-11-01T00:00:00+08:00'); assert.equal(deepseekRequestCost(true,start-1),0); assert.equal(deepseekRequestCost(true,start),0.00075); assert.equal(deepseekRequestCost(false,start),0);
-  const {ctx} = fixture(); t.mock.method(Date,'now',()=>start+1000); let calls = 0; const r = registry(async () => {calls++; return json({results:[hit]});});
+  // startOfToday() reads the real clock, so the mocked time must not fall before today.
+  const now = Math.max(start + 1000, Date.now());
+  const {ctx} = fixture(); t.mock.method(Date,'now',()=>now); let calls = 0; const r = registry(async () => {calls++; return json({results:[hit]});});
   const a = JSON.parse((await r.execute('web_search',q,ctx)).content); assert.equal(a.usage.estimatedCostUsd,0.00075);
   const row = ctx.db.prepare('SELECT * FROM cost_ledger').get() as any; assert.equal(row.kind,'search'); assert.equal(row.turn_id,ctx.turnId); assert.equal(row.usd,0.00075);
   ctx.cfg.limits.turnUsd = 0.001; assert.match((await r.execute('web_search',{query:'other query'},ctx)).content,/BUDGET_EXCEEDED/);

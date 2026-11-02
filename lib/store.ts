@@ -2,14 +2,16 @@
 // and the single write lock every read-modify-write goes through.
 import fs from 'node:fs';
 import path from 'node:path';
-import { DATA_DIR, PORTFOLIO_FILE } from './config.ts';
+import { bookDir } from './book.ts';
 import type { AccountHolding } from '../shared/types.ts';
 import type { StoredAccount, StoredPortfolio, StoredPosition, StoredTransaction, StoredDividend, UndoEntry } from './model.ts';
 
 /** A position in a view: the ALL view merges accounts and adds holdings. */
 export type ViewPosition = StoredPosition & { holdings?: AccountHolding[] };
 
-const UNDO_FILE = path.join(DATA_DIR, 'undo.json');
+// Files of the active book (lib/book.ts): REAL lives in DATA_DIR, PAPER in DATA_DIR/paper.
+const portfolioFile = () => path.join(bookDir(), 'portfolio.json');
+const undoFile = () => path.join(bookDir(), 'undo.json');
 const UNDO_MAX = 25;
 
 // --------------------------------------------------------------------------
@@ -19,13 +21,13 @@ export function newAccountId(): string { return 'acc' + Date.now().toString(36) 
 export function newTxId(): string { return 'tx' + Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36); }
 export function loadPortfolio(): StoredPortfolio {
   let p: any, raw: string | undefined; // untrusted file contents, migrated into StoredPortfolio below
-  try { raw = fs.readFileSync(PORTFOLIO_FILE, 'utf8'); }
+  try { raw = fs.readFileSync(portfolioFile(), 'utf8'); }
   catch (e) { if ((e as NodeJS.ErrnoException).code === 'ENOENT') p = {}; else throw e; } // missing = fresh start
   if (raw !== undefined) {
     try { p = JSON.parse(raw); }
     catch {
       // File exists but is corrupt: back it up rather than silently wiping the portfolio.
-      try { fs.renameSync(PORTFOLIO_FILE, PORTFOLIO_FILE.replace(/\.json$/, '') + '.corrupt.' + Date.now() + '.json'); } catch {}
+      try { fs.renameSync(portfolioFile(), portfolioFile().replace(/\.json$/, '') + '.corrupt.' + Date.now() + '.json'); } catch {}
       throw new Error('portfolio.json was corrupt; backed up to a .corrupt.json file. Restart to begin fresh, or restore the backup.');
     }
   }
@@ -71,10 +73,10 @@ export function recalcPosition(pos: Pick<StoredPosition, 'lots' | 'quantity' | '
 // cash) snapshots the accounts first, so it can be rolled back. Watchlist and
 // alerts are not part of the snapshot: undoing a trade shouldn't drop a
 // watchlist symbol added since.
-function readRaw(): string | null { try { return fs.readFileSync(PORTFOLIO_FILE, 'utf8'); } catch { return null; } }
-function loadUndo(): UndoEntry[] { try { const s = JSON.parse(fs.readFileSync(UNDO_FILE, 'utf8')); return Array.isArray(s) ? s : []; } catch { return []; } }
+function readRaw(): string | null { try { return fs.readFileSync(portfolioFile(), 'utf8'); } catch { return null; } }
+function loadUndo(): UndoEntry[] { try { const s = JSON.parse(fs.readFileSync(undoFile(), 'utf8')); return Array.isArray(s) ? s : []; } catch { return []; } }
 function writeAtomic(file: string, text: string) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
+  fs.mkdirSync(bookDir(), { recursive: true });
   const tmp = file + '.tmp.' + process.pid;
   fs.writeFileSync(tmp, text, { mode: 0o600 }); // portfolio data stays private to the user
   fs.renameSync(tmp, file);
@@ -95,7 +97,7 @@ export async function withUndo<T>(label: string, fn: () => T | Promise<T>): Prom
     const stack = loadUndo();
     stack.push({ at: Date.now(), label: String(label).slice(0, 80), snap });
     while (stack.length > UNDO_MAX) stack.shift();
-    writeAtomic(UNDO_FILE, JSON.stringify(stack));
+    writeAtomic(undoFile(), JSON.stringify(stack));
   }
   return out;
 }
@@ -113,17 +115,17 @@ export function undo() {
     p.accounts = last.snap.accounts || p.accounts;
     p.activeId = last.snap.activeId || p.activeId;
     savePortfolio(p);
-    writeAtomic(UNDO_FILE, JSON.stringify(stack));
+    writeAtomic(undoFile(), JSON.stringify(stack));
     return { undone: last.label, at: last.at, ...undoInfo() };
   });
 }
 
 export function savePortfolio(p: StoredPortfolio): StoredPortfolio {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
+  fs.mkdirSync(bookDir(), { recursive: true });
   // Write to a temp file then atomically rename, so a crash mid-write can't truncate the live file.
-  const tmp = PORTFOLIO_FILE + '.tmp.' + process.pid;
+  const tmp = portfolioFile() + '.tmp.' + process.pid;
   fs.writeFileSync(tmp, JSON.stringify(p, null, 2), { mode: 0o600 });
-  fs.renameSync(tmp, PORTFOLIO_FILE);
+  fs.renameSync(tmp, portfolioFile());
   return p;
 }
 export function findPos(acc: StoredAccount, symbol: string): StoredPosition | undefined {

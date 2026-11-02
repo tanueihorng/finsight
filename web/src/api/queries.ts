@@ -39,9 +39,10 @@ export function useMarkets() {
   return useQuery({ queryKey: ['markets'], enabled, staleTime: 15_000, refetchInterval: 15_000,
     queryFn: ({ signal }) => api<Markets>('/api/markets', { signal }) });
 }
-export function useWatchlist() {
+/** `on` false keeps a hidden consumer (the PAPER desk in REAL) from subscribing. */
+export function useWatchlist(on = true) {
   const { enabled } = useScope();
-  return useQuery({ queryKey: ['watchlist'], enabled, staleTime: 15_000, refetchInterval: 15_000,
+  return useQuery({ queryKey: ['watchlist'], enabled: enabled && on, staleTime: 15_000, refetchInterval: 15_000,
     queryFn: ({ signal }) => api<{ watchlist: WatchItem[] }>('/api/watchlist', { signal }) });
 }
 export function useAlerts() {

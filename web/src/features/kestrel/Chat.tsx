@@ -12,6 +12,9 @@ import { asks, brief, eventTime, greeting, pctText, portfolioLine, prevClose, sy
 import { Icon, type IconName } from './icons.tsx';
 import { costLabel, ctxButton, LS, ls, prettyArgs, type PageContext } from './labels.ts';
 import { md } from './md.ts';
+import { useBook } from '../paper/book.ts';
+import { LimitsDialog } from './LimitsDialog.tsx';
+import { openLimits } from './limits.ts';
 import { citeHost, type Turn } from './turns.ts';
 
 const UiView = lazy(() => import('./ui/UiView.tsx'));
@@ -265,7 +268,7 @@ function Rail({ onNew }: { onNew: () => void }) {
         ))}
       </div>
       <button className="kx-all kx-clear-all" onClick={() => void clearAllChats()}>Clear all chats</button>
-      {s.todayUsd != null && <div className="kx-spend" title="API spend today (models and paid search)"><span>Today</span><span>{costLabel(s.todayUsd)}</span></div>}
+      {s.todayUsd != null && <button type="button" className="kx-spend" title="API spend today (models and paid search). Click to change limits." onClick={openLimits}><span>Today</span><span>{costLabel(s.todayUsd)}</span></button>}
     </nav>
   );
 }
@@ -322,7 +325,7 @@ function Briefing({ b, now, lines, onAsk }: { b: Brief; now: number; lines: { po
   );
 }
 function Welcome({ onTry, onCommand }: { onTry: (s: string) => void; onCommand: () => void }) {
-  const s = useStore(chat);
+  const s = useStore(chat), book = useBook();
   const portfolio = usePortfolio(), events = useEvents(), calendar = useCalendar();
   const positions = portfolio.data?.positions || [];
   const bars = useIntraday(positions.map((p) => p.symbol)).data?.results;
@@ -371,10 +374,10 @@ function Welcome({ onTry, onCommand }: { onTry: (s: string) => void; onCommand: 
           </button><button className="agent-icon-btn kx-jump-delete" aria-label={`Delete recent chat ${t.title}`} onClick={() => void deleteThread(t)}><Icon name="trash" size={14} /></button></div>
         ))}
         <button className="kx-jump-row cmd" onClick={onCommand}>
-          <Icon name="slash" size={14} /><span className="t">Commands and skills</span><span className="when">/cost · /skills · /strategies</span>
+          <Icon name="slash" size={14} /><span className="t">Commands and skills</span><span className="when">/cost · /limits · /skills</span>
         </button>
       </div>
-      <div className="kx-foot"><span>Answers cite sources and data times. {s.name} never trades.</span>
+      <div className="kx-foot"><span>Answers cite sources and data times. {book === 'paper' ? `${s.name} can place paper orders (fake money) under your approval setting.` : `${s.name} never trades real money.`}</span>
         <span className="kx-keys" aria-hidden="true"><kbd>⌘/</kbd> toggle <kbd>⌘⇧/</kbd> full page <kbd>/</kbd> skills</span></div>
     </div>
   );
@@ -496,6 +499,7 @@ export function Chat({ inputRef, onRetry, docked, full = false }: { inputRef: Re
     <FullPage.Provider value={full}>
     <div ref={rootRef} className={'agent-chat' + (s.narrow ? ' narrow' : '') + (rail ? ' rail-on' : '') + (s.view === 'welcome' ? ' fresh' : '') + (full ? ' full' : '')}>
       {rail && <Rail onNew={onNew} />}
+      <LimitsDialog />
       {rail && s.narrow && <div className="kx-scrim" onClick={() => toggleThreads(false)} aria-hidden="true" />}
       <section className="kx-main">
         <div className="agent-log" role="log" aria-live="polite" aria-relevant="additions" ref={logRef} onScroll={() => {

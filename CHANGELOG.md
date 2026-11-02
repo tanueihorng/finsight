@@ -15,6 +15,25 @@ The earlier draft with unverified release numbers is preserved in `docs/archive/
 
 ## Unreleased
 
+- Kestrel limits are user-editable (merged locally at `aa373b7`).
+  - Click the "Today" spend in the chat list, or type `/limits`, to edit:
+    - the daily cap and the per-reply and per-council cost ceilings
+    - steps and time per reply
+    - web searches and pages read per reply
+    - council research calls and answer length
+  - Changes save to the agent's `config.json` and apply from the next reply; Kestrel's own token cannot change them.
+  - Higher defaults: US$0.25 per reply (was 0.05), US$5 per day (was 2), 25 steps (was 12), 300 s (was 120), 20 searches (was 10), 25 pages (was 15), 8 council research calls (was a fixed 4).
+- The holdings ticker's buttons now have accessible names that include their visible text. Visual baselines were re-captured after the ticker moved the page by a sub-pixel.
+
+- `PAPER-001` ([FEAT-012](docs/features/FEAT-012-paper-trading.md)), merged locally at `aa373b7`; not pushed.
+  - A PAPER book next to the real one, switched on the lock screen or in the top bar. The real book is untouched.
+  - Alpaca paper only: the user's own paper keys, and live keys are refused. The book mirrors Alpaca fills and updates live through `trade_updates` and SSE.
+  - A trade desk with a chart linked to the order ticket, fills and open limit orders drawn on the chart, and positions, orders, history and Kestrel tabs.
+  - Security review fixes (merged locally at `bc26969`): one order per approved ticket under double clicks; in ask mode Kestrel cancels only its own orders; Kestrel's orders are serialized so limits hold under concurrent calls; browser writes under `/api/` must be same-origin (another localhost port shares the cookie); news links limited to http(s); non-finite limit prices refused.
+  - The desk also helps research before an order (merged locally at `bc26969`): a watchlist column with search, a Watch toggle, key stats (ranges, volume, market cap, P/E, earnings, dividend yield), a News tab, and two-way symbol linking with the terminal. All of it shows before keys are entered.
+  - Kestrel can place paper orders through new tools. The user chooses ask-first or autonomous and sets optional limits.
+  - Verified offline against a fake broker; a live run with real paper keys is pending.
+
 - `COUNCILQUALITY-001` TSM ADR audit fixes, on branch `fix/council-tsm-audit` at `1c5104e` (from `main` 8155d6f); not merged, pushed or deployed. An isolated live TSM review completed 7/7 stages, cited the 2026-10-15 6-K results and guidance, and reported an ADR-basis market cap of about US$2.11tn; P/E was refused (TWD EPS); research stayed partial. Business and Macro Council specialists can use web search and page fetch within the existing search/fetch counts, with each request reserved in the Council turn and daily budgets; Risk cannot. Foreign private issuers are read through 6-K results releases and the latest 20-F instead of 8-Ks, with the form used recorded. `valuation_metrics` applies the ADR ratio (TSM: 5 ordinary shares per ADR) or refuses market cap and P/E with an explicit gap; mixed-currency multiples are refused. Stages that do not complete record their cause; budget refusals state the reservation, free amount and cap. The Risk card no longer says "Assessment missing" when only the challenge was refused. Full page opened with the terminal scrolled stays within the viewport and returns to the same scroll position. Spending caps are unchanged.
 
 - `DISCOVER-001` ([FEAT-010](docs/features/FEAT-010-market-discover.md)), merged locally at `cefd2ff` (`5727d97`, `67cf0b0`); not pushed or deployed: Discover panel and read-only `GET /api/discover`. **Your symbols** ranks gainers and losers among held and watched symbols (regular session vs previous close), with exclusions, stale flags and exchange-local earnings dates. **US market** shows Yahoo's Day Gainers / Day Losers screens (top 25, Yahoo's criteria). **IPOs** shows Nasdaq's US IPO calendar, with tentative expected dates, deals priced in the last 14 days, and Nasdaq and SEC links. Both new sources are key-less, unofficial and US-only. A live run against real data is recorded in the spec.
