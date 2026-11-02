@@ -62,7 +62,7 @@ const NUMBER = /(?<![\w.])-?\d{1,3}(?:,\d{3})+(?:\.\d+)?|(?<![\w.])-?\d+(?:\.\d+
 type Figure = { value: number; percent: boolean; decimals: number; text: string; limit: boolean };
 // A limit, cap or threshold named next to a percentage ("the 15% cap", "limit
 // of 15%") makes it a rule, not a holding's weight, even when the values match.
-const LIMIT_WORDS = /\b(?:limits?|caps?|ceilings?|thresholds?|max(?:imum)?|targets?|bands?|guidelines?|triggers?)\b/i;
+const LIMIT_WORDS = /\b(?:limits?|caps?|ceilings?|thresholds?|max(?:imum)?|targets?|bands?|guidelines?|triggers?|proposed)\b/i;
 function figures(text: string): Figure[] {
   const out: Figure[] = [], ms = [...text.matchAll(NUMBER)];
   ms.forEach((m, k) => {
@@ -165,9 +165,10 @@ export function metricIssues(assessment: Assessment, evidence: readonly { id: st
       membershipIssues(text, groupings).forEach(add);
       relationIssues(text).forEach(add);
       if (pending) pendingIssues(text).forEach(add);
+      // Scope stated once in the claim covers its later sentences and its counterevidence.
+      const scopeNamed = SCOPE_WORDS.test(finding.claim) || SCOPE_WORDS.test(text);
       for (const sentence of sentences(text)) for (const fig of figures(sentence)) {
-        // Scope stated once in the claim or entry covers its later sentences.
-        if (fig.percent && !fig.limit && scopedWeights.some((l) => near(fig, l.value)) && !SCOPE_WORDS.test(text)) add(`${fig.text}% is an all-account or account-specific weight; name its account scope (e.g. "all accounts combined")`);
+        if (fig.percent && !fig.limit && scopedWeights.some((l) => near(fig, l.value)) && !scopeNamed) add(`${fig.text}% is an all-account or account-specific weight; name its account scope (e.g. "all accounts combined")`);
         if (!fig.percent && approx.some((v) => near(fig, v)) && !APPROX_WORDS.test(sentence)) add(`${fig.text} is a trailing P/E from approximate EPS; call it approximate`);
       }
     }
@@ -179,7 +180,7 @@ export function metricIssues(assessment: Assessment, evidence: readonly { id: st
     for (const fig of figures(finding.claim)) {
       if (fig.percent && !numbers.some((v) => near(fig, v) || near(fig, v * 100) || near(fig, -v) || near(fig, -v * 100))) issues.push(`finding ${i + 1}: ${fig.text}% is not in its cited evidence`);
       // Large plain amounts can only be denominators; small ones are too ambiguous to label.
-      const hits = labelled.filter((l) => (fig.percent ? l.kind === 'weight' : l.kind === 'denominator' && Math.abs(l.value) >= 100) && near(fig, l.value));
+      const hits = fig.limit ? [] : labelled.filter((l) => (fig.percent ? l.kind === 'weight' : l.kind === 'denominator' && Math.abs(l.value) >= 100) && near(fig, l.value));
       const found = new Set(hits.map((h) => h.basis).filter(isBasis));
       if (found.size === 1) { const b = [...found][0]!; bases.set(b, [...(bases.get(b) ?? []), fig.text + (fig.percent ? '%' : '')]); }
     }
