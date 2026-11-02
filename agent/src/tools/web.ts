@@ -444,11 +444,19 @@ export function createWebTools(fetchImpl: typeof fetch = fetch, fetchPage = guar
       const newest = [eps, rev, ni].map((x) => x?.ttm.periodEnd ?? '').sort().at(-1)!;
       const fresh = (x: typeof eps) => (x && days(x.ttm.periodEnd, newest) <= 200 ? x.ttm : null);
       const T = { eps: fresh(eps), revenue: fresh(rev), netIncome: fresh(ni) };
+      // A trailing period that ended long ago is reported but not used for a
+      // multiple against today's price: an IFRS filer's FY2024 20-F gave TSM a
+      // P/E on earnings 22 months old. 18 months covers an annual filer's gap.
+      const today = new Date(Date.now()).toISOString().slice(0, 10);
+      const current = (x: typeof T.eps) => (x && days(x.periodEnd, today) <= 548 ? x : null);
+      const C = { eps: current(T.eps), revenue: current(T.revenue) };
+      const staleGaps: string[] = [];
+      for (const [x, label, metrics] of [[T.eps, 'diluted EPS', 'P/E and earnings yield'], [T.revenue, 'revenue', 'price-to-sales']] as const) if (x && !current(x)) staleGaps.push(`Trailing ${label} ends ${x.periodEnd}, more than 18 months before today, so ${metrics} are not computed against today's price. Use the issuer's latest results release.`);
       const r = (n: number | null, d = 2) => (n === null || !Number.isFinite(n) ? null : Math.round(n * 10 ** d) / 10 ** d);
       // The quoted price is per listed security. A foreign issuer's US listing is
       // usually an ADR, while the cover-page count is ordinary shares, so the
       // count is divided by the ratio; an unknown ratio refuses the per-share metrics.
-      const gaps: string[] = [];
+      const gaps: string[] = [...staleGaps];
       const adr = filer === 'foreign_private_issuer' ? ADR_RATIOS[t.toUpperCase()] ?? null : null;
       const perListed = filer === 'foreign_private_issuer' ? adr?.ordinaryPerAdr ?? null : 1;
       if (filer === 'foreign_private_issuer' && !adr) gaps.push(`${title} is a foreign private issuer and its US listing may be an ADR; the ordinary shares per ADR are not known here, so market cap, P/E, earnings yield and price-to-sales are not computed.`);
@@ -463,7 +471,7 @@ export function createWebTools(fetchImpl: typeof fetch = fetch, fetchPage = guar
       const toUsd = (unit: string | undefined, perShare: boolean) => unit === (perShare ? 'USD/shares' : 'USD') ? 1 : fx && unit === (perShare ? `${fx.currency}/shares` : fx.currency) ? fx.rate : null;
       // EPS is per ordinary share in its reported currency; per listed security it is times the ratio.
       const epsRate = eps ? toUsd(eps.unit, true) : null, epsUsd = epsRate !== null;
-      const epsV = T.eps && perListed && epsRate !== null ? T.eps.value * perListed * epsRate : null;
+      const epsV = C.eps && perListed && epsRate !== null ? C.eps.value * perListed * epsRate : null;
       if (T.eps && perListed && !epsUsd) gaps.push(`Diluted EPS is reported in ${eps!.unit} (${T.eps.method}, period ending ${T.eps.periodEnd}); the quote is in ${q?.currency ?? 'an unknown currency'}. No ${reportCcy ?? 'reporting-currency'} to USD rate was available, so P/E and earnings yield are not computed. Use per-ADR results stated in the issuer's earnings release.`);
       const revRate = rev ? toUsd(rev.unit, false) : null, revUsd = revRate !== null;
       if (T.revenue && marketCap && !revUsd) gaps.push(`Revenue is reported in ${rev!.unit}; no USD rate was available, so price-to-sales is not computed against a USD market cap.`);
@@ -489,7 +497,7 @@ export function createWebTools(fetchImpl: typeof fetch = fetch, fetchPage = guar
         epsMethodNote: epsApproximate ? [combined ? `Trailing diluted EPS is approximate: ${T.eps!.method} combines per-share values computed on different weighted-average diluted share counts.` : '', epsRate !== 1 && epsV ? `EPS was converted from ${fx!.currency} at the spot rate, not the rates over the period it was earned.` : '', 'Describe EPS, P/E and earnings yield as approximate.'].filter(Boolean).join(' ') : null,
         fxConversion: converted ? { currency: fx!.currency, usdPerUnit: fx!.rate, symbol: fx!.symbol, marketTime: fx!.marketTime, basis: 'spot rate applied to period figures; approximate' } : null,
         earningsYieldPct: price && epsV !== null && usd ? r((epsV / price) * 100) : null,
-        psTrailing: marketCap && revRate !== null && T.revenue?.value ? r(marketCap / (T.revenue.value * revRate)) : null,
+        psTrailing: marketCap && revRate !== null && C.revenue?.value ? r(marketCap / (C.revenue.value * revRate)) : null,
         gaps,
         note: 'Computed in code from the listed inputs. P/E is null for non-positive earnings, a non-USD quote, EPS with no available USD rate, or an unknown ADR ratio; each refusal is listed in gaps. Foreign-currency EPS and revenue are converted at the spot rate in fxConversion and are approximate. Shares are the cover-page count as of the stated date. No forward estimates.',
       };

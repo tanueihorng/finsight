@@ -291,6 +291,16 @@ test('valuation_metrics converts ordinary shares with the ADR ratio and refuses 
   assert.ok(v.json.gaps.some((g: string) => /6-K without XBRL/.test(g)));
 });
 
+test('valuation_metrics refuses multiples on trailing figures over 18 months old', async (t) => {
+  // Live TSM 2026-11-02: SEC data held only the FY2024 20-F, so P/E used 22-month-old EPS.
+  t.mock.method(Date, 'now', () => Date.parse('2027-09-01T00:00:00Z'));
+  const v = await run('valuation_metrics', { ticker: 'TSM' });
+  assert.equal(v.json.marketCap, 10000);
+  assert.equal(v.json.peTrailing, null); assert.equal(v.json.earningsYieldPct, null); assert.equal(v.json.psTrailing, null);
+  assert.ok(v.json.gaps.some((g: string) => /diluted EPS ends 2025-12-31, more than 18 months/.test(g)));
+  assert.equal(v.json.ttm.epsDiluted.periodEnd, '2025-12-31');
+});
+
 test('valuation_metrics refuses foreign-currency multiples when no USD rate is available', async () => {
   const noFx = await fakeFinsight({ fx: {} });
   try {
