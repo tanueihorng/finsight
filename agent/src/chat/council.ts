@@ -93,6 +93,13 @@ function webFee(content: string): number | null {
   try { const c = JSON.parse(content)?.usage?.estimatedCostUsd; return typeof c === 'number' && Number.isFinite(c) && c >= 0 ? Math.min(c, WEB_REQUEST_RESERVE_USD) : null; } catch { return null; }
 }
 
+/** Missing evidence a valid assessment lists; none for output that does not decode. */
+function listedGaps(res: StepResult, evidence: CouncilEvidence[]): string[] {
+  try {
+    const a = decodeAssessment(res.blocks.filter((b) => b.type === 'text').map((b) => b.text).join(''), evidence.map(({ content: _content, roles: _roles, ...item }) => item));
+    return [...new Set(a.findings.flatMap((f) => f.missingEvidence))];
+  } catch { return []; }
+}
 function abortable<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
   return new Promise((resolve, reject) => {
     const stop = () => reject(signal.reason || Error('Council stopped'));
@@ -205,8 +212,20 @@ export async function runCouncil(o: {
       // same tools, per-turn search/fetch counts and spending caps as chat.
       const allowed = new Set(role === 'risk' ? ['get_exposures', 'query_positions', 'portfolio_weights', 'get_cash', 'get_policy'] : ['get_quote', 'get_history', 'edgar_filings', 'edgar_financials', 'valuation_metrics', 'edgar_recent_8k', 'get_earnings_dates', 'web_search', 'fetch_url']);
       const context = { ...(auditContext.getStore() ?? {}), councilRunId: parentId, councilRole: role, councilPhase: phase, councilStageId: r.id };
-      let res = await auditContext.run(context, () => call(system, messages, research, onCost, tools.filter((t) => allowed.has(t.name))));
-      const calls = res.blocks.filter((b) => b.type === 'tool_call');
+      const offered = tools.filter((t) => allowed.has(t.name));
+      let res = await auditContext.run(context, () => call(system, messages, research, onCost, offered));
+      let calls = res.blocks.filter((b) => b.type === 'tool_call');
+      // Live TSM 2026-11-02: specialists answered at once and listed forward
+      // EPS and peer multiples as missing without searching. One that skips its
+      // batch but names missing evidence is asked once to look for it.
+      const gaps = research && !calls.length && offered.some((t) => t.name === 'web_search') ? listedGaps(res, evidence) : [];
+      if (gaps.length) {
+        auditContext.run(context, () => audit('council.research.nudge', { gaps: gaps.length }));
+        messages.push({ role: 'assistant', blocks: res.blocks, providerExtra: res.providerExtra });
+        messages.push({ role: 'user', blocks: [{ type: 'text', text: `Your assessment lists missing evidence: ${gaps.slice(0, 6).join('; ')}. You have not used your research batch. Call the available tools now, at most ${researchCalls}, for whatever of it they can retrieve: for example web_search for the issuer's guidance, analyst estimates or peer valuation, then fetch_url for the best primary page. If no available tool can retrieve any of it, return your assessment JSON unchanged.` }] });
+        res = await auditContext.run(context, () => call(system, messages, true, onCost, offered));
+        calls = res.blocks.filter((b) => b.type === 'tool_call');
+      }
       if (calls.length) {
         if (!research) throw Error('Council research limit exceeded');
         // Validate the complete batch before executing any call. An over-budget

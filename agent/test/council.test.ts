@@ -273,3 +273,31 @@ test('a stage refused by the turn cap records cause budget and the answer says w
  assert.ok(refused.length); assert.ok(refused.every((r) => r.cause === 'budget' && /needs up to US\$\d+\.\d{4}.*of the US\$0\.0001 cap is free/.test(r.error!)));
  assert.match(out.text, /^Partial council review — \d of 7 stages completed\. Not completed: .*stopped by the spending cap.*The Council turn cap is US\$0\.0001; each call reserves its worst-case cost/);
 });
+// Live TSM 2026-11-02: no specialist searched although each listed forward
+// EPS and peer multiples as missing. One nudge per research stage, never more.
+test('a specialist that lists missing evidence without researching is asked once to search', async () => {
+ const nudged: string[] = []; const executed: string[] = [];
+ const o = setup(async (r) => {
+  const role = /Council role: (\w+)/.exec(r.system)![1]!, last = JSON.stringify(r.messages.at(-1));
+  if (/You have not used your research batch/.test(last)) { nudged.push(role); return role === 'growth' ? { ...result(), blocks: [{ type: 'tool_call', id: 's1', name: 'web_search', args: { query: 'issuer guidance' } }], stopReason: 'tool_use' } : result(); }
+  return result();
+ });
+ o.tools = webSchemas;
+ o.execute = async (_role, name) => { executed.push(name); return { id: 'w' + executed.length, source: 'FinSight tool ' + name, observedAt: 'x', retrievedAt: '2026-11-03', content: JSON.stringify({ usage: { estimatedCostUsd: 0.00075 } }) }; };
+ const out = await runCouncil(o);
+ // Growth and Macro have web search and list "Policy" as missing; Risk has no web tools; challenges and chair have no research.
+ assert.deepEqual(nudged.sort(), ['growth', 'macro']);
+ assert.deepEqual(executed, ['web_search']);
+ assert.ok(out.runs.every((r) => r.status === 'completed'));
+});
+test('no nudge without listed gaps or without web search', async () => {
+ const noGaps = { ...finding, findings: [{ ...finding.findings[0]!, missingEvidence: [] }] };
+ let nudges = 0;
+ const o = setup(async (r) => { if (/You have not used your research batch/.test(JSON.stringify(r.messages.at(-1)))) nudges++; return { ...result(), blocks: [{ type: 'text', text: JSON.stringify(noGaps) }] }; });
+ o.tools = webSchemas;
+ await runCouncil(o);
+ const p = setup(async (r) => { if (/You have not used your research batch/.test(JSON.stringify(r.messages.at(-1)))) nudges++; return result(); });
+ p.tools = webSchemas.filter((t) => t.name !== 'web_search');
+ await runCouncil(p);
+ assert.equal(nudges, 0);
+});

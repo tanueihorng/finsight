@@ -21,9 +21,10 @@ function setup(question='Should I buy AMD?',plan:unknown={kind:'explicit',subjec
 test('actual council service fetches AMD before any specialist even with TSM attached, and persists its scope',async()=>{
  const s=setup();const out=await runStoredCouncil(s.args);
  for(const req of s.requests.slice(1)){const data=JSON.parse((req.messages[0]!.blocks[0] as {text:string}).text);const quote=(typeof data.evidence[0].content === 'string' ? JSON.parse(data.evidence[0].content) : data.evidence[0].content);assert.deepEqual(quote.quotes.map((x:{symbol:string})=>x.symbol),['AMD']);assert.deepEqual(JSON.parse(data.question).researchSubjects.map((x:{symbol:string})=>x.symbol),['AMD']);}
- assert.equal(out.steps,8);assert.equal(s.requests.length,8);
+ // 7 stages, one research nudge each for Growth and Macro (they list gaps without searching), plus resolution.
+ assert.equal(out.steps,10);assert.equal(s.requests.length,10);
  const notices=store.listMessages(s.db,s.ctx.threadId!).flatMap(m=>m.blocks).filter(b=>b.type==='notice');assert.ok(notices.some(b=>b.type==='notice'&&b.kind==='research_scope'&&JSON.parse(b.text).subjects[0].symbol==='AMD'));
- assert.equal(store.getTrace(s.db,s.ctx.turnId!).length,8);assert.ok(store.spendSince(s.db,0)>0);assert.ok(out.runs.every(r=>r.status==='completed'));s.db.close();
+ assert.equal(store.getTrace(s.db,s.ctx.turnId!).length,10);assert.ok(store.spendSince(s.db,0)>0);assert.ok(out.runs.every(r=>r.status==='completed'));s.db.close();
 });
 test('council-specific budget and output cap override ordinary chat limits without changing them',async()=>{
  const s=setup();s.cfg.limits.turnUsd=0.00000001;s.cfg.limits.councilTurnUsd=.5;s.cfg.limits.councilOutputTokens=8000;
@@ -107,7 +108,7 @@ test('the council service retrieves planned evidence before specialists and pers
   assert.equal(ready.level, 'partial'); assert.equal(ready.evidence.retrieved, plan.length);
   assert.match(out.text, /^Research readiness: partial · stages 7\/7/);
   // Prefetch adds tool calls, not model calls.
-  assert.equal(s.requests.length, 8);
+  assert.equal(s.requests.length, 10); // includes one research nudge each for Growth and Macro
   s.db.close();
 });
 
