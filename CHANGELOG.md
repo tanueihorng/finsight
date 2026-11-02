@@ -15,6 +15,8 @@ The earlier draft with unverified release numbers is preserved in `docs/archive/
 
 ## Unreleased
 
+- `COUNCILQUALITY-001` follow-ups, merged locally into `main` 2026-11-03; not pushed or deployed. A frozen TSM-ENTRY replay (demo turn of 2026-10-31, fictional portfolio) now runs in the agent tests: its false account-scope warnings are gone because a claim's scope covers its counterevidence and "proposed" marks a limit, while the real 12.54%/15.63% mixed-basis pairing is still caught. `valuation_metrics` converts foreign-currency EPS and revenue to USD at the spot rate from FinSight's quote path, reports the rate and marks EPS, P/E and earnings yield approximate (refused without a rate). ADR ratios added for BABA, NTES, TM, SONY, SHEL, INFY, UL, ARM and TCOM from their 20-F covers; dual-class PDD, BIDU and JD left out. Verified: 224 agent with secret scan, 267 unit, typecheck; browser suite not rerun (no web changes).
+
 - Kestrel limits are user-editable (merged locally at `aa373b7`).
   - Click the "Today" spend in the chat list, or type `/limits`, to edit:
     - the daily cap and the per-reply and per-council cost ceilings
