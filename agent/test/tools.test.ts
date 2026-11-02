@@ -282,11 +282,23 @@ test('valuation_metrics converts ordinary shares with the ADR ratio and refuses 
   assert.equal(v.json.price.value, 10);
   assert.deepEqual([v.json.adr.ordinaryPerAdr, v.json.adr.adrEquivalentShares], [5, 1000]);
   assert.equal(v.json.marketCap, 10000); assert.match(v.json.marketCapBasis, /ordinary shares ÷ 5/);
-  // EPS and revenue are in the reporting currency (not the USD convenience translation); no FX is applied.
+  // EPS and revenue are in the reporting currency (not the USD convenience translation), converted at spot XTW→USD 0.032.
   assert.equal(v.json.ttm.epsDiluted.unit, 'XTW/shares'); assert.equal(v.json.ttm.revenue.unit, 'XTW');
-  assert.equal(v.json.peTrailing, null); assert.equal(v.json.earningsYieldPct, null); assert.equal(v.json.psTrailing, null);
-  assert.ok(v.json.gaps.some((g: string) => /XTW\/shares/.test(g) && /P\/E and earnings yield are not computed/.test(g)));
+  // EPS 3.2 XTW × 5 per ADR × 0.032 = 0.512 USD; P/E 10 ÷ 0.512; revenue 64,000 × 0.032 = 2,048 USD.
+  assert.equal(v.json.peTrailing, 19.53); assert.equal(v.json.earningsYieldPct, 5.12); assert.equal(v.json.psTrailing, 4.88);
+  assert.deepEqual([v.json.fxConversion.currency, v.json.fxConversion.usdPerUnit, v.json.fxConversion.symbol], ['XTW', 0.032, 'XTWUSD=X']);
+  assert.equal(v.json.epsApproximate, true); assert.match(v.json.epsMethodNote, /converted from XTW at the spot rate/);
   assert.ok(v.json.gaps.some((g: string) => /6-K without XBRL/.test(g)));
+});
+
+test('valuation_metrics refuses foreign-currency multiples when no USD rate is available', async () => {
+  const noFx = await fakeFinsight({ fx: {} });
+  try {
+    const v = await run('valuation_metrics', { ticker: 'TSM' }, testCtx(testConfig(noFx)));
+    assert.equal(v.json.marketCap, 10000);
+    assert.equal(v.json.peTrailing, null); assert.equal(v.json.earningsYieldPct, null); assert.equal(v.json.psTrailing, null); assert.equal(v.json.fxConversion, null);
+    assert.ok(v.json.gaps.some((g: string) => /XTW\/shares/.test(g) && /No XTW to USD rate/.test(g)));
+  } finally { await noFx.close(); }
 });
 
 test('valuation_metrics refuses market cap and P/E for a foreign issuer with an unknown ADR ratio, and uses a known one', async () => {

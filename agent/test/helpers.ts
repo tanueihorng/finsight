@@ -86,7 +86,9 @@ function bars(n: number, start = 100, drift = 0.002) {
 
 export type Fake = { url: string; dataDir: string; calls: { method: string; path: string; auth: string | undefined }[]; close: () => Promise<void>; down: boolean };
 
-export async function fakeFinsight(options: { scopedAccounts?: boolean; naturalHistory?: boolean } = {}): Promise<Fake> {
+export async function fakeFinsight(options: { scopedAccounts?: boolean; naturalHistory?: boolean; fx?: Record<string, number> } = {}): Promise<Fake> {
+  // FX pairs the fake quote path knows; any other =X symbol has no price.
+  const fx = options.fx ?? { 'XTWUSD=X': 0.032 };
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-fs-'));
   fs.writeFileSync(path.join(dataDir, 'agent-link.json'), JSON.stringify({ token: TOKEN, proxySecret: PROXY_SECRET }), { mode: 0o600 });
   const calls: Fake['calls'] = [];
@@ -120,6 +122,7 @@ export async function fakeFinsight(options: { scopedAccounts?: boolean; naturalH
       }
       case '/api/quote-details': return j(200, { details: Object.fromEntries((u.searchParams.get('symbols') || '').split(',').map((symbol) => [symbol.toUpperCase(), { earningsStart: Date.UTC(2026, 10, 3, 21), earningsEnd: null, earningsEstimated: false }])) });
       case '/api/quote': return j(200, { quotes: (u.searchParams.get('symbols') || '').split(',').map((symbol) => {
+        if (symbol.endsWith('=X')) return { symbol, name: symbol, type: 'CURRENCY', price: fx[symbol], currency: 'USD' };
         const p = PORTFOLIO.positions.find((p) => p.symbol === symbol);
         return { symbol, name: p?.name || symbol, type: symbol === 'VOO' ? 'ETF' : 'EQUITY', price: p?.last ?? 10, currency: p?.currency || 'USD', change: 1, changePct: 1 };
       }) });
