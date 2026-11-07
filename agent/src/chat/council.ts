@@ -132,7 +132,7 @@ export async function runCouncil(o: {
   const budget = new CouncilBudget(o.capUsd);
   const releaseChair = budget.reserve(o.capUsd / 4, true);
   let total: number | null = 0, steps = 0;
-  const roleTools = new Set(['get_quote', 'get_history', 'get_exposures', 'query_positions', 'portfolio_weights', 'get_cash', 'get_policy', 'edgar_filings', 'edgar_financials', 'valuation_metrics', 'edgar_recent_8k', 'get_earnings_dates', 'web_search', 'fetch_url']);
+  const roleTools = new Set(['get_quote', 'get_history', 'get_exposures', 'query_positions', 'portfolio_weights', 'get_cash', 'get_policy', 'edgar_filings', 'edgar_financials', 'valuation_metrics', 'edgar_recent_8k', 'get_earnings_dates', 'web_search', 'fetch_url', 'insider_trades', 'short_interest', 'technical_indicators', 'dcf_valuation', 'peer_comparison']);
   const tools = o.tools.filter((t) => roleTools.has(t.name));
   const call = async (system: string, messages: Msg[], withTools: boolean, onCost: (cost: number | null) => void, allowedTools = tools): Promise<StepResult> => {
     const callId = randomUUID();
@@ -210,7 +210,7 @@ export async function runCouncil(o: {
       const messages: Msg[] = [{ role: 'user', blocks: [{ type: 'text', text: JSON.stringify({ question, evidence: packet(role, data), data }) }] }];
       // Business and Macro may also search the web and fetch pages, through the
       // same tools, per-turn search/fetch counts and spending caps as chat.
-      const allowed = new Set(role === 'risk' ? ['get_exposures', 'query_positions', 'portfolio_weights', 'get_cash', 'get_policy'] : ['get_quote', 'get_history', 'edgar_filings', 'edgar_financials', 'valuation_metrics', 'edgar_recent_8k', 'get_earnings_dates', 'web_search', 'fetch_url']);
+      const allowed = new Set(role === 'risk' ? ['get_exposures', 'query_positions', 'portfolio_weights', 'get_cash', 'get_policy', 'technical_indicators', 'short_interest'] : ['get_quote', 'get_history', 'edgar_filings', 'edgar_financials', 'valuation_metrics', 'edgar_recent_8k', 'get_earnings_dates', 'web_search', 'fetch_url', 'insider_trades', 'short_interest', 'technical_indicators', 'dcf_valuation', 'peer_comparison']);
       const context = { ...(auditContext.getStore() ?? {}), councilRunId: parentId, councilRole: role, councilPhase: phase, councilStageId: r.id };
       const offered = tools.filter((t) => allowed.has(t.name));
       let res = await auditContext.run(context, () => call(system, messages, research, onCost, offered));
@@ -222,7 +222,7 @@ export async function runCouncil(o: {
       if (gaps.length) {
         auditContext.run(context, () => audit('council.research.nudge', { gaps: gaps.length }));
         messages.push({ role: 'assistant', blocks: res.blocks, providerExtra: res.providerExtra });
-        messages.push({ role: 'user', blocks: [{ type: 'text', text: `Your assessment lists missing evidence: ${gaps.slice(0, 6).join('; ')}. You have not used your research batch. Call the available tools now, at most ${researchCalls}, for whatever of it they can retrieve: for example web_search for the issuer's guidance, analyst estimates or peer valuation, then fetch_url for the best primary page. If no available tool can retrieve any of it, return your assessment JSON unchanged.` }] });
+        messages.push({ role: 'user', blocks: [{ type: 'text', text: `Your assessment lists missing evidence: ${gaps.slice(0, 6).join('; ')}. You have not used your research batch. Call the available tools now, at most ${researchCalls}, for whatever of it they can retrieve: for example web_search for the issuer's guidance or analyst estimates, then fetch_url for the best primary page; peer_comparison for peer multiples and margins; dcf_valuation for the growth the price implies; insider_trades or short_interest for positioning. If no available tool can retrieve any of it, return your assessment JSON unchanged.` }] });
         res = await auditContext.run(context, () => call(system, messages, true, onCost, offered));
         calls = res.blocks.filter((b) => b.type === 'tool_call');
       }

@@ -24,6 +24,8 @@ export const SEC_CALLS: string[] = [];
 const realFetch = globalThis.fetch;
 globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
   const url = new URL(typeof input === 'string' || input instanceof URL ? input : input.url);
+  // FINRA short interest is never reached from tests either: one synthetic row.
+  if (url.hostname === 'api.finra.org') { SEC_CALLS.push('finra:' + url.pathname); return new Response(JSON.stringify([{ settlementDate: '2026-10-15', currentShortPositionQuantity: 1000, changePercent: 1, averageDailyVolumeQuantity: 500, daysToCoverQuantity: 2, issueName: 'Synthetic' }]), { status: 200, headers: { 'content-type': 'application/json' } }); }
   if (!/(^|\.)sec\.gov$/.test(url.hostname)) return realFetch(input, init);
   SEC_CALLS.push(url.pathname);
   const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });

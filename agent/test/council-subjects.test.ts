@@ -90,7 +90,7 @@ test('the council service retrieves planned evidence before specialists and pers
   const first = JSON.parse((s.requests[1]!.messages[0]!.blocks[0] as { text: string }).text);
   const plan = JSON.parse(first.question).evidencePlan as { key: string; status: string; evidenceId?: string; reason?: string }[];
   const status = Object.fromEntries(plan.map((c) => [c.key, c.status]));
-  assert.deepEqual(status, { 'history:AMD': 'retrieved', 'financials:AMD': 'retrieved', 'valuation:AMD': 'retrieved', 'earnings8k:AMD': 'retrieved', '8k:AMD': 'retrieved', 'events:earnings': 'retrieved', 'portfolio:weights': 'retrieved', 'portfolio:sectors': 'retrieved', 'portfolio:policy': 'retrieved', 'macro:DGS10': 'retrieved' });
+  assert.deepEqual(status, { 'history:AMD': 'retrieved', 'financials:AMD': 'retrieved', 'valuation:AMD': 'retrieved', 'earnings8k:AMD': 'retrieved', '8k:AMD': 'retrieved', 'technicals:AMD': 'retrieved', 'insiders:AMD': 'retrieved', 'short:AMD': 'retrieved', 'events:earnings': 'retrieved', 'portfolio:weights': 'retrieved', 'portfolio:sectors': 'retrieved', 'portfolio:policy': 'retrieved', 'macro:DGS10': 'retrieved' });
   // Each specialist receives the retrieved items planned for its role, and only those plus the shared quote.
   const packets = new Map(s.requests.slice(1).map((r) => { const d = JSON.parse((r.messages[0]!.blocks[0] as { text: string }).text); return [/Council role: (\w+)\. /.exec(r.system)![1]! + ':' + (d.data ? 'later' : 'first'), new Set(d.evidence.map((e: { id: string }) => e.id))] as const; }));
   const planned = (role: string) => plan.filter((c) => c.status === 'retrieved' && (c as { roles?: string[] }).roles!.includes(role)).map((c) => c.evidenceId!);

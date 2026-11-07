@@ -62,10 +62,44 @@ export function htmlToText(html: string, url: string): { title: string; text: st
 
 const ticker = z.string().regex(/^[A-Za-z.\-]{1,10}$/);
 
-async function secJson(ctx: ToolCtx, url: string, ttlMs: number): Promise<any> {
+// SEC fair access allows 10 requests per second per client. Every SEC request
+// from this process takes a slot here, so concurrent Council evidence items
+// (insider Form 4 reads, company facts, filings) stay under the limit.
+const SEC_GAP_MS = 110;
+let secNext = 0;
+export async function secSlot(signal?: AbortSignal): Promise<void> {
+  const now = Date.now(), at = Math.max(now, secNext);
+  secNext = at + SEC_GAP_MS;
+  if (at > now) await new Promise<void>((resolve, reject) => {
+    const t = setTimeout(resolve, at - now);
+    signal?.addEventListener('abort', () => { clearTimeout(t); reject(signal.reason); }, { once: true });
+  });
+}
+/** A quote's marketTime (seconds or milliseconds) as ISO text. */
+export const isoMarketTime = (t: number | null | undefined) => (t ? new Date(t * (t < 1e12 ? 1000 : 1)).toISOString() : null);
+export { ticker as tickerSchema };
+
+/** Latest cover-page share count, summed across share classes reported in the
+ * same filing. Some multi-class filers (GOOGL) tag no cover count; the latest
+ * quarter's weighted-average diluted count is used instead and named as such. */
+export function latestShares(facts: any): { value: number; asOf: string; filed: string | null; classes: number; basis?: string } | null {
+  const xs: (Fact & { accn?: string })[] = facts.facts?.dei?.EntityCommonStockSharesOutstanding?.units?.shares ?? [];
+  if (!xs.length) {
+    const w: Fact[] = facts.facts?.['us-gaap']?.WeightedAverageNumberOfDilutedSharesOutstanding?.units?.shares ?? [];
+    const q = w.filter((x) => x.start && (Date.parse(x.end) - Date.parse(x.start)) / 864e5 < 100).sort((a, b) => a.end.localeCompare(b.end) || String(a.filed).localeCompare(String(b.filed))).at(-1);
+    return q ? { value: q.val, asOf: q.end, filed: q.filed ?? null, classes: 0, basis: 'weighted-average diluted shares for the latest quarter (no cover-page count tagged); approximate' } : null;
+  }
+  const last = [...xs].sort((a, b) => String(a.filed).localeCompare(String(b.filed)) || a.end.localeCompare(b.end)).at(-1)!;
+  // One entry per class value; identical repeats within the filing are counted once.
+  const same = [...new Map(xs.filter((x) => x.accn === last.accn && x.end === last.end).map((x) => [String(x.val), x])).values()];
+  return { value: same.reduce((s, x) => s + x.val, 0), asOf: last.end, filed: last.filed ?? null, classes: same.length };
+}
+
+export async function secJson(ctx: ToolCtx, url: string, ttlMs: number, fetchImpl: typeof fetch = fetch): Promise<any> {
   const key = 'sec:' + url;
   const hit = cacheGet<any>(ctx.db, key); if (hit) return hit;
-  const res = await fetch(url, { signal: AbortSignal.timeout(25_000), headers: { 'User-Agent': ctx.cfg.edgarUserAgent, Accept: 'application/json' } });
+  await secSlot(ctx.signal);
+  const res = await fetchImpl(url, { signal: AbortSignal.timeout(25_000), headers: { 'User-Agent': ctx.cfg.edgarUserAgent, Accept: 'application/json' } });
   if (!res.ok) throw new AgentError('EDGAR_ERROR', `SEC returned ${res.status} for ${new URL(url).pathname}`);
   const j = await res.json();
   cacheSet(ctx.db, key, j, ttlMs);
@@ -82,6 +116,7 @@ export function secHtml(raw: string): string {
 async function secText(ctx: ToolCtx, url: string, ttlMs: number, maxChars: number): Promise<string> {
   const key = `sec-text:${maxChars}:` + url;
   const hit = cacheGet<string>(ctx.db, key); if (hit) return hit;
+  await secSlot(ctx.signal);
   const res = await fetch(url, { signal: AbortSignal.timeout(25_000), headers: { 'User-Agent': ctx.cfg.edgarUserAgent, Accept: 'text/html,text/plain' } });
   if (!res.ok) throw new AgentError('EDGAR_ERROR', `SEC returned ${res.status} for ${new URL(url).pathname}`);
   const raw = secHtml((await res.text()).slice(0, 2_000_000));
@@ -105,7 +140,7 @@ export function exhibit99(items: { name?: unknown; size?: unknown }[], primary: 
   return (docs.find((x) => /ex-?99/i.test(x.name)) ?? docs.find((x) => /99[-_]?\d{0,2}\.html?$/i.test(x.name)) ?? [...(prose.length ? prose : docs)].sort((a, b) => b.size - a.size)[0])?.name;
 }
 
-type Fact = { start?: string; end: string; val: number; form?: string; fp?: string; fy?: number; filed?: string };
+export type Fact = { start?: string; end: string; val: number; form?: string; fp?: string; fy?: number; filed?: string };
 const ANNUAL_FORMS = new Set(['10-K', '20-F', '40-F']);
 // IFRS filers (most foreign private issuers) tag ifrs-full concepts; requests
 // keep the US GAAP names and are mapped to the IFRS equivalent.
@@ -116,7 +151,7 @@ const IFRS_CONCEPTS: Record<string, string> = {
   NetCashProvidedByUsedInOperatingActivities: 'CashFlowsFromUsedInOperatingActivities',
   PaymentsToAcquirePropertyPlantAndEquipment: 'PurchaseOfPropertyPlantAndEquipmentClassifiedAsInvestingActivities',
 };
-function reportedFacts(facts: any): { taxonomy: 'us-gaap' | 'ifrs-full'; facts: Record<string, any>; concept: (name: string) => string } {
+export function reportedFacts(facts: any): { taxonomy: 'us-gaap' | 'ifrs-full'; facts: Record<string, any>; concept: (name: string) => string } {
   const gaap = facts.facts?.['us-gaap'], ifrs = facts.facts?.['ifrs-full'];
   if (ifrs && (!gaap || !Object.keys(gaap).length)) return { taxonomy: 'ifrs-full', facts: ifrs, concept: (n) => (ifrs[n] ? n : IFRS_CONCEPTS[n] ?? n) };
   return { taxonomy: 'us-gaap', facts: gaap || {}, concept: (n) => n };
@@ -136,7 +171,11 @@ export function ttm(facts: Fact[]): { value: number; method: string; periodEnd: 
   const years = latest(dur.filter((f) => { const d = days(f.start!, f.end); return d > 350 && d < 380; }));
   const fy = years.at(-1);
   if (!fy) return null;
-  const ytd = latest(dur.filter((f) => f.end > fy.end && f.start! > fy.start! && days(f.start!, f.end) > 150 && days(f.start!, f.end) < 300)).at(-1);
+  // Year-to-date runs from the day after fiscal year-end. A first-quarter YTD
+  // is three months long, so it counts too (MSFT's Q1 was ignored at >150 days);
+  // at the latest end date the longest span is the YTD, not a discrete quarter.
+  const ytdAll = latest(dur.filter((f) => f.end > fy.end && days(fy.end, f.start!) >= 0 && days(fy.end, f.start!) < 10 && days(f.start!, f.end) > 80 && days(f.start!, f.end) < 300));
+  const ytd = ytdAll.filter((f) => f.end === ytdAll.at(-1)?.end).sort((a, b) => a.start!.localeCompare(b.start!))[0];
   const prior = ytd && latest(dur.filter((f) => Math.abs(days(f.start!, ytd.start!) - 365) < 20 && Math.abs(days(f.start!, f.end) - days(ytd.start!, ytd.end)) < 15)).at(-1);
   if (ytd && prior) return { value: fy.val + ytd.val - prior.val, method: 'fiscal year + current year-to-date - prior year-to-date', periodEnd: ytd.end, inputs: [fy, ytd, prior].map(pick) };
   return { value: fy.val, method: 'latest fiscal year (no comparable year-to-date)', periodEnd: fy.end, inputs: [pick(fy)] };
@@ -188,8 +227,8 @@ async function spotUsdPer(ctx: ToolCtx, currency: string): Promise<{ currency: s
   return null;
 }
 
-async function cikFor(ctx: ToolCtx, t: string): Promise<{ cik: string; title: string }> {
-  const map = await secJson(ctx, 'https://www.sec.gov/files/company_tickers.json', 7 * 864e5);
+export async function cikFor(ctx: ToolCtx, t: string, fetchImpl: typeof fetch = fetch): Promise<{ cik: string; title: string }> {
+  const map = await secJson(ctx, 'https://www.sec.gov/files/company_tickers.json', 7 * 864e5, fetchImpl);
   const row: any = Object.values(map).find((r: any) => String(r.ticker).toUpperCase() === t.toUpperCase());
   if (!row) throw new AgentError('NOT_FOUND', `${t} is not an SEC registrant ticker (EDGAR covers US-listed filers).`);
   return { cik: String(row.cik_str).padStart(10, '0'), title: row.title };
@@ -435,8 +474,9 @@ export function createWebTools(fetchImpl: typeof fetch = fetch, fetchPage = guar
         return found.sort((a, b) => b.ttm.periodEnd.localeCompare(a.ttm.periodEnd))[0] ?? null;
       };
       const eps = series('EarningsPerShareDiluted'), rev = series('Revenues', 'RevenueFromContractWithCustomerExcludingAssessedTax', 'SalesRevenueNet'), ni = series('NetIncomeLoss');
-      const sharesFacts: Fact[] = facts.facts?.dei?.EntityCommonStockSharesOutstanding?.units?.shares || [];
-      const shares = [...sharesFacts].sort((a, b) => a.end.localeCompare(b.end)).at(-1) ?? null;
+      // Same share count as dcf_valuation and peer_comparison (all classes in the latest filing).
+      const ls = latestShares(facts);
+      const shares = ls && { val: ls.value, end: ls.asOf, filed: ls.filed, basis: ls.basis };
       const q = (await ctx.finsight.get<{ quotes?: { symbol: string; price?: number; currency?: string; marketTime?: number | null }[] }>('/api/quote', { symbols: t.toUpperCase() }, ctx.signal)).quotes?.find((x) => x.symbol === t.toUpperCase());
       const price = typeof q?.price === 'number' && q.price > 0 ? q.price : null;
       const usd = q?.currency === 'USD';
@@ -486,12 +526,12 @@ export function createWebTools(fetchImpl: typeof fetch = fetch, fetchPage = guar
       ctx.citations.push({ type: 'citation', url: `https://data.sec.gov/api/xbrl/companyfacts/CIK${cik}.json`, title: `${title} XBRL company facts (SEC)`, retrievedAt, class: 'primary' });
       return {
         source: 'SEC XBRL company facts + FinSight /api/quote', sourceClass: 'primary', retrievedAt, company: title, cik, filerType: filer, taxonomy,
-        price: { value: price, currency: q?.currency ?? null, marketTime: q?.marketTime ? new Date(q.marketTime * (q.marketTime < 1e12 ? 1000 : 1)).toISOString() : null },
+        price: { value: price, currency: q?.currency ?? null, marketTime: isoMarketTime(q?.marketTime) },
         ttm: { epsDiluted: T.eps && { ...T.eps, concept: eps!.concept, unit: eps!.unit }, revenue: T.revenue && { ...T.revenue, concept: rev!.concept, unit: rev!.unit }, netIncome: T.netIncome && { ...T.netIncome, concept: ni!.concept, unit: ni!.unit } },
-        sharesOutstanding: shares && { value: shares.val, asOf: shares.end, filed: shares.filed ?? null, kind: filer === 'foreign_private_issuer' ? 'ordinary shares' : 'common shares' },
+        sharesOutstanding: shares && { value: shares.val, asOf: shares.end, filed: shares.filed ?? null, kind: shares.basis ?? (filer === 'foreign_private_issuer' ? 'ordinary shares' : 'common shares') },
         ...(filer === 'foreign_private_issuer' ? { adr: adr ? { ordinaryPerAdr: adr.ordinaryPerAdr, adrEquivalentShares: r(listedShares, 0), source: adr.source } : { ordinaryPerAdr: null, status: 'ratio_unknown' } } : {}),
         marketCap: r(marketCap, 0),
-        marketCapBasis: marketCap ? (adr ? `ADR price × (ordinary shares ÷ ${adr.ordinaryPerAdr})` : 'price × common shares outstanding') : null,
+        marketCapBasis: marketCap ? (adr ? `ADR price × (ordinary shares ÷ ${adr.ordinaryPerAdr})` : (shares?.basis ? `price × ${shares.basis}` : 'price × common shares outstanding')) : null,
         peTrailing: price && epsV && epsV > 0 && usd ? r(price / epsV) : null,
         epsApproximate,
         epsMethodNote: epsApproximate ? [combined ? `Trailing diluted EPS is approximate: ${T.eps!.method} combines per-share values computed on different weighted-average diluted share counts.` : '', epsRate !== 1 && epsV ? `EPS was converted from ${fx!.currency} at the spot rate, not the rates over the period it was earned.` : '', 'Describe EPS, P/E and earnings yield as approximate.'].filter(Boolean).join(' ') : null,

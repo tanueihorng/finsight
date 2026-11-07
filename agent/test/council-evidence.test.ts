@@ -8,7 +8,7 @@ const keys = (p: ReturnType<typeof planEvidence>) => p.items.map((i) => i.key);
 
 test('equities get financials, valuation, the earnings release, 8-K text, earnings dates and price path; portfolio, policy and macro context are planned once', () => {
   const p = planEvidence([{ symbol: 'AMD', type: 'EQUITY' }], Date.UTC(2026, 9, 29));
-  assert.deepEqual(keys(p), ['history:AMD', 'financials:AMD', 'valuation:AMD', 'earnings8k:AMD', '8k:AMD', 'events:earnings', 'portfolio:weights', 'portfolio:sectors', 'portfolio:policy', 'macro:DGS10']);
+  assert.deepEqual(keys(p), ['history:AMD', 'financials:AMD', 'valuation:AMD', 'earnings8k:AMD', '8k:AMD', 'technicals:AMD', 'insiders:AMD', 'short:AMD', 'events:earnings', 'portfolio:weights', 'portfolio:sectors', 'portfolio:policy', 'macro:DGS10']);
   // The latest results release is requested by item, not left to the latest two 8-Ks.
   assert.deepEqual(p.items.find((i) => i.key === 'earnings8k:AMD')!.args, { ticker: 'AMD', limit: 1, items: ['2.02'], maxChars: 8000 });
   assert.deepEqual(p.items.find((i) => i.key === 'portfolio:weights')!.args, { symbols: ['AMD'] });

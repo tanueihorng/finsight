@@ -11,8 +11,9 @@ export type PlanItem = { key: string; purpose: string; tool: string; args: Recor
 // detail: what a retrieved item actually used, e.g. the filing form (8-K or 6-K).
 export type Coverage = Omit<PlanItem, 'args'> & { status: 'retrieved' | 'failed' | 'not_applicable' | 'unavailable' | 'skipped_limit'; evidenceId?: string; reason?: string; detail?: string };
 
-// Three equities need 5 items each plus 6 shared ones.
-export const PLAN_LIMITS = { subjects: 3, items: 22, concurrency: 3 } as const;
+// Three equities need 8 items each plus 7 shared ones (KESTRELTOOLS-001 added
+// technicals, insider and short-interest items per SEC equity).
+export const PLAN_LIMITS = { subjects: 3, items: 31, concurrency: 3 } as const;
 
 export function subjectKind(type: string | null | undefined): SubjectKind {
   const t = String(type || '').toUpperCase();
@@ -47,6 +48,11 @@ export function planEvidence(subjects: Subject[], now = Date.now(), scope: { acc
         // private issuer the latest 6-K results release, and names the form.
         add({ key: `earnings8k:${sym}`, purpose: 'Latest earnings release (8-K item 2.02, or 6-K for a foreign private issuer): results, segments, margins and outlook', tool: 'edgar_recent_8k', args: { ticker: sym, limit: 1, items: ['2.02'], maxChars: 8000 }, roles: ['growth', 'macro'], subject: sym });
         add({ key: `8k:${sym}`, purpose: 'Text of the two most recent current reports (8-K, or 6-K for a foreign private issuer), with the latest 20-F named', tool: 'edgar_recent_8k', args: { ticker: sym, limit: 2 }, roles: ['growth', 'macro'], subject: sym });
+        // Deterministic positioning and price context (no model cost): compact
+        // insider summary, FINRA short interest and descriptive technicals.
+        add({ key: `technicals:${sym}`, purpose: 'Moving averages, RSI, MACD, realized volatility and return relative to SPY (descriptive, not a signal)', tool: 'technical_indicators', args: { symbol: sym }, roles: ['macro', 'risk'], subject: sym });
+        add({ key: `insiders:${sym}`, purpose: 'SEC Form 4 insider trades over 180 days: open-market buys vs sells, 10b5-1 plan share', tool: 'insider_trades', args: { ticker: sym, days: 180, maxFilings: 20, includeTransactions: false }, roles: ['growth', 'risk'], subject: sym });
+        add({ key: `short:${sym}`, purpose: 'FINRA short interest, days to cover and % of shares outstanding', tool: 'short_interest', args: { symbol: sym, months: 6 }, roles: ['risk'], subject: sym });
       } else {
         coverage.push({ key: `financials:${sym}`, purpose: 'Reported financials', tool: 'edgar_financials', roles: ['growth', 'macro'], subject: sym, status: 'not_applicable', reason: 'Not a US SEC registrant ticker; no approved primary filings source for this listing' });
         coverage.push({ key: `valuation:${sym}`, purpose: 'Trailing valuation multiples', tool: 'valuation_metrics', roles: ['growth', 'macro', 'risk'], subject: sym, status: 'unavailable', reason: 'Valuation is computed from SEC filings; no approved source for this listing' });
