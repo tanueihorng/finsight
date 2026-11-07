@@ -207,3 +207,10 @@ export function useGuardrails() {
   return useQuery({ queryKey: ['guardrails', base], enabled, staleTime: 120_000, refetchInterval: 120_000,
     queryFn: ({ signal }) => api<import('../../../shared/guardrails.ts').GuardrailReport>(`/api/guardrails?base=${encodeURIComponent(base)}`, { signal }) });
 }
+
+/** FEAT-014 §2: theses joined with whole-book holdings. */
+export function useTheses() {
+  const { base, enabled } = useScope();
+  return useQuery({ queryKey: ['theses', base], enabled, staleTime: 120_000, refetchInterval: 300_000,
+    queryFn: ({ signal }) => api<import('../../../shared/theses.ts').ThesisReport>(`/api/theses?base=${encodeURIComponent(base)}`, { signal }) });
+}

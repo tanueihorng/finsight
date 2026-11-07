@@ -34,6 +34,7 @@ import {
 import { dividendsReport, upcomingEvents, setWithholding } from './lib/dividends.ts';
 import { discover } from './lib/discover.ts';
 import * as guardrails from './lib/guardrails.ts';
+import * as theses from './lib/theses.ts';
 import { chartTrades, ledger, editBuy, deleteBuy, realizedReport } from './lib/ledger.ts';
 import { undo, undoInfo } from './lib/store.ts';
 import * as charts from './lib/charts.ts';
@@ -468,6 +469,20 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       const accounts = [];
       for (const a of listAccounts().accounts) accounts.push({ id: a.id, name: a.name, netWorth: (await portfolioWithQuotes(base, a.id)).summary.netWorth });
       return sendJson(res, 200, guardrails.evaluate({ base: all.base, positions: all.positions, cash: all.cash, accounts }, guardrails.loadLimits()));
+    }
+    if (p === '/api/theses' || p.startsWith('/api/theses/')) {
+      // FEAT-014 §2: owner-written theses joined with whole-book holdings.
+      if (req.method === 'POST') {
+        const b = await readBody(req);
+        try {
+          if (p === '/api/theses/save') theses.upsert(b.thesis);
+          else if (p === '/api/theses/delete') theses.remove(b.symbol);
+          else if (p === '/api/theses/check') theses.addCheck(b.symbol, b.check);
+          else return sendJson(res, 404, { error: 'Unknown endpoint' });
+        } catch (e) { return sendJson(res, 400, { error: (e as Error).message }); }
+      } else if (p !== '/api/theses') return sendJson(res, 404, { error: 'Unknown endpoint' });
+      const all = await portfolioWithQuotes(base, 'ALL');
+      return sendJson(res, 200, theses.report(all.positions.map((x) => ({ symbol: x.symbol, weight: all.summary.netWorth > 0 ? (x.marketValue / all.summary.netWorth) * 100 : 0, last: x.last, currency: x.currency })), theses.list()));
     }
     if (p === '/api/events') return sendJson(res, 200, await upcomingEvents(acct));
     if (p === '/api/discover') return sendJson(res, 200, await discover(acct));
