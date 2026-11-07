@@ -2,7 +2,7 @@
 // and the single write lock every read-modify-write goes through.
 import fs from 'node:fs';
 import path from 'node:path';
-import { bookDir } from './book.ts';
+import { activeBook, bookDir, withBook } from './book.ts';
 import type { AccountHolding } from '../shared/types.ts';
 import type { StoredAccount, StoredPortfolio, StoredPosition, StoredTransaction, StoredDividend, UndoEntry } from './model.ts';
 
@@ -183,4 +183,11 @@ export function viewDividends(p: StoredPortfolio, accountId: string | null | und
 // saves can't clobber each other. NOTE: locked functions must never call another
 // locked function (buy/importCsv use buyUnlocked) or they'd deadlock the chain.
 let _lock: Promise<unknown> = Promise.resolve();
-export function withLock<T>(fn: () => T | Promise<T>): Promise<T> { const r = _lock.then(fn, fn); _lock = r.catch(() => {}); return r; }
+// The book is fixed when the change is requested (BOOKRACE-001): a REAL/PAPER
+// switch while it waits for the lock, or awaits quotes/FX inside it, must not
+// make it load one book and save into the other.
+export function withLock<T>(fn: () => T | Promise<T>): Promise<T> {
+  const book = activeBook();
+  const run = () => withBook(book, fn);
+  const r = _lock.then(run, run); _lock = r.catch(() => {}); return r;
+}
