@@ -34,6 +34,11 @@ import * as FxRiskIsland from './features/fxrisk/FxRiskIsland.tsx';
 import * as GuardrailsIsland from './features/guardrails/GuardrailsIsland.tsx';
 import * as ThesesIsland from './features/theses/ThesesIsland.tsx';
 import * as DecisionsIsland from './features/decisions/DecisionsIsland.tsx';
+import * as CostsIsland from './features/costs/CostsIsland.tsx';
+import * as CostBasisIsland from './features/costbasis/CostBasisIsland.tsx';
+import * as RadarIsland from './features/radar/RadarIsland.tsx';
+import * as DigestIsland from './features/digest/DigestIsland.tsx';
+import * as BacktestIsland from './features/backtest/BacktestIsland.tsx';
 import * as TradeSheetIsland from './features/trade/TradeSheetIsland.tsx';
 import * as BookIsland from './features/paper/BookIsland.tsx';
 import * as PaperIsland from './features/paper/PaperIsland.tsx';
@@ -115,6 +120,11 @@ export const islands: IslandRegistry = preloadable({
   guardrails: () => Promise.resolve(GuardrailsIsland),
   theses: () => Promise.resolve(ThesesIsland),
   decisions: () => Promise.resolve(DecisionsIsland),
+  costs: () => Promise.resolve(CostsIsland),
+  costbasis: () => Promise.resolve(CostBasisIsland),
+  radar: () => Promise.resolve(RadarIsland),
+  digest: () => Promise.resolve(DigestIsland),
+  backtest: () => Promise.resolve(BacktestIsland),
   trade: () => Promise.resolve(TradeSheetIsland),
   book: () => Promise.resolve(BookIsland),
   paper: () => Promise.resolve(PaperIsland),

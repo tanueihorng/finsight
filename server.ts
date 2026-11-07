@@ -36,8 +36,13 @@ import { discover } from './lib/discover.ts';
 import * as guardrails from './lib/guardrails.ts';
 import * as theses from './lib/theses.ts';
 import { report as decisionsReport } from './lib/decisions.ts';
+import { costsReport } from './lib/costs.ts';
+import * as costbasis from './lib/costbasis.ts';
+import { radarReport } from './lib/radar.ts';
+import * as digest from './lib/digest.ts';
+import * as backtest from './lib/backtest.ts';
 import { chartTrades, ledger, editBuy, deleteBuy, realizedReport } from './lib/ledger.ts';
-import { undo, undoInfo } from './lib/store.ts';
+import { undo, undoInfo, loadPortfolio } from './lib/store.ts';
 import * as charts from './lib/charts.ts';
 import * as journal from './lib/journal.ts';
 import { portfolioPerformance } from './lib/performance.ts';
@@ -113,7 +118,7 @@ function serveStatic(req: IncomingMessage, res: ServerResponse, pathname: string
 
 // Book edits refused in PAPER mode (orders are the only way in). Watchlist,
 // alerts, charts and the journal stay editable.
-const PAPER_READONLY = /^\/api\/(portfolio\/(buy|sell|delete|import|reset|transfer)|accounts\/(add|rename|remove)|cash|ledger\/(edit|delete)|undo|settings\/withholding)$/;
+const PAPER_READONLY = /^\/api\/(portfolio\/(buy|sell|delete|import|reset|transfer)|accounts\/(add|rename|remove)|cash|ledger\/(edit|delete)|undo|settings\/withholding|costbasis\/set)$/;
 
 // Server-sent events: paper order, ticket and sync events, stream status, and
 // the REAL/PAPER choice, which every open terminal must follow.
@@ -138,6 +143,18 @@ const symbolList = (u: URL): string[] => {
   for (const s of (u.searchParams.get('symbols') || '').split(',').map((x) => x.trim()).filter(Boolean)) if (!seen.has(s.toUpperCase())) seen.set(s.toUpperCase(), s);
   return [...seen.values()];
 };
+
+// FEAT-014/015: whole-book weights (% of net worth) and the guardrail report, shared by several panels.
+type BookView = Awaited<ReturnType<typeof portfolioWithQuotes>>;
+function bookWeights(all: BookView) {
+  return all.positions.map((x) => ({ symbol: x.symbol, weight: all.summary.netWorth > 0 ? (x.marketValue / all.summary.netWorth) * 100 : 0, last: x.last, currency: x.currency }));
+}
+async function guardrailReport(base: string) {
+  const all = await portfolioWithQuotes(base, 'ALL');
+  const accounts = [];
+  for (const a of listAccounts().accounts) accounts.push({ id: a.id, name: a.name, netWorth: (await portfolioWithQuotes(base, a.id)).summary.netWorth });
+  return guardrails.evaluate({ base: all.base, positions: all.positions, cash: all.cash, accounts }, guardrails.loadLimits());
+}
 
 async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
   // Applied to every response: the terminal must not be framed or MIME-sniffed.
@@ -466,10 +483,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         try { guardrails.saveLimits((await readBody(req)).limits); }
         catch (e) { return sendJson(res, 400, { error: (e as Error).message }); }
       }
-      const all = await portfolioWithQuotes(base, 'ALL');
-      const accounts = [];
-      for (const a of listAccounts().accounts) accounts.push({ id: a.id, name: a.name, netWorth: (await portfolioWithQuotes(base, a.id)).summary.netWorth });
-      return sendJson(res, 200, guardrails.evaluate({ base: all.base, positions: all.positions, cash: all.cash, accounts }, guardrails.loadLimits()));
+      return sendJson(res, 200, await guardrailReport(base));
     }
     if (p === '/api/theses' || p.startsWith('/api/theses/')) {
       // FEAT-014 §2: owner-written theses joined with whole-book holdings.
@@ -482,8 +496,64 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
           else return sendJson(res, 404, { error: 'Unknown endpoint' });
         } catch (e) { return sendJson(res, 400, { error: (e as Error).message }); }
       } else if (p !== '/api/theses') return sendJson(res, 404, { error: 'Unknown endpoint' });
+      return sendJson(res, 200, theses.report(bookWeights(await portfolioWithQuotes(base, 'ALL')), theses.list()));
+    }
+    if (p === '/api/costs') return sendJson(res, 200, await costsReport(base, acct, u.searchParams.get('range') || 'max')); // FEAT-015 §1
+    if (p === '/api/costbasis' || p.startsWith('/api/costbasis/')) {
+      // FEAT-015 §3: flags suspect costs; only a cost the owner types is written (ledger + undo).
+      if (req.method === 'POST') {
+        const b = await readBody(req);
+        try {
+          if (p === '/api/costbasis/mark') costbasis.setMark(b.account, b.symbol, b.status, b.note);
+          else if (p === '/api/costbasis/set') await costbasis.setAverageCost(b.account, b.symbol, b.avgCost);
+          else return sendJson(res, 404, { error: 'Unknown endpoint' });
+        } catch (e) { return sendJson(res, 400, { error: (e as Error).message }); }
+      } else if (p !== '/api/costbasis') return sendJson(res, 404, { error: 'Unknown endpoint' });
       const all = await portfolioWithQuotes(base, 'ALL');
-      return sendJson(res, 200, theses.report(all.positions.map((x) => ({ symbol: x.symbol, weight: all.summary.netWorth > 0 ? (x.marketValue / all.summary.netWorth) * 100 : 0, last: x.last, currency: x.currency })), theses.list()));
+      const unquoted = new Set(all.positions.filter((x) => !x.quoted).map((x) => x.symbol.toUpperCase()));
+      return sendJson(res, 200, await costbasis.costReview({ unquoted, check: req.method === 'GET' && u.searchParams.get('check') === '1' }));
+    }
+    if (p === '/api/radar') {
+      // FEAT-015 §4: upcoming events joined with the owner's own records (prompts, never trades).
+      const all = await portfolioWithQuotes(base, 'ALL');
+      const w = bookWeights(all);
+      const days = Math.min(90, Math.max(7, Number(u.searchParams.get('days')) || 30));
+      return sendJson(res, 200, await radarReport({ weights: Object.fromEntries(w.map((x) => [x.symbol.toUpperCase(), x.weight])),
+        theses: theses.report(w, theses.list()).rows, guardrails: (await guardrailReport(base)).checks }, days));
+    }
+    if (p === '/api/digest' || p === '/api/digest/save') {
+      // FEAT-015 §5: generated on request only; saving writes DATA_DIR/digests. No schedule, no delivery.
+      if (p === '/api/digest/save' && req.method !== 'POST') return sendJson(res, 405, { error: 'POST only' });
+      const all = await portfolioWithQuotes(base, 'ALL');
+      const w = bookWeights(all);
+      const safe = <T,>(f: () => Promise<T> | T): Promise<T | null> => Promise.resolve().then(f).catch(() => null);
+      const [perf, gr, cr] = await Promise.all([safe(() => portfolioPerformance('1mo', base, 'ALL', 'none')), safe(() => guardrailReport(base)),
+        safe(() => costbasis.costReview({ unquoted: new Set(all.positions.filter((x) => !x.quoted).map((x) => x.symbol.toUpperCase())) }))]);
+      const th = await safe(() => theses.report(w, theses.list()));
+      const rd = await safe(() => radarReport({ weights: Object.fromEntries(w.map((x) => [x.symbol.toUpperCase(), x.weight])), theses: th?.rows ?? [], guardrails: gr?.checks ?? [] }, 14));
+      const now = Date.now();
+      const d = digest.compose({ now, base: all.base, week: perf ? digest.weekFrom((perf as { points: { t: number; value: number; invested: number }[] }).points, now) : null,
+        guardrails: gr, theses: th, decisions: await safe(() => decisionsReport()), radar: rd, costReview: cr });
+      return sendJson(res, 200, { ...d, savedAs: p === '/api/digest/save' ? digest.save(d) : null });
+    }
+    if (p.startsWith('/api/backtest/')) {
+      // FEAT-015 §6: research runs and an owner-recorded "paper" status (forward tracking only; never orders).
+      try {
+        if (p === '/api/backtest/strategies' && req.method === 'GET') {
+          const all = await portfolioWithQuotes(base, 'ALL');
+          const universe = [...new Set([...all.positions.filter((x) => x.quoted).map((x) => x.symbol.toUpperCase()), ...loadPortfolio().watchlist.map((x) => x.toUpperCase())])]
+            .filter((x) => !/[=^]/.test(x) && !/-USD$/.test(x)).slice(0, backtest.MAX_SYMBOLS);
+          return sendJson(res, 200, { strategies: backtest.strategies(), defaultUniverse: universe, gate: backtest.GATE });
+        }
+        if (p === '/api/backtest/paper' && req.method === 'GET') return sendJson(res, 200, { tracks: await backtest.paperTracks() });
+        if (req.method === 'POST') {
+          const b = await readBody(req);
+          if (p === '/api/backtest/run') return sendJson(res, 200, await backtest.backtest(b.strategy, b.symbols, b.range));
+          if (p === '/api/backtest/promote') return sendJson(res, 200, { record: await backtest.promote(b.strategy, b.symbols, b.range, b.note), strategies: backtest.strategies() });
+          if (p === '/api/backtest/status') { backtest.setStatus(b.strategy, b.status); return sendJson(res, 200, { strategies: backtest.strategies() }); }
+        }
+      } catch (e) { return sendJson(res, 400, { error: (e as Error).message }); }
+      return sendJson(res, 404, { error: 'Unknown endpoint' });
     }
     if (p === '/api/decisions' && req.method === 'GET') return sendJson(res, 200, decisionsReport()); // FEAT-014 §3, read-only
     if (p === '/api/events') return sendJson(res, 200, await upcomingEvents(acct));

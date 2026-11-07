@@ -174,6 +174,31 @@ const PANELS: Record<string, () => ReactNode> = {
       <Host island="decisions" id="decisions" className="decisions" />
     </Panel>
   ),
+  costs: () => (
+    <Panel pid="costs" title={<span className="panel-title">RETURNS AFTER COSTS</span>} head={<span className="dim small" data-island-slot="costs:head"></span>}>
+      <Host island="costs" id="costs" className="costs" />
+    </Panel>
+  ),
+  costbasis: () => (
+    <Panel pid="costbasis" title={<span className="panel-title">COST BASIS REVIEW</span>} head={<span className="dim small" data-island-slot="costbasis:head"></span>}>
+      <Host island="costbasis" id="costbasis" className="costbasis" />
+    </Panel>
+  ),
+  radar: () => (
+    <Panel pid="radar" title={<span className="panel-title">EVENT RADAR</span>} head={<span className="dim small" data-island-slot="radar:head"></span>}>
+      <Host island="radar" id="radar" className="radar" />
+    </Panel>
+  ),
+  digest: () => (
+    <Panel pid="digest" title={<span className="panel-title">WEEKLY DIGEST</span>} head={<span className="dim small" data-island-slot="digest:head"></span>}>
+      <Host island="digest" id="digest" className="digest" />
+    </Panel>
+  ),
+  backtest: () => (
+    <Panel pid="backtest" title={<span className="panel-title">BACKTESTER</span>} head={<span className="dim small" data-island-slot="backtest:head"></span>}>
+      <Host island="backtest" id="backtest" className="backtest" />
+    </Panel>
+  ),
   fxrisk: () => (
     <Panel pid="fxrisk" title={<span className="panel-title">FX RISK</span>} head={<span id="fxr-spot" className="dim small" data-island-slot="fxrisk:head"></span>}>
       <Host island="fxrisk" id="fxrisk" className="fxrisk" />

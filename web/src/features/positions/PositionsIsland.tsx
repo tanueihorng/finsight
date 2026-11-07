@@ -2,7 +2,9 @@ import { keyboardClick } from '../../ui/keyboard.ts';
 import { useEffect, useMemo, useRef, type MouseEvent } from 'react';
 import { useStore } from 'zustand';
 import { api } from '../../api/client.ts';
-import { useAccounts, useCategories, usePortfolio } from '../../api/queries.ts';
+import { useAccounts, useCategories, usePortfolio, useTheses } from '../../api/queries.ts';
+import { vsFair } from '../../../../shared/valuation.ts';
+import type { Thesis } from '../../../../shared/theses.ts';
 import { selectSymbol, setStatus } from '../../legacy/app.ts';
 import { setLastPrices } from '../../state/store.ts';
 import { fmt, money, moneySigned, signClass, signStr } from '../../ui/format.ts';
@@ -60,7 +62,19 @@ function SumCells({ base, s }: { base: string; s: Sums }) {
   );
 }
 
-function PositionRow({ p, base, group, selected, flash, flashKey }: { p: Row; base: string; group: Group; selected: boolean; flash: string; flashKey: number }) {
+// FEAT-015 §2: price against the owner's thesis range. Shown only when some thesis has one.
+type Ranges = Record<string, Thesis['valuation']> | null;
+function FairCell({ p, ranges }: { p: Row; ranges: Ranges }) {
+  const v = ranges?.[p.symbol.toUpperCase()];
+  const r = vsFair(p.last, p.currency, v);
+  if (!r) return <td className="r dim">—</td>;
+  if (r.state === 'currency') return <td className="r dim" title={`Range is in ${r.currency}, price in ${r.priceCurrency}; not converted`}>ccy?</td>;
+  const range = `${r.low != null ? fmt(r.low) : '…'}–${r.high != null ? fmt(r.high) : '…'} ${r.currency}`;
+  const text = r.state === 'within' ? 'IN RANGE' : `${r.state === 'below' ? 'BELOW' : 'ABOVE'} ${fmt(Math.abs(r.gapPct), 0)}%`;
+  return <td className={'r ' + (r.state === 'below' ? 'up' : r.state === 'above' ? 'warn' : '')} title={`Your thesis range ${range}. A comparison, not a signal.`}>{text}</td>;
+}
+
+function PositionRow({ p, base, group, selected, flash, flashKey, ranges }: { p: Row; base: string; group: Group; selected: boolean; flash: string; flashKey: number; ranges: Ranges }) {
   const accts = group !== 'account' && p.holdings && p.holdings.length > 1 ? ` · ${p.holdings.length} accts` : '';
   const act = (fn: () => void) => (e: MouseEvent) => { e.stopPropagation(); fn(); };
   return (
@@ -83,6 +97,7 @@ function PositionRow({ p, base, group, selected, flash, flashKey }: { p: Row; ba
       <td className={`r ${signClass(p.unrealizedPct)}`}>{signStr(p.unrealizedPct)}%</td>
       <td className={`r ${signClass(p.fxPnl)}`}>{p.currency === base ? <span className="dim">—</span> : moneySigned(base, p.fxPnl)}</td>
       <td className="r">{fmt(p.weight, 1)}</td>
+      {ranges && <FairCell p={p} ranges={ranges} />}
       <td><div className="row-actions">
         <button aria-label={`Buy more ${p.symbol}`} title="Buy (B)" className="x-btn buy" data-act="buy" data-sym={p.symbol} onClick={act(() => trade(p, 'buy'))}>Buy</button>
         <button aria-label={`Sell ${p.symbol}`} title="Sell (S)" className="x-btn sell" data-act="sell" data-sym={p.symbol} data-qty={p.quantity} onClick={act(() => trade(p, 'sell'))}>Sell</button>
@@ -115,9 +130,15 @@ export default function PositionsIsland() {
     seen.current = store().getState().lastPrices;
   }, [portfolio.dataUpdatedAt]); // deliberately not [positions]
 
+  const theses = useTheses().data;
+  const ranges = useMemo<Ranges>(() => {
+    const withRange = (theses?.rows ?? []).filter((r) => r.thesis?.valuation && (r.thesis.valuation.low != null || r.thesis.valuation.high != null));
+    return withRange.length ? Object.fromEntries(withRange.map((r) => [r.symbol.toUpperCase(), r.thesis!.valuation])) : null;
+  }, [theses]);
+  const cols = ranges ? 12 : 11;
   const model = tableModel(view, categories, positions, accountName);
   const row = (p: Row) => <PositionRow key={p.symbol + '|' + (p.account ?? '')} p={p} base={base} group={view.group}
-    selected={selected === p.symbol} flash={flashes[p.symbol] || ''} flashKey={portfolio.dataUpdatedAt} />;
+    selected={selected === p.symbol} flash={flashes[p.symbol] || ''} flashKey={portfolio.dataUpdatedAt} ranges={ranges} />;
   const b = model.body;
   return (
     <>
@@ -153,17 +174,18 @@ export default function PositionsIsland() {
                 <th key={k} scope="col" tabIndex={0} onKeyDown={keyboardClick} aria-sort={view.sortKey === k ? (view.sortDir > 0 ? 'ascending' : 'descending') : 'none'} data-sort={k} className={[right && 'r', view.sortKey === k && 'sorted'].filter(Boolean).join(' ') || undefined}
                   data-dir={view.sortKey === k ? (view.sortDir > 0 ? '▲' : '▼') : ''} onClick={() => setPosView(toggleSort(view, k))}>{label}</th>
               ))}
+              {ranges && <th scope="col" className="r" title="Price against your thesis fair-value range">VS FAIR</th>}
               <th scope="col"><span className="sr-only">Actions</span></th>
             </tr>
           </thead>
           <tbody id="positions-body">
-            {b.kind === 'empty' && <tr><td colSpan={11} className="empty">No positions yet — add one above or type <b>ADD AAPL 10 195.50</b> in the command bar.</td></tr>}
-            {b.kind === 'nomatch' && <tr><td colSpan={11} className="empty">No holdings match this filter.</td></tr>}
+            {b.kind === 'empty' && <tr><td colSpan={cols} className="empty">No positions yet — add one above or type <b>ADD AAPL 10 195.50</b> in the command bar.</td></tr>}
+            {b.kind === 'nomatch' && <tr><td colSpan={cols} className="empty">No holdings match this filter.</td></tr>}
             {b.kind === 'rows' && b.rows.map(row)}
             {b.kind === 'groups' && b.groups.map((g) => [
               <tr key={'grp:' + g.key} className="grp-row" data-grp={g.key} tabIndex={0} aria-expanded={g.open} onKeyDown={keyboardClick} onClick={() => setPosView(toggleCollapsed(view, g.key))}>
                 <td colSpan={5}><span className="grp-caret">{g.open ? '▾' : '▸'}</span> {g.key.toUpperCase()} <span className="dim">· {g.rows.length}</span></td>
-                <SumCells base={base} s={g.sums} /><td></td>
+                <SumCells base={base} s={g.sums} />{ranges && <td></td>}<td></td>
               </tr>,
               ...(g.open ? g.rows.map(row) : []),
             ])}
