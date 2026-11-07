@@ -1,4 +1,4 @@
-const holdings = ['portfolio', 'dividends', 'fx-risk', 'performance', 'wealth', 'ledger', 'realized', 'accounts', 'chart-trades', 'events', 'categories', 'discover', 'exposure'] as const;
+const holdings = ['portfolio', 'dividends', 'fx-risk', 'performance', 'wealth', 'ledger', 'realized', 'accounts', 'chart-trades', 'events', 'categories', 'discover', 'exposure', 'guardrails'] as const;
 const scoped = [...holdings, 'alerts', 'detail'] as const;
 // Endpoint writes -> readers (docs/frontend-migration/COUPLING.md §A6). Keys are
 // refreshed in order: 'accounts' comes first where a write can remove the

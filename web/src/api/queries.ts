@@ -200,3 +200,10 @@ export function useDividends() {
   return useQuery({ queryKey: ['dividends', base, account], enabled, staleTime: 120_000, refetchInterval: 120_000,
     queryFn: ({ signal }) => api<import('../../../shared/types.ts').DividendsReport>(`/api/dividends?base=${encodeURIComponent(base)}&account=${encodeURIComponent(account)}`, { signal }) });
 }
+
+/** FEAT-014: whole-book guardrails (not account-scoped: limits apply to the whole book). */
+export function useGuardrails() {
+  const { base, enabled } = useScope();
+  return useQuery({ queryKey: ['guardrails', base], enabled, staleTime: 120_000, refetchInterval: 120_000,
+    queryFn: ({ signal }) => api<import('../../../shared/guardrails.ts').GuardrailReport>(`/api/guardrails?base=${encodeURIComponent(base)}`, { signal }) });
+}

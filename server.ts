@@ -33,6 +33,7 @@ import {
 } from './lib/portfolio.ts';
 import { dividendsReport, upcomingEvents, setWithholding } from './lib/dividends.ts';
 import { discover } from './lib/discover.ts';
+import * as guardrails from './lib/guardrails.ts';
 import { chartTrades, ledger, editBuy, deleteBuy, realizedReport } from './lib/ledger.ts';
 import { undo, undoInfo } from './lib/store.ts';
 import * as charts from './lib/charts.ts';
@@ -456,6 +457,17 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     }
     if (p === '/api/dividends') {
       return sendJson(res, 200, await dividendsReport(base, acct));
+    }
+    if (p === '/api/guardrails' || p === '/api/guardrails/limits') {
+      // FEAT-014: whole-book exposures against the user's own limits (read-only; flags, never orders).
+      if (p === '/api/guardrails/limits' && req.method === 'POST') {
+        try { guardrails.saveLimits((await readBody(req)).limits); }
+        catch (e) { return sendJson(res, 400, { error: (e as Error).message }); }
+      }
+      const all = await portfolioWithQuotes(base, 'ALL');
+      const accounts = [];
+      for (const a of listAccounts().accounts) accounts.push({ id: a.id, name: a.name, netWorth: (await portfolioWithQuotes(base, a.id)).summary.netWorth });
+      return sendJson(res, 200, guardrails.evaluate({ base: all.base, positions: all.positions, cash: all.cash, accounts }, guardrails.loadLimits()));
     }
     if (p === '/api/events') return sendJson(res, 200, await upcomingEvents(acct));
     if (p === '/api/discover') return sendJson(res, 200, await discover(acct));

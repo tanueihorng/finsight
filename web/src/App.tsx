@@ -159,6 +159,11 @@ const PANELS: Record<string, () => ReactNode> = {
       <Host island="alerts" id="alerts" className="alerts" />
     </Panel>
   ),
+  guardrails: () => (
+    <Panel pid="guardrails" title={<span className="panel-title">POLICY GUARDRAILS</span>} head={<span className="dim small" data-island-slot="guardrails:head"></span>}>
+      <Host island="guardrails" id="guardrails" className="guardrails" />
+    </Panel>
+  ),
   fxrisk: () => (
     <Panel pid="fxrisk" title={<span className="panel-title">FX RISK</span>} head={<span id="fxr-spot" className="dim small" data-island-slot="fxrisk:head"></span>}>
       <Host island="fxrisk" id="fxrisk" className="fxrisk" />
