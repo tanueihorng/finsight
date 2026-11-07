@@ -33,6 +33,7 @@ import * as ActivityIsland from './features/activity/ActivityIsland.tsx';
 import * as FxRiskIsland from './features/fxrisk/FxRiskIsland.tsx';
 import * as GuardrailsIsland from './features/guardrails/GuardrailsIsland.tsx';
 import * as ThesesIsland from './features/theses/ThesesIsland.tsx';
+import * as DecisionsIsland from './features/decisions/DecisionsIsland.tsx';
 import * as TradeSheetIsland from './features/trade/TradeSheetIsland.tsx';
 import * as BookIsland from './features/paper/BookIsland.tsx';
 import * as PaperIsland from './features/paper/PaperIsland.tsx';
@@ -113,6 +114,7 @@ export const islands: IslandRegistry = preloadable({
   fxrisk: () => Promise.resolve(FxRiskIsland),
   guardrails: () => Promise.resolve(GuardrailsIsland),
   theses: () => Promise.resolve(ThesesIsland),
+  decisions: () => Promise.resolve(DecisionsIsland),
   trade: () => Promise.resolve(TradeSheetIsland),
   book: () => Promise.resolve(BookIsland),
   paper: () => Promise.resolve(PaperIsland),

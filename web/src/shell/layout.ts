@@ -7,17 +7,17 @@ export type Side = 'left' | 'right';
 export interface Columns { left: string[]; right: string[] }
 // Default order, as in the pre-X1 index.html (Kestrel's dock sits after the detail).
 export const DEFAULT_COLUMNS: Columns = {
-  left: ['positions', 'guardrails', 'theses', 'performance', 'wealth', 'allocation', 'exposure', 'heatmap', 'watchlist', 'alerts', 'fxrisk', 'dividends', 'activity'],
+  left: ['positions', 'guardrails', 'theses', 'decisions', 'performance', 'wealth', 'allocation', 'exposure', 'heatmap', 'watchlist', 'alerts', 'fxrisk', 'dividends', 'activity'],
   right: ['detail', 'kestrel', 'news', 'markets', 'discover', 'calendar', 'worldbank', 'fred', 'inflation'],
 };
 // ⚙ Layout's show/hide list: [body id, label]; the body id is what finsight-panels stores.
 export const PANELS: [string, string][] = [
-  ['guardrails', 'Policy Guardrails'], ['theses', 'Thesis Tracker'], ['perf-body', 'Performance'], ['alloc-body', 'Allocation'], ['exposure-body', 'Look-through'], ['heatmap-body', 'Sector Heatmap'],
+  ['guardrails', 'Policy Guardrails'], ['theses', 'Thesis Tracker'], ['decisions', 'Decision Log'], ['perf-body', 'Performance'], ['alloc-body', 'Allocation'], ['exposure-body', 'Look-through'], ['heatmap-body', 'Sector Heatmap'],
   ['fxrisk', 'FX Risk'], ['dividends', 'Dividends'], ['watchlist', 'Watchlist'], ['alerts', 'Price Alerts'], ['activity', 'Recent Activity'],
   ['news', 'News'], ['markets', 'World Markets'], ['discover', 'Discover'], ['calendar', 'Econ Calendar'], ['wb-body', 'World Bank'], ['fred-body', 'US Fed (FRED)'], ['infl-body', 'US Inflation Gauges'],
 ];
 export const HIDE_ID: Record<string, string> = {
-  guardrails: 'guardrails', theses: 'theses', performance: 'perf-body', allocation: 'alloc-body', exposure: 'exposure-body', heatmap: 'heatmap-body', fxrisk: 'fxrisk', dividends: 'dividends', watchlist: 'watchlist',
+  guardrails: 'guardrails', theses: 'theses', decisions: 'decisions', performance: 'perf-body', allocation: 'alloc-body', exposure: 'exposure-body', heatmap: 'heatmap-body', fxrisk: 'fxrisk', dividends: 'dividends', watchlist: 'watchlist',
   alerts: 'alerts', activity: 'activity', news: 'news', markets: 'markets', discover: 'discover', calendar: 'calendar', worldbank: 'wb-body', fred: 'fred-body', inflation: 'infl-body',
 };
 export interface SavedLayout { left?: string[]; right?: string[] }

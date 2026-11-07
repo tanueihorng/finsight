@@ -34,7 +34,7 @@ were never executed. None of them places, drafts or suggests an order.
   status `proposed|accepted`, symbol format, floor ≤ ceiling; unchanged entries keep `updatedAt`).
 - Panel: `POLICY GUARDRAILS`, left column after Positions, hideable in ⚙ Layout; EDIT LIMITS editor.
 
-## 2. Thesis tracker (in progress)
+## 2. Thesis tracker (implemented)
 
 Per holding, following policy §6: role (core / tactical / unclassified), value mechanism, valuation
 range, invalidation conditions (business / valuation / portfolio-fit; urgent or needs corroboration),
@@ -42,16 +42,29 @@ optional maximum intended weight, review interval and next review date, and date
 (`intact`, `weakened`, `broken`, `insufficient evidence`). Held symbols without a thesis are listed as
 such; a missing thesis is not a reason to sell.
 
-## 3. Decision log view (in progress)
+## 3. Decision log view (implemented)
 
-Parses `DECISION_LOG.md` entries headed `## D-…` and shows, per entry, the date, title, user decision
-(pending / accepted / modified / rejected, as written) and execution status. Entries whose decision is
-accepted but whose execution is not confirmed are flagged "decided, not executed". Read-only; the raw
-entry text is shown so nothing is reinterpreted.
+Parses `DECISION_LOG.md` entries headed `## D-YYYYMMDD-NNN — title` (the template's placeholder id is
+skipped) and shows date, id, title, the "User decision" and "Execution" text exactly as written, and the
+raw entry on expansion. Tags are a coarse reading of the first words only: a decision starting "pending"
+is pending, otherwise decided; an execution starting "none"/"unexecuted" is none. "Decided, not executed"
+means exactly that pairing, so an entry that authorised research but left the investment decision
+pending can still be flagged; the text beside it is authoritative. Duplicate ids and missing status
+lines are listed as log issues. `GET /api/decisions` returns the file name, never its folder path.
+
+API: `GET /api/theses?base=`, `POST /api/theses/save {thesis}`, `/api/theses/delete {symbol}`,
+`/api/theses/check {symbol, check}` (verdict, optional note and past date; next review = check date +
+interval).
 
 ## Verification
 
 - `test/guardrails.test.ts` (6 tests): unset defaults, issuer de-duplication, currency incl. cash, near and
   floor logic, named holdings, no-data, validation, persistence.
-- Browser check on an isolated scratch data dir with fictional holdings (port 8013): panel renders, editor
-  saves, 2 breach / 1 near shown as expected.
+- `test/theses.test.ts` (3): validation per policy §6, check history and next-review movement, report join
+  (issuer de-duplication, overdue, valuation band only in matching currency, max weight, sold symbols).
+- `test/decisions.test.ts` (2): template skipped, tags and flag, duplicate ids, missing lines, folder path
+  not exposed.
+- Browser check on an isolated scratch data dir with fictional holdings and a fictional log (port 8013):
+  guardrail editor saves and shows 2 breach / 1 near; a thesis is written, validated, reviewed and shown
+  over its max weight; the decision filter and entry expansion work.
+- The owner's real log was parsed locally as a smoke test; its contents are not recorded in this repo.

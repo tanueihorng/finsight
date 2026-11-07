@@ -214,3 +214,10 @@ export function useTheses() {
   return useQuery({ queryKey: ['theses', base], enabled, staleTime: 120_000, refetchInterval: 300_000,
     queryFn: ({ signal }) => api<import('../../../shared/theses.ts').ThesisReport>(`/api/theses?base=${encodeURIComponent(base)}`, { signal }) });
 }
+
+/** FEAT-014 §3: read-only parse of the owner's decision log. */
+export function useDecisions() {
+  const { enabled } = useScope();
+  return useQuery({ queryKey: ['decisions'], enabled, staleTime: 60_000, refetchInterval: 300_000,
+    queryFn: ({ signal }) => api<import('../../../shared/decisions.ts').DecisionReport>('/api/decisions', { signal }) });
+}

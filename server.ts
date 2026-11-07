@@ -35,6 +35,7 @@ import { dividendsReport, upcomingEvents, setWithholding } from './lib/dividends
 import { discover } from './lib/discover.ts';
 import * as guardrails from './lib/guardrails.ts';
 import * as theses from './lib/theses.ts';
+import { report as decisionsReport } from './lib/decisions.ts';
 import { chartTrades, ledger, editBuy, deleteBuy, realizedReport } from './lib/ledger.ts';
 import { undo, undoInfo } from './lib/store.ts';
 import * as charts from './lib/charts.ts';
@@ -484,6 +485,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       const all = await portfolioWithQuotes(base, 'ALL');
       return sendJson(res, 200, theses.report(all.positions.map((x) => ({ symbol: x.symbol, weight: all.summary.netWorth > 0 ? (x.marketValue / all.summary.netWorth) * 100 : 0, last: x.last, currency: x.currency })), theses.list()));
     }
+    if (p === '/api/decisions' && req.method === 'GET') return sendJson(res, 200, decisionsReport()); // FEAT-014 §3, read-only
     if (p === '/api/events') return sendJson(res, 200, await upcomingEvents(acct));
     if (p === '/api/discover') return sendJson(res, 200, await discover(acct));
     if (p === '/api/settings/withholding' && req.method === 'POST') {
