@@ -6,7 +6,7 @@
 
 <p><b>A free, Bloomberg-style portfolio terminal that runs entirely on your own machine.</b><br>
 Live market data, FX-risk tracking, and an economic calendar — no accounts, no API keys, nothing to install.<br>
-Now with <b>↗ Kestrel</b>, a built-in AI research agent that knows your portfolio.</p>
+Now with <b>↗ Kestrel</b>, a built-in AI agent that researches your portfolio and can trade a fake-money paper account.</p>
 
 <p>
 <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-a78bfa">
@@ -16,10 +16,12 @@ Now with <b>↗ Kestrel</b>, a built-in AI research agent that knows your portfo
 <img alt="Runs 100% local" src="https://img.shields.io/badge/runs-100%25%20local-2ec27e">
 <img alt="AI agent: Kestrel" src="https://img.shields.io/badge/AI%20agent-%E2%86%97%20Kestrel-2ec27e">
 <img alt="Models: any" src="https://img.shields.io/badge/models-DeepSeek%20%C2%B7%20Claude%20%C2%B7%20more-38bdf8">
+<img alt="Paper trading: Alpaca" src="https://img.shields.io/badge/paper%20trading-Alpaca-a78bfa">
 </p>
 
 <p>
 <a href="#-meet-kestrel--your-ai-research-agent">↗ Kestrel AI agent</a> ·
+<a href="#-agentic-paper-trading">Paper trading</a> ·
 <a href="#-quick-start">Quick start</a> ·
 <a href="#-features">Features</a> ·
 <a href="#-fx-risk--macro">FX risk &amp; macro</a> ·
@@ -47,16 +49,18 @@ It's built for the investor who **funds in one currency and invests in another**
 
 <div align="center"><img src="docs/kestrel.svg" alt="Kestrel chat panel running a pre-trade check inside FinSight" width="100%"></div>
 
-Press **⌘/** anywhere in FinSight and a chat panel slides in. **Kestrel** is an AI research agent that can see what you can see: your holdings, cash, P&amp;L, upcoming earnings, your strategy library and the chart you're looking at. It answers with real numbers from FinSight, cites its sources, and **never trades**.
+Press **⌘/** anywhere in FinSight and a chat panel slides in. **Kestrel** is an AI research agent that can see what you can see: your holdings, cash, P&amp;L, upcoming earnings, your strategy library and the chart you're looking at. It answers with real numbers from FinSight and cites its sources. It **never touches real money**: the only orders it can place are on a fake-money [paper account](#-agentic-paper-trading).
 
 > *"Which of my holdings have a live strategy setup?"* · *"How exposed am I to semiconductors?"* · *"What changed in NVDA's last 10-Q?"* · *"Why is my portfolio down today?"* · *"Is adding 20 more TSM a good idea under my rules?"*
 
 | | |
 |---|---|
 | 🧠 **Any model** | DeepSeek (default, very cheap), Claude Haiku, Claude Code, or any OpenAI-compatible model. Switch mid-chat from the model picker; adding a model is one manifest file |
-| 📊 **Knows your portfolio** | 38 read-only tools: positions, exposure by currency/sector, cash, dividends, events, ledger, journal. Totals and weights come from code, not model arithmetic |
+| 📊 **Knows your portfolio** | 53 tools covering positions, exposure by currency/sector, cash, dividends, events, ledger and journal. Totals and weights come from code, not model arithmetic |
 | 📈 **Uses your strategies** | Runs the same strategy engines as the chart (pullback, breakout, MA trend, RSI-2, DCA zones), scans holdings for live setups, sizes positions from your real cash |
-| 🔎 **Researches** | SEC EDGAR filings and XBRL financials, web search (Tavily / Brave / SearchGPT) and page reading. Every fact carries a source and a date |
+| 🔎 **Researches** | SEC EDGAR filings and XBRL financials, Form 4 insider trades, FINRA short interest, technical indicators, DCF and reverse DCF, peer comparison, web search (Tavily / Brave / SearchGPT) and page reading. Every fact carries a source and a date |
+| 🏛️ **Investment Council** | Business & Growth, Macro & Valuation and Portfolio Risk specialists assess a question independently and challenge each other, then Kestrel chairs the conclusion |
+| 🧪 **Paper trades** | Places and cancels orders on an Alpaca paper account, with your approval or on its own within your limits. See [Agentic paper trading](#-agentic-paper-trading) |
 | 🧩 **Skills** | `/pre-trade-check`, `/position-review`, `/earnings-review`, `/why-did-it-move`, `/strategy-scan` — or drop in your own [Agent Skills](https://github.com/anthropics/skills)-format playbooks |
 | 📎 **Files & pictures** | Paste or drop PDFs, Word docs, CSVs or chart screenshots and ask about them |
 | 🗂️ **Session rail & prompt library** | Session history rail (switch, rename, pin, delete threads), start screen with prompt ideas, and Claude-style typography (bundled Source Serif 4 answers) |
@@ -66,8 +70,8 @@ Press **⌘/** anywhere in FinSight and a chat panel slides in. **Kestrel** is a
 <div align="center"><img src="docs/kestrel-architecture.svg" alt="How Kestrel fits into FinSight" width="100%"></div>
 
 **Built to be trusted with your money data**
-- 🛑 **Read-only by design** — no tool can trade, move money, message anyone or edit your records. Facts you tell it become *proposals* you confirm.
-- 🔐 **Local and locked** — Kestrel runs on loopback behind your FinSight PIN and reads data with a GET-only token. API keys live in the macOS Keychain.
+- 🛑 **Read-only toward your real book** — no tool can place a real trade, move money, message anyone or edit your records. Paper orders are the one exception, and they only reach the fake-money account. Facts you tell it become *proposals* you confirm.
+- 🔐 **Local and locked** — Kestrel runs on loopback behind your FinSight PIN. Its token can read data and submit paper orders or cancels, and nothing else. API keys live in the macOS Keychain.
 - 🧱 **Hardened** — sandboxed strategy plugins, SSRF-guarded web fetching, untrusted web pages and documents can't give it orders, per-answer spend limits and a daily cap.
 - 🙈 **Nothing personal in the repo** — chats, logs, uploads and keys stay in your data folder.
 
@@ -81,6 +85,28 @@ node server.ts                 # FinSight starts, supervises and stops Kestrel f
 
 Then press **⌘/** (or the **↗ KESTREL** button). Use it as a **side panel** (drag the ⋮ edge or press ↔ to change the width) or **dock it into the terminal** with ⊟, where it becomes a normal panel you can drag between columns, collapse ▾ and resize in height. FinSight works exactly as before without it. Full guide: **[agent/README.md](agent/README.md)** · spec: **[agent/docs/SPEC.md](agent/docs/SPEC.md)**.
 
+## 🧪 Agentic paper trading
+
+Switch FinSight from **REAL** to **PAPER** on the lock screen or in the top bar, and you get a second book backed by an [Alpaca](https://alpaca.markets) paper account: fake money, US stocks and ETFs. Your real portfolio is untouched, and the PAPER badge and coloured stripe keep the two apart.
+
+**The trade desk** puts a chart, a docked order ticket and a watchlist on one screen. It takes market and limit orders in shares or USD, draws fills and open orders on the chart, and shows positions, history, news and P&L live.
+
+**Kestrel can trade it.** Ask it in chat to buy, sell or cancel, or let it act when the conversation calls for it. You decide how much rope it gets:
+
+| Approval | What happens to Kestrel's order |
+|---|---|
+| **Ask** (default) | Becomes a pending ticket you approve or reject on the desk |
+| **Auto** | Goes straight to Alpaca, within your limits |
+
+- 🚧 **Limits you set** — maximum order value, orders per day, position weight after the order, and a symbol allowlist. Each is optional, and a breached limit refuses the order with the reason before it reaches Alpaca.
+- 🔑 **Kestrel can't change the rules** — approval and limits change only from your PIN session. Your Alpaca keys stay on the server and are never sent to the browser or to Kestrel.
+- 🏷️ **Every order is labelled** — you can see whether you or Kestrel placed it, with Kestrel's note on why.
+- 🔌 **Works over MCP too** — Claude Code and Codex get the same paper tools, through the same approval and limits.
+- 🚫 **Paper only** — the broker address is fixed to Alpaca's paper API and live keys are refused. There is no real-money trading path in the code.
+
+**Turn it on:** create a free paper key pair at Alpaca, switch to PAPER and paste the keys into the desk's Connect form, or set `ALPACA_PAPER_KEY_ID` and `ALPACA_PAPER_SECRET_KEY`. This is the only part of FinSight that needs a broker key.
+
+Today Kestrel trades when you are talking to it. A scheduled cycle that screens, researches, decides and scores its own results is [planned](docs/features/FEAT-013-agentic-trading.md) but not built.
 
 ## 🚀 Quick start
 
@@ -146,6 +172,7 @@ Or drop in a raw **Interactive Brokers / moomoo / Tiger** statement — FinSight
 | 💵 **Dividends** | Received and forward income **net of withholding tax**, yield on cost, next ex-date |
 | 🗓️ **Company dates** | Upcoming earnings and ex-dividend dates for what you hold or watch |
 | 💰 **Cash** | Track uninvested cash per currency — net worth, and foreign cash counts as FX exposure |
+| 🧪 **Paper trading** | A separate fake-money book on Alpaca with a full trade desk, for you and Kestrel |
 | 📲 **Installable** | Install as its own app window; opens instantly; warm cache survives restarts and Yahoo hiccups |
 | 🔔 **Price alerts** | Desktop notification + toast + beep, even when the browser is closed |
 | 🎨 **Themes & fonts** | Switch accent palette and font; remembered per browser |
@@ -223,14 +250,16 @@ All free, no key:
 | **World Bank** | Macro indicators by country |
 | **Forex Factory** | This-week economic-calendar events (CPI/PCE/jobs/FOMC) |
 
+Optional: paper trading uses your own free **Alpaca** paper keys, and Kestrel needs a key for the AI provider you choose.
+
 > [!IMPORTANT]
-> **Not affiliated** with Bloomberg, Yahoo, Interactive Brokers, Forex Factory, or the Federal Reserve. "Bloomberg-style" describes the look only. The code *fetches* public endpoints for your own personal, local use — it does **not redistribute** any provider's data, and you shouldn't either. **FRED**/**World Bank** are open data; **Yahoo** is an unofficial endpoint (a common grey area — expect occasional rate-limiting); **Forex Factory's** feed is free for **personal use only — don't rebroadcast it**. Nothing here is financial advice; data is "as is" with no warranty.
+> **Not affiliated** with Bloomberg, Yahoo, Interactive Brokers, Alpaca, Forex Factory, or the Federal Reserve. "Bloomberg-style" describes the look only. The code *fetches* public endpoints for your own personal, local use — it does **not redistribute** any provider's data, and you shouldn't either. **FRED**/**World Bank** are open data; **Yahoo** is an unofficial endpoint (a common grey area — expect occasional rate-limiting); **Forex Factory's** feed is free for **personal use only — don't rebroadcast it**. Nothing here is financial advice; data is "as is" with no warranty.
 
 ## 🏗️ Architecture
 
-Every component, how they talk to each other, and where data lives. FinSight owns your portfolio data and all market-data fetching. Kestrel runs as a supervised loopback service with read-only access, and everything except model and data providers stays on your machine.
+Every component, how they talk to each other, and where data lives. FinSight owns your portfolio data and all market-data fetching. Kestrel runs as a supervised loopback service with read-only access to your real book, and everything except model, data and paper-broker providers stays on your machine.
 
-<div align="center"><img src="docs/architecture.svg" alt="Full FinSight + Kestrel architecture: browser, FinSight server, Kestrel agent (API, chat engine, model adapters, 38 tools, MCP server, sandbox), internet services and local storage" width="100%"></div>
+<div align="center"><img src="docs/architecture.svg" alt="Full FinSight + Kestrel architecture: browser, FinSight server, Kestrel agent (API, chat engine, model adapters, 53 tools, MCP server, sandbox), internet services and local storage" width="100%"></div>
 
 **How the Kestrel chatbot works with FinSight**, in six steps:
 
@@ -242,10 +271,10 @@ Every component, how they talk to each other, and where data lives. FinSight own
 | Layer | Pieces |
 |---|---|
 | **Browser** | Terminal UI — one React app (`web/src/App.tsx`, built to `public/app/`) with the plain-JS `chart.js` canvas chart · ↗ Kestrel panel (React island, SSE stream) · service worker (static shell + build manifest) · PIN lock |
-| **FinSight server** (`:8000`) | `server.ts` router with security headers and Host check · `lib/auth` PIN sessions · `lib/agentlink` GET-only agent token and `/api/agent/*` proxy · `lib/agentproc` agent supervisor · domain logic in `lib/` (portfolio, ledger, dividends, performance, market, macro, charts, journal, cache) |
-| **Kestrel agent** (`127.0.0.1:8100`) | HTTP API (`/v1`, loopback and secret gate) · chat engine (tool loop, limits, retries, SSE events) · model adapters (OpenAI-compatible, Anthropic SDK, Claude Code CLI) · 38 read-only tools · MCP server (stdio) · strategy sandbox · SSRF-guarded fetch · uploads · skills · interaction log |
+| **FinSight server** (`:8000`) | `server.ts` router with security headers and Host check · `lib/auth` PIN sessions · `lib/agentlink` agent token (GET plus paper orders only) and `/api/agent/*` proxy · `lib/agentproc` agent supervisor · `lib/paper` + `lib/alpaca` paper book, order gate and broker link · domain logic in `lib/` (portfolio, ledger, dividends, performance, market, macro, charts, journal, cache) |
+| **Kestrel agent** (`127.0.0.1:8100`) | HTTP API (`/v1`, loopback and secret gate) · chat engine (tool loop, limits, retries, SSE events) · model adapters (OpenAI-compatible, Anthropic SDK, Claude Code CLI) · 53 tools (read-only except paper orders) · MCP server (stdio) · strategy sandbox · SSRF-guarded fetch · uploads · skills · interaction log |
 | **Storage** | `~/FinSightData`: portfolio and app JSON files (0600) · `agent/agent.db` SQLite (threads, messages, turns, events, traces, cost, cache, proposals, FTS) · logs, uploads, skills, config · macOS Keychain for API keys |
-| **Internet** | LLM providers (DeepSeek, Anthropic) · SEC EDGAR · Tavily/Brave search · Yahoo Finance, FRED, World Bank, Forex Factory (via FinSight only) |
+| **Internet** | LLM providers (DeepSeek, Anthropic) · SEC EDGAR · FINRA · Tavily/Brave search · Alpaca paper API, Yahoo Finance, FRED, World Bank, Forex Factory (via FinSight only) |
 </details>
 
 ## 📁 Project structure

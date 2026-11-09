@@ -78,7 +78,7 @@
   <rect x="500" y="204" width="166" height="96" rx="8" class="box"/>
   <text x="514" y="226" class="t">Token gate</text>
   <text x="514" y="246" class="s">lib/agentlink.ts</text>
-  <text x="514" y="264" class="s">GET-only allowlist</text>
+  <text x="514" y="264" class="s">GET + paper only</text>
   <text x="514" y="282" class="m">fails closed w/o PIN</text>
 
   <rect x="324" y="312" width="342" height="92" rx="8" class="boxv"/>
@@ -139,7 +139,7 @@
   <text x="1016" y="356" class="m">pricing → cost ledger · vision flag</text>
 
   <rect x="710" y="384" width="572" height="150" rx="8" class="box"/>
-  <text x="724" y="406" class="t">Tool registry · 35 read-only tools · zod schemas → JSON Schema</text>
+  <text x="724" y="406" class="t">Tool registry · 53 tools · zod schemas → JSON Schema</text>
   <g class="s">
     <text x="724" y="430">Portfolio (19)</text>
     <text x="724" y="446" class="m">get_portfolio · query_positions</text>

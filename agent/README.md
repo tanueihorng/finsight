@@ -67,7 +67,7 @@ Type `/` in the chat to see them. Bundled skills: `pre-trade-check`, `position-r
   ```bash
   npm run skills -- add https://github.com/<owner>/<repo>/tree/<ref>/<path-to-skill-folder>
   ```
-- **Limits:** skills are instructions, not code. Scripts inside third-party skills are not executed, and skills get the same read-only tools as chat.
+- **Limits:** skills are instructions, not code. Scripts inside third-party skills are not executed, and skills get the same tools as chat.
 
 ## Files and pictures
 
