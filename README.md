@@ -111,6 +111,8 @@ Today Kestrel trades when you are talking to it. A scheduled cycle that screens,
 ## 🚀 Quick start
 
 > Requires **Node.js 24+** to run: the server is TypeScript that Node runs directly. The web UI ships pre-built, so there is still nothing to `npm install`. (See [DOCS.md](DOCS.md) for rebuilding the UI and running the tests.)
+>
+> Kestrel's portfolio backtesting tools also need the Python worker. Install [uv](https://docs.astral.sh/uv/), then run `uv sync --project agent/quant` once. Everything else works without it.
 
 ```bash
 git clone https://github.com/tanueihorng/finsight.git

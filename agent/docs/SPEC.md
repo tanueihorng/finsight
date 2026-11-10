@@ -197,6 +197,11 @@ All facts tools are **read-only** and call FinSight with the GET-only token [D-Q
 | FR-4.13 | **Conformance suite** runs on load and in CI for every strategy: manifest schema, card completeness, no look-ahead (signal at t is unchanged when bars after t are removed), determinism (same input gives the same output), sandbox compliance, result reproducibility. Failing strategies are listed as `invalid` with reasons and are not runnable. |
 | FR-4.14 | A discretionary strategy (no engine) MUST be usable as a checklist. The agent MUST NOT produce mechanical signals for it. |
 | FR-4.15 | All mechanical strategies MUST report the same metric set (R/trade or %/trade, win rate, max drawdown, trades, vs buy-and-hold) on a declared universe and cost model, so they can be compared. |
+| FR-4.16 | `backtest_portfolio` replays one mechanical strategy across many symbols in a single cash-limited portfolio against a total-return benchmark (FEAT-014). Candidate trades MUST come from the shared strategy engines through the sandbox, per FR-4.3. |
+| FR-4.17 | Portfolio replay and metrics run in the Python worker in `agent/quant/`: JSON in and out, no inherited credentials, timeout, output cap, and no broker access (sockets and child processes denied by a Python audit hook). User-supplied strategy code MUST NOT run in it. The final ledger MUST reconcile or the run fails. |
+| FR-4.18 | Every `backtest_portfolio` result MUST state that it is in-sample, the survivorship and selection bias, its assumptions, its data warnings and hashes of the dataset and engine. A backtest MUST NOT place, approve or size a paper order. |
+| FR-4.19 | Every `backtest_portfolio` run MUST be saved in `agent.db` with the bars it used and return a `runId`. `get_quant_run` reads or lists saved runs and can recompute one from its stored bars without FinSight. A run whose bars fail their hash check MUST be refused. The newest 100 runs are kept. |
+| FR-4.20 | `validate_quant_run` stresses a saved run with frozen rules and returns pass, fail or insufficient for fixed time, universe, cost and bootstrap checks. It MUST refuse when the engine no longer produces the run's trades, MUST state that it is not out-of-sample proof, and MUST NOT change a strategy's status or authorise a paper order. |
 
 ### FR-5 Background tasks and workflows
 
@@ -358,6 +363,7 @@ The tool layer runs as an MCP server over **stdio** for Claude Code/Codex (local
 | `cost_ledger` | id, ts, brain, model, kind (input/output/cache_read/cache_write/search/api), units, unit_price, price_version, usd, task_id?, turn_id?, workflow | |
 | `cache_search` / `cache_fetch` | key (hash), value_json, fetched_at, expires_at | |
 | `proposals` | id, kind (profile/thesis/decision/strategy_status), target, diff_json, source_turn, status (pending/accepted/rejected), decided_at | applying a proposal is a separate, user-initiated action |
+| `quant_runs` / `quant_series` / `quant_run_series` | run id, strategy_key, result_json; sha256, bars_gz; run_id, symbol, sha256 | saved backtests (FR-4.19) with robustness_json (FR-4.20); newest 100 kept, bars shared by content hash |
 | `fts_notes` / `fts_messages` | FTS5 virtual tables | rebuilt incrementally on file change / message insert |
 
 ### 6.2 Provider-neutral message content [P-4]

@@ -21,7 +21,7 @@ type Col = (number | null)[];
 interface YahooChart {
   chart?: { result?: {
     meta?: YahooMeta; timestamp?: number[];
-    indicators?: { quote?: { close?: Col; open?: Col; high?: Col; low?: Col; volume?: Col }[] };
+    indicators?: { quote?: { close?: Col; open?: Col; high?: Col; low?: Col; volume?: Col }[]; adjclose?: { adjclose?: Col }[] };
     events?: { dividends?: Record<string, { date: number; amount: number }> };
   }[] | null };
 }
@@ -243,8 +243,10 @@ async function fetchHistory(symbol: string, range: string, interval: string): Pr
   // Keep `c` (and the c-not-null filter) so every existing consumer that reads
   // point.c — performance/fx/wb/fred — is unaffected; OHLCV is purely additive
   // so the security-detail chart can render candlesticks + volume.
+  // `adj` (dividend-adjusted close) is additive too; `c` is split-adjusted only.
+  const adj = result.indicators?.adjclose?.[0]?.adjclose;
   const points = ts
-    .map((t, i) => ({ t: t * 1000, o: opens[i], h: highs[i], l: lows[i], c: closes[i], v: vols[i] }))
+    .map((t, i) => ({ t: t * 1000, o: opens[i], h: highs[i], l: lows[i], c: closes[i], v: vols[i], ...(adj ? { adj: adj[i] } : {}) }))
     .filter((p) => p.c != null) as HistoryPoint[]; // c is a number after the filter
   return { symbol, range, interval, meta: result.meta ? normalizeQuote(symbol, result.meta) : null, points };
 }

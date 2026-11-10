@@ -19,7 +19,7 @@ export type Quote = QuotedQuote | { symbol: string; error: string };
 /** lib/market.ts fetchMarkets, server.ts GET /api/markets. */
 export type Markets = Record<string, (Quote & { label: string })[]>;
 /** lib/market.ts getHistory: only c is filtered for null, other OHLCV may be absent. */
-export interface HistoryPoint { t: number; c: number; o?: number | null; h?: number | null; l?: number | null; v?: number | null }
+export interface HistoryPoint { t: number; c: number; o?: number | null; h?: number | null; l?: number | null; v?: number | null; adj?: number | null }
 /** lib/market.ts getHistory, server.ts GET /api/history. */
 export interface History { symbol: string; range: string; interval: string; meta: QuotedQuote | null; points: HistoryPoint[]; cache?: { cachedAt: string; status: 'fresh' | 'stale-revalidating' | 'stale-fallback' } }
 

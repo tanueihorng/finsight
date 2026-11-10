@@ -47,6 +47,15 @@ const MIGRATIONS: string[] = [
    CREATE INDEX ui_views_thread ON ui_views(thread_id);`,
   `ALTER TABLE trace_steps ADD COLUMN cache_read_tokens INTEGER;
    ALTER TABLE trace_steps ADD COLUMN cache_write_tokens INTEGER;`,
+  `CREATE TABLE quant_runs (id TEXT PRIMARY KEY, created_at INTEGER NOT NULL, strategy_key TEXT NOT NULL, result_json TEXT NOT NULL);
+   CREATE INDEX quant_runs_created ON quant_runs(created_at);
+   CREATE TABLE quant_series (sha256 TEXT PRIMARY KEY, bars_gz BLOB NOT NULL);
+   CREATE TABLE quant_run_series (
+    run_id TEXT NOT NULL REFERENCES quant_runs(id) ON DELETE CASCADE,
+    symbol TEXT NOT NULL, sha256 TEXT NOT NULL REFERENCES quant_series(sha256),
+    PRIMARY KEY (run_id, symbol));
+   CREATE INDEX quant_run_series_sha ON quant_run_series(sha256);`,
+  `ALTER TABLE quant_runs ADD COLUMN robustness_json TEXT;`,
 ];
 
 export function openDb(file: string): DB {
