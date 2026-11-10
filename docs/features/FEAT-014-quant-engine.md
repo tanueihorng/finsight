@@ -2,8 +2,8 @@
 
 - **ID:** FEAT-014
 - **Execution task:** `QUANT-001`
-- **Status:** Milestones 1 to 3 implemented, not merged · selected by the user 2026-11-10
-- **Agent spec:** FR-4.16 to FR-4.20
+- **Status:** Milestones 1 to 4 implemented, not merged · selected by the user 2026-11-10, Quant Lab 2026-11-11
+- **Agent spec:** FR-4.16 to FR-4.21
 
 ## Intent
 
@@ -101,13 +101,133 @@ The bootstrap is a stationary block bootstrap of paired daily strategy and bench
 | Boundary table | Every pass, fail and insufficient threshold is tested on both sides |
 | Mutation testing | `validation.py` is included in `quant:verify -- --mutate` |
 
+## Milestone 4 (implemented)
+
+The Quant Lab is a full-screen workbench. Open it with the **LAB** button in the top bar or the `LAB` command. The user chose four previewed layouts on 2026-11-11: the terminal workbench is the shell, and the other three are views inside it.
+
+| View | Answers |
+|---|---|
+| Overview | What the run did: growth of the money against the benchmark, key figures, and the check list beside it |
+| Evidence | The six robustness checks, each with the number behind it |
+| Compare | How strategies tested on identical stocks and settings stand, sorted by checks passed, never by return |
+| Plain English | Five questions a non-specialist would ask, answered from the check statuses |
+| Details | Settings, trading activity, warnings, assumptions, recompute, CSV export and glossary |
+
+Usability rules:
+
+- A first run needs a strategy and tickers. Presets fill the tickers (13 large US stocks, the watchlist, US holdings). Other settings sit under More settings with working defaults.
+- One button runs the backtest and then its checks, shows the step and elapsed time, and can be cancelled. If the checks fail, the saved backtest stays visible as not checked.
+- The form validates against the tool limits and names each problem beside its field.
+- The workspace is keyboard usable: arrow keys move between tabs and along the chart, Escape closes and returns focus to the LAB button. Every chart has a table view. It fits a phone with no sideways scrolling.
+
+Evidence rules:
+
+- The page computes no performance number. Every figure comes from the saved run or study, and text states which checks were not met, never why.
+- "Not out-of-sample proof", survivorship bias and "not accepted" stay on screen. The Lab has no order or approval controls.
+- The agent exposes `GET` and `POST /v1/quant/runs`, `GET /v1/quant/runs/:id`, and `POST .../validate` and `.../reproduce`, reached only through FinSight's session-gated proxy. One job runs at a time, and leaving the request stops the worker. These routes read the store or call the tool handler directly because the tool result cap would truncate a whole study.
+
+Verification: `web/src/features/quant/quant.test.ts` covers formatting, form limits, chart geometry, comparison rules and answer wording. `web/e2e/QUANT*.spec.ts` drives the workspace against a synthetic agent, and agent tests cover the routes. A manual browser run used real public prices on isolated data, with four strategies on 13 stocks.
+
 ## Later milestones (not selected)
 
 | Order | Work | Note |
 |---|---|---|
 | Later | Walk-forward testing | Nothing to re-fit until engines take parameters (FR-4.4 version bumps) |
-| 4 | Quant Lab React island | After validation, so charts do not lend authority to untested numbers |
 | 5 | Portfolio risk and Council citation | FEAT-013 currently says backtests are not used as evidence for its scorecard; reconcile first |
-| 6 | Risk-based sizing, factor models, optimisation | Python libraries are added when a task needs them |
+| 6 | Factor research, risk-based sizing, optimisation | Drafted below, not selected. Python libraries are added when a task needs them |
 
 Forward paper evaluation belongs to FEAT-013.
+
+## Milestone 6 draft: cross-sectional factor research
+
+**Status:** Draft, deferred, not selected (2026-11-11). Nothing here authorises code, a data purchase or a change to the agent spec. All numbers are proposals until the user confirms them.
+
+### Why this is a separate track
+
+Milestones 1 to 3 measure single-stock chart rules. Each symbol is simulated alone, nothing is ranked against anything else, the universe is chosen by hand and every position is the same size. This milestone adds what those lack: a rules-defined universe, signals compared across stocks at each date, sizing based on risk, and data that shows only what was known at the time.
+
+The goal is a long-only monthly model that one person can run. It is a research result, and a good result still authorises nothing. Forward paper evaluation stays in FEAT-013.
+
+### Gate
+
+Work starts only when both are true:
+
+1. The user confirms Milestones 1 to 3 are correct and accurate, as decided on 2026-11-11.
+2. The user selects this milestone and accepts the spec changes listed below.
+
+No prototype on Yahoo data. It would have the survivorship bias this milestone exists to remove, and early numbers would anchor every later decision.
+
+### Design
+
+| Part | Proposal |
+|---|---|
+| Universe | At each rebalance, the 1,000 most liquid US common stocks by 63-day median dollar volume, price at least $5, computed only from data up to that date. A liquidity rule needs delisted prices but not past index membership |
+| Signals | Fixed before any result is seen. Momentum: 12-month return skipping the latest month. Value: earnings and free-cash-flow yield. Quality: gross profit over assets. Low risk: inverse 252-day volatility |
+| Fundamentals timing | A figure is usable only from the session after its filing date, using the value as first filed |
+| Combination | Winsorised cross-sectional ranks, equal weight across signals. Nothing is fitted, so there is nothing to overfit in the first version |
+| Portfolio | Long-only, top 50 names, rebalanced monthly. Signal at the month-end close, trades at the next open. A held name stays until it falls out of the top 30% of the universe, to limit turnover |
+| Costs | The existing 10 bps commission, plus slippage of 5, 15 or 40 bps by liquidity tier. No order above 1% of 20-day average dollar volume |
+| Delistings | The last traded price, then a stated assumed loss. Results report 0%, 30% and 100% loss. Using only 0% would bring back a form of survivorship bias |
+| Benchmarks | SPY total return and the equal-weight universe. The second shows whether selection added anything beyond holding many smaller stocks |
+
+### Stages
+
+Each stage must pass before the next begins.
+
+| Stage | Work | Exit test |
+|---|---|---|
+| 6A Data | Bulk download into a local dataset with a content hash. Prices include delisted names. Fundamentals carry filing dates | Named delisted stocks are present and end correctly. A known past restatement shows the first-filed value before the restatement date |
+| 6B Signals | Universe and signal code in Python, with no portfolio yet | Decile long-short returns correlate at 0.7 or more per month with the [Ken French](https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/data_library.html) or [AQR](https://www.aqr.com/Insights/Datasets) published series for the same factor. Removing all data after any date leaves earlier signals unchanged |
+| 6C Rebalance replay | A new target-weight path through the cash, cost, dividend and ledger rules | The ledger reconciles. An independent reference model and vectorbt agree with it. Mutation testing covers the new module |
+| 6D Validation | Trial log, Deflated Sharpe Ratio, locked holdout, factor attribution against published factors | See below. A read-only `factor_backtest` tool for Kestrel comes only after this stage |
+| 6E Risk and optimisation | First inverse-volatility weights with position and sector caps, then a shrinkage covariance optimiser with a turnover penalty | Each step must beat the simpler one after costs in the holdout, or it is dropped |
+
+### Validation additions
+
+- **Trial log.** Every signal and setting combination tried is recorded in a table that is never pruned. The 100-run limit on saved runs cannot serve this purpose, because pruning would hide failed attempts.
+- **Deflated Sharpe Ratio.** It uses the logged trial count, addressing the gap the bootstrap states: it does not correct for choosing one strategy among others.
+- **Locked holdout.** The latest 3 years stay unread until the design is frozen and are read once, with the read recorded. Thirty-six monthly results are weak evidence, and the authors have lived through those years, so this is stricter than Milestone 3 and still not proof.
+- **Evidence bar.** Alpha against published factors with a t-statistic of at least 3, over the research period, before any claim of an edge.
+- **Existing checks.** The six Milestone 3 checks carry over where they apply.
+
+### Architecture consequences
+
+| Current constraint | Problem | Proposal |
+|---|---|---|
+| The worker takes one JSON request on stdin, and FEAT-014 caps runs at 50 symbols | A universe drawn from thousands of names over 15 or more years is millions of daily rows, too large for JSON | The agent passes a dataset path and hash. The worker opens a read-only SQLite file with the standard library. No new native dependency, and the guard still denies sockets and child processes |
+| Candidate trades come per symbol | They cannot express a cross-stock decision | A separate target-weight contract, `date → {symbol: weight}` |
+| FR-4.16 and FR-4.3 tie backtests to the shared chart engines | Factor models are not chart strategies | A new requirement stating factor models are Python-only, are not charted and are not user-supplied |
+| FR-4.19 saves every run with its bars | Copying a full dataset per run would use far more than the current 400 MB worst case | Runs for this tool store a reference to an immutable dataset by hash, and reproduction refuses if that dataset is gone or changed |
+| The repo is open source and holds no personal data | Licensed vendor data cannot be committed | Datasets live in `~/FinSightData/`, keys in the macOS Keychain. Download happens outside the worker |
+
+### Data options
+
+| Source | For | Against |
+|---|---|---|
+| Sharadar via Nasdaq Data Link | Point-in-time fundamentals, delisted companies, bulk table downloads, suits a Mac | Paid. Past-membership universes take extra work, which the liquidity rule avoids |
+| Norgate | Survivorship-free prices and historical index constituents | Paid. A third-party guide says its Python API needs a Windows app running. Prices only, so fundamentals need another source |
+| SEC XBRL company facts, already used by `research.ts` | Free, primary, has filing dates | Starts around 2009, and current ticker maps do not cover delisted firms. Prices would still need a paid source |
+
+Prices, terms, redistribution limits and coverage must be checked directly with each vendor before selection. The comparisons above come from third-party write-ups.
+
+### Non-goals
+
+Intraday trading, live or paper order generation, shorting outside the 6B replication test, alternative data, machine-learning or LLM-generated signals, and user-supplied Python. Research on LLMs found them most useful for reading filings and calls, with thin evidence of lasting alpha and a risk that funds converge on the same positions.
+
+### Decisions for the user
+
+1. Which data source, and what annual budget.
+2. Universe size and history length.
+3. Portfolio size for the liquidity limit. This is a setting and never stored in the repo.
+4. Whether to accept the new requirement and the FR-4.19 exception.
+5. Whether the proposed thresholds stand: 0.7 replication, t-statistic of 3, 3-year holdout.
+
+### Research notes (retrieved 2026-11-11)
+
+Most public material on current practice is asset-manager marketing or vendor blogs, and funds do not publish their methods.
+
+- Signals and portfolio construction: [Robeco](https://www.robeco.com/en-us/insights/2026/05/innovation-where-it-matters-generating-alpha-while-maintaining-disciplined-control), [Goldman Sachs Asset Management](https://am.gs.com/en-us/institutions/insights/article/2026/not-all-quants-are-alike-equity-alpha)
+- Factor returns and crowding: [Russell Investments Q1 2026](https://russellinvestments.com/content/dam/ri/files/us/en/institutions/articles/Equity-Factor-Investing-Report_2026-Q1.pdf), [AQR, Academic Alpha](https://www.aqr.com/-/media/AQR/Documents/White-Papers/Academic-Alpha-A-Re-Introduction-to-Style-Premia-Investing.pdf?sc_lang=en)
+- Overfitting: [Deflated Sharpe Ratio](https://papers.ssrn.com/abstract=2460551), [Probability of Backtest Overfitting](https://papers.ssrn.com/abstract=2326253)
+- LLMs: [UT McCombs](https://news.mccombs.utexas.edu/research/keeping-humans-in-the-loop/), [Zerve](https://www.zerve.ai/blog/llms-in-quantitative-research)
+- Data: [Sharadar comparison](https://dev.to/pickuma/financial-modeling-prep-vs-sharadar-fundamental-data-apis-for-quant-backtests-la2), [Norgate toolkit](https://concretumgroup.substack.com/p/the-complete-norgate-data-toolkit)

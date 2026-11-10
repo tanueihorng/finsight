@@ -8,6 +8,7 @@ import { islands } from './islands.ts';
 import { kestrelDock } from './features/kestrel/dock.ts';
 import { setFooter } from './legacy/app.ts';
 import { setChartHoldings } from './shell/chartHooks.ts';
+import { openQuantLab, quantLab } from './features/quant/open.ts';
 import { columns, dropBefore, hiddenPanels, HIDE_ID, movePanel, saveLayout, type Side } from './shell/layout.ts';
 
 // The whole page as one React app (X1). The markup, ids and classes are the
@@ -275,6 +276,7 @@ function PortfolioEffects() {
 }
 
 export default function App() {
+  const labMounted = useStore(quantLab, (x) => x.mounted);
   return (
     <>
       <div id="lock-screen" className="lock">
@@ -287,6 +289,7 @@ export default function App() {
         </div>
         <div className="topbar-right">
           <span id="agent-toggle-slot" style={{ display: 'contents' }}></span>
+          <button type="button" id="quant-open" className="topbar-btn" title="Quant Lab: backtest strategies on history" onClick={openQuantLab}>LAB</button>
           <Host as="span" island="book" style={contents} />
           <Host as="label" island="account" className="base-sel" title="Account / portfolio — each holds its own positions" />
           <Host as="span" island="profile" style={contents} />
@@ -306,6 +309,7 @@ export default function App() {
 
       {/* FEAT-012: the paper trade desk, full width above the panels, PAPER mode only (styles.css hides it in REAL). */}
       <Host island="paper" id="paper-panel" className="paper-desk" />
+      {labMounted && <Host island="quant" id="quant-lab" />}
       <main className="grid">
         <Column side="left">
           <Summary />

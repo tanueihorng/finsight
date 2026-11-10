@@ -24,6 +24,7 @@ import type { Skill } from '../skills.ts';
 import { saveUpload, MAX_UPLOAD_BYTES } from '../uploads.ts';
 import { getAudit } from '../obs/audit.ts';
 import { SEARCH_CHOICES, searchProviders } from '../tools/web.ts';
+import { listQuantRuns, readQuantRun } from '../tools/quant.ts';
 
 export type ApiDeps = { cfg: Config; db: DB; engine: ChatEngine; bus: EventBus; brains: Map<string, BrainEntry>; brainsInvalid: { id: string; error: string }[]; tools: ToolRegistry; finsight: FinsightClient; skills?: () => Map<string, Skill> };
 
@@ -38,6 +39,21 @@ const Send = z.object({
 const Upload = z.object({ name: z.string().min(1).max(200), dataBase64: z.string().min(4) }).strict();
 const NewThread = z.object({ title: z.string().max(120).optional(), brain: z.string().max(40).optional() }).strict();
 const PatchThread = z.object({ title: z.string().min(1).max(120).optional(), archived: z.boolean().optional() }).strict();
+
+// The Quant Lab runs one job at a time: each holds a Python worker and up to 170 s of CPU.
+let quantBusy = false;
+const QUANT_RUN = /^\/v1\/quant\/runs\/(qr_[\w-]{6,40})(?:\/(validate|reproduce))?$/;
+async function quantJob(d: ApiDeps, res: http.ServerResponse, name: string, input: unknown): Promise<any> {
+  const tool = d.tools.get(name);
+  if (!tool) throw new AgentError('NOT_FOUND', `Tool ${name} is not available`, 404);
+  const args = tool.input.parse(input);
+  if (quantBusy) throw new AgentError('QUANT_BUSY', 'Another backtest or check is still running. Wait for it to finish.', 409);
+  quantBusy = true;
+  const left = new AbortController(), stop = () => { if (!res.writableEnded) left.abort(); };
+  res.once('close', stop); // the browser cancelled or went away: stop the worker
+  const ctx: ToolCtx = { cfg: d.cfg, db: d.db, finsight: d.finsight, signal: AbortSignal.any([left.signal, AbortSignal.timeout(tool.timeoutMs ?? 30_000)]), budget: { searches: 0, fetches: 0 }, citations: [], via: 'quant-lab' };
+  try { return await tool.handler(args, ctx); } finally { quantBusy = false; res.off('close', stop); }
+}
 
 function safeEqual(a: string, b: string): boolean {
   const x = Buffer.from(a), y = Buffer.from(b);
@@ -165,6 +181,23 @@ async function route(d: ApiDeps, req: http.IncomingMessage, res: http.ServerResp
     const ctx: ToolCtx = { cfg: d.cfg, db: d.db, finsight: d.finsight, signal: AbortSignal.timeout(15000), budget: { searches: 0, fetches: 0 }, citations: [] };
     const r = await d.tools.execute('list_strategies', {}, ctx);
     return send(res, r.ok ? 200 : 502, JSON.parse(r.content));
+  }
+  if (p === '/v1/quant/runs' && m === 'GET') return send(res, 200, listQuantRuns(d.db, Math.min(100, Math.max(1, Number(u.searchParams.get('limit')) || 100))));
+  if (p === '/v1/quant/runs' && m === 'POST') {
+    const out = await quantJob(d, res, 'backtest_portfolio', await readJson(req));
+    return send(res, 201, { runId: out.runId });
+  }
+  if ((mt = p.match(QUANT_RUN))) {
+    const runId = mt[1]!, action = mt[2];
+    if (!action && m === 'GET') return send(res, 200, readQuantRun(d.db, runId));
+    if (action === 'validate' && m === 'POST') {
+      const out = await quantJob(d, res, 'validate_quant_run', { runId });
+      return send(res, 200, { runId, summary: out.summary });
+    }
+    if (action === 'reproduce' && m === 'POST') {
+      const { stored: _stored, current: _current, ...out } = await quantJob(d, res, 'get_quant_run', { runId, reproduce: true });
+      return send(res, 200, out);
+    }
   }
   if ((mt = p.match(/^\/v1\/turns\/(turn_[\w-]{6,})\/trace$/)) && m === 'GET') return send(res, 200, { steps: store.getTrace(d.db, mt[1]!) });
   // Kestrel's spending and tool limits: effective values, defaults and which are set.

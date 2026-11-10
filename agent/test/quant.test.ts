@@ -11,7 +11,13 @@ import { QUANT_PYTHON, runQuantWorker } from '../src/quant/host.ts';
 import { MAX_SAVED_RUNS, digest, listRuns, saveRun } from '../src/quant/runs.ts';
 import { openDb } from '../src/store/db.ts';
 import { buildRegistry } from '../src/tools/index.ts';
-import { fakeFinsight, testConfig, testCtx } from './helpers.ts';
+import { fakeFinsight, testConfig, testCtx, PROXY_SECRET } from './helpers.ts';
+import http from 'node:http';
+import type { AddressInfo } from 'node:net';
+import { EventBus } from '../src/chat/bus.ts';
+import { ChatEngine } from '../src/chat/engine.ts';
+import { createApi } from '../src/api/server.ts';
+import { finsightClient } from '../src/tools/finsight.ts';
 
 const at = (date: string, c = 100, extra: object = {}) => ({ t: Date.parse(`${date}T14:30:00Z`), o: c, h: c, l: c, c, v: 1000, ...extra });
 const noon = Date.parse('2026-03-04T17:00:00Z'); // 12:00 in New York
@@ -276,4 +282,93 @@ test('a validated 50-symbol run stays within one tool result when read back', ne
     content(await registry.execute('validate_quant_run', { runId: saved.runId }, ctx));
     for (const detail of ['run', 'robustness']) assert.ok(content(await registry.execute('get_quant_run', { runId: saved.runId, detail }, ctx)).runId);
   } finally { await fake.close(); }
+});
+
+// ---- Quant Lab API ----
+
+async function labApi() {
+  const fake = await fakeFinsight();
+  const cfg = testConfig(fake);
+  const db = openDb(':memory:'), bus = new EventBus(db), tools = buildRegistry(), finsight = finsightClient(cfg.finsightUrl, cfg.finsightDataDir);
+  const engine = new ChatEngine({ cfg, db, tools, brains: new Map(), finsight, bus });
+  const probe = http.createServer().listen(0, '127.0.0.1');
+  await new Promise((r) => probe.once('listening', r));
+  cfg.port = (probe.address() as AddressInfo).port;
+  await new Promise((r) => probe.close(r));
+  const server = createApi({ cfg, db, engine, bus, brains: new Map(), brainsInvalid: [], tools, finsight });
+  await new Promise<void>((r) => server.listen(cfg.port, '127.0.0.1', r));
+  const call = async (path: string, body?: unknown, signal?: AbortSignal) => {
+    const res = await fetch(`http://127.0.0.1:${cfg.port}${path}`, { method: body === undefined ? 'GET' : 'POST', signal, headers: { 'x-agent-secret': PROXY_SECRET, 'content-type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
+    return { status: res.status, body: await res.json() as any };
+  };
+  return { call, close: async () => { server.closeAllConnections(); server.close(); db.close(); await fake.close(); } };
+}
+
+test('Quant Lab API runs, checks, reads the whole study and reproduces', needsWorker, async () => {
+  const lab = await labApi();
+  try {
+    assert.deepEqual((await lab.call('/v1/quant/runs')).body.runs, []);
+    const created = await lab.call('/v1/quant/runs', savedArgs);
+    assert.equal(created.status, 201, JSON.stringify(created.body));
+    assert.deepEqual(Object.keys(created.body), ['runId']);
+    const { runId } = created.body;
+
+    const unchecked = await lab.call(`/v1/quant/runs/${runId}`);
+    assert.equal(unchecked.body.robustness, null);
+    assert.equal(unchecked.body.series, undefined, 'stored price series stay on the agent');
+
+    const checked = await lab.call(`/v1/quant/runs/${runId}/validate`, {});
+    assert.equal(checked.status, 200, JSON.stringify(checked.body));
+    const { pass, fail, insufficient } = checked.body.summary;
+    assert.equal(pass + fail + insufficient, 6);
+
+    const full = (await lab.call(`/v1/quant/runs/${runId}`)).body;
+    assert.equal(full.robustness.checks.length, 6);
+    assert.ok(full.robustness.bootstrap.intervals.excessCagrPct, 'the tables a chat read leaves out are here');
+    assert.ok(full.robustness.cost.grid.length > 0);
+    assert.ok(full.monthlyEquity.length > 0);
+
+    const [row] = (await lab.call('/v1/quant/runs')).body.runs;
+    assert.equal(row.runId, runId);
+    assert.deepEqual(row.robustnessChecks, checked.body.summary);
+    assert.equal(row.settings.positionPct, 20);
+
+    const again = await lab.call(`/v1/quant/runs/${runId}/reproduce`, {});
+    assert.equal(again.body.reproduced, true, JSON.stringify(again.body));
+    assert.equal(again.body.stored, undefined);
+  } finally { await lab.close(); }
+});
+
+test('Quant Lab API refuses bad input, unknown runs and a second job at once', needsWorker, async () => {
+  const lab = await labApi();
+  try {
+    assert.equal((await lab.call('/v1/quant/runs', { strategy: 'matrend', symbols: [] })).status, 400);
+    const missing = await lab.call('/v1/quant/runs/qr_doesnotexist');
+    assert.equal(missing.body.error.code, 'NOT_FOUND');
+    assert.equal((await lab.call('/v1/quant/runs/not-a-run')).status, 404);
+    assert.equal((await lab.call('/v1/quant/runs/qr_doesnotexist/delete', {})).status, 404);
+
+    const first = lab.call('/v1/quant/runs', savedArgs);
+    await new Promise((r) => setTimeout(r, 30));
+    const second = await lab.call('/v1/quant/runs', savedArgs);
+    assert.equal(second.status, 409);
+    assert.equal(second.body.error.code, 'QUANT_BUSY');
+    assert.equal((await first).status, 201);
+    assert.equal((await lab.call('/v1/quant/runs', savedArgs)).status, 201, 'the lock is released afterwards');
+  } finally { await lab.close(); }
+});
+
+test('Quant Lab API stops the job when the browser cancels, and accepts the next one', needsWorker, async () => {
+  const lab = await labApi();
+  try {
+    const stop = new AbortController();
+    const cancelled = lab.call('/v1/quant/runs', savedArgs, stop.signal).catch((e: Error) => e.name);
+    await new Promise((r) => setTimeout(r, 30));
+    stop.abort();
+    assert.equal(await cancelled, 'AbortError');
+    let next = await lab.call('/v1/quant/runs', savedArgs);
+    for (let i = 0; next.status === 409 && i < 50; i++) { await new Promise((r) => setTimeout(r, 100)); next = await lab.call('/v1/quant/runs', savedArgs); }
+    assert.equal(next.status, 201, JSON.stringify(next.body));
+    assert.equal((await lab.call('/v1/quant/runs')).body.runs.length, 1, 'the cancelled run was not saved');
+  } finally { await lab.close(); }
 });

@@ -202,6 +202,7 @@ All facts tools are **read-only** and call FinSight with the GET-only token [D-Q
 | FR-4.18 | Every `backtest_portfolio` result MUST state that it is in-sample, the survivorship and selection bias, its assumptions, its data warnings and hashes of the dataset and engine. A backtest MUST NOT place, approve or size a paper order. |
 | FR-4.19 | Every `backtest_portfolio` run MUST be saved in `agent.db` with the bars it used and return a `runId`. `get_quant_run` reads or lists saved runs and can recompute one from its stored bars without FinSight. A run whose bars fail their hash check MUST be refused. The newest 100 runs are kept. |
 | FR-4.20 | `validate_quant_run` stresses a saved run with frozen rules and returns pass, fail or insufficient for fixed time, universe, cost and bootstrap checks. It MUST refuse when the engine no longer produces the run's trades, MUST state that it is not out-of-sample proof, and MUST NOT change a strategy's status or authorise a paper order. |
+| FR-4.21 | The Quant Lab API runs, checks, reads and recomputes saved backtests for the FinSight web app. It MUST allow one job at a time (`409 QUANT_BUSY`), MUST stop the worker when the client disconnects, and MUST NOT expose order or approval actions. |
 
 ### FR-5 Background tasks and workflows
 
@@ -316,6 +317,7 @@ All requests need the proxy secret header; JSON bodies are validated by schema; 
 | `POST /v1/tasks` · `GET /v1/tasks` · `GET /v1/tasks/:id` | create/list/get | create is idempotent on `idempotencyKey` |
 | `POST /v1/tasks/:id/cancel` · `POST /v1/tasks/:id/resume` | control | |
 | `GET /v1/strategies` · `GET /v1/strategies/:id` | library | |
+| `GET /v1/quant/runs` · `POST /v1/quant/runs` · `GET /v1/quant/runs/:id` · `POST /v1/quant/runs/:id/validate` · `POST /v1/quant/runs/:id/reproduce` | Quant Lab (FR-4.21) | one job at a time |
 | `GET /v1/runs/:traceId` | trace viewer | |
 | `GET /v1/cost?period=day\|month` | spend | |
 | `GET /v1/proposals` · `POST /v1/proposals/:id/accept\|reject` | L3 (stored in MVP, applied later) | accept requires explicit user action in UI |

@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { z } from 'zod';
 import type { ToolCtx, ToolDef } from './registry.ts';
+import type { DB } from '../store/db.ts';
 import { listAll, roots } from './strategies.ts';
 import { runSandbox } from '../sandbox/host.ts';
 import { runQuantWorker, workerHash } from '../quant/host.ts';
@@ -103,7 +104,7 @@ async function rebuild(ctx: ToolCtx, run: SavedRun) {
 
 function runSummary(id: string, createdAt: number, result: Record<string, any>, robustness: Record<string, any> | null) {
   return {
-    runId: id, savedAt: new Date(createdAt).toISOString(), strategy: result.strategy, universe: result.universe, benchmarkSymbol: result.benchmark, window: result.window,
+    runId: id, savedAt: new Date(createdAt).toISOString(), strategy: result.strategy, universe: result.universe, benchmarkSymbol: result.benchmark, window: result.window, settings: result.settings,
     cagrPct: result.performance.strategy.cagrPct, sharpe: result.performance.strategy.sharpe, maxDrawdownPct: result.performance.strategy.maxDrawdownPct,
     benchmarkCagrPct: result.performance.benchmark.cagrPct, closedTrades: result.trading.closedTrades, validation: result.validation,
     robustnessChecks: robustness ? robustness.summary : null,
@@ -115,6 +116,17 @@ function robustnessBrief(robustness: Record<string, any> | null) {
   if (!robustness) return null;
   const { base: _base, time: _time, universe: _universe, cost: _cost, bootstrap: _bootstrap, design: _design, ...brief } = robustness;
   return { ...brief, fullStudy: "Call get_quant_run with detail: 'robustness' for the per-study tables." };
+}
+
+/** Saved runs for the Quant Lab. Read from the store, so the tool-result size cap does not apply. */
+export function listQuantRuns(db: DB, limit: number) {
+  return { validation: VALIDATION, survivorship: SURVIVORSHIP, maxSaved: MAX_SAVED_RUNS, runs: listRuns(db, limit).map((r) => runSummary(r.id, r.createdAt, r.result, r.robustness)) };
+}
+
+/** One saved run with its full robustness study, without the stored price series. */
+export function readQuantRun(db: DB, id: string) {
+  const run = loadRun(db, id);
+  return { runId: run.id, savedAt: new Date(run.createdAt).toISOString(), ...run.result, robustness: run.robustness };
 }
 
 export const quantTools: ToolDef[] = [
