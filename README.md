@@ -55,7 +55,7 @@ Press **⌘/** anywhere in FinSight and a chat panel slides in. **Kestrel** is a
 
 | | |
 |---|---|
-| 🧠 **Any model** | DeepSeek (default, very cheap), Claude Haiku, Claude Code, or any OpenAI-compatible model. Switch mid-chat from the model picker; adding a model is one manifest file |
+| 🧠 **Any model** | DeepSeek (default, very cheap), Claude Haiku, Claude Sonnet, Claude Code, or any OpenAI-compatible model. Switch mid-chat from the model picker; adding a model is one manifest file |
 | 📊 **Knows your portfolio** | 53 tools covering positions, exposure by currency/sector, cash, dividends, events, ledger and journal. Totals and weights come from code, not model arithmetic |
 | 📈 **Uses your strategies** | Runs the same strategy engines as the chart (pullback, breakout, MA trend, RSI-2, DCA zones), scans holdings for live setups, sizes positions from your real cash |
 | 🔎 **Researches** | SEC EDGAR filings and XBRL financials, Form 4 insider trades, FINRA short interest, technical indicators, DCF and reverse DCF, peer comparison, web search (Tavily / Brave / SearchGPT) and page reading. Every fact carries a source and a date |

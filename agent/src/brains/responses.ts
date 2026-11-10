@@ -1,7 +1,7 @@
 // Stateless Responses transport. Keep encrypted reasoning with its completed
 // output items, bound to the same brain/model/origin; never render it as text.
 import type { ApiBrain, BrainManifest, StepRequest, StepResult } from './types.ts';
-import { outputLimit, safeId } from './types.ts';
+import { outputLimit, safeId, unreachable } from './types.ts';
 import type { Block, Msg } from '../types.ts';
 import { AgentError } from '../types.ts';
 
@@ -47,7 +47,7 @@ export function responsesBrain(manifest: BrainManifest, apiKey: string, fetchImp
     try { res = await fetchImpl(url, { method: 'POST', signal: req.signal, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` }, body: JSON.stringify(body) }); }
     catch (e) {
       if (req.signal.aborted || (e as Error).name === 'AbortError') throw e;
-      throw new AgentError('PROVIDER_ERROR', `${manifest.label} unreachable: ${(e as Error).message}`, 502);
+      throw unreachable(manifest.label, e);
     }
     if (!res.ok || !res.body) {
       // Provider error bodies can carry request content. Keep them out of chat.

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { LENSES, LensId, validateAssessment } from '../src/chat/council-contract.ts';
+import { DecidedAssessment, LENSES, LensId, validateAssessment } from '../src/chat/council-contract.ts';
 
 test('lens catalog uses unique versioned allowed IDs', () => {
   assert.equal(LENSES.length, 5);
@@ -24,4 +24,15 @@ test('decoder accepts a single JSON fence but rejects prose scraping and fabrica
   assert.equal(decodeAssessment('```json\n' + text + '\n```', []).findings.length, 0);
   assert.throws(() => decodeAssessment('Some prose ' + text, []));
   assert.throws(() => decodeAssessment(text + '\ntrailing prose', []));
+});
+
+test('a chair decision is strict and may cite only supplied evidence', () => {
+  const evidence = [{ id: 'e1', source: 'S', observedAt: '2026-10-01', retrievedAt: '2026-10-02' }];
+  const decision = { verdict: 'wait', rationale: 'r', buyNow: 'b', wait: 'w', noAction: 'n', valuation: 'v', momentum: 'm', changesView: ['c'], evidenceIds: ['e1'] };
+  const base = { findings: [], unresolvedQuestions: [] };
+  assert.equal(validateAssessment({ ...base, decision }, evidence, DecidedAssessment).decision?.verdict, 'wait');
+  assert.throws(() => validateAssessment(base, evidence, DecidedAssessment), /decision/);
+  assert.throws(() => validateAssessment({ ...base, decision }, evidence), /decision/, 'a specialist may not return one');
+  assert.throws(() => validateAssessment({ ...base, decision, extra: 1 }, evidence, DecidedAssessment), /extra/);
+  assert.throws(() => validateAssessment({ ...base, decision: { ...decision, evidenceIds: ['nope'] } }, evidence, DecidedAssessment), /Unknown evidence ID: nope/);
 });

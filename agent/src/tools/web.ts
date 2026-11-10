@@ -249,13 +249,21 @@ export function searchProviders(cfg: Config) {
   };
 }
 
+// Pay-as-you-go list prices per request, checked 2026-11-10. Free monthly credits
+// and paid-plan discounts are not known here, so these can overstate the bill.
+export const WEB_PRICES = {
+  tavily: { label: 'Tavily', usd: 0.008, unit: 'basic search (1 credit)', note: 'Free plan covers 1,000 credits a month.', version: 'tavily-payg-2026-11-10' },
+  brave: { label: 'Brave', usd: 0.005, unit: 'search', note: 'Includes US$5 of free credit a month.', version: 'brave-search-2026-11-10' },
+  deepseek: { label: 'DeepSeek', usd: 0.00075, unit: 'successful search or fetch', note: 'Failed and empty requests are not charged.', version: 'deepseek-search-fetch-2026-10-25' },
+} as const;
+
 // Published rate, not a provider invoice. Failed/empty requests are not billable.
 const DEEPSEEK_BILLING_START = Date.parse('2026-11-01T00:00:00+08:00');
-const DEEPSEEK_PRICE_VERSION = 'deepseek-search-fetch-2026-10-25';
+const DEEPSEEK_PRICE_VERSION = WEB_PRICES.deepseek.version;
 // Only outstanding search/fetch fees; committed spend stays in the existing ledger.
 const pendingFees = new WeakMap<ToolCtx['db'], { total: number; turns: Map<string, number> }>();
 export function deepseekRequestCost(success: boolean, at = Date.now()): number {
-  return success && at >= DEEPSEEK_BILLING_START ? 0.00075 : 0;
+  return success && at >= DEEPSEEK_BILLING_START ? WEB_PRICES.deepseek.usd : 0;
 }
 
 function deepseekQuery(query: string, days?: number, domains?: string[]): string {
@@ -344,7 +352,11 @@ export function createWebTools(fetchImpl: typeof fetch = fetch, fetchPage = guar
               const key = getSecret(ctx.cfg.home, p === 'tavily' ? 'TAVILY_API_KEY' : 'BRAVE_API_KEY');
               if (!key) continue;
               hits = p === 'tavily' ? await tavily(key, q.query, q.maxResults, q.recencyDays, q.domains, fetchImpl, ctx.signal) : await brave(key, q.query, q.maxResults, q.recencyDays, fetchImpl, ctx.signal);
-              provider = p; break;
+              provider = p;
+              const price = WEB_PRICES[p as 'tavily' | 'brave'];
+              usage = { requests: 1, billableRequests: 1, estimatedCostUsd: price.usd, priceVersion: price.version };
+              addCost(ctx.db, { brain: `${p}-search`, kind: 'search', units: 1, usd: price.usd, priceVersion: price.version, turnId: ctx.turnId, threadId: ctx.threadId });
+              break;
             } catch (e) { if (ctx.signal.aborted) throw e; lastErr = e; }
           }
           if (!hits) {

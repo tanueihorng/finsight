@@ -14,7 +14,7 @@ const manifest=BrainManifest.parse({apiVersion:1,kind:'brain',id:'subject-fixtur
 const result=(value:unknown):StepResult=>({blocks:[{type:'text',text:JSON.stringify(value)}],usage:{inputTokens:50,outputTokens:50},stopReason:'end'});
 function setup(question='Should I buy AMD?',plan:unknown={kind:'explicit',subjects:[{mention:'AMD',symbol:'AMD'}],clarification:''}){
  const cfg=testConfig(fake);cfg.limits.turnUsd=2;const db=openDb(':memory:');const thread=store.createThread(db);const turn=store.createTurn(db,thread.id,'subject-fixture');const ctx=testCtx(cfg,db);ctx.threadId=thread.id;ctx.turnId=turn.id;
- const requests:StepRequest[]=[];const brain={kind:'api' as const,manifest,step:async(req:StepRequest)=>{requests.push(req);if(req.system.startsWith('Research subject resolution.'))return result(plan);const data=JSON.parse((req.messages[0]!.blocks[0] as {text:string}).text);return result({findings:data.evidence.length?[{claim:'Verified subject quote',evidenceIds:[data.evidence[0].id],assumptions:[],uncertainty:'Valuation not supplied',counterevidence:[],invalidation:'New filing',missingEvidence:['Valuation']}]:[],unresolvedQuestions:[]});}};
+ const requests:StepRequest[]=[];const brain={kind:'api' as const,manifest,step:async(req:StepRequest)=>{requests.push(req);if(req.system.startsWith('Research subject resolution.'))return result(plan);const data=JSON.parse((req.messages[0]!.blocks[0] as {text:string}).text);return result({findings:data.evidence.length?[{claim:'Verified subject quote',evidenceIds:[data.evidence[0].id],assumptions:[],uncertainty:'Valuation not supplied',counterevidence:[],invalidation:'New filing',missingEvidence:['Valuation']}]:[],unresolvedQuestions:[],...(/fill decision/.test(req.system)?{decision:{verdict:'insufficient_evidence',rationale:'Fixture',buyNow:'Fixture',wait:'Fixture',noAction:'Fixture',valuation:'Fixture',momentum:'Fixture',changesView:['Fixture'],evidenceIds:[]}}:{})});}};
  const args={db,bus:new EventBus(db),tools:buildRegistry(),ctx,brain,system:'Core read-only rules',question,usageTotal:{inputTokens:0,outputTokens:0,cacheReadTokens:0},scope:{symbol:'TSM'} as import('../src/types.ts').PageContext | undefined};
  return {db,ctx,cfg,requests,args};
 }
@@ -85,12 +85,20 @@ test('conversation references use the latest saved scope and do not resurrect a 
 
 test('the council service retrieves planned evidence before specialists and persists each outcome', async () => {
   const s = setup(); SEC_CALLS.length = 0;
+  const searches: unknown[] = [], realExecute = s.args.tools.execute.bind(s.args.tools);
+  s.args.tools.execute = (async (name: string, args: unknown, ctx: Parameters<typeof realExecute>[2]) => {
+    if (name !== 'web_search') return realExecute(name, args, ctx);
+    searches.push(args);
+    return { ok: true, content: JSON.stringify({ provider: 'fixture', cached: false, retrievedAt: '2026-11-08T00:00:00Z', usage: { estimatedCostUsd: 0.001 }, results: [{ title: 'Fixture', url: 'https://example.com/a', snippet: 'Fixture' }] }) };
+  }) as typeof s.args.tools.execute;
   const out = await runStoredCouncil(s.args);
   assert.ok(out.runs.every((r) => r.status === 'completed'));
+  assert.deepEqual((searches as { query: string }[]).map((a) => a.query).sort(), ['AMD company statement on investigation or controversy', 'AMD regulator Congress inquiry hearing lawsuit']);
   const first = JSON.parse((s.requests[1]!.messages[0]!.blocks[0] as { text: string }).text);
-  const plan = JSON.parse(first.question).evidencePlan as { key: string; status: string; evidenceId?: string; reason?: string }[];
+  const plan = JSON.parse(first.question).evidencePlan as { key: string; status: string; evidenceId?: string; reason?: string; detail?: string }[];
   const status = Object.fromEntries(plan.map((c) => [c.key, c.status]));
-  assert.deepEqual(status, { 'history:AMD': 'retrieved', 'financials:AMD': 'retrieved', 'valuation:AMD': 'retrieved', 'earnings8k:AMD': 'retrieved', '8k:AMD': 'retrieved', 'technicals:AMD': 'retrieved', 'insiders:AMD': 'retrieved', 'short:AMD': 'retrieved', 'events:earnings': 'retrieved', 'portfolio:weights': 'retrieved', 'portfolio:sectors': 'retrieved', 'portfolio:policy': 'retrieved', 'macro:DGS10': 'retrieved' });
+  assert.deepEqual(status, { 'history:AMD': 'retrieved', 'financials:AMD': 'retrieved', 'valuation:AMD': 'retrieved', 'earnings8k:AMD': 'retrieved', '8k:AMD': 'retrieved', 'technicals:AMD': 'retrieved', 'insiders:AMD': 'retrieved', 'short:AMD': 'retrieved', 'news:response:AMD': 'retrieved', 'news:regulatory:AMD': 'retrieved', 'events:earnings': 'retrieved', 'portfolio:weights': 'retrieved', 'portfolio:sectors': 'retrieved', 'portfolio:policy': 'retrieved', 'macro:DGS10': 'retrieved' });
+  assert.equal(plan.find((c) => c.key === 'news:response:AMD')!.detail, '1 search result');
   // Each specialist receives the retrieved items planned for its role, and only those plus the shared quote.
   const packets = new Map(s.requests.slice(1).map((r) => { const d = JSON.parse((r.messages[0]!.blocks[0] as { text: string }).text); return [/Council role: (\w+)\. /.exec(r.system)![1]! + ':' + (d.data ? 'later' : 'first'), new Set(d.evidence.map((e: { id: string }) => e.id))] as const; }));
   const planned = (role: string) => plan.filter((c) => c.status === 'retrieved' && (c as { roles?: string[] }).roles!.includes(role)).map((c) => c.evidenceId!);
@@ -157,4 +165,19 @@ test('council receives bounded prior text as untrusted context, with the chosen 
    assert.match(scope.conversationNote,/not verified evidence/);
  }
  s.db.close();
+});
+
+test('a failed or disabled news search is a recorded gap, never a failed review', async () => {
+  const failed = setup(); // the test environment has no search key
+  const out = await runStoredCouncil(failed.args);
+  assert.ok(out.runs.every((r) => r.status === 'completed'));
+  const plan = (s: ReturnType<typeof setup>) => JSON.parse(JSON.parse((s.requests[1]!.messages[0]!.blocks[0] as { text: string }).text).question).evidencePlan as { key: string; status: string; reason?: string }[];
+  const news = plan(failed).find((c) => c.key === 'news:response:AMD')!;
+  assert.equal(news.status, 'failed'); assert.match(news.reason!, /web_search/);
+  failed.db.close();
+  const off = setup(); off.cfg.searchProvider = 'none';
+  const none = await runStoredCouncil(off.args);
+  assert.ok(none.runs.every((r) => r.status === 'completed'));
+  assert.equal(plan(off).find((c) => c.key === 'news:regulatory:AMD')!.status, 'unavailable');
+  off.db.close();
 });

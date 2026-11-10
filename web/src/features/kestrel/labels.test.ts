@@ -1,6 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { clampWidth, costLabel, ctxButton, ctxLabel, nextWidth, offlineWhy, prettyArgs, prettyTool, suggestions, took } from './labels.ts';
+import { clampWidth, costLabel, ctxButton, ctxLabel, nextWidth, offlineWhy, prettyArgs, prettyTool, retryNotice, suggestions, took } from './labels.ts';
+
+test('retry notices never claim the model is busy', () => {
+  assert.equal(retryNotice('PROVIDER_ERROR', 'DNS lookup failed'), "couldn't reach the model (DNS lookup failed), retrying…");
+  assert.equal(retryNotice('PROVIDER_RATE_LIMIT'), 'model rate limited, retrying…');
+  assert.equal(retryNotice('PROVIDER_ERROR'), 'model request failed (PROVIDER_ERROR), retrying…');
+});
 
 test('Kestrel labels match legacy agent-panel.js', () => {
   assert.equal(prettyTool('mcp__finsight__get_portfolio'), 'get_portfolio');

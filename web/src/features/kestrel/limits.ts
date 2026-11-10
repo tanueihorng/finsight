@@ -32,5 +32,7 @@ export function limitsPatch(form: Record<string, string>, set: Record<string, nu
 export const limitsForm = (set: Record<string, number>) => Object.fromEntries(LIMIT_FIELDS.map((f) => [f.key, set[f.key] != null ? String(set[f.key]) : '']));
 export const defaultText = (f: LimitField, defaults: Record<string, number>) => (defaults[f.key] != null ? (f.usd ? `US$${defaults[f.key]}` : String(defaults[f.key])) : f.fallback ?? '');
 
-export const limitsDialog = createStore<{ open: boolean }>()(() => ({ open: false }));
-export const openLimits = () => limitsDialog.setState({ open: true });
+export type SettingsTab = 'usage' | 'limits';
+export const limitsDialog = createStore<{ open: boolean; tab: SettingsTab }>()(() => ({ open: false, tab: 'limits' }));
+export const openLimits = () => limitsDialog.setState({ open: true, tab: 'limits' });
+export const openUsage = () => limitsDialog.setState({ open: true, tab: 'usage' });

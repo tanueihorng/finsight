@@ -3,7 +3,7 @@ import { createStore } from 'zustand/vanilla';
 import { openLimits } from './limits.ts';
 import { confirmDialog } from '../../ui/dialog.tsx';
 import { agentApi, AgentError, type Brain, type Citation, type Message, type SearchProvider, type Skill, type Thread } from './api.ts';
-import { COMMANDS, ctxLabel, friendly, LS, ls, offlineWhy, randomVerb, suggestions, TOOL_VERBS, prettyTool, type PageContext } from './labels.ts';
+import { COMMANDS, ctxLabel, friendly, LS, ls, offlineWhy, randomVerb, retryNotice, suggestions, TOOL_VERBS, prettyTool, type PageContext } from './labels.ts';
 import type { UiView } from '../../../../shared/ui.ts';
 import { addCouncil, addUi, addCite, addNotice, addText, addTool, endSegment, finish, newTurn, toolDone, type Turn } from './turns.ts';
 
@@ -125,7 +125,7 @@ function openStream() {
   on<D>('ui.render', (d) => { if (typeof d.callId === 'string') updateTurn(d.turnId, (t) => addUi(t, d.callId as string, d.view)); });
   on<D & Citation>('citation', (d) => updateTurn(d.turnId, (t) => addCite(t, d)));
   on<D>('budget.warning', (d) => updateTurn(d.turnId, (t) => addNotice(t, String(d.note || 'Limit reached.'), 'warn')));
-  on<D>('turn.retry', (d) => { updateTurn(d.turnId, (t) => addNotice(t, `model busy (${d.code}), retrying…`, 'warn')); set({ status: { ...get().status, verb: 'Waiting for the model' } }); });
+  on<D>('turn.retry', (d) => { updateTurn(d.turnId, (t) => addNotice(t, retryNotice(d.code as string | undefined, d.connection as string | undefined), 'warn')); set({ status: { ...get().status, verb: 'Waiting for the model' } }); });
   on<D>('turn.finished', (d) => { updateTurn(d.turnId, (t) => finish(t, { label: t.label, costUsd: d.costUsd as number | undefined, ms: d.ms as number | undefined })); done(d.turnId); afterTurn(); });
   on<D>('turn.stopped', (d) => { updateTurn(d.turnId, (t) => finish(addNotice(t, 'Interrupted by you.', 'warn'), { label: t.label })); done(d.turnId); afterTurn(); });
   on<D>('turn.failed', (d) => { updateTurn(d.turnId, (t) => finish(addNotice(t, friendly(d.code as string, d.message as string), 'error'), { label: t.label })); done(d.turnId); afterTurn(); });

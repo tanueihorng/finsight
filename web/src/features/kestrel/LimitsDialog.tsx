@@ -4,14 +4,17 @@ import { useModalFocus } from '../../ui/modalFocus.ts';
 import { showToast } from '../../ui/toast.tsx';
 import { agentApi } from './api.ts';
 import { chat } from './chat.ts';
-import { defaultText, LIMIT_FIELDS, limitsDialog, limitsForm, limitsPatch, type LimitsResponse } from './limits.ts';
+import { defaultText, LIMIT_FIELDS, limitsDialog, limitsForm, limitsPatch, type LimitsResponse, type SettingsTab } from './limits.ts';
+import { UsagePanel } from './UsagePanel.tsx';
 
 // Kestrel limits: the user's own spending and tool ceilings, saved to the
-// agent's config.json and applied from the next reply. Opened from the
-// "Today" spend in the chat list or /limits. Kestrel cannot reach this route.
+// agent's config.json and applied from the next reply, beside the usage
+// dashboard. Opened from the "Today" spend in the chat list or /limits.
+// Kestrel cannot reach this route.
 const usd2 = (v: number | undefined) => (v == null ? '—' : `US$${v.toFixed(2)}`);
 export function LimitsDialog() {
-  const open = useStore(limitsDialog, (s) => s.open);
+  const open = useStore(limitsDialog, (s) => s.open), tab = useStore(limitsDialog, (s) => s.tab);
+  const setTab = (next: SettingsTab) => limitsDialog.setState({ tab: next });
   const boxRef = useRef<HTMLFormElement>(null);
   const [data, setData] = useState<LimitsResponse | null>(null), [form, setForm] = useState<Record<string, string>>({});
   const [err, setErr] = useState(''), [busy, setBusy] = useState(false);
@@ -38,12 +41,16 @@ export function LimitsDialog() {
   const name = useStore(chat, (s) => s.name);
   return (
     <div id="limits-modal" className={open ? 'modal' : 'modal hidden'} onClick={(e) => { if (e.target === e.currentTarget) close(); }}>
-      <form className="modal-box" ref={boxRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label={`${name} limits`} onSubmit={(e) => void save(e)}>
+      <form className="modal-box" ref={boxRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label={`${name} settings`} onSubmit={(e) => void save(e)}>
         <div className="modal-head">
-          <span className="panel-title">{name.toUpperCase()} LIMITS</span>
+          <span className="panel-title">{name.toUpperCase()} SETTINGS</span>
           <button type="button" aria-label="Close dialog" className="x-btn" onClick={close}>✕</button>
         </div>
-        <div className="modal-body kx-limits">
+        <div className="kx-settings-tabs" role="tablist" aria-label="Settings sections">
+          {(['usage', 'limits'] as const).map((t) => <button key={t} type="button" role="tab" aria-selected={tab === t} className={tab === t ? 'on' : ''} onClick={() => setTab(t)}>{t === 'usage' ? 'Usage' : 'Limits'}</button>)}
+        </div>
+        {tab === 'usage' && open && <div className="modal-body"><UsagePanel /></div>}
+        {tab === 'limits' && <div className="modal-body kx-limits">
           <p className="muted small">Ceilings on what {name} may spend and do. Leave a field empty to use the default. Changes apply from the next reply; your other settings are untouched.</p>
           {data && <p className="small">Spent today: <b>{usd2(data.todayUsd)}</b> of {usd2(data.limits.dayUsd)}</p>}
           {!data && !err && <p className="muted small">Loading…</p>}
@@ -56,11 +63,11 @@ export function LimitsDialog() {
             </label>
           ))}
           {err && <div role="alert" className="down small">{err}</div>}
-        </div>
-        <div className="modal-foot">
+        </div>}
+        {tab === 'limits' && <div className="modal-foot">
           <button type="button" className="mini-btn" disabled={!data} onClick={() => setForm(limitsForm({}))}>ALL DEFAULTS</button>
           <button id="limits-save" className="mini-btn solid" disabled={!data || busy}>{busy ? 'SAVING…' : 'SAVE'}</button>
-        </div>
+        </div>}
       </form>
     </div>
   );

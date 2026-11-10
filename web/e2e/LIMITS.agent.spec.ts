@@ -7,7 +7,8 @@ test('limits open from the Today spend and /limits, save only changes, and empty
   await page.click('#agent-toggle');
   await page.getByRole('button', { name: 'Open full page' }).click();
   await page.locator('button.kx-spend').click();
-  const dialog = page.getByRole('dialog', { name: 'Kestrel limits' });
+  await page.getByRole('tab', { name: 'Limits' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Kestrel settings' });
   await expect(dialog).toBeVisible();
   await expect(dialog).toContainText('Spent today: US$0.50 of US$5.00');
   await expect(page.locator('#limit-dayUsd')).toHaveAttribute('placeholder', 'US$5');

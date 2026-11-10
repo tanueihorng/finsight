@@ -7,7 +7,7 @@
 // stated as confirmed, all-account weights must name that scope, and an
 // approximate trailing P/E must be called approximate. No model judgement is
 // involved; issues trigger the existing repair turn.
-import type { Assessment } from './council-contract.ts';
+import type { ChairAssessment } from './council-contract.ts';
 
 type Basis = 'securities' | 'securities_plus_cash';
 type Labelled = { value: number; basis: Basis | null; kind: 'weight' | 'denominator' };
@@ -148,9 +148,47 @@ function pendingIssues(text: string): string[] {
 const SCOPE_WORDS = /\ball[- ]accounts?\b|\bacross\s+(?:all\s+)?(?:your\s+)?accounts\b|\bcombined\b|\baccount\b|\bportfolio[- ]wide\b|\bhousehold\b/i;
 const APPROX_WORDS = /approx|\babout\b|\baround\b|\broughly\b|~|≈|estimat|\bcirca\b|\bnear(?:ly)?\b/i;
 
+// Company guidance stated as a midpoint and tolerance. Code computes the bounds.
+type Guide = { value: number; unit: 'billion' | 'million' | '%'; tolerance: string; low: number; high: number };
+const TOLERANCE = /(?:plus\s+or\s+minus|±|\+\/-)\s*(\d+(?:\.\d+)?)\s*(%|percent\b|basis\s+points?\b|percentage\s+points?\b)/gi;
+const round2 = (n: number) => Math.round(n * 100) / 100;
+export function guidanceRanges(content: string): Guide[] {
+  const text = content.replace(/\\[nrt]/g, ' ').replace(/\s+/g, ' ');
+  const out: Guide[] = [];
+  for (const m of text.matchAll(TOLERANCE)) {
+    const clause = text.slice(Math.max(0, m.index - 200), m.index).split(/[.!?]\s+(?=[A-Z])/).at(-1)!, size = Number(m[1]);
+    if (m[2]!.startsWith('%') || /^percent/i.test(m[2]!)) {
+      const amount = [...clause.matchAll(/\$\s?(\d[\d,]*(?:\.\d+)?)\s*(billion|million)\b/gi)].at(-1);
+      if (!amount) continue;
+      const value = Number(amount[1]!.replace(/,/g, ''));
+      out.push({ value, unit: amount[2]!.toLowerCase() as Guide['unit'], tolerance: `${size}%`, low: round2(value * (1 - size / 100)), high: round2(value * (1 + size / 100)) });
+    } else {
+      const points = /^basis/i.test(m[2]!) ? size / 100 : size;
+      for (const pct of clause.matchAll(/(\d+(?:\.\d+)?)\s*%/g)) { const value = Number(pct[1]); out.push({ value, unit: '%', tolerance: `${points} percentage points`, low: round2(value - points), high: round2(value + points) }); }
+    }
+  }
+  return out;
+}
+const SHORTFALL = String.raw`\b(?:below|under|beneath|less\s+than|lower\s+than|short\s+of|miss(?:es|ed|ing)?|falls?\s+short)\b[^.;]{0,40}?`;
+const RANGE_NAMED = /\b(?:range|low(?:er)?\s+end|bottom\s+of|plus\s+or\s+minus)\b|±|\+\/-/i;
+/** "Revenue below US$108 billion" where guidance is 108 billion plus or minus 2%. */
+function guidanceIssues(text: string, guides: Guide[]): string[] {
+  if (RANGE_NAMED.test(text)) return [];
+  const out = new Set<string>();
+  for (const g of guides) {
+    const unit = g.unit === 'billion' ? String.raw`\s?(?:billion|bn|b)\b` : g.unit === 'million' ? String.raw`\s?(?:million|mn|m)\b` : String.raw`\s?%`;
+    const hit = new RegExp(SHORTFALL + String.raw`(?<![\d.])` + escape(String(g.value)) + String.raw`(?:\.0+)?` + unit, 'i').exec(text);
+    if (hit) out.add(`"${hit[0].trim()}" treats a guidance midpoint as a break point; guidance is ${g.value}${g.unit === '%' ? '%' : ' ' + g.unit} plus or minus ${g.tolerance} (${g.low} to ${g.high}${g.unit === '%' ? '%' : ' ' + g.unit}). Compare with the full range; a result inside it is not a miss`);
+  }
+  return [...out];
+}
+
 /** Issues for each finding, keyed "finding N: …". Empty when every figure checks out. */
-export function metricIssues(assessment: Assessment, evidence: readonly { id: string; content?: string }[]): string[] {
+export function metricIssues(assessment: ChairAssessment, evidence: readonly { id: string; content?: string }[]): string[] {
+  const guides = evidence.flatMap((e) => guidanceRanges(e.content ?? ''));
   const facts = new Map(evidence.map((e) => [e.id, evidenceFacts(e.content ?? '')]));
+  // The bounds are code-computed from the cited guidance, so quoting them is allowed.
+  for (const e of evidence) facts.get(e.id)!.numbers.push(...guidanceRanges(e.content ?? '').flatMap((g) => [g.low, g.high]));
   const issues: string[] = [];
   assessment.findings.forEach((finding, i) => {
     // Counterevidence cites its own source IDs inline; those count as cited too.
@@ -176,6 +214,7 @@ export function metricIssues(assessment: Assessment, evidence: readonly { id: st
     // Counterevidence is opposing evidence from the packet, not opinion: each
     // entry must name the supplied evidence it comes from.
     finding.counterevidence.forEach((c, k) => { if (!evidence.some((e) => new RegExp(`(?<![\\w-])${escape(e.id)}(?![\\w-])`).test(c))) issues.push(`finding ${i + 1}: counterevidence ${k + 1} cites no supplied evidence ID; name its source ID or move it to assumptions`); });
+    for (const text of [finding.claim, finding.invalidation]) guidanceIssues(text, guides).forEach((m) => issues.push(`finding ${i + 1}: ${m}`));
     const bases = new Map<Basis, string[]>();
     for (const fig of figures(finding.claim)) {
       if (fig.percent && !numbers.some((v) => near(fig, v) || near(fig, v * 100) || near(fig, -v) || near(fig, -v * 100))) issues.push(`finding ${i + 1}: ${fig.text}% is not in its cited evidence`);
@@ -186,6 +225,11 @@ export function metricIssues(assessment: Assessment, evidence: readonly { id: st
     }
     if (bases.size > 1) issues.push(`finding ${i + 1}: mixes denominators (${[...bases].map(([b, xs]) => `${xs.join(', ')} on ${b}`).join('; ')}); restate every figure on one basis`);
   });
+  const d = assessment.decision;
+  if (d) {
+    const claim = [d.rationale, d.buyNow, d.wait, d.noAction, d.valuation, d.momentum].join(' ');
+    issues.push(...metricIssues({ findings: [{ claim, evidenceIds: d.evidenceIds, assumptions: [], uncertainty: '-', counterevidence: [], invalidation: d.changesView.join('; '), missingEvidence: [] }], unresolvedQuestions: [] }, evidence).map((x) => x.replace(/^finding 1:/, 'decision:')));
+  }
   return issues;
 }
 

@@ -96,4 +96,13 @@ test('a challenge stopped by the spending cap keeps the assessment and names the
   // A challenge that failed for another reason is not blamed on the budget.
   const model = all().map((r) => r.role === 'macro' && r.phase === 'challenge' ? { ...r, status: 'failed', cause: 'model' as const } : r);
   assert.equal(councilModel(model, true, false).roles[1]!.phaseNote, 'Assessed · challenge failed');
+  // A response rejected by the format check is not called a missing assessment.
+  const invalid = all().map((r) => r.role === 'macro' && r.phase === 'assessment' ? { ...r, status: 'failed', cause: 'validation' as const } : r);
+  assert.equal(councilModel(invalid, true, false).roles[1]!.phaseNote, 'Assessment failed validation');
+});
+
+test('a chair result with a decision still parses into the chair view', () => {
+  const decision = { verdict: 'wait', rationale: 'r', buyNow: 'b', wait: 'w', noAction: 'n', valuation: 'v', momentum: 'm', changesView: ['c'], evidenceIds: ['e1'] };
+  const runs = all().map((r) => r.role === 'chair' ? { ...r, detail: JSON.stringify({ findings: [finding('Chair ruling')], unresolvedQuestions: [], decision }) } : r);
+  assert.equal(councilModel(runs, true, true).chair.lead, 'Chair ruling');
 });

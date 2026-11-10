@@ -2,7 +2,7 @@
 // weight against a cash-inclusive total. Synthetic figures only.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { evidenceFacts, metricIssues } from '../src/chat/council-metrics.ts';
+import { evidenceFacts, metricIssues, guidanceRanges } from '../src/chat/council-metrics.ts';
 
 const den = { securities: { scope: 'securities', value: 119000, currency: 'SGD' }, securities_plus_cash: { scope: 'securities_plus_cash', value: 134447.51, currency: 'SGD' }, liabilities: 'not tracked' };
 const portfolio = JSON.stringify({ weightBasis: 'securities', denominators: den, positions: [{ symbol: 'AAA', marketValue: 18188.02, weightPct: 15.28, weightInclCashPct: 13.53 }] });
@@ -141,4 +141,20 @@ test('figures in cited filing text count as evidence, and a label is matched as 
   assert.match(metricIssues(one('Data Center revenue rose 120%.', ['r']), [k8]).join(), /120% is not in its cited evidence/);
   const ex = { id: 's', content: JSON.stringify({ weightBasis: 'securities_plus_cash', rows: [{ group: 'Technology', members: [{ symbol: 'TSM' }] }, { group: 'Cash', members: [{ symbol: 'SGD cash' }] }] }) };
   assert.deepEqual(metricIssues(one('Technology is large on the securities-plus-cash basis, led by TSM.', ['s']), [ex]), []);
+});
+
+test('guidance is a range: a midpoint used as a break point is flagged with code-computed bounds', () => {
+  const release = 'Revenue is expected to be $108.0 billion, plus or minus 2%. GAAP and non-GAAP gross margins are expected to be 73.9% and 74.0%, respectively, plus or minus 50 basis points.';
+  const evidence = [{ id: 'g', content: JSON.stringify({ reports: [{ text: release }] }) }];
+  assert.deepEqual(guidanceRanges(evidence[0]!.content).map((x) => [x.value, x.unit, x.low, x.high]), [[108, 'billion', 105.84, 110.16], [73.9, '%', 73.4, 74.4], [74, '%', 73.5, 74.5]]);
+  const with_ = (invalidation: string, claim = 'No figures.') => metricIssues({ findings: [{ claim, evidenceIds: ['g'], assumptions: [], uncertainty: 'u', counterevidence: [], invalidation, missingEvidence: [] }], unresolvedQuestions: [] }, evidence);
+  const sharp = with_('Revenue below US$108 billion or gross margin below 74% would break the support.');
+  assert.equal(sharp.length, 2);
+  assert.match(sharp[0]!, /^finding 1: .*midpoint.*105\.84 to 110\.16 billion/); assert.match(sharp[1]!, /73\.5 to 74\.5%/);
+  assert.deepEqual(with_('Revenue below the US$105.84 billion low end of guidance would matter.'), []);
+  assert.deepEqual(with_('Revenue below US$108 billion but inside the guided range would not change the view.'), []);
+  assert.deepEqual(with_('Revenue above US$108 billion.'), []);
+  assert.deepEqual(with_('Unrelated.', 'The guided margin floor is 73.5%.'), [], 'a code-computed bound counts as evidence');
+  const decision = { verdict: 'wait' as const, rationale: 'r', buyNow: 'b', wait: 'w', noAction: 'n', valuation: 'v', momentum: 'm', changesView: ['Revenue below $108 billion'], evidenceIds: ['g'] };
+  assert.match(metricIssues({ findings: [], unresolvedQuestions: [], decision }, evidence)[0]!, /^decision: .*midpoint/);
 });

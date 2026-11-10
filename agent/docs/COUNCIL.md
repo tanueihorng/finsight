@@ -296,7 +296,7 @@ Budget: the audited run's cap was the default US$0.05 turn limit
 measured cost (US$0.0178 reserved for a challenge that would have cost about
 US$0.0045), and US$0.0125 stays held for the chair, so the risk challenge was
 refused although the whole run cost US$0.028. Caps are unchanged. A stage that
-does not complete now records `cause` (budget, context, tool, model, stopped); the
+does not complete now records `cause` (budget, context, tool, validation, model, stopped); the
 answer, readiness record and UI name each such stage and cause, the refusal
 states the reservation, free amount and cap, and readiness names the cap's
 setting. The Risk card shows "Assessed · challenge not run · spending cap reached"
@@ -309,3 +309,17 @@ classifier is a cover-text pattern, not a semantic check. Web evidence is
 untrusted and its support for claims is still unverified. A foreign-issuer
 packet with web pages is larger, so the US$0.05 default makes partial reviews
 likely; a higher `councilTurnUsd` needs the user's approval.
+
+## Decision quality — 2026-11-10
+
+Prompted by review of a partial NVDA run. Each equity's evidence plan now has two
+code-built web searches (company response, regulatory action, past 30 days), held
+against the Council's caps and recorded as evidence items. Web facts must name who
+said them and how they were obtained. A claim that treats a guidance midpoint as a
+break point is flagged by a deterministic check, with code-computed bounds, and gets
+the usual repair. When the question is about acting, the chair must return a
+`decision`: a verdict, the case for buying now, waiting and no action, valuation
+kept apart from price momentum, and what would change the view. Code replaces a
+`buy_now` verdict with `insufficient_evidence` when the Macro & Valuation assessment
+did not complete. Search queries come from code, never from user or page text. These
+checks shape the answer; they do not verify that its sources support it.

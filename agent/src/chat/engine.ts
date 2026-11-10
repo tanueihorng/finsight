@@ -10,7 +10,7 @@ import * as store from '../store/db.ts';
 import { MAX_RESULT_CHARS, type ToolRegistry, type ToolCtx } from '../tools/registry.ts';
 import type { FinsightClient } from '../tools/finsight.ts';
 import type { BrainEntry } from '../brains/registry.ts';
-import type { ApiBrain, Brain, CliBrain, StepResult } from '../brains/types.ts';
+import type { ApiBrain, Brain, CliBrain, ConnectionFailure, StepResult } from '../brains/types.ts';
 import { Effort, costOf } from '../brains/types.ts';
 import type { Block, CitationBlock, Msg, PageContext, Usage } from '../types.ts';
 import { AgentError } from '../types.ts';
@@ -147,7 +147,7 @@ export class ChatEngine {
         const result = await runStoredCouncil({ db: this.db, bus: this.bus, tools: this.tools, ctx, brain, system: councilSystem, question: question.text.replace(/^\/(committee|debate)\s*/, ''), usageTotal, effort, scope: scopeNotice?.type === 'notice' ? JSON.parse(scopeNotice.text) : undefined });
         step = result.steps;
         ctrl.signal.throwIfAborted();
-        onText(result.text); councilReadiness = result.readiness?.level ?? null; councilUnknown = result.costUsd === null; costUsd = result.costUsd ?? 0;
+        onText(result.text); councilReadiness = result.readiness?.level ?? null; councilUnknown = result.costUsd === null; costUsd = result.costUsd === null ? 0 : store.turnSpend(this.db, turnId);
         store.appendMessage(this.db, threadId, 'assistant', [{ type: 'text', text: result.text }], { brain: brain.manifest.id, turnId });
       } else {
         await this.attachContextPack(threadId, ctx);
@@ -251,6 +251,7 @@ export class ChatEngine {
     const tools = this.tools.schemas().filter((t) => t.name !== 'render_ui' || ctx.ui!.enabled);
     let costUsd = 0, step = 0, final = false, warnedContext = false;
     while (true) {
+      costUsd = store.turnSpend(this.db, turnId); // includes paid search and fetch
       const overLimit = step >= turnSteps || costUsd >= turnUsd || Date.now() - t0 > turnSeconds * 1000 * 0.8;
       if (overLimit && !final) {
         final = true;
@@ -282,7 +283,7 @@ export class ChatEngine {
       const c = costOf(brain.manifest, res.usage, res.searches);
       costUsd += c; addUsage(usageTotal, res.usage);
       store.addTraceStep(this.db, turnId, step * 100, { kind: 'brain', name: brain.manifest.id, usage: res.usage, costUsd: c, ms: Date.now() - t, ok: true });
-      store.addCost(this.db, { brain: brain.manifest.id, kind: 'tokens', units: (res.usage.inputTokens ?? 0) + (res.usage.outputTokens ?? 0), usd: c, priceVersion: brain.manifest.pricing.version, turnId, threadId });
+      store.addCost(this.db, { brain: brain.manifest.id, kind: 'tokens', units: (res.usage.inputTokens ?? 0) + (res.usage.outputTokens ?? 0), usd: c, priceVersion: brain.manifest.pricing.version, turnId, threadId, usage: res.usage });
       step++;
       const calls = res.blocks.filter((b): b is Extract<Block, { type: 'tool_call' }> => b.type === 'tool_call');
       const blocks = [...res.blocks];
@@ -324,7 +325,7 @@ export class ChatEngine {
       if (calls.every((c) => c.name === 'render_ui' && (c.args as { complete?: unknown } | null)?.complete === true)
         && results.every((r) => r.type === 'tool_result' && r.ok)) break;
     }
-    return { costUsd, step };
+    return { costUsd: store.turnSpend(this.db, turnId), step };
   }
 
   private async stepWithRetry(brain: ApiBrain, req: Parameters<ApiBrain['step']>[0], threadId: string, turnId: string): Promise<StepResult> {
@@ -337,8 +338,9 @@ export class ChatEngine {
         if (!transient || emitted || attempt >= 3 || req.signal.aborted) throw e;
         const wait = Math.min(8000, 500 * 2 ** attempt) * (0.5 + Math.random());
         attempt++;
-        audit('model.retry', { turnId, attempt, waitMs: Math.round(wait), code: e.code });
-        this.bus.emit(threadId, 'turn.retry', { turnId, attempt, waitMs: Math.round(wait), code: e.code });
+        const connection = (e.details as { connection?: ConnectionFailure } | undefined)?.connection;
+        audit('model.retry', { turnId, attempt, waitMs: Math.round(wait), code: e.code, ...(connection ? { connection } : {}) });
+        this.bus.emit(threadId, 'turn.retry', { turnId, attempt, waitMs: Math.round(wait), code: e.code, ...(connection ? { connection: connection.reason } : {}) });
         await new Promise((r) => setTimeout(r, wait));
       }
     }
@@ -363,7 +365,7 @@ export class ChatEngine {
     addUsage(usageTotal, r.usage);
     const c = r.costUsd ?? 0;
     store.addTraceStep(this.db, turnId, 0, { kind: 'cli-turn', name: brain.manifest.id, usage: r.usage, costUsd: r.costUsd ?? undefined, ms: Date.now() - t, ok: true });
-    if (r.costUsd != null) store.addCost(this.db, { brain: brain.manifest.id, kind: 'cli-reported', units: 1, usd: r.costUsd, priceVersion: 'cli', turnId, threadId });
+    if (r.costUsd != null) store.addCost(this.db, { brain: brain.manifest.id, kind: 'cli-reported', units: 1, usd: r.costUsd, priceVersion: 'cli', turnId, threadId, usage: r.usage });
     store.appendMessage(this.db, threadId, 'assistant', [{ type: 'text', text: r.text }], { brain: brain.manifest.id, turnId });
     return { costUsd: c };
   }

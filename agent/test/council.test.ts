@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { CouncilBudget, runCouncil } from '../src/chat/council.ts';
+import { CouncilBudget, runCouncil, stageCause } from '../src/chat/council.ts';
 import type { CouncilEvidence } from '../src/chat/council.ts';
 import type { ApiBrain, StepRequest } from '../src/brains/types.ts';
 import { BrainManifest } from '../src/brains/types.ts';
@@ -89,6 +89,24 @@ test('malformed completed output gets one accounted repair per stage without a g
  let dispatched = 0;
  const broken = await runCouncil({ ...setup(async () => { dispatched++; return { ...result(), blocks: [{ type: 'text', text: 'not JSON' }] }; }) });
  assert.equal(dispatched, 14); assert.equal(broken.steps, 14); assert.match(broken.text, /Partial/);
+});
+
+test('repair names the schema errors; output still invalid is labelled a format failure', async () => {
+ const { missingEvidence: _dropped, ...incomplete } = finding.findings[0]!;
+ const invalid = JSON.stringify({ findings: [incomplete], unresolvedQuestions: [] });
+ const text = (m: StepRequest['messages'][number]) => m.blocks.map((b) => (b.type === 'text' ? b.text : '')).join('');
+ let repairPrompt = '';
+ const out = await runCouncil(setup(async (req) => {
+  if (!req.system.includes('Council role: macro.') || JSON.parse(text(req.messages[0]!)).data !== null) return result();
+  if (req.messages.length > 1) repairPrompt = text(req.messages.at(-1)!);
+  return { ...result(), blocks: [{ type: 'text', text: invalid }] };
+ }));
+ assert.match(repairPrompt, /findings\.0\.missingEvidence: /);
+ const macro = out.runs.find((r) => r.role === 'macro' && r.phase === 'assessment')!;
+ assert.equal(macro.status, 'failed'); assert.equal(macro.cause, 'validation'); assert.match(macro.error!, /^Council assessment failed validation after one repair: findings\.0\.missingEvidence/);
+ assert.match(out.text, /Macro assessment: failed validation after one repair/);
+ assert.equal(out.runs.filter((r) => r.status === 'completed').length, 6);
+ assert.equal(stageCause('DeepSeek Flash unreachable: DNS lookup failed (ENOTFOUND)'), 'model');
 });
 
 test('per-call output limits do not mutate model defaults and reject invalid bounds', async () => {
@@ -300,4 +318,52 @@ test('no nudge without listed gaps or without web search', async () => {
  p.tools = webSchemas.filter((t) => t.name !== 'web_search');
  await runCouncil(p);
  assert.equal(nudges, 0);
+});
+
+const decision = (verdict: string) => ({ verdict, rationale: 'Evidence is mixed.', buyNow: 'Case for buying.', wait: 'Case for waiting.', noAction: 'Case for nothing.', valuation: 'No range is supported.', momentum: 'Price has fallen.', changesView: ['A filed statement'], evidenceIds: ['e1'] });
+const asText = (value: unknown) => ({ ...result(), blocks: [{ type: 'text' as const, text: JSON.stringify(value) }] });
+const firstText = (m: StepRequest['messages'][number]) => m.blocks.map((b) => (b.type === 'text' ? b.text : '')).join('');
+
+test('a question about acting requires a chair decision, shown first in the answer', async () => {
+ const prompts: string[] = [];
+ const out = await runCouncil({ ...setup(async (req) => { if (!req.system.includes('Council role: chair')) return result(); prompts.push(req.system); return asText({ ...finding, decision: decision('wait') }); }), question: 'Should I buy this synthetic company now?' });
+ assert.match(prompts[0]!, /fill decision/); assert.match(prompts[0]!, /"decision"/);
+ assert.equal(out.runs.find((r) => r.role === 'chair')!.findings!.decision!.verdict, 'wait');
+ assert.match(out.text, /^Council review\n\nDecision: Wait\nEvidence is mixed\.\nBuy now: Case for buying\.\nWait: Case for waiting\.\nNo action: Case for nothing\.\nValuation: No range is supported\.\nPrice momentum \(not a valuation signal\): Price has fallen\.\nWould change the view: A filed statement\n\nInsufficient evidence/);
+
+ let chairCalls = 0, repair = '';
+ const missing = await runCouncil({ ...setup(async (req) => { if (req.system.includes('Council role: chair')) { if (++chairCalls === 2) repair = firstText(req.messages.at(-1)!); } return result(); }), question: 'Is this synthetic company a buy?' });
+ assert.equal(chairCalls, 2); assert.match(repair, /decision: /);
+ const chair = missing.runs.find((r) => r.role === 'chair')!;
+ assert.equal(chair.status, 'failed'); assert.equal(chair.cause, 'validation');
+
+ let plain = '';
+ await runCouncil(setup(async (req) => { if (req.system.includes('Council role: chair')) plain = req.system; return result(); }));
+ assert.doesNotMatch(plain, /fill decision/); assert.doesNotMatch(plain, /"decision"/);
+});
+
+test('buy now is not accepted without a completed valuation assessment', async () => {
+ const buy = asText({ ...finding, decision: decision('buy_now') });
+ const kept = await runCouncil({ ...setup(async (req) => (req.system.includes('Council role: chair') ? buy : result())), question: 'Should I buy this synthetic company?' });
+ assert.equal(kept.runs.find((r) => r.role === 'chair')!.findings!.decision!.verdict, 'buy_now');
+ const out = await runCouncil({ ...setup(async (req) => {
+  if (req.system.includes('Council role: chair')) return buy;
+  if (req.system.includes('Council role: macro.') && JSON.parse(firstText(req.messages[0]!)).data === null) return asText({ findings: 'broken' });
+  return result();
+ }), question: 'Should I buy this synthetic company?' });
+ const d = out.runs.find((r) => r.role === 'chair')!.findings!.decision!;
+ assert.equal(d.verdict, 'insufficient_evidence'); assert.match(d.rationale, /^Buy now was not accepted.*Macro & Valuation.*Evidence is mixed\.$/);
+ assert.match(out.text, /Decision: Insufficient evidence/);
+});
+
+test('planned paid searches are held against the turn cap and refused when they do not fit', async () => {
+ let filled = 0, refused: unknown, released: unknown;
+ const out = await runCouncil({ ...setup(async () => result()), capUsd: 0.04, prepare: async (_call, paidWeb) => {
+  const settles = [paidWeb(), paidWeb(), paidWeb()]; filled = settles.filter(Boolean).length;
+  refused = paidWeb();
+  settles[0]!(JSON.stringify({ usage: { estimatedCostUsd: 0 } }));
+  released = paidWeb();
+  return { question: 'q', evidence: [], stop: 'stopped' };
+ } });
+ assert.equal(filled, 3); assert.equal(refused, null); assert.equal(typeof released, 'function'); assert.equal(out.text, 'stopped');
 });

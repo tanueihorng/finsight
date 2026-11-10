@@ -61,7 +61,7 @@ test('DeepSeek search maps filters, citations and usage; cache preserves provena
   const b = JSON.parse((await r.execute('web_search', input, ctx)).content);
   assert.equal(b.cached, true); assert.equal(b.usage.requests, 0); assert.equal(b.retrievedAt, a.retrievedAt); assert.equal(calls, 1);
   ctx.cfg.searchProvider = 'tavily'; assert.equal(JSON.parse((await r.execute('web_search', input, ctx)).content).provider, 'tavily'); assert.equal(calls, 2);
-  assert.equal((ctx.db.prepare('SELECT COUNT(*) n FROM cost_ledger').get() as any).n, 1);
+  const billed = ctx.db.prepare('SELECT brain, kind, usd FROM cost_ledger ORDER BY id').all() as any[]; assert.equal(billed.length, 2); assert.deepEqual({ ...billed[1] }, { brain: 'tavily-search', kind: 'search', usd: 0.008 });
 });
 test('query limits include filters, count Unicode characters and reject injected domain syntax', async () => {
   const { ctx } = fixture(); let calls = 0; const r = registry(async () => { calls++; return json({ results: [] }); });

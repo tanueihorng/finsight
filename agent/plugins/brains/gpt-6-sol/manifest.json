@@ -11,7 +11,12 @@
     "inputPerM": 2,
     "outputPerM": 10,
     "cacheReadPerM": 0.2,
-    "version": "openai-standard-2026-10-25 (<=272K prompt); https://developers.openai.com/api/docs/models/gpt-6-sol"
+    "version": "openai-standard-2026-11-10 (<=272K prompt); https://developers.openai.com/api/docs/models/gpt-6-sol",
+    "longContext": {
+      "aboveTokens": 272000,
+      "inputMultiplier": 2,
+      "outputMultiplier": 1.5
+    }
   },
   "capabilities": {
     "tools": true,
