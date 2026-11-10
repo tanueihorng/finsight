@@ -40,7 +40,7 @@ import {
 } from './lib/auth.ts';
 import * as agentlink from './lib/agentlink.ts';
 import * as agentproc from './lib/agentproc.ts';
-import { chosenBook, chooseBook, isBook } from './lib/book.ts';
+import { activeBook, chosenBook, chooseBook, isBook, withBook } from './lib/book.ts';
 import * as paper from './lib/paper.ts';
 
 /** A parsed JSON request body: untrusted, {} when missing or malformed. The lib functions validate it. */
@@ -120,7 +120,7 @@ function paperStream(req: IncomingMessage, res: ServerResponse): void {
   req.on('close', () => paperClients.delete(res));
 }
 
-const server = http.createServer(async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
   // Applied to every response: the terminal must not be framed or MIME-sniffed.
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -237,7 +237,7 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
       return sendJson(res, 404, { error: 'Unknown endpoint' });
     }
     // The PAPER book mirrors Alpaca: only orders change it.
-    if (chosenBook() === 'paper' && req.method === 'POST' && PAPER_READONLY.test(p)) {
+    if (activeBook() === 'paper' && req.method === 'POST' && PAPER_READONLY.test(p)) {
       return sendJson(res, 409, { error: 'PAPER mode mirrors your Alpaca paper account. Place an order instead, or switch to REAL to edit your own portfolio.' });
     }
     // ---- chat panel -> local agent service (session-gated proxy, SSE passthrough) ----
@@ -457,12 +457,15 @@ const server = http.createServer(async (req: IncomingMessage, res: ServerRespons
   } catch (err) {
     return sendJson(res, 500, { error: String(err && (err as Error).message || err) });
   }
-});
+}
+// Each request stays on the book chosen when it arrived: a write awaits quotes
+// between load and save, and a switch in that gap must not move it to the other book.
+const server = http.createServer((req, res) => withBook(chosenBook(), () => handle(req, res)));
 
 // Background alert checker — evaluates alerts on a timer and fires desktop
 // notifications even when no browser is open. Override cadence with ALERT_INTERVAL (seconds).
 const ALERT_INTERVAL = Math.max(15, Number(process.env.ALERT_INTERVAL) || 60) * 1000;
-setInterval(() => { evaluateAlerts(true).catch(() => console.warn('Alert evaluation failed; see application diagnostics.')); }, ALERT_INTERVAL);
+setInterval(() => { withBook(chosenBook(), () => evaluateAlerts(true)).catch(() => console.warn('Alert evaluation failed; see application diagnostics.')); }, ALERT_INTERVAL);
 
 paper.startPaper(); // Alpaca paper stream + book sync, when paper keys are connected
 agentlink.ensureLink(); // creates DATA_DIR/agent-link.json (0600) for the optional local agent
