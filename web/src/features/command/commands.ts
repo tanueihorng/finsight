@@ -1,7 +1,7 @@
 // Command bar grammar (F7), ported 1:1 from public/app.js runCommand. Parsing
 // only: runCommand.ts performs the writes. Commands are case-insensitive;
 // symbols are sent as typed and shown upper-case, like legacy.
-export const HELP = 'ADD <s> <qty> <px> [date] · SELL <s> <qty> [px] · DEL <s> · UNDO · LEDGER · CASH <ccy> <amt> · WHT <mkt> <%> · Q <s> · WATCH/UNWATCH <s> · ALERT <s> > <px> · NEWS [s] · MKT · CLEAR';
+export const HELP = 'ADD <s> <qty> <px> [date] · SELL <s> <qty> [px] · DEL <s> · UNDO · LEDGER · CASH <ccy> <amt> · WHT <mkt> <%> · Q <s> · WATCH/UNWATCH <s> · ALERT <s> > <px> · NEWS [s] · MKT · LAB · CLEAR';
 export const USAGE = {
   add: 'Usage: ADD <symbol> <qty> <avg price> [YYYY-MM-DD]   e.g. ADD AAPL 10 195.50',
   sell: 'Usage: SELL <symbol> <qty> [price]   (price optional → uses market)',
@@ -19,7 +19,7 @@ export type Command =
   | { kind: 'watch'; sym: string } | { kind: 'unwatch'; sym: string }
   | { kind: 'alert'; sym: string; op: '<' | '>'; price: string }
   | { kind: 'news'; sym: string | null } | { kind: 'undo' } | { kind: 'ledger' }
-  | { kind: 'cash'; ccy: string; amt: string } | { kind: 'wht'; mkt: string; pct: string } | { kind: 'markets' };
+  | { kind: 'cash'; ccy: string; amt: string } | { kind: 'wht'; mkt: string; pct: string } | { kind: 'markets' } | { kind: 'lab' };
 
 export function parseCommand(raw: string): Command {
   const text = raw.trim();
@@ -45,6 +45,7 @@ export function parseCommand(raw: string): Command {
     case 'CASH': return a && b != null ? { kind: 'cash', ccy: a, amt: b } : usage(USAGE.cash);
     case 'WHT': return a && b != null ? { kind: 'wht', mkt: a, pct: b } : usage(USAGE.wht);
     case 'MKT': case 'MARKETS': return { kind: 'markets' };
+    case 'LAB': case 'QUANT': return { kind: 'lab' };
     case 'CLEAR': return { kind: 'clear' };
     default: return { kind: 'quote', sym: cmd }; // a bare symbol quotes it
   }

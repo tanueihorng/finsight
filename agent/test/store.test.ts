@@ -11,7 +11,7 @@ test('migrations apply once; db file is private (0600)', () => {
   const f = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'db-')), 'a.db');
   const db = store.openDb(f); db.close();
   const db2 = store.openDb(f);
-  assert.equal((db2.prepare('SELECT COUNT(*) n FROM schema_migrations').get() as any).n, 4);
+  assert.equal((db2.prepare('SELECT COUNT(*) n FROM schema_migrations').get() as any).n, 6);
   assert.equal(fs.statSync(f).mode & 0o777, 0o600);
 });
 
@@ -64,10 +64,25 @@ test('cache honours TTL', async () => {
   assert.equal(store.cacheGet(db, 'k'), null);
 });
 
+test('a database already on the usage migration keeps its cost data and gains the quant tables', () => {
+  const f = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'db-quant-upgrade-')), 'a.db');
+  const old = store.openDb(f);
+  old.exec('DROP TABLE quant_run_series; DROP TABLE quant_series; DROP TABLE quant_runs; DELETE FROM schema_migrations WHERE version >= 5');
+  store.addCost(old, { brain: 'synthetic', kind: 'tokens', units: 10, usd: 0.5, usage: { inputTokens: 7, outputTokens: 1 } });
+  old.close();
+  const upgraded = store.openDb(f);
+  const cost = upgraded.prepare('SELECT usd, input_tokens i FROM cost_ledger').get() as { usd: number; i: number };
+  assert.deepEqual([cost.usd, cost.i], [0.5, 7]);
+  assert.deepEqual((upgraded.prepare('SELECT version FROM schema_migrations ORDER BY version').all() as { version: number }[]).map((r) => r.version), [1, 2, 3, 4, 5, 6]);
+  assert.ok((upgraded.prepare('PRAGMA table_info(quant_runs)').all() as { name: string }[]).some((c) => c.name === 'robustness_json'));
+  assert.ok(fs.existsSync(f + '.bak-v4'));
+  upgraded.close();
+});
+
 test('migration backup includes committed WAL data and preserves v1 rollback before adding views', () => {
   const f = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'db-upgrade-')), 'a.db');
   const old = store.openDb(f);
-  old.exec('DROP TABLE ui_views; ALTER TABLE trace_steps DROP COLUMN cache_read_tokens; ALTER TABLE trace_steps DROP COLUMN cache_write_tokens; ALTER TABLE cost_ledger DROP COLUMN input_tokens; ALTER TABLE cost_ledger DROP COLUMN output_tokens; ALTER TABLE cost_ledger DROP COLUMN cache_read_tokens; ALTER TABLE cost_ledger DROP COLUMN cache_write_tokens; DELETE FROM schema_migrations WHERE version >= 2');
+  old.exec('DROP TABLE quant_run_series; DROP TABLE quant_series; DROP TABLE quant_runs; DROP TABLE ui_views; ALTER TABLE trace_steps DROP COLUMN cache_read_tokens; ALTER TABLE trace_steps DROP COLUMN cache_write_tokens; ALTER TABLE cost_ledger DROP COLUMN input_tokens; ALTER TABLE cost_ledger DROP COLUMN output_tokens; ALTER TABLE cost_ledger DROP COLUMN cache_read_tokens; ALTER TABLE cost_ledger DROP COLUMN cache_write_tokens; DELETE FROM schema_migrations WHERE version >= 2');
   const t = store.createThread(old, 'Committed WAL row');
   assert.ok(fs.statSync(f + '-wal').size > 0);
   const upgraded = store.openDb(f);

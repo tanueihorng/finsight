@@ -11,7 +11,7 @@ const err = async (page: Page, text: string | RegExp) => { await expect(status(p
 test('HELP and ?, CLEAR, Enter and GO both run and clear the input, blank does nothing', async ({ page }) => {
   await seeded(page);
   await cmd(page, 'help');
-  await ok(page, 'ADD <s> <qty> <px> [date] · SELL <s> <qty> [px] · DEL <s> · UNDO · LEDGER · CASH <ccy> <amt> · WHT <mkt> <%> · Q <s> · WATCH/UNWATCH <s> · ALERT <s> > <px> · NEWS [s] · MKT · CLEAR');
+  await ok(page, 'ADD <s> <qty> <px> [date] · SELL <s> <qty> [px] · DEL <s> · UNDO · LEDGER · CASH <ccy> <amt> · WHT <mkt> <%> · Q <s> · WATCH/UNWATCH <s> · ALERT <s> > <px> · NEWS [s] · MKT · LAB · CLEAR');
   await expect(page.locator('#cmd')).toHaveValue('');
   await cmd(page, 'CLEAR');
   await expect(status(page)).toHaveText('');

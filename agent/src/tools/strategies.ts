@@ -17,9 +17,9 @@ type Evidence = Record<string, { version: string; status: string; evidence: unkn
 function evidence(ctx: ToolCtx): Evidence {
   try { return JSON.parse(fs.readFileSync(path.join(ctx.cfg.pluginsDir, 'strategy-evidence.json'), 'utf8')); } catch { return {}; }
 }
-const roots = (ctx: ToolCtx) => ({ builtinDir: path.join(ctx.cfg.finsightRepo, 'public'), privateDir: ctx.cfg.privateStrategiesDir });
+export const roots = (ctx: ToolCtx) => ({ builtinDir: path.join(ctx.cfg.finsightRepo, 'public'), privateDir: ctx.cfg.privateStrategiesDir });
 
-async function listAll(ctx: ToolCtx) {
+export async function listAll(ctx: ToolCtx) {
   const r = await runSandbox<{ strategies: any[]; invalid: any[] }>(roots(ctx), { op: 'list' });
   const ev = evidence(ctx);
   return {
