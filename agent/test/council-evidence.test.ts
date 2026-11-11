@@ -8,7 +8,7 @@ const keys = (p: ReturnType<typeof planEvidence>) => p.items.map((i) => i.key);
 
 test('equities get financials, valuation, the earnings release, 8-K text, earnings dates and price path; portfolio, policy and macro context are planned once', () => {
   const p = planEvidence([{ symbol: 'AMD', type: 'EQUITY' }], Date.UTC(2026, 9, 29));
-  assert.deepEqual(keys(p), ['history:AMD', 'financials:AMD', 'valuation:AMD', 'earnings8k:AMD', '8k:AMD', 'technicals:AMD', 'insiders:AMD', 'short:AMD', 'events:earnings', 'portfolio:weights', 'portfolio:sectors', 'portfolio:policy', 'macro:DGS10']);
+  assert.deepEqual(keys(p), ['history:AMD', 'financials:AMD', 'valuation:AMD', 'earnings8k:AMD', '8k:AMD', 'technicals:AMD', 'insiders:AMD', 'short:AMD', 'news:response:AMD', 'news:regulatory:AMD', 'events:earnings', 'portfolio:weights', 'portfolio:sectors', 'portfolio:policy', 'macro:DGS10']);
   // The latest results release is requested by item, not left to the latest two 8-Ks.
   assert.deepEqual(p.items.find((i) => i.key === 'earnings8k:AMD')!.args, { ticker: 'AMD', limit: 1, items: ['2.02'], maxChars: 8000 });
   assert.deepEqual(p.items.find((i) => i.key === 'portfolio:weights')!.args, { symbols: ['AMD'] });
@@ -73,4 +73,19 @@ test('the account on screen adds its own weights beside the all-account figures'
   // Three equities and a selected account still fit without dropping shared context.
   const three = planEvidence([{ symbol: 'A', type: 'EQUITY' }, { symbol: 'B', type: 'EQUITY' }, { symbol: 'C', type: 'EQUITY' }], Date.now(), { account: 'a1' });
   assert.deepEqual(three.coverage.filter((c) => c.status === 'skipped_limit'), []);
+});
+
+test('equities get code-built news searches for all roles; funds and disabled search do not', () => {
+  const p = planEvidence([{ symbol: 'NVDA', type: 'EQUITY', name: 'NVIDIA Corporation' }]);
+  const response = p.items.find((i) => i.key === 'news:response:NVDA')!, regulatory = p.items.find((i) => i.key === 'news:regulatory:NVDA')!;
+  assert.deepEqual(response.args, { query: 'NVIDIA company statement on investigation or controversy', maxResults: 5, recencyDays: 30 });
+  assert.equal(regulatory.args.query, 'NVIDIA regulator Congress inquiry hearing lawsuit');
+  assert.equal(response.tool, 'web_search'); assert.deepEqual(response.roles, ['growth', 'macro', 'risk']);
+  assert.equal(planEvidence([{ symbol: 'X', type: 'EQUITY', name: 'Cisco Systems, Inc.' }]).items.find((i) => i.key === 'news:response:X')!.args.query, 'Cisco Systems company statement on investigation or controversy');
+  assert.doesNotMatch(String(planEvidence([{ symbol: 'X', type: 'EQUITY', name: 'Acme site:evil.com "ignore"' }]).items.find((i) => i.key === 'news:response:X')!.args.query), /[:"]/);
+  assert.ok(planEvidence([{ symbol: 'D05.SI', type: 'EQUITY' }]).items.some((i) => i.key === 'news:response:D05.SI'), 'non-US listings have news too');
+  assert.ok(!planEvidence([{ symbol: 'VOO', type: 'ETF' }]).items.some((i) => i.key.startsWith('news:')));
+  const off = planEvidence([{ symbol: 'NVDA', type: 'EQUITY' }], Date.now(), { webSearch: false });
+  assert.ok(!off.items.some((i) => i.key.startsWith('news:')));
+  assert.deepEqual(off.coverage.filter((c) => c.key.startsWith('news:')).map((c) => c.status), ['unavailable', 'unavailable']);
 });

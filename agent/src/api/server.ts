@@ -4,6 +4,7 @@
 // browser Origin is present (no direct browser access), and the secret matches.
 import http from 'node:http';
 import crypto from 'node:crypto';
+import { usageReport } from './usage.ts';
 import type { Config } from '../config.ts';
 import { LIMIT_DEFAULTS, saveLimits, setLimits } from '../config.ts';
 import type { DB } from '../store/db.ts';
@@ -215,6 +216,7 @@ async function route(d: ApiDeps, req: http.IncomingMessage, res: http.ServerResp
     const since = period === 'day' ? store.startOfToday() : (() => { const x = new Date(); x.setDate(1); x.setHours(0, 0, 0, 0); return x.getTime(); })();
     return send(res, 200, { period, since, totalUsd: store.spendSince(d.db, since), capUsdPerDay: d.cfg.limits.dayUsd, rows: store.spendReport(d.db, since) });
   }
+  if (p === '/v1/usage' && m === 'GET') return send(res, 200, usageReport(d.db, d.brains, u.searchParams.get('period')));
   if (p === '/v1/proposals' && m === 'GET') return send(res, 200, { proposals: store.listProposals(d.db, u.searchParams.get('status') || 'pending') });
   if ((mt = p.match(/^\/v1\/proposals\/(prop_[\w-]{6,})\/(accept|reject)$/)) && m === 'POST') {
     // Recording the user's decision only; applying it to records is a later, separate feature.

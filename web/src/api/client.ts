@@ -6,6 +6,10 @@ export class ApiError extends Error {
   constructor(status: number, message: string) { super(message); this.name = 'ApiError'; this.status = status; }
 }
 
+// The REAL/PAPER module (which imports this file) fills these in: writes state
+// the book this tab shows, and any response from another book makes it recheck.
+export const bookGuard: { shown: () => string | null; served: (book: string) => void } = { shown: () => null, served: () => {} };
+
 // Injectable dependencies keep HTTP/error tests independent of the browser.
 // While locked, protected requests fail without touching the network: an
 // island that renders just before a lock can subscribe just after it, and
@@ -16,12 +20,16 @@ export function createApi(fetcher: typeof fetch, lock: () => void, isLocked: () 
     if (isLocked() && !path.startsWith('/api/auth/')) throw new ApiError(401, 'Locked. Enter your PIN.');
     const headers = new Headers(init.headers);
     if (!headers.has('Accept')) headers.set('Accept', 'application/json');
+    const shown = bookGuard.shown();
+    if (shown && (init.method ?? 'GET') !== 'GET' && path !== '/api/book' && !path.startsWith('/api/auth/')) headers.set('X-FinSight-Book', shown);
     const response = await fetcher(path, { ...init, headers, credentials: 'same-origin' }).catch((e: unknown) => {
       // The server may have stopped: the shell re-checks and shows the offline screen (X1, from app.js onNetError).
       if (!(e instanceof DOMException && e.name === 'AbortError')) globalThis.dispatchEvent?.(new Event('finsight:network-error'));
       throw e;
     });
     if (response.status === 401) lock();
+    const served = response.headers?.get('X-FinSight-Book');
+    if (shown && served && served !== shown) bookGuard.served(served);
     const body: unknown = await response.json().catch(() => undefined);
     if (!response.ok) {
       const error = (body as ApiErrorBody | undefined)?.error;

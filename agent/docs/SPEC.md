@@ -320,6 +320,7 @@ All requests need the proxy secret header; JSON bodies are validated by schema; 
 | `GET /v1/quant/runs` · `POST /v1/quant/runs` · `GET /v1/quant/runs/:id` · `POST /v1/quant/runs/:id/validate` · `POST /v1/quant/runs/:id/reproduce` | Quant Lab (FR-4.21) | one job at a time |
 | `GET /v1/runs/:traceId` | trace viewer | |
 | `GET /v1/cost?period=day\|month` | spend | |
+| `GET /v1/usage?period=day\|week\|month\|all` | tokens, search requests, cost and current prices for the settings dashboard | |
 | `GET /v1/proposals` · `POST /v1/proposals/:id/accept\|reject` | L3 (stored in MVP, applied later) | accept requires explicit user action in UI |
 
 ### 5.3 SSE event types

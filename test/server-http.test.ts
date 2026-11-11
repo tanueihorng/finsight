@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
-import { startServer, setup, request, cookieOf, json } from './serverproc.ts';
+import { startServer, setup, request, cookieOf, json, sleep } from './serverproc.ts';
 import type { Accounts, Portfolio } from '../shared/types.ts';
 import type { StoredPortfolio } from '../lib/model.ts';
 
@@ -237,6 +237,25 @@ test('parallel writes serialize; the undo history keeps the last 25 changes', as
   assert.equal(u.status, 200); assert.equal(u.json.available, 24);
   pf = (await s.req('GET', '/api/portfolio?base=USD', json(c))).json;
   assert.deepEqual(pf.cash, [{ ccy: 'USD', amount: 1014, base: 1014 }]);
+});
+
+test('a book switch while a write is in flight leaves that write in the book it started in', async (t) => {
+  // Held fetches keep the buy awaiting its quote while the switch lands.
+  const s = await startServer({ args: ['--import', PROBE], env: { FETCH_PROBE_DELAY: '300' } }); t.after(() => s.stop());
+  const c = await setup(s);
+  const buying = s.req('POST', '/api/portfolio/buy?base=USD', json(c, { symbol: 'AAPL', quantity: 2, price: 100 }));
+  await sleep(100);
+  assert.equal((await s.req('POST', '/api/book', json(c, { book: 'paper' }))).json.book, 'paper');
+
+  const buy = await buying;
+  assert.equal(buy.status, 200);
+  assert.deepEqual((buy.json as Portfolio).positions.map((x) => [x.symbol, x.quantity]), [['AAPL', 2]], 'the response shows the book the request started in');
+
+  const real: StoredPortfolio = JSON.parse(fs.readFileSync(path.join(s.dataDir, 'portfolio.json'), 'utf8'));
+  assert.deepEqual(real.accounts[0]!.positions.map((x) => x.symbol), ['AAPL']);
+  assert.equal(fs.existsSync(path.join(s.dataDir, 'paper', 'portfolio.json')), false, 'nothing reaches the PAPER book');
+  assert.equal(fs.existsSync(path.join(s.dataDir, 'paper', 'undo.json')), false);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(s.dataDir, 'undo.json'), 'utf8')).length, 1, 'the undo entry stays with the REAL book');
 });
 
 test('a restart keeps the PIN, holdings and persisted quotes but not sessions; SIGTERM exits cleanly', async (t) => {

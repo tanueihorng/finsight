@@ -6,14 +6,15 @@
 import type { CouncilEvidence } from './council.ts';
 
 export type SubjectKind = 'equity' | 'fund' | 'other';
-export type Subject = { symbol: string; type?: string | null };
+export type Subject = { symbol: string; type?: string | null; name?: string };
 export type PlanItem = { key: string; purpose: string; tool: string; args: Record<string, unknown>; roles: string[]; subject?: string };
 // detail: what a retrieved item actually used, e.g. the filing form (8-K or 6-K).
 export type Coverage = Omit<PlanItem, 'args'> & { status: 'retrieved' | 'failed' | 'not_applicable' | 'unavailable' | 'skipped_limit'; evidenceId?: string; reason?: string; detail?: string };
 
-// Three equities need 8 items each plus 7 shared ones (KESTRELTOOLS-001 added
-// technicals, insider and short-interest items per SEC equity).
-export const PLAN_LIMITS = { subjects: 3, items: 31, concurrency: 3 } as const;
+// Three equities need 10 items each plus 7 shared ones (KESTRELTOOLS-001 added
+// technicals, insider and short-interest items per SEC equity; two news searches
+// per equity followed).
+export const PLAN_LIMITS = { subjects: 3, items: 37, concurrency: 3 } as const;
 
 export function subjectKind(type: string | null | undefined): SubjectKind {
   const t = String(type || '').toUpperCase();
@@ -26,9 +27,13 @@ export function subjectKind(type: string | null | undefined): SubjectKind {
 export const secTicker = (symbol: string) => /^[A-Za-z]{1,6}(?:[.-][A-Ba-b])?$/.test(symbol);
 
 const yearAgo = (now: number) => new Date(now - 366 * 864e5).toISOString().slice(0, 10);
+// Queries are built by code from the instrument's name, never from the user's or
+// a page's text. Punctuation is dropped so a name cannot carry search operators.
+const searchName = (s: Subject) => (s.name || s.symbol).replace(/[^\p{L}\p{N}&' -]+/gu, ' ').replace(/\s+(incorporated|inc|corporation|corp|company|co|limited|ltd|plc)\s*$/i, '').replace(/\s+/g, ' ').trim().slice(0, 60);
+const NEWS_NOTE = 'Search snippets are leads: attribute each to its outlet and fetch the page before relying on a figure';
 
 /** Planned retrievals plus items known in advance to be inapplicable or unavailable. */
-export function planEvidence(subjects: Subject[], now = Date.now(), scope: { account?: string } = {}): { items: PlanItem[]; coverage: Coverage[] } {
+export function planEvidence(subjects: Subject[], now = Date.now(), scope: { account?: string; webSearch?: boolean } = {}): { items: PlanItem[]; coverage: Coverage[] } {
   const items: PlanItem[] = [], coverage: Coverage[] = [];
   const add = (item: PlanItem) => { if (items.length < PLAN_LIMITS.items) items.push(item); else coverage.push({ ...strip(item), status: 'skipped_limit', reason: `Evidence plan limit of ${PLAN_LIMITS.items} items` }); };
   const kept = subjects.slice(0, PLAN_LIMITS.subjects);
@@ -57,6 +62,16 @@ export function planEvidence(subjects: Subject[], now = Date.now(), scope: { acc
         coverage.push({ key: `financials:${sym}`, purpose: 'Reported financials', tool: 'edgar_financials', roles: ['growth', 'macro'], subject: sym, status: 'not_applicable', reason: 'Not a US SEC registrant ticker; no approved primary filings source for this listing' });
         coverage.push({ key: `valuation:${sym}`, purpose: 'Trailing valuation multiples', tool: 'valuation_metrics', roles: ['growth', 'macro', 'risk'], subject: sym, status: 'unavailable', reason: 'Valuation is computed from SEC filings; no approved source for this listing' });
       }
+      // Filings lag events: a company's response and a regulator's move often appear in the press first.
+      const news = [
+        { key: `news:response:${sym}`, purpose: `Past 30 days: any company statement, board or independent investigation, or controversy. ${NEWS_NOTE}`, query: `${searchName(s)} company statement on investigation or controversy` },
+        { key: `news:regulatory:${sym}`, purpose: `Past 30 days: regulator, legislative or court action involving the company. ${NEWS_NOTE}`, query: `${searchName(s)} regulator Congress inquiry hearing lawsuit` },
+      ];
+      for (const { query, ...n } of news) {
+        const item = { ...n, tool: 'web_search', roles: ['growth', 'macro', 'risk'], subject: sym };
+        if (scope.webSearch === false) coverage.push({ ...item, status: 'unavailable', reason: 'Web search is disabled in config' });
+        else add({ ...item, args: { query, maxResults: 5, recencyDays: 30 } });
+      }
     }
   }
   if (kept.length) {
@@ -78,7 +93,7 @@ const strip = ({ args: _args, ...rest }: PlanItem): Omit<PlanItem, 'args'> => re
 function detailOf(content: string): { detail?: string } {
   try {
     const j = JSON.parse(content);
-    const parts = [typeof j.formUsed === 'string' ? j.formUsed : '', j.annualReport?.form && j.annualReport?.filed ? `latest ${j.annualReport.form} filed ${j.annualReport.filed}` : '', Array.isArray(j.gaps) && j.gaps.length ? `${j.gaps.length} metric gap${j.gaps.length === 1 ? '' : 's'} (see gaps)` : ''].filter(Boolean);
+    const parts = [typeof j.formUsed === 'string' ? j.formUsed : '', j.annualReport?.form && j.annualReport?.filed ? `latest ${j.annualReport.form} filed ${j.annualReport.filed}` : '', Array.isArray(j.gaps) && j.gaps.length ? `${j.gaps.length} metric gap${j.gaps.length === 1 ? '' : 's'} (see gaps)` : '', Array.isArray(j.results) ? `${j.results.length} search result${j.results.length === 1 ? '' : 's'}` : ''].filter(Boolean);
     return parts.length ? { detail: parts.join('; ').slice(0, 200) } : {};
   } catch { return {}; }
 }

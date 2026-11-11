@@ -223,3 +223,66 @@ test('security: one order per approval, Kestrel cancels only its own orders in a
   assert.equal((await s.req('POST', '/api/book', { ...cross, headers: { ...cross.headers, 'sec-fetch-site': 'same-origin' } })).status, 200);
   assert.throws(() => normalizeOrder({ symbol: 'AAPL', side: 'buy', type: 'limit', qty: 1, limitPrice: Infinity }), /limit price/);
 });
+
+test('approving a ticket re-checks the limits as they are now, in the same gate as automatic orders', async (t) => {
+  const { s, c } = await connected(); t.after(() => s.stop());
+  await s.req('POST', '/api/paper/settings', json(c, { approval: 'ask', limits: { maxOrdersPerDay: 1, maxOrderUsd: 1000 } }));
+  const order = { symbol: 'AAPL', side: 'buy', type: 'limit', qty: 1, limitPrice: 100, tif: 'gtc' };
+  const a = (await s.req('POST', '/api/paper/orders', agent(s, order))).json, b = (await s.req('POST', '/api/paper/orders', agent(s, order))).json;
+  const decide = (id: string) => s.req('POST', '/api/paper/tickets/decide', json(c, { id, approve: true }));
+  assert.equal((await decide(a.ticket.id)).json.status, 'approved');
+
+  const daily = await decide(b.ticket.id);
+  assert.equal(daily.status, 400); assert.match(daily.json.error, /your limit is 1/);
+  let st = (await s.req('GET', '/api/paper/state', json(c))).json;
+  assert.equal(st.openOrders.length, 1, 'the refused ticket never reached Alpaca');
+  const ticket = st.tickets.find((x: { id: string }) => x.id === b.ticket.id);
+  assert.equal(ticket.status, 'pending', 'still waiting for the user'); assert.match(ticket.error, /your limit is 1/);
+
+  await s.req('POST', '/api/paper/settings', json(c, { approval: 'ask', limits: { maxOrderUsd: 50 } }));
+  assert.match((await decide(b.ticket.id)).json.error, /above your US\$50 limit/);
+  await s.req('POST', '/api/paper/settings', json(c, { approval: 'ask', limits: {} }));
+  assert.equal((await decide(b.ticket.id)).json.status, 'approved', 'raising the limit lets the same ticket through');
+  st = (await s.req('GET', '/api/paper/state', json(c))).json;
+  assert.equal(st.tickets.find((x: { id: string }) => x.id === b.ticket.id).error, undefined);
+});
+
+test('concentration counts unfilled buys of the symbol, and only what is unfilled', async (t) => {
+  const { s, c } = await connected(); t.after(() => s.stop());
+  await s.req('POST', '/api/paper/settings', json(c, { approval: 'auto', limits: { maxPositionPct: 10 } }));
+  const place = (body: Record<string, unknown>) => s.req('POST', '/api/paper/orders', agent(s, body)).then((x) => x.json);
+  const msft = { symbol: 'MSFT', side: 'buy', type: 'limit', qty: 60, limitPrice: 100, tif: 'gtc' };
+  const first = await place(msft);
+  assert.equal(first.placed, true);
+  const second = await place(msft);
+  assert.equal(second.refused, true); assert.match(second.reason, /MSFT would be about 12\.0% of paper equity/);
+  assert.equal((await place({ ...msft, symbol: 'AAPL' })).placed, true, 'another symbol has its own room');
+  assert.equal((await place({ ...msft, side: 'sell' })).refused, undefined, 'a sell adds no concentration');
+
+  // Cancelling frees the room again.
+  await s.req('POST', '/api/paper/orders/cancel', json(c, { id: first.order.id }));
+  assert.equal((await place(msft)).placed, true);
+  // Concurrent orders are serialized against the same room.
+  const burst = await Promise.all([1, 2].map(() => place({ ...msft, symbol: 'AMD' })));
+  assert.equal(burst.filter((x) => x.placed).length, 1);
+});
+
+test('every response names its book, a switch is pushed, and a write from a stale tab is refused', async (t) => {
+  const s = await startServer(); t.after(() => s.stop());
+  const c = await setup(s);
+  assert.equal((await s.req('GET', '/api/portfolio', json(c))).headers['x-finsight-book'], 'real');
+
+  const ac = new AbortController(); t.after(() => ac.abort());
+  const res = await fetch(`http://127.0.0.1:${s.port}/api/paper/stream`, { headers: { cookie: c }, signal: ac.signal });
+  const reader = res.body!.getReader(), text = new TextDecoder(); let got = '';
+  await s.req('POST', '/api/book', json(c, { book: 'paper' }));
+  const end = Date.now() + 3000;
+  while (!got.includes('"book-choice"') && Date.now() < end) got += text.decode((await reader.read()).value);
+  assert.match(got, /"kind":"book-choice","book":"paper"/);
+
+  const stale = await s.req('POST', '/api/watchlist/add', { ...json(c, { symbol: 'AMD' }), headers: { ...json(c).headers, 'x-finsight-book': 'real' } });
+  assert.equal(stale.status, 409); assert.match(stale.json.error, /now PAPER/);
+  const current = await s.req('POST', '/api/watchlist/add', { ...json(c, { symbol: 'AMD' }), headers: { ...json(c).headers, 'x-finsight-book': 'paper' } });
+  assert.equal(current.status, 200);
+  assert.equal((await s.req('POST', '/api/book', { ...json(c, { book: 'real' }), headers: { ...json(c).headers, 'x-finsight-book': 'paper' } })).status, 200, 'a stale tab may still switch');
+});

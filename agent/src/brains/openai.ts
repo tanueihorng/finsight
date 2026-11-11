@@ -1,7 +1,7 @@
 // OpenAI-compatible chat-completions adapter (DeepSeek, GLM, and any other
 // provider that speaks this format). Streams text and tool-call deltas.
 import type { ApiBrain, BrainManifest, StepRequest, StepResult, ToolSchema } from './types.ts';
-import { outputLimit, safeId } from './types.ts';
+import { outputLimit, safeId, unreachable } from './types.ts';
 import type { Block, Msg } from '../types.ts';
 import { AgentError } from '../types.ts';
 
@@ -65,7 +65,7 @@ export function openAiBrain(manifest: BrainManifest, apiKey: string, fetchImpl: 
         res = await fetchImpl(url, { method: 'POST', signal: req.signal, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` }, body: JSON.stringify(body) });
       } catch (e) {
         if ((e as Error).name === 'AbortError') throw e;
-        throw new AgentError('PROVIDER_ERROR', `${manifest.label} unreachable: ${(e as Error).message}`, 502);
+        throw unreachable(manifest.label, e);
       }
       if (!res.ok || !res.body) {
         const text = await res.text().catch(() => '');

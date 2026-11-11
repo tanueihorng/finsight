@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useStore } from 'zustand';
-import { Assessment } from '../../../../agent/src/chat/council-contract.ts';
+import { ChairAssessment, DECISION_LABEL } from '../../../../agent/src/chat/council-contract.ts';
 import type { Part, Readiness } from './turns.ts';
 import { CouncilActivity } from './CouncilActivity.tsx';
 import { CouncilChain } from './CouncilChain.tsx';
@@ -123,18 +123,24 @@ export function ReadinessNote({ readiness: r }: { readiness: Readiness }) {
 export function CouncilConclusion({ children, runs = [], readiness }: { children: ReactNode; runs?: CouncilPart[]; readiness?: Readiness }) {
   const peek = useStore(window.FinSight.store, (s) => s.peek);
   const chair = [...runs].reverse().find((run) => run.role === 'chair' && run.status === 'completed');
-  let assessment: ReturnType<typeof Assessment.parse> | null = null;
-  if (chair && peek) try { const parsed = Assessment.safeParse(JSON.parse(chair.detail)); if (parsed.success) assessment = parsed.data; } catch { /* legacy or incomplete result */ }
+  let assessment: ChairAssessment | null = null;
+  if (chair && peek) try { const parsed = ChairAssessment.safeParse(JSON.parse(chair.detail)); if (parsed.success) assessment = parsed.data; } catch { /* legacy or incomplete result */ }
   const partial = runs.some((run) => run.status === 'failed' || run.status === 'stopped');
   // The chair's own unresolved figure checks; specialists' show on their cards.
   const flags = chair?.flags ?? [];
   const gaps = [...new Set(assessment?.findings.flatMap((finding) => finding.missingEvidence) || [])];
-  const changes = [...new Set(assessment?.findings.map((finding) => finding.invalidation) || [])];
+  const decision = assessment?.decision;
+  const changes = [...new Set([...(decision?.changesView ?? []), ...(assessment?.findings.map((finding) => finding.invalidation) || [])])];
   return <section className={styles.conclusion} data-council-result>
     <div className={styles.resultLabel}><Icon name="spark" size={14} /> {partial ? 'Partial chair synthesis' : 'Chair synthesis'}</div>
     {readiness && <ReadinessNote readiness={readiness} />}
     {!!flags.length && <div className={styles.figureCheck} role="note" data-figure-check><strong>Figure check: {flags.length} unverified</strong>{peek ? <ul>{flags.map((f) => <li key={f}>{f}</li>)}</ul> : <span> Details hidden by UNPEEK.</span>}</div>}
     {!peek ? <p className={styles.resultMuted}>Council findings hidden by UNPEEK.</p> : assessment?.findings.length ? <>
+      {decision && <div className={styles.decision} data-council-decision>
+        <p className={styles.decisionVerdict}>Decision: {DECISION_LABEL[decision.verdict]}</p>
+        <p className={styles.resultClaim}>{decision.rationale}</p>
+        <dl className={styles.decisionCases}><dt>Buy now</dt><dd>{decision.buyNow}</dd><dt>Wait</dt><dd>{decision.wait}</dd><dt>No action</dt><dd>{decision.noAction}</dd><dt>Valuation</dt><dd>{decision.valuation}</dd><dt>Price momentum</dt><dd>{decision.momentum}</dd></dl>
+      </div>}
       {assessment.findings.map((finding, index) => <div key={index} className={styles.resultFinding}><p className={index === 0 ? styles.resultLead : styles.resultClaim}>{finding.claim}</p><p className={styles.resultMuted}>{finding.uncertainty}</p></div>)}
       <div className={styles.resultColumns}>{gaps.length > 0 && <div><h4>Still needed</h4><ul>{gaps.map((gap) => <li key={gap}>{gap}</li>)}</ul></div>}{changes.length > 0 && <div><h4>What changes the view</h4><ul>{changes.map((change) => <li key={change}>{change}</li>)}</ul></div>}</div>
       <details className={styles.fullReport}><summary>Full report & source references</summary>{children}</details>

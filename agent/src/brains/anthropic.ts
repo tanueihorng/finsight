@@ -5,7 +5,7 @@ import { DATE_SUFFIX } from '../chat/prompt.ts';
 // replayed unchanged to the same brain, as the API requires.
 import Anthropic from '@anthropic-ai/sdk';
 import type { ApiBrain, BrainManifest, StepRequest, StepResult } from './types.ts';
-import { outputLimit, safeId } from './types.ts';
+import { outputLimit, safeId, unreachable } from './types.ts';
 import type { Block, Msg } from '../types.ts';
 import { AgentError } from '../types.ts';
 
@@ -66,6 +66,7 @@ export function anthropicBrain(manifest: BrainManifest, apiKey: string): ApiBrai
         if (e instanceof Anthropic.RateLimitError) throw new AgentError('PROVIDER_RATE_LIMIT', `${manifest.label}: rate limited`, 429);
         if (e instanceof Anthropic.AuthenticationError) throw new AgentError('PROVIDER_INVALID', `${manifest.label}: invalid API key`, 502);
         if (e instanceof Anthropic.BadRequestError) throw new AgentError('PROVIDER_INVALID', `${manifest.label}: ${e.message}`, 502);
+        if (e instanceof Anthropic.APIConnectionError) throw unreachable(manifest.label, e);
         if (e instanceof Anthropic.APIError) throw new AgentError('PROVIDER_ERROR', `${manifest.label}: ${e.message}`, 502);
         throw e;
       }

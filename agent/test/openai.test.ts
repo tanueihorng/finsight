@@ -65,6 +65,25 @@ test('provider error classification and caller cancellation remain intact',async
   const controller=new AbortController();controller.abort();const b=openAiBrain(manifest('gpt-6-luna'),'test-key',async(_url,opts)=>{opts?.signal?.throwIfAborted();throw Error('unreachable');});
   await assert.rejects(b.step({system:'s',messages:[],tools:[],signal:controller.signal,onText:()=>{}}),(e:any)=>e.name==='AbortError');
 });
+test('a failed connection reports a safe cause and is retried under that description',async()=>{
+  const failed=(error:unknown)=>openAiBrain(manifest('gpt-6-luna'),'test-key',async()=>{throw error;}).step({system:'s',messages:[],tools:[],signal:new AbortController().signal,onText:()=>{}}).then(()=>assert.fail('expected failure'),(e:any)=>e);
+  const dns=await failed(new TypeError('fetch failed',{cause:Object.assign(Error('getaddrinfo ENOTFOUND api.example'),{code:'ENOTFOUND',syscall:'getaddrinfo'})}));
+  assert.equal(dns.code,'PROVIDER_ERROR');assert.match(dns.message,/unreachable: DNS lookup failed \(ENOTFOUND, getaddrinfo\)$/);assert.deepEqual(dns.details.connection,{reason:'DNS lookup failed',code:'ENOTFOUND',syscall:'getaddrinfo'});
+  const aggregate=new AggregateError([Object.assign(Error('connect'),{code:'ETIMEDOUT',syscall:'connect'})],'all failed');
+  assert.match((await failed(new TypeError('fetch failed',{cause:aggregate}))).message,/connection timed out \(ETIMEDOUT, connect\)$/);
+  assert.match((await failed(new TypeError('fetch failed',{cause:Object.assign(Error('bad cert'),{code:'CERT_HAS_EXPIRED'})}))).message,/TLS handshake failed \(CERT_HAS_EXPIRED\)$/);
+  const leak=await failed(new TypeError('invalid header value: Bearer sk-secret'));
+  assert.match(leak.message,/network error with no further detail$/);assert.doesNotMatch(JSON.stringify([leak.message,leak.details]),/sk-secret/);
+
+  const cfg=config(),db=openDb(':memory:');clean.push(()=>db.close());cfg.defaultBrain='gpt-6-luna';let calls=0;
+  const brain=openAiBrain(manifest('gpt-6-luna'),'test-key',async()=>{if(++calls===1)throw new TypeError('fetch failed',{cause:Object.assign(Error('refused'),{code:'ECONNREFUSED',syscall:'connect'})});return stream([delta({content:'Back.'},'stop'),{choices:[],usage}]);});
+  const engine=new ChatEngine({cfg,db,bus:new EventBus(db),tools:new ToolRegistry(),brains:new Map(),finsight:{get:async()=>{throw Error('synthetic no portfolio');}}});engine.setBrain('gpt-6-luna',brain);
+  const thread=store.createThread(db);const r=engine.send({threadId:thread.id,content:'Hello'});
+  for(let i=0;i<300&&(db.prepare('SELECT status FROM turns WHERE id=?').get(r.turnId)as any).status==='running';i++)await new Promise(r=>setTimeout(r,10));
+  assert.equal((db.prepare('SELECT status FROM turns WHERE id=?').get(r.turnId)as any).status,'succeeded');assert.equal(calls,2);
+  const retry=store.eventsAfter(db,thread.id,0).find(e=>e.type==='turn.retry')!.payload as any;
+  assert.equal(retry.code,'PROVIDER_ERROR');assert.equal(retry.connection,'connection refused');
+});
 test('GPT streaming tool loop persists outputs and token costs in existing engine',async()=>{
   const cfg=config(),db=openDb(':memory:');clean.push(()=>db.close());cfg.defaultBrain='gpt-6-luna';let steps=0;
   const tools=new ToolRegistry().add({name:'test_cash',description:'synthetic cash',input:z.object({}),handler:async()=>({cash:42})});

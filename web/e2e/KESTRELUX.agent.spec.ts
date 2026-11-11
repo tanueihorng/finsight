@@ -234,3 +234,88 @@ test('replayed Risk card with a budget-refused challenge shows its assessment an
   await expect(card).not.toContainText('Assessment missing');
   await expect(page.locator('[data-stage-issues]')).toContainText('Risk challenge: stopped by the spending cap');
 });
+
+test('the reply settings row never overlaps; labels stay whole once the composer has room', async ({ page }) => {
+  await page.setViewportSize({ width: 1500, height: 900 });
+  await page.route('**/api/agent/brains', (route) => route.fulfill({ json: { default: 'gpt', brains: [{ id: 'gpt', label: 'GPT-6 Luna', costTier: '$$', available: true, thinking: { levels: ['none', 'low', 'medium', 'high'], default: 'medium' } }] } }));
+  await page.route('**/api/agent/search-providers', (route) => route.fulfill({ json: { default: 'deepseek', providers: [{ id: 'deepseek', label: 'DeepSeek', available: true }] } }));
+  await seeded(page); await page.click('#agent-toggle');
+  await expect(page.locator('.kx-model-btn:visible')).toContainText('Medium');
+  // Real panel widths: the chat list and the key hint appear only on a wide panel.
+  for (const panel of [360, 440, 520, 640, 720, 800, 900]) {
+    await page.evaluate((w) => localStorage.setItem('finsight-agent-w', String(w)), panel);
+    await page.reload();
+    await expect(page.locator('.kx-model-btn:visible')).toContainText('Medium');
+    const width = await page.locator('.kx-main:visible').evaluate((e) => Math.round(e.getBoundingClientRect().width));
+    const row = await page.locator('.kx-model-btn:visible').evaluate((button) => {
+      const items = [...button.querySelectorAll<HTMLElement>('.it')].filter((e) => e.offsetParent).map((e) => { const r = document.createRange(); r.selectNodeContents(e); return { left: r.getBoundingClientRect().left, right: r.getBoundingClientRect().right, box: e.getBoundingClientRect().right }; });
+      return { items, cut: [...button.querySelectorAll<HTMLElement>('.lbl')].filter((e) => e.offsetParent && e.scrollWidth > e.clientWidth).map((e) => e.textContent) };
+    });
+    for (const [i, item] of row.items.entries()) {
+      expect(item.right, `item ${i} stays inside its box at ${width}px`).toBeLessThanOrEqual(item.box + 0.5);
+      if (row.items[i + 1]) expect(item.right, `item ${i} clears the next at ${width}px`).toBeLessThanOrEqual(row.items[i + 1]!.left);
+    }
+    expect(row.cut, `no cut labels in a ${width}px composer`).toEqual([]);
+  }
+});
+
+test('an older saved search pick no longer overrides the Tavily default', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('finsight-agent-search', 'deepseek'));
+  await page.route('**/api/agent/search-providers', (route) => route.fulfill({ json: { default: 'tavily', providers: [{ id: 'deepseek', label: 'DeepSeek', available: true }, { id: 'tavily', label: 'Tavily', available: true }] } }));
+  await seeded(page); await page.click('#agent-toggle');
+  await expect(page.locator('.kx-model-btn:visible')).toContainText('Auto (Tavily)');
+});
+
+test('the usage dashboard shows tokens, search cost and prices, and fits a phone', async ({ page }) => {
+  const report = { period: 'month', since: 0, totals: { usd: 1.5, modelUsd: 1.492, webUsd: 0.008, webRequests: 1, tokens: 1234567 },
+    models: [{ id: 'sonnet', label: 'Claude Sonnet 5.5', calls: 3, inputTokens: 1200000, cacheReadTokens: 900000, cacheWriteTokens: 0, outputTokens: 34567, unsplitTokens: 0, usd: 1.492 }],
+    web: [{ provider: 'tavily', label: 'Tavily', kind: 'search', requests: 1, usd: 0.008 }],
+    rates: { checked: '2026-11-10', models: [{ id: 'sonnet', label: 'Claude Sonnet 5.5', cli: false, inputPerM: 2, cachedPerM: 0.1, outputPerM: 10, notes: [] }, { id: 'claude-code', label: 'Claude Code', cli: true, inputPerM: 0, cachedPerM: 0, outputPerM: 0, notes: [] }], web: [{ provider: 'tavily', label: 'Tavily', usd: 0.008, unit: 'basic search (1 credit)', note: 'Free plan covers 1,000 credits a month.' }] } };
+  const asked: string[] = [];
+  await page.route('**/api/agent/usage?*', (route) => { asked.push(new URL(route.request().url()).searchParams.get('period') || ''); return route.fulfill({ json: report }); });
+  await page.route('**/api/agent/cost?*', (route) => route.fulfill({ json: { period: 'day', totalUsd: 0.5, capUsdPerDay: 5 } }));
+  await page.setViewportSize({ width: 1400, height: 900 });
+  await seeded(page); await page.click('#agent-toggle');
+  await page.getByRole('button', { name: 'Open full page' }).click();
+  await page.locator('button.kx-spend').click();
+  const panel = page.locator('[data-usage-panel]');
+  await expect(panel.locator('[data-usage-total]')).toHaveText('$1.50');
+  await expect(panel).toContainText('Claude Sonnet 5.5');
+  await expect(panel).toContainText('1.23M');
+  await expect(panel).toContainText('Tavily');
+  await expect(panel).toContainText('Cost reported by the CLI');
+  await panel.getByRole('button', { name: 'Today' }).click();
+  await expect.poll(() => asked.at(-1)).toBe('day');
+  await page.setViewportSize({ width: 390, height: 844 });
+  const overflow = await page.locator('#limits-modal .modal-box').evaluate((e) => e.getBoundingClientRect().right - window.innerWidth);
+  expect(overflow).toBeLessThanOrEqual(0);
+});
+
+test('a chair decision shows every action under PEEK and leaves with UNPEEK', async ({ page }) => {
+  await page.route('**/api/agent/info', async (route) => {
+    const response = await route.fetch(); const data = await response.json();
+    await route.fulfill({ response, json: { ...data, council: true } });
+  });
+  await seeded(page); await page.click('#agent-toggle');
+  await page.locator('.agent-input:visible').fill('/committee synthetic decision ');
+  await page.locator('.agent-input:visible').press('Enter');
+  await expect(page.locator('.agent-turn:visible').last()).toContainText('Echo: /committee synthetic decision');
+  const decision = { verdict: 'insufficient_evidence', rationale: 'Valuation did not complete.', buyNow: 'Synthetic buy case', wait: 'Synthetic wait case', noAction: 'Synthetic hold case', valuation: 'No range is supported', momentum: 'Price fell', changesView: ['A filed statement'], evidenceIds: ['e1'] };
+  const findings = { findings: [{ claim: 'Synthetic chair claim', evidenceIds: ['e1'], assumptions: [], uncertainty: 'Synthetic', counterevidence: [], invalidation: 'Synthetic change', missingEvidence: [] }], unresolvedQuestions: [], decision };
+  await page.route('**/api/agent/threads/*', async (route) => {
+    const response = await route.fetch(); const data = await response.json();
+    if (!data.messages) return route.fulfill({ response });
+    const turnId = data.messages.find((m: { role: string }) => m.role === 'assistant')?.turnId;
+    data.messages.push({ id: 'run-c', role: 'assistant', turnId, blocks: [{ type: 'notice', kind: 'council', text: JSON.stringify({ id: 'ch', parentId: 'p', role: 'chair', phase: 'synthesis', model: 'fixture', version: 1, ms: 10, costUsd: 0.001, status: 'completed', findings }) }] });
+    await route.fulfill({ response, json: data });
+  });
+  await page.locator('.agent-icon-btn[title="New chat (/new)"]:visible').click();
+  await page.locator('.kx-jump-row', { hasText: '/committee synthetic decision' }).first().click();
+  const block = page.locator('[data-council-decision]');
+  await expect(block).toContainText('Decision: Insufficient evidence');
+  for (const text of ['Synthetic buy case', 'Synthetic wait case', 'Synthetic hold case', 'No range is supported', 'Price fell']) await expect(block).toContainText(text);
+  await expect(page.locator('[data-council-result]')).toContainText('A filed statement');
+  await page.evaluate(() => window.FinSight.store.setState({ peek: false }));
+  await expect(block).toHaveCount(0);
+  await expect(page.locator('[data-council-result]')).not.toContainText('Synthetic buy case');
+});

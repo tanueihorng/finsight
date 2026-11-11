@@ -11,7 +11,20 @@
     "inputPerM": 0.3,
     "outputPerM": 1.2,
     "cacheReadPerM": 0.006,
-    "version": "deepseek-peak-2026-10-24 (off-peak is half; api-docs.deepseek.com/quick_start/pricing)"
+    "version": "deepseek-2026-11-10 (peak rates; half price off-peak; api-docs.deepseek.com/quick_start/pricing)",
+    "offPeak": {
+      "multiplier": 0.5,
+      "weekdayPeakUtc": [
+        [
+          1,
+          4
+        ],
+        [
+          6,
+          10
+        ]
+      ]
+    }
   },
   "capabilities": {
     "tools": true,

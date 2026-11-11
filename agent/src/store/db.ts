@@ -47,6 +47,14 @@ const MIGRATIONS: string[] = [
    CREATE INDEX ui_views_thread ON ui_views(thread_id);`,
   `ALTER TABLE trace_steps ADD COLUMN cache_read_tokens INTEGER;
    ALTER TABLE trace_steps ADD COLUMN cache_write_tokens INTEGER;`,
+  `ALTER TABLE cost_ledger ADD COLUMN input_tokens INTEGER;
+   ALTER TABLE cost_ledger ADD COLUMN output_tokens INTEGER;
+   ALTER TABLE cost_ledger ADD COLUMN cache_read_tokens INTEGER;
+   ALTER TABLE cost_ledger ADD COLUMN cache_write_tokens INTEGER;
+   UPDATE cost_ledger SET input_tokens = t.i, output_tokens = t.o, cache_read_tokens = t.r, cache_write_tokens = t.w
+     FROM (SELECT turn_id tid, name, cost_usd, MAX(input_tokens) i, MAX(output_tokens) o, MAX(cache_read_tokens) r, MAX(cache_write_tokens) w
+           FROM trace_steps WHERE kind = 'brain' AND input_tokens IS NOT NULL GROUP BY turn_id, name, cost_usd) t
+     WHERE cost_ledger.kind = 'tokens' AND cost_ledger.turn_id = t.tid AND cost_ledger.brain = t.name AND cost_ledger.usd = t.cost_usd;`,
   `CREATE TABLE quant_runs (id TEXT PRIMARY KEY, created_at INTEGER NOT NULL, strategy_key TEXT NOT NULL, result_json TEXT NOT NULL);
    CREATE INDEX quant_runs_created ON quant_runs(created_at);
    CREATE TABLE quant_series (sha256 TEXT PRIMARY KEY, bars_gz BLOB NOT NULL);
@@ -216,9 +224,32 @@ export function getTrace(db: DB, turnId: string): unknown[] {
 }
 
 // ---------------------------------------------------------------- cost ledger
-export function addCost(db: DB, e: { brain: string; kind: string; units: number; usd: number; priceVersion?: string; turnId?: string; threadId?: string }): void {
-  db.prepare('INSERT INTO cost_ledger(ts, brain, kind, units, usd, price_version, turn_id, thread_id) VALUES (?,?,?,?,?,?,?,?)')
-    .run(Date.now(), e.brain, e.kind, e.units, e.usd, e.priceVersion ?? null, e.turnId ?? null, e.threadId ?? null);
+export function addCost(db: DB, e: { brain: string; kind: string; units: number; usd: number; priceVersion?: string; turnId?: string; threadId?: string; usage?: Usage }): void {
+  db.prepare('INSERT INTO cost_ledger(ts, brain, kind, units, usd, price_version, turn_id, thread_id, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
+    .run(Date.now(), e.brain, e.kind, e.units, e.usd, e.priceVersion ?? null, e.turnId ?? null, e.threadId ?? null, e.usage?.inputTokens ?? null, e.usage?.outputTokens ?? null, e.usage?.cacheReadTokens ?? null, e.usage?.cacheWriteTokens ?? null);
+}
+/** Everything billed to one reply so far: model calls plus paid search and fetch. */
+/** Persist a worst-case charge before a provider call, so the daily and turn
+ * totals (and any concurrent turn) already include it. settle(actual) replaces
+ * it with the measured cost; settle(null) keeps the reservation because the
+ * real charge is unknown. */
+export function reserveCost(db: DB, e: { brain: string; kind: string; usd: number; priceVersion?: string; turnId?: string; threadId?: string }): (actual: number | null, usage?: Usage) => void {
+  const entry = db.prepare('INSERT INTO cost_ledger(ts,brain,kind,units,usd,price_version,turn_id,thread_id) VALUES (?,?,?,?,?,?,?,?)').run(Date.now(), e.brain, e.kind, 0, e.usd, e.priceVersion ?? null, e.turnId ?? null, e.threadId ?? null);
+  return (actual, usage) => {
+    if (actual === null) return;
+    db.prepare('UPDATE cost_ledger SET usd=?,kind=?,units=?,input_tokens=?,output_tokens=?,cache_read_tokens=?,cache_write_tokens=? WHERE id=?').run(actual, 'tokens', (usage?.inputTokens ?? 0) + (usage?.outputTokens ?? 0), usage?.inputTokens ?? null, usage?.outputTokens ?? null, usage?.cacheReadTokens ?? null, usage?.cacheWriteTokens ?? null, entry.lastInsertRowid);
+  };
+}
+export function turnSpend(db: DB, turnId: string): number {
+  return (db.prepare('SELECT COALESCE(SUM(usd), 0) s FROM cost_ledger WHERE turn_id = ?').get(turnId) as { s: number }).s;
+}
+export type UsageRow = { brain: string; kind: string; calls: number; units: number; usd: number; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number; unsplitTokens: number };
+export function usageRows(db: DB, sinceMs: number): UsageRow[] {
+  return db.prepare(`SELECT brain, kind, COUNT(*) calls, SUM(units) units, SUM(usd) usd,
+    COALESCE(SUM(input_tokens), 0) inputTokens, COALESCE(SUM(output_tokens), 0) outputTokens,
+    COALESCE(SUM(cache_read_tokens), 0) cacheReadTokens, COALESCE(SUM(cache_write_tokens), 0) cacheWriteTokens,
+    COALESCE(SUM(CASE WHEN input_tokens IS NULL AND kind NOT IN ('cli-reported', 'council-reserved', 'model-reserved') THEN units ELSE 0 END), 0) unsplitTokens
+    FROM cost_ledger WHERE ts >= ? GROUP BY brain, kind ORDER BY usd DESC`).all(sinceMs) as UsageRow[];
 }
 export function spendSince(db: DB, sinceMs: number): number {
   return (db.prepare('SELECT COALESCE(SUM(usd), 0) s FROM cost_ledger WHERE ts >= ?').get(sinceMs) as { s: number }).s;

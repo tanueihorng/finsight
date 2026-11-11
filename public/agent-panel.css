@@ -338,7 +338,7 @@ body.agent-resizing-v { user-select: none; cursor: row-resize; }
 .kx-select option, .kx-field option { background: var(--panel); color: var(--text); }
 /* reply settings: one line under the box (model · thinking · search); the pickers open above it */
 .kx-under { display: flex; align-items: center; gap: 10px; padding: 6px 4px 0; min-width: 0; }
-.kx-keys { margin-left: auto; font-size: 11px; color: var(--dim); white-space: nowrap; }
+.kx-keys { margin-left: auto; flex-shrink: 9999; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 11px; color: var(--dim); white-space: nowrap; }
 .kx-settings { position: relative; min-width: 0; display: flex; }
 .kx-model-btn { display: inline-flex; align-items: center; gap: 10px; min-width: 0; height: 26px; padding: 0 8px; margin-left: -8px; border: 0; border-radius: 8px; background: none; color: var(--muted); font: inherit; font-size: 12px; cursor: pointer; white-space: nowrap; }
 .kx-model-btn .it { display: inline-flex; align-items: center; gap: 5px; min-width: 0; }
@@ -347,6 +347,8 @@ body.agent-resizing-v { user-select: none; cursor: row-resize; }
 .kx-model-btn .it.think { color: var(--amber-2); }
 .kx-model-btn .it.think .kx-icon { color: var(--amber-2); }
 .kx-model-btn .lbl { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+/* Labels without a .lbl cannot ellipsize, so shrinking would paint them over the next item. */
+.kx-model-btn .it:not(:has(.lbl)), .kx-model-btn > .kx-icon { flex: none; }
 .kx-model-btn > .kx-icon { color: var(--dim); transition: transform .15s; }
 .kx-model-btn:hover, .kx-model-btn:focus-visible, .kx-model-btn.open { color: var(--text); background: var(--tint); outline: none; }
 .kx-model-btn.open > .kx-icon { transform: rotate(180deg); }
@@ -368,7 +370,7 @@ body.agent-resizing-v { user-select: none; cursor: row-resize; }
 .agent-send:disabled { opacity: .3; cursor: default; }
 .agent-send.stop { background: var(--text); }
 /* Narrow composer: labels shorten before anything is cut to a letter. */
-@container (max-width: 520px) { .kx-keys { display: none; } }
+@container (max-width: 640px) { .kx-keys { display: none; } }
 @container (max-width: 400px) {
   .agent-ctx { max-width: 96px; }
   .kx-lens .pre { display: none; }
@@ -531,3 +533,28 @@ button.kx-spend:hover { color: var(--amber); }
 .kx-limit-in::placeholder { color: var(--muted); }
 .kx-limit-help { grid-column: 1 / -1; font-size: 11px; color: var(--muted); }
 @media (max-width: 600px) { .kx-limit { grid-template-columns: 1fr 110px; } }
+
+/* Kestrel settings: section tabs and the usage dashboard */
+.kx-settings-tabs { display: flex; gap: 4px; padding: 8px 14px 0; border-bottom: 1px solid var(--border); }
+.kx-settings-tabs button { padding: 5px 10px; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--muted); font: inherit; font-size: 12px; cursor: pointer; }
+.kx-settings-tabs button:hover, .kx-settings-tabs button:focus-visible { color: var(--text); outline: none; }
+.kx-settings-tabs button.on { color: var(--text); border-bottom-color: var(--amber); }
+.kx-usage { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.kx-usage-periods { display: flex; flex-wrap: wrap; gap: 4px; }
+.kx-usage-periods button { padding: 3px 8px; border: 1px solid var(--border-2); border-radius: 3px; background: none; color: var(--muted); font: inherit; font-size: 11px; cursor: pointer; }
+.kx-usage-periods button:hover, .kx-usage-periods button:focus-visible { color: var(--text); outline: none; border-color: var(--amber); }
+.kx-usage-periods button.on { color: var(--text); border-color: var(--amber); }
+.kx-usage-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.kx-usage-tiles > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 8px; border: 1px solid var(--border); border-radius: 4px; }
+.kx-usage-tiles span { font-size: 11px; color: var(--muted); }
+.kx-usage-tiles b { font-size: 15px; font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.kx-usage h4 { margin: 4px 0 0; font-size: 12px; font-weight: 600; color: var(--text); }
+.kx-usage h4 .muted { font-weight: 400; font-size: 11px; }
+.kx-usage-scroll { overflow-x: auto; }
+.kx-usage table { width: 100%; border-collapse: collapse; font-size: 11px; font-variant-numeric: tabular-nums; }
+.kx-usage th, .kx-usage td { padding: 4px 6px; border-bottom: 1px solid var(--border); text-align: right; white-space: nowrap; color: var(--text); }
+.kx-usage th { font-weight: 400; color: var(--muted); }
+.kx-usage th:first-child, .kx-usage td:first-child { text-align: left; white-space: normal; min-width: 130px; }
+.kx-usage td.muted { color: var(--muted); }
+.kx-usage td small { display: block; font-size: 10px; color: var(--muted); }
+@media (max-width: 600px) { .kx-usage-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

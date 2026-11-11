@@ -14,7 +14,7 @@ import { costLabel, ctxButton, LS, ls, prettyArgs, type PageContext } from './la
 import { md } from './md.ts';
 import { useBook } from '../paper/book.ts';
 import { LimitsDialog } from './LimitsDialog.tsx';
-import { openLimits } from './limits.ts';
+import { openUsage } from './limits.ts';
 import { citeHost, type Turn } from './turns.ts';
 
 const UiView = lazy(() => import('./ui/UiView.tsx'));
@@ -268,7 +268,7 @@ function Rail({ onNew }: { onNew: () => void }) {
         ))}
       </div>
       <button className="kx-all kx-clear-all" onClick={() => void clearAllChats()}>Clear all chats</button>
-      {s.todayUsd != null && <button type="button" className="kx-spend" title="API spend today (models and paid search). Click to change limits." onClick={openLimits}><span>Today</span><span>{costLabel(s.todayUsd)}</span></button>}
+      {s.todayUsd != null && <button type="button" className="kx-spend" title="API spend today (models and paid search). Click for usage and limits." onClick={openUsage}><span>Today</span><span>{costLabel(s.todayUsd)}</span></button>}
     </nav>
   );
 }

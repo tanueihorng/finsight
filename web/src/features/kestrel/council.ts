@@ -2,12 +2,12 @@
 // capsule). Built only from public run summaries — status, phase, timing and the
 // validated Assessment — never model scratch reasoning. UNPEEK blanks all
 // finding text and counts.
-import { Assessment } from '../../../../agent/src/chat/council-contract.ts';
+import { ChairAssessment } from '../../../../agent/src/chat/council-contract.ts';
 import { createStore } from 'zustand/vanilla';
 import type { Part } from './turns.ts';
 
 export type CouncilPart = Extract<Part, { kind: 'council' }>;
-export type Finding = Assessment['findings'][number];
+export type Finding = ChairAssessment['findings'][number];
 export const ROLES = [
   { id: 'growth', label: 'Business & Growth', short: 'Business', focus: 'Quality & growth', tag: 'G' },
   { id: 'macro', label: 'Macro & Valuation', short: 'Macro', focus: 'Value & economic forces', tag: 'M' },
@@ -27,8 +27,8 @@ export function councilState(runs: CouncilPart[], finished: boolean): RunState {
 }
 export const STATE_LABEL: Record<RunState, string> = { running: 'Working', completed: 'Ready', failed: 'Failed', stopped: 'Stopped', queued: 'Queued', 'not-run': 'Not run' };
 
-export function parseAssessment(raw: string): Assessment | null {
-  try { const r = Assessment.safeParse(JSON.parse(raw)); return r.success ? r.data : null; } catch { return null; }
+export function parseAssessment(raw: string): ChairAssessment | null {
+  try { const r = ChairAssessment.safeParse(JSON.parse(raw)); return r.success ? r.data : null; } catch { return null; }
 }
 
 export interface Step {
@@ -66,6 +66,7 @@ export function gapLabel(r: CouncilPart): string {
   const phase = PHASE_LABEL[r.phase] ?? r.phase;
   if (r.cause === 'budget') return `${phase} not run · spending cap reached`;
   if (r.cause === 'context') return `${phase} not run · evidence too large for the model`;
+  if (r.cause === 'validation') return `${phase} failed validation`;
   return r.phase === 'assessment' ? 'Assessment missing' : `${phase} failed`;
 }
 

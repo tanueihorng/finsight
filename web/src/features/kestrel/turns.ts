@@ -55,8 +55,8 @@ export function addUi(t: Turn, callId: string, view: unknown): Turn {
 
 // Why a stage did not complete. Older runs carry only the error text, so a
 // spending-cap refusal is recognised from it on replay.
-export type StageCause = 'budget' | 'context' | 'tool' | 'model' | 'stopped';
-const CAUSES: StageCause[] = ['budget', 'context', 'tool', 'model', 'stopped'];
+export type StageCause = 'budget' | 'context' | 'tool' | 'validation' | 'model' | 'stopped';
+const CAUSES: StageCause[] = ['budget', 'context', 'tool', 'validation', 'model', 'stopped'];
 function stageCause(r: Record<string, any>): StageCause | undefined {
   if (r.status !== 'failed' && r.status !== 'stopped') return undefined;
   if (CAUSES.includes(r.cause)) return r.cause;

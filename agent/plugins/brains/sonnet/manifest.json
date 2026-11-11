@@ -1,0 +1,27 @@
+{
+  "apiVersion": 1,
+  "kind": "brain",
+  "id": "sonnet",
+  "label": "Claude Sonnet 5.5",
+  "transport": "anthropic",
+  "model": "claude-sonnet-5-5",
+  "keyRef": "ANTHROPIC_API_KEY",
+  "pricing": {
+    "inputPerM": 2,
+    "outputPerM": 10,
+    "cacheReadPerM": 0.1,
+    "version": "anthropic-2026-11-03"
+  },
+  "capabilities": {
+    "tools": true,
+    "streaming": true,
+    "nativeSearch": false,
+    "contextTokens": 1000000,
+    "vision": true
+  },
+  "costTier": "$$",
+  "maxOutputTokens": 16000,
+  "options": {
+    "output_config": { "effort": "medium" }
+  }
+}

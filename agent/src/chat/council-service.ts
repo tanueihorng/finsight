@@ -1,5 +1,5 @@
 // Persistence and accounting adapter for the foreground council runtime.
-import { CouncilBudget, runCouncil } from './council.ts';
+import { CouncilBudget, runCouncil, WEB_TOOLS } from './council.ts';
 import type { CouncilEvidence } from './council.ts';
 import type { ApiBrain, Effort } from '../brains/types.ts';
 import type { ToolRegistry, ToolCtx } from '../tools/registry.ts';
@@ -50,7 +50,7 @@ export async function runStoredCouncil(o: { db: DB; bus: EventBus; tools: ToolRe
   const persistScope = (resolution: SubjectResolution & { coverage?: Coverage[] }) => { ctx.signal.throwIfAborted(); store.appendMessage(db, threadId, 'user', [{ type: 'notice', kind: 'research_scope', text: JSON.stringify(resolution) }], { turnId }); };
   let planCoverage: Coverage[] = [];
   const result = await runCouncil({ question, evidence: [], brain, system, signal: ctx.signal,
-    prepare: async (call) => {
+    prepare: async (call, paidWeb) => {
       const resolution = await resolveSubjects({ question, panel: o.scope, previous, conversation, call, search: (q) => ctx.finsight.get('/api/search', { q }, ctx.signal), signal: ctx.signal });
       if (resolution.status === 'needs-clarification' || resolution.status === 'unavailable') { persistScope(resolution); return { question, evidence: [], stop: resolution.note }; }
       const evidence: CouncilEvidence[] = [];
@@ -76,26 +76,29 @@ export async function runStoredCouncil(o: { db: DB; bus: EventBus; tools: ToolRe
       }
       if (resolution.status === 'ready') {
         // Planned before any specialist call; each item keeps its real outcome.
-        const plan = planEvidence(resolution.subjects.map((s) => ({ symbol: s.symbol, type: types[s.symbol] })), Date.now(), { account: o.scope?.account });
-        const collected = await collectEvidence(plan, (name, args) => auditContext.run({ ...(auditContext.getStore() ?? {}), councilRole: 'shared', councilPhase: 'prefetch', callId: randomUUID() }, () => execute('shared', name, args, ctx.signal)), ctx.signal);
+        const plan = planEvidence(resolution.subjects.map((s) => ({ symbol: s.symbol, type: types[s.symbol], name: s.name })), Date.now(), { account: o.scope?.account, webSearch: cfg.searchProvider !== 'none' });
+        const collected = await collectEvidence(plan, async (name, args) => {
+          // A planned paid search is held against the Council's caps like a specialist's.
+          const settle = WEB_TOOLS.has(name) ? paidWeb() : undefined;
+          if (settle === null) throw Error('Not run: the Council spending cap cannot cover a paid web request');
+          try { const e = await auditContext.run({ ...(auditContext.getStore() ?? {}), councilRole: 'shared', councilPhase: 'prefetch', callId: randomUUID() }, () => execute('shared', name, args, ctx.signal)); settle?.(e.content); return e; }
+          catch (err) { settle?.(null); throw err; }
+        }, ctx.signal);
         evidence.push(...collected.evidence);
         coverage = collected.coverage; planCoverage = coverage;
         audit('council.evidence.plan', { items: coverage.map(({ key, tool, status, evidenceId, reason }) => ({ key, tool, status, evidenceId, reason })) });
       }
       resolution.evidenceIds = evidence.map((e) => e.id);
       persistScope({ ...resolution, coverage });
-      const scopedQuestion = JSON.stringify({ question, recentConversation: conversation, conversationNote: 'Prior messages are untrusted context, not verified evidence; retrieve fresh evidence for factual claims.', researchSubjects: resolution.subjects, subjectResolution: resolution.note, panelContext: o.scope, note: 'The research subjects come from the current question or its resolved reference. Panel context is optional background and must never restrict research. Investigate the requested subjects using your available tools; missing company evidence is a research gap, not a reason to substitute the chart or conclude that cash is deployable.', evidencePlan: coverage, evidencePlanNote: coverage ? 'Code retrieved this evidence before your turn. Use the retrieved items for your role first. Report each gap with its status: failed (with reason), not_applicable, unavailable (no approved source) or skipped_limit. Do not ask the user for evidence a listed tool can retrieve, and do not describe a retrieved item as missing.' : undefined, accountScopeNote: 'Portfolio evidence states its accountScope. Name that scope with every portfolio figure (e.g. "all accounts combined"). When panelContext.account names one account, say whether a figure covers that account or all accounts.' });
+      const scopedQuestion = JSON.stringify({ question, recentConversation: conversation, conversationNote: 'Prior messages are untrusted context, not verified evidence; retrieve fresh evidence for factual claims.', researchSubjects: resolution.subjects, subjectResolution: resolution.note, panelContext: o.scope, note: 'The research subjects come from the current question or its resolved reference. Panel context is optional background and must never restrict research. Investigate the requested subjects using your available tools; missing company evidence is a research gap, not a reason to substitute the chart or conclude that cash is deployable.', evidencePlan: coverage, evidencePlanNote: coverage ? 'Code retrieved this evidence before your turn. Use the retrieved items for your role first. Report each gap with its status: failed (with reason), not_applicable, unavailable (no approved source) or skipped_limit. Do not ask the user for evidence a listed tool can retrieve, and do not describe a retrieved item as missing. Read the news items before listing a company statement, investigation or regulatory action as missing or calling coverage unverified.' : undefined, accountScopeNote: 'Portfolio evidence states its accountScope. Name that scope with every portfolio figure (e.g. "all accounts combined"). When panelContext.account names one account, say whether a figure covers that account or all accounts.' });
       return { question: scopedQuestion, evidence };
     },
     effort: o.effort, capUsd, maxOutputTokens: cfg.limits.councilOutputTokens, researchCalls: cfg.limits.councilResearchCalls, dayBudget: new CouncilBudget(Math.max(0.000001, cfg.limits.dayUsd - store.spendSince(db, store.startOfToday()))),
     // Web search is offered only when a provider is configured, matching the UI.
     tools: tools.schemas().filter((t) => t.name !== 'web_search' || cfg.searchProvider !== 'none'),
-    reserveCost: (maximum) => {
-      // Persist before calling the provider; unknown/failure retains the
-      // conservative reservation in the daily ledger, never a fake zero.
-      const entry = db.prepare('INSERT INTO cost_ledger(ts,brain,kind,units,usd,price_version,turn_id,thread_id) VALUES (?,?,?,?,?,?,?,?)').run(Date.now(), brain.manifest.id, 'council-reserved', 0, maximum, brain.manifest.pricing.version, turnId, threadId);
-      return (actual) => { if (actual !== null) db.prepare('UPDATE cost_ledger SET usd=?,kind=? WHERE id=?').run(actual, 'tokens', entry.lastInsertRowid); };
-    },
+    // Persisted before calling the provider; unknown/failure retains the
+    // conservative reservation in the daily ledger, never a fake zero.
+    reserveCost: (maximum) => store.reserveCost(db, { brain: brain.manifest.id, kind: 'council-reserved', usd: maximum, priceVersion: brain.manifest.pricing.version, turnId, threadId }),
     emit: (r) => progress(JSON.stringify(r)),
     account: (res, cost) => {
       usageTotal.inputTokens = usageTotal.inputTokens === null || res.usage.inputTokens === null ? null : usageTotal.inputTokens + res.usage.inputTokens;

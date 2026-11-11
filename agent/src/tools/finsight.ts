@@ -21,14 +21,20 @@ export function readAgentLink(finsightDataDir: string): AgentLink | null {
   } catch { return null; }
 }
 
+/** Endpoints whose data belongs to one book (REAL or PAPER); quotes, news and the like do not. */
+export const BOOK_SCOPED = /^\/api\/(book|portfolio|accounts|dividends|realized|fx-risk|ledger|events)(\/|$)/;
+export type BookObserver = (book: string, pathname: string) => void;
+
 export interface FinsightClient {
   get<T = any>(pathname: string, params?: Record<string, string | number | undefined>, signal?: AbortSignal): Promise<T>;
   /** Paper order routes only; FinSight refuses the token anywhere else. */
   post?<T = any>(pathname: string, body: unknown, signal?: AbortSignal): Promise<T>;
+  /** A client that also reports the book each response was served from. */
+  observe?(fn: BookObserver): FinsightClient;
 }
 
 export function finsightClient(baseUrl: string, finsightDataDir: string, fetchImpl: typeof fetch = fetch): FinsightClient {
-  async function send(method: 'GET' | 'POST', pathname: string, params: Record<string, string | number | undefined>, body: unknown, signal?: AbortSignal) {
+  async function send(method: 'GET' | 'POST', pathname: string, params: Record<string, string | number | undefined>, body: unknown, signal: AbortSignal | undefined, observers: BookObserver[]) {
     const link = readAgentLink(finsightDataDir); // re-read each call so token rotation needs no restart
     if (!link) throw new AgentError('FINSIGHT_AUTH', 'No FinSight agent link found. Start FinSight once (it creates agent-link.json), then retry.', 503);
     const u = new URL(pathname, baseUrl);
@@ -55,10 +61,14 @@ export function finsightClient(baseUrl: string, finsightDataDir: string, fetchIm
       if (method === 'POST') { try { const j = await res.json() as { error?: string }; if (j?.error) msg = j.error; } catch { /* keep generic */ } }
       throw new AgentError('FINSIGHT_ERROR', msg, 502);
     }
+    const book = res.headers.get('x-finsight-book');
+    if (book) for (const fn of observers) fn(book, pathname);
     return res.json() as Promise<any>;
   }
-  return {
-    get: (pathname, params = {}, signal) => send('GET', pathname, params, undefined, signal),
-    post: (pathname, body, signal) => send('POST', pathname, {}, body, signal),
-  };
+  const client = (observers: BookObserver[]): FinsightClient => ({
+    get: (pathname, params = {}, signal) => send('GET', pathname, params, undefined, signal, observers),
+    post: (pathname, body, signal) => send('POST', pathname, {}, body, signal, observers),
+    observe: (fn) => client([...observers, fn]),
+  });
+  return client([]);
 }

@@ -125,7 +125,7 @@ async function estimate(o: OrderInput): Promise<Estimate> {
 }
 const startOfToday = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime(); };
 /** The first limit the order breaks, or null. Applies to Kestrel's orders. */
-export async function limitBreach(o: OrderInput, s: PaperSettings, est: Estimate, ctx: { kestrelOrdersToday: number; equity?: number; positionValue?: number }): Promise<string | null> {
+export async function limitBreach(o: OrderInput, s: PaperSettings, est: Estimate, ctx: { kestrelOrdersToday: number; equity?: number; positionValue?: number | null }): Promise<string | null> {
   const l = s.limits;
   if (l.symbols && !l.symbols.includes(o.symbol)) return `${o.symbol} is not in your allowed symbols (${l.symbols.join(', ')})`;
   if (l.maxOrdersPerDay != null && ctx.kestrelOrdersToday >= l.maxOrdersPerDay) return `Kestrel has already placed ${ctx.kestrelOrdersToday} paper orders today; your limit is ${l.maxOrdersPerDay}`;
@@ -134,7 +134,7 @@ export async function limitBreach(o: OrderInput, s: PaperSettings, est: Estimate
     if (est.valueUsd > l.maxOrderUsd + 1e-9) return `Order value about US$${est.valueUsd.toFixed(2)} (${est.priceSource}) is above your US$${l.maxOrderUsd} limit`;
   }
   if (l.maxPositionPct != null && o.side === 'buy') {
-    if (est.valueUsd == null || !ctx.equity) return `Can't check your ${l.maxPositionPct}% position limit: no price or account equity`;
+    if (est.valueUsd == null || !ctx.equity || ctx.positionValue === null) return `Can't check your ${l.maxPositionPct}% position limit: no price or account equity`;
     const after = ((ctx.positionValue || 0) + est.valueUsd) / ctx.equity * 100;
     if (after > l.maxPositionPct + 1e-9) return `${o.symbol} would be about ${after.toFixed(1)}% of paper equity after this order; your limit is ${l.maxPositionPct}%`;
   }
@@ -159,28 +159,53 @@ async function submit(o: OrderInput, meta: Omit<OrderMeta, 'at'>) {
 export async function placeUserOrder(raw: Record<string, any>) {
   return { placed: true, order: await submit(normalizeOrder(raw), { origin: 'user' }) };
 }
+/** USD still committed by open buys of one symbol, or null when one can't be priced. */
+async function openBuyValue(open: alpaca.AlpacaOrder[]): Promise<number | null> {
+  let total = 0, quoted: number | null | undefined;
+  for (const x of open) {
+    const filled = Number(x.filled_qty || 0);
+    if (x.notional != null) { total += Math.max(0, Number(x.notional) - filled * Number(x.filled_avg_price || 0)); continue; }
+    if (x.limit_price == null && quoted === undefined) {
+      try { quoted = (await getQuote(toBookSymbol(x.symbol))).price ?? null; } catch { quoted = null; }
+    }
+    const price = x.limit_price != null ? Number(x.limit_price) : quoted, left = Number(x.qty) - filled;
+    if (!price || !(price > 0) || !Number.isFinite(left)) return null;
+    total += Math.max(0, left) * price;
+  }
+  return Number.isFinite(total) ? total : null;
+}
 async function kestrelContext(o: OrderInput) {
   const f = readOrders(), today = startOfToday();
   const kestrelOrdersToday = Object.values(f.meta).filter((m) => m.origin === 'kestrel' && m.at >= today).length;
   const s = getSettings();
   if (s.limits.maxPositionPct == null) return { kestrelOrdersToday };
+  // Open orders first: a fill between the reads is then counted twice, never missed.
+  const open = (await alpaca.orders('open', 500)).filter((x) => x.symbol === o.symbol && x.side === 'buy');
   const [acct, pos] = await Promise.all([alpaca.account(), alpaca.positions()]);
   const p = pos.find((x) => x.symbol === o.symbol);
-  return { kestrelOrdersToday, equity: Number(acct.equity), positionValue: p ? Math.abs(Number(p.market_value)) : 0 };
+  const held = p ? Math.abs(Number(p.market_value)) : 0, resting = await openBuyValue(open);
+  return { kestrelOrdersToday, equity: Number(acct.equity), positionValue: resting === null || !Number.isFinite(held) ? null : held + resting };
 }
-// Kestrel's orders run one at a time, so concurrent calls cannot both pass
-// the daily-count and position checks before either is recorded.
+// Every Kestrel order, automatic or approved, passes one gate, one at a time,
+// so concurrent calls cannot both pass the daily-count and position checks
+// before either is recorded.
 let kestrelQueue: Promise<unknown> = Promise.resolve();
-/** Kestrel's order: limits first, then a ticket (ask) or straight to Alpaca (auto). */
-export function placeKestrelOrder(raw: Record<string, any>, threadId?: string) {
-  const r = kestrelQueue.then(() => placeKestrelOrderNow(raw, threadId));
+function inKestrelGate<T>(fn: () => Promise<T>): Promise<T> {
+  const r = kestrelQueue.then(fn);
   kestrelQueue = r.catch(() => {});
   return r;
 }
+async function checkKestrelLimits(o: OrderInput) {
+  const s = getSettings(), est = await estimate(o);
+  return { s, est, breach: await limitBreach(o, s, est, await kestrelContext(o)) };
+}
+/** Kestrel's order: limits first, then a ticket (ask) or straight to Alpaca (auto). */
+export function placeKestrelOrder(raw: Record<string, any>, threadId?: string) {
+  return inKestrelGate(() => placeKestrelOrderNow(raw, threadId));
+}
 async function placeKestrelOrderNow(raw: Record<string, any>, threadId?: string) {
-  const o = normalizeOrder(raw), s = getSettings();
-  const est = await estimate(o);
-  const breach = await limitBreach(o, s, est, await kestrelContext(o));
+  const o = normalizeOrder(raw);
+  const { s, est, breach } = await checkKestrelLimits(o);
   if (breach) return { placed: false, refused: true, reason: breach, approval: s.approval, limits: s.limits };
   const note = raw.note ? String(raw.note).slice(0, 500) : undefined;
   if (s.approval === 'ask') {
@@ -206,17 +231,30 @@ export async function decideTicket(id: unknown, approve: boolean) {
     notify('tickets', { ticketId: id });
     return { ticketId: id, status: 'rejected' as const };
   }
-  try {
-    const order = await submit(t.order, { origin: 'kestrel', threadId: t.threadId, ticketId: t.id });
-    await withOrders((f) => { const x = f.tickets.find((y) => y.id === id); if (x) Object.assign(x, { status: 'approved', decidedAt: Date.now(), orderId: order.id }); });
-    notify('tickets', { ticketId: id });
-    return { ticketId: id, status: 'approved' as const, order };
-  } catch (e) {
-    const error = String((e as Error).message || e).slice(0, 300);
-    await withOrders((f) => { const x = f.tickets.find((y) => y.id === id); if (x) Object.assign(x, { status: 'failed', decidedAt: Date.now(), error }); });
-    notify('tickets', { ticketId: id });
-    throw e;
-  }
+  // Approval allows this order; it doesn't lift the user's limits, which are
+  // re-read here because they, the price and the account may have moved.
+  return inKestrelGate(async () => {
+    let breach: string | null;
+    try { breach = (await checkKestrelLimits(t.order)).breach; }
+    catch (e) { breach = `Can't check your limits right now: ${String((e as Error).message || e).slice(0, 200)}`; }
+    if (breach) {
+      const error = breach;
+      await withOrders((f) => { const x = f.tickets.find((y) => y.id === id); if (x) { Object.assign(x, { status: 'pending', error }); delete x.decidedAt; } });
+      notify('tickets', { ticketId: id });
+      throw new Error(`Not sent: ${error}. The ticket is still waiting.`);
+    }
+    try {
+      const order = await submit(t.order, { origin: 'kestrel', threadId: t.threadId, ticketId: t.id });
+      await withOrders((f) => { const x = f.tickets.find((y) => y.id === id); if (x) { Object.assign(x, { status: 'approved', decidedAt: Date.now(), orderId: order.id }); delete x.error; } });
+      notify('tickets', { ticketId: id });
+      return { ticketId: id, status: 'approved' as const, order };
+    } catch (e) {
+      const error = String((e as Error).message || e).slice(0, 300);
+      await withOrders((f) => { const x = f.tickets.find((y) => y.id === id); if (x) Object.assign(x, { status: 'failed', decidedAt: Date.now(), error }); });
+      notify('tickets', { ticketId: id });
+      throw e;
+    }
+  });
 }
 export async function cancelOrder(id: unknown, by: Origin = 'user') {
   const oid = String(id || '');

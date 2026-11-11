@@ -1,10 +1,10 @@
 import { useStore } from 'zustand';
-import { Assessment } from '../../../../agent/src/chat/council-contract.ts';
+import { ChairAssessment } from '../../../../agent/src/chat/council-contract.ts';
 import type { Part } from './turns.ts';
 
 const labels: Record<string, string> = { growth: 'Business & Growth', macro: 'Macro & Valuation', risk: 'Portfolio Risk', chair: 'Kestrel Chair' };
 function parseFindings(raw: string) {
-  try { const result = Assessment.safeParse(JSON.parse(raw)); return result.success ? result.data : null; }
+  try { const result = ChairAssessment.safeParse(JSON.parse(raw)); return result.success ? result.data : null; }
   catch { return null; }
 }
 export function CouncilActivity({ run }: { run: Extract<Part, { kind: 'council' }> }) {

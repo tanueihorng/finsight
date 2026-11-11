@@ -1,5 +1,5 @@
 // Kestrel wording and small formatters (G1/G2), ported from public/agent-panel.js.
-export const LS = { open: 'finsight-agent-open', width: 'finsight-agent-w', thread: 'finsight-agent-thread', brain: 'finsight-agent-brain', ctx: 'finsight-agent-ctx', mode: 'finsight-agent-mode', dockH: 'finsight-agent-dock-h', collapsed: 'finsight-agent-collapsed', search: 'finsight-agent-search', rail: 'finsight-agent-rail' } as const;
+export const LS = { open: 'finsight-agent-open', width: 'finsight-agent-w', thread: 'finsight-agent-thread', brain: 'finsight-agent-brain', ctx: 'finsight-agent-ctx', mode: 'finsight-agent-mode', dockH: 'finsight-agent-dock-h', collapsed: 'finsight-agent-collapsed', search: 'finsight-agent-search-v2', rail: 'finsight-agent-rail' } as const;
 export const ls = {
   get(k: string, d: string) { try { const v = localStorage.getItem(k); return v == null ? d : v; } catch { return d; } },
   set(k: string, v: string | number) { try { localStorage.setItem(k, String(v)); } catch { /* private mode */ } },
@@ -33,6 +33,11 @@ export function prettyArgs(s: string | undefined): string {
 export const took = (ms: number | null | undefined) => (ms == null ? '' : ms < 1000 ? ` · ${ms} ms` : ` · ${(ms / 1000).toFixed(1)} s`);
 export const costLabel = (usd: number) => `$${Number(usd).toFixed(usd < 0.01 ? 4 : 3)}`;
 export const friendly = (code?: string, msg?: string) => (code === 'FINSIGHT_DOWN' ? 'FinSight data is unreachable right now.' : msg || code || 'Something went wrong.');
+
+export function retryNotice(code?: string, connection?: string): string {
+  if (connection) return `couldn't reach the model (${connection}), retrying…`;
+  return code === 'PROVIDER_RATE_LIMIT' ? 'model rate limited, retrying…' : `model request failed (${code}), retrying…`;
+}
 
 export interface PageContext { symbol?: string; account?: string; base?: string; timeframe?: string; strategy?: string; view: 'terminal' }
 export function ctxLabel(pc: PageContext | string | undefined): string {
