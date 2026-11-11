@@ -15,6 +15,8 @@ The earlier draft with unverified release numbers is preserved in `docs/archive/
 
 ## Unreleased
 
+- `AUDITFIX-001` research and paper approval fixes (`5bd0629`, integrated 2026-11-12). SEC pacing uses elapsed time and supports cancellation. DCF refuses invalid share counts, stale cash flow and ambiguous capex signs. Form 4 retains each joint filer’s roles. Interrupted paper approvals reconcile the original order with Alpaca and stay unconfirmed when the broker cannot confirm it.
+
 - `SANDBOX-001` Portfolio Sandbox ([FEAT-020](docs/features/FEAT-020-portfolio-sandbox.md)), merged into local `main` on 2026-11-11 (`449d717`, `55bb9b4`). Open it from Positions to preview ordered draft trades against a pinned account and currency. The comparison shows cash, fees and concentration, flags oversells and funding shortfalls, and validates incomplete price and cash overrides. Previewing leaves the portfolio and ledger untouched.
 
 - `QUANT-001` Quant Engine and Quant Lab ([FEAT-014](docs/features/FEAT-014-quant-engine.md)), merged on GitHub in PR #3 on 2026-11-11; not deployed to the personal app.

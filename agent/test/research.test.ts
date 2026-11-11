@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { performance } from 'node:perf_hooks';
 import { loadConfig } from '../src/config.ts';
 import { openDb } from '../src/store/db.ts';
 import { ToolRegistry } from '../src/tools/registry.ts';
@@ -39,6 +40,19 @@ const FORM4 = (code: string, shares: number, price: number, plan = false, ad = c
 test('Form 4 parsing keeps owner role, code, amounts and 10b5-1 flag', () => {
   const [t] = parseForm4(FORM4('S', 1000, 150.5, true), '2026-10-17', 'u');
   assert.deepEqual([t!.owner, t!.roles[0], t!.code, t!.shares, t!.price, t!.acquired, t!.ownedAfter, t!.plan10b5_1, t!.date], ['Doe Jane', 'CFO & EVP', 'S', 1000, 150.5, false, 5000, true, '2026-10-15']);
+});
+
+test('Form 4 decodes XML entities once and associates roles with each joint filer', () => {
+  const xml = FORM4('P', 5, 20).replace('Doe Jane', 'O&apos;Connor &amp; Co')
+    .replace('</reportingOwner>', '</reportingOwner><reportingOwner><rptOwnerName>D&#x27;Souza &amp;lt; Holdings</rptOwnerName><isDirector>1</isDirector></reportingOwner>');
+  const rows = parseForm4(xml, '2026-10-17', 'fixture');
+  assert.equal(rows.length, 1);
+  assert.deepEqual(rows[0]!.reportingOwners, [
+    { name: "O'Connor & Co", roles: ['CFO & EVP'] }, { name: "D'Souza &lt; Holdings", roles: ['director'] },
+  ]);
+  const summary = summariseInsiders(rows);
+  assert.equal(summary.openMarketBuys.valueUsd, 100);
+  assert.deepEqual(summary.byInsider[0]!.reportingOwners, rows[0]!.reportingOwners);
 });
 
 test('insider summary counts only open-market P/S and separates other codes', () => {
@@ -297,6 +311,69 @@ test('SEC requests are paced to stay under 10 per second', async () => {
   await secSlot(); const t0 = Date.now();
   await Promise.all([secSlot(), secSlot(), secSlot()]);
   assert.ok(Date.now() - t0 >= 300, `three queued slots took ${Date.now() - t0} ms`);
+});
+
+test('SEC pacing survives a wall-clock jump and an event-loop stall, and honours cancellation', async (t) => {
+  const { secSlot } = await import('../src/tools/web.ts');
+  await secSlot();
+  const abort = new AbortController();
+  const reason = new Error('fixture cancellation');
+  const cancelled = assert.rejects(secSlot(abort.signal), (error) => error === reason);
+  abort.abort(reason);
+  await cancelled;
+  await assert.rejects(secSlot(abort.signal), (error) => error === reason);
+  const now = Date.now();
+  t.mock.method(Date, 'now', () => now - 3_600_000);
+  const released: number[] = [];
+  const deadline = AbortSignal.timeout(2000);
+  const pending = [secSlot(deadline), secSlot(deadline)].map(async (slot) => { await slot; released.push(performance.now()); });
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 150);
+  await Promise.all(pending);
+  assert.ok(released[1]! - released[0]! >= 105, 'overdue callers must still be spaced after waking');
+});
+
+test('DCF refuses zero shares, stale FCF despite recent revenue, and ambiguous capex signs', async (t) => {
+  t.mock.method(Date, 'now', () => Date.parse('2026-11-12T00:00:00Z'));
+  const recent = ['2025-10-01', '2026-09-30'] as const;
+  const old = ['2022-10-01', '2023-09-30'] as const;
+  const flow = (val: number, [start, end]: readonly [string, string]) => ({
+    units: { USD: [{ start, end, val, form: '10-K', fp: 'FY', filed: end }] },
+  });
+  const instant = (val: number) => ({ units: { USD: [{ end: '2026-09-30', val, filed: '2026-10-01' }] } });
+  for (const { shares, capex, period, refused } of [
+    { shares: 0, capex: 20, period: recent, refused: 'no_shares' },
+    { shares: 100, capex: 20, period: old, refused: 'stale_financials' },
+    { shares: 100, capex: -20, period: recent, refused: 'capex_sign_ambiguous' },
+    { shares: 100, capex: 20, period: recent, refused: null },
+  ]) {
+    const facts = { facts: {
+      dei: { EntityCommonStockSharesOutstanding: { units: { shares: [{ end: '2026-09-30', val: shares, accn: 'a', filed: '2026-10-01' }] } } },
+      'us-gaap': { Revenues: flow(250, recent), NetCashProvidedByUsedInOperatingActivities: flow(100, period),
+        PaymentsToAcquirePropertyPlantAndEquipment: flow(capex, period),
+        CashAndCashEquivalentsAtCarryingValue: instant(50), LongTermDebtNoncurrent: instant(10) },
+    } };
+    const provider = (async (u: string) => u.endsWith('company_tickers.json')
+      ? json({ 0: { cik_str: 1, ticker: 'AAA', title: 'Synthetic' } })
+      : u.includes('/submissions/') ? json({ filings: { recent: { form: ['10-K'] } } }) : json(facts)) as typeof fetch;
+    const ctx = ctxWith(() => ({ quotes: [{ symbol: 'AAA', price: 10, currency: 'USD' }] }));
+    const out = JSON.parse((await new ToolRegistry().add(...createResearchTools(provider)).execute('dcf_valuation', { ticker: 'AAA', growthPct: 10 }, ctx)).content);
+    assert.equal(out.status, refused ? 'refused' : 'ok', JSON.stringify(out));
+    if (refused) assert.deepEqual(out.refusedFor, [refused]);
+    else assert.equal(out.inputs.fcfTtm, 80);
+    if (refused === 'capex_sign_ambiguous') assert.equal(out.inputs.fcfTtm, null);
+  }
+  assert.throws(() => dcfPerShare({ fcf0: 100, growth: .1, discount: .1, terminal: .02, years: 5, fade: true, netDebt: 0, shares: 0 }), /positive and finite/);
+  const q1 = { start: '2025-10-01', end: '2025-12-31' };
+  const q2 = { start: '2026-01-01', end: '2026-03-31' };
+  const q3 = { start: '2026-04-01', end: '2026-06-30' };
+  const q4 = { start: '2026-07-01', end: '2026-09-30' };
+  const quarters = [q1, q2, q3, q4];
+  const mixed = fundamentals({ facts: { 'us-gaap': {
+    NetCashProvidedByUsedInOperatingActivities: { units: { USD: quarters.map((q) => ({ ...q, val: 25 })) } },
+    PaymentsToAcquirePropertyPlantAndEquipment: { units: { USD: quarters.map((q, i) => ({ ...q, val: i === 0 ? -5 : 10 })) } },
+  } } });
+  assert.equal(mixed.ttm.capex?.value, 25);
+  assert.equal(mixed.ttm.freeCashFlow, null, 'a positive total does not hide an ambiguous component sign');
 });
 
 test('review nits: unpriced insider rows are counted, not valued at zero; short history fails; equal discount and terminal is a typed refusal', async () => {

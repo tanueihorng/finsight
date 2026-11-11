@@ -10,7 +10,7 @@ export interface PaperOrder {
   id: string; symbol: string; side: 'buy' | 'sell'; type: string; tif: string; qty: number | null; notional: number | null; limitPrice: number | null;
   filledQty: number | null; filledAvgPrice: number | null; status: string; createdAt: string; filledAt: string | null; origin: 'user' | 'kestrel' | 'alpaca'; threadId: string | null;
 }
-export interface Ticket { id: string; status: 'pending' | 'approving' | 'approved' | 'rejected' | 'failed'; order: OrderInput; note?: string; createdAt: number; error?: string; estimate?: { valueUsd: number | null; priceSource: string } }
+export interface Ticket { id: string; status: 'pending' | 'approving' | 'unconfirmed' | 'approved' | 'rejected' | 'failed'; order: OrderInput; note?: string; createdAt: number; error?: string; estimate?: { valueUsd: number | null; priceSource: string } }
 export interface PaperPosition { symbol: string; bookSymbol: string; qty: number; side: string; avgEntryPrice: number; currentPrice: number; marketValue: number; unrealizedPl: number }
 export interface PaperState {
   connected: boolean; keySource: 'env' | 'file' | null; settings: Settings; tickets: Ticket[];

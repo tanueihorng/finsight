@@ -73,6 +73,7 @@ Exploratory concepts under review; requires an RFC/spec before moving to the Bac
 
 | ID | Feature | Completion Date | Evidence / Release |
 | :--- | :--- | :--- | :--- |
+| **AUDITFIX-001** | Research validation, SEC pacing and [paper approval recovery](features/FEAT-012-paper-trading.md) | 2026-11-12 | Integrated from `5bd0629`. Verified with app and agent tests, Chromium and a fake broker. |
 | **SANDBOX-001** | [Portfolio Sandbox (FEAT-020)](features/FEAT-020-portfolio-sandbox.md) | 2026-11-11 | Merged into local `main` with verified preview and override validation (`449d717`, `55bb9b4`). Deployment pending. |
 | **CORE-001** | Kestrel Research Agent Core | 2026-10-24 | Initial release with DeepSeek, Haiku, Claude Code brains, 35 tools. |
 | **IUI-001** | Intelligent UI Views | 2026-10-26 | Interactive cards and data tables via `render_ui`. |
