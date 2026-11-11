@@ -31,7 +31,7 @@ function robustness(key) {
   };
 }
 
-let runs = [], seq = 0;
+let runs = [], seq = 0, revised = false; // revised: later runs see corrected prices
 const settings = (b) => ({ years: b.years ?? 5, initialCash: b.initialCash ?? 100000, positionPct: b.positionPct ?? 10, maxPositions: b.maxPositions ?? 10, costBps: b.costBps ?? 10, extraSlippageBps: b.extraSlippageBps ?? 0, riskFreePct: b.riskFreePct ?? 0, currency: 'USD' });
 function makeRun(b) {
   const key = b.strategy, p = PROFILES[key], s = settings(b);
@@ -45,14 +45,15 @@ function makeRun(b) {
     rejected: { max_positions: 5, no_cash: 10, already_held: 0 }, reducedEntries: 20,
     openPositions: [{ symbol: 'AAA', entryDate: '2025-09-10', shares: 191, entryPx: 111.2156, markPx: 164.73, unrealizedPnl: 10986.93 }],
     monthlyEquity: monthly(230566, 172184), recentFills: [{ date: '2025-11-05', symbol: 'AAA', side: 'buy', shares: 85, px: 271.57, fee: 23.08, why: 'entry' }], reconciled: true,
-    warnings: ['Survivorship and selection bias apply: the universe is today\'s chosen tickers.'], assumptions: ['Daily bars, long-only.'], provenance: { datasetSha256: 'b'.repeat(64), candidateTrades: 205 }, robustness: null,
+    warnings: ['Survivorship and selection bias apply: the universe is today\'s chosen tickers.'], assumptions: ['Daily bars, long-only.'], provenance: { datasetSha256: (revised ? 'c' : 'b').repeat(64), workerSha256: 'd'.repeat(64), candidateTrades: 205 }, robustness: null,
   };
 }
-const brief = (r) => ({ runId: r.runId, savedAt: r.savedAt, strategy: r.strategy, universe: r.universe, benchmarkSymbol: r.benchmark, window: r.window, settings: r.settings, cagrPct: r.performance.strategy.cagrPct, sharpe: 1.19, maxDrawdownPct: -15.7, benchmarkCagrPct: BENCH, closedTrades: 79, validation: r.validation, robustnessChecks: r.robustness?.summary ?? null });
+const brief = (r) => ({ runId: r.runId, savedAt: r.savedAt, strategy: r.strategy, universe: r.universe, benchmarkSymbol: r.benchmark, window: r.window, settings: r.settings, cagrPct: r.performance.strategy.cagrPct, sharpe: 1.19, maxDrawdownPct: -15.7, benchmarkCagrPct: BENCH, closedTrades: 79, validation: r.validation, datasetSha256: r.provenance.datasetSha256, workerSha256: r.provenance.workerSha256, robustnessChecks: r.robustness?.summary ?? null });
 const wait = (req, ms) => new Promise((resolve) => { const t = setTimeout(() => resolve(true), ms); req.socket.once('close', () => { clearTimeout(t); resolve(false); }); });
 
 export async function quantRoute(req, res, p, u, json, readBody) {
-  if (p === '/__test/quant-reset') { runs = []; return json(res, 200, { ok: true }); }
+  if (p === '/__test/quant-reset') { runs = []; revised = false; return json(res, 200, { ok: true }); }
+  if (p === '/__test/quant-revise') { revised = true; return json(res, 200, { ok: true }); }
   if (p === '/strategies') return json(res, 200, { strategies: [...Object.entries(PROFILES).map(([key, x]) => ({ id: `${key}@1.0.0`, key, name: x.name, mechanical: true, kind: 'trade', status: 'backtested' })), { id: 'notes@1.0.0', key: 'notes', name: 'Discretionary notes', mechanical: false, kind: 'trade', status: 'idea' }] });
   if (p === '/quant/runs' && req.method === 'GET') return json(res, 200, { validation: 'In-sample only: no out-of-sample test has been run.', survivorship: 'Survivorship applies.', maxSaved: 100, runs: runs.map(brief) });
   if (p === '/quant/runs' && req.method === 'POST') {

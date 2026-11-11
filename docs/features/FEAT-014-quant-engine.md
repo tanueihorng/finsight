@@ -128,6 +128,18 @@ Evidence rules:
 
 Verification: `web/src/features/quant/quant.test.ts` covers formatting, form limits, chart geometry, comparison rules and answer wording. `web/e2e/QUANT*.spec.ts` drives the workspace against a synthetic agent, and agent tests cover the routes. A manual browser run used real public prices on isolated data, with four strategies on 13 stocks.
 
+## Review fixes (2026-11-11)
+
+An independent review of `328b26e` found three defects. Each is fixed, with a test that fails if the fix is removed.
+
+| Finding | Fix |
+|---|---|
+| A robustness study could be saved against a result it did not reproduce (`baseMatchesRun: false`) | `validate_quant_run` first recomputes the run from its stored bars and refuses (`QUANT_RESULT_CHANGED`) unless the result hash and every section match. It then refuses (`QUANT_BASE_MISMATCH`) unless the study's full-window baseline equals the saved run in window, growth, Sharpe, drawdown and trade count. Nothing is saved on refusal, and reads hide any older unmatched study. |
+| Compare could show runs on revised prices as one test | Run summaries carry the dataset and replay-code fingerprints. Compare requires both to match, and a run without them stands alone. |
+| A non-USD or unreported benchmark currency was accepted | FinSight history now reports whether Yahoo sent a currency (`meta.currencyReported`). The benchmark must be reported USD or the backtest is refused. Stocks not reported as USD are excluded with a warning. History cache keys moved to `hv2:` so no entry without the flag is served. |
+
+The four real saved runs were re-validated with the stricter code: all passed both guards and gave the same studies, byte for byte.
+
 ## Later milestones (not selected)
 
 | Order | Work | Note |

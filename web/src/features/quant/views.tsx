@@ -180,7 +180,7 @@ export function Compare({ runs, selected, names, onSelect, onCheck, busy }: { ru
         </tr>
       ))}</tbody>
     </table></div>
-    {hidden > 0 && <p className={s.emptyLine}>{hidden} other saved {hidden === 1 ? 'run is' : 'runs are'} left out because {hidden === 1 ? 'it uses' : 'they use'} different stocks, dates or settings, or {hidden === 1 ? 'is' : 'are'} an older copy.</p>}
+    {hidden > 0 && <p className={s.emptyLine}>{hidden} other saved {hidden === 1 ? 'run is' : 'runs are'} left out because {hidden === 1 ? 'it uses' : 'they use'} different stocks, dates, settings, price data or replay code, or {hidden === 1 ? 'is' : 'are'} an older copy.</p>}
     {checked.length > 0 && <div className={s.halves}>
       <section className={s.pad} aria-label="Intervals">
         <h3 className={s.sectH}>Yearly lead over {benchmark}: run result and {checked[0]!.robustness.bootstrap.confidencePct}% interval</h3>

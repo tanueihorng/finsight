@@ -21,7 +21,7 @@ export type Markets = Record<string, (Quote & { label: string })[]>;
 /** lib/market.ts getHistory: only c is filtered for null, other OHLCV may be absent. */
 export interface HistoryPoint { t: number; c: number; o?: number | null; h?: number | null; l?: number | null; v?: number | null; adj?: number | null }
 /** lib/market.ts getHistory, server.ts GET /api/history. */
-export interface History { symbol: string; range: string; interval: string; meta: QuotedQuote | null; points: HistoryPoint[]; cache?: { cachedAt: string; status: 'fresh' | 'stale-revalidating' | 'stale-fallback' } }
+export interface History { symbol: string; range: string; interval: string; meta: (QuotedQuote & { currencyReported?: boolean }) | null; points: HistoryPoint[]; cache?: { cachedAt: string; status: 'fresh' | 'stale-revalidating' | 'stale-fallback' } }
 
 /** lib/portfolio.ts listAccounts (a summary, not the on-disk account). */
 export interface Account { id: string; name: string; type: string; count: number }

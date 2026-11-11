@@ -19,7 +19,7 @@ const study = (statuses: Partial<Record<string, 'pass' | 'fail' | 'insufficient'
   };
 };
 const run = (r: Robustness | null, strategy = 'matrend@1.0.0', excess = 6.7) => ({ runId: strategy, strategy, benchmark: 'SPY', performance: { strategy: { cagrPct: 18.19, maxDrawdownPct: -15.7 }, benchmark: { cagrPct: 11.48, maxDrawdownPct: -24.5 }, excess: { cagrPct: excess } }, robustness: r } as unknown as Run);
-const summary = (id: string, strategy: string, extra: Partial<RunSummary> = {}) => ({ runId: id, strategy, universe: ['B', 'A'], benchmarkSymbol: 'SPY', window: { start: 'a', end: 'b', tradingDays: 2 }, settings: { years: 5 }, ...extra } as unknown as RunSummary);
+const summary = (id: string, strategy: string, extra: Partial<RunSummary> = {}) => ({ runId: id, strategy, universe: ['B', 'A'], benchmarkSymbol: 'SPY', window: { start: 'a', end: 'b', tradingDays: 2 }, settings: { years: 5 }, datasetSha256: 'data', workerSha256: 'code', ...extra } as unknown as RunSummary);
 
 test('numbers keep their sign, use a real minus and show gaps as a dash', () => {
   assert.equal(pct(-1.676), '−1.68%');
@@ -123,6 +123,14 @@ test('compare keeps the newest run of each strategy for one identical test', () 
   assert.equal(out.hidden, 2);
   assert.deepEqual(comparable(runs, runs[1]!).rows.map((r) => r.runId), ['2', '1'], 'the selected run stands for its strategy');
   assert.deepEqual(comparable(runs, null), { rows: [], hidden: 0 });
+});
+
+test('compare leaves out runs on different price data or replay code, and unfingerprinted runs stand alone', () => {
+  const runs = [summary('3', 'a@1'), summary('2', 'b@1', { datasetSha256: 'revised' }), summary('1', 'c@1', { workerSha256: 'newer' }), summary('0', 'd@1')];
+  assert.deepEqual(comparable(runs, runs[0]!).rows.map((r) => r.runId), ['3', '0']);
+  assert.equal(comparable(runs, runs[0]!).hidden, 2);
+  const legacy = [summary('9', 'a@1', { datasetSha256: null }), summary('8', 'b@1', { datasetSha256: null })];
+  assert.deepEqual(comparable(legacy, legacy[0]!), { rows: [legacy[0]], hidden: 1 });
 });
 
 test('compare order is by checks passed, then name, whatever the returns', () => {

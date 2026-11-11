@@ -87,10 +87,25 @@ async function simulate(ctx: ToolCtx, strategy: Strategy, bars: Record<string, B
   const { ok: _ok, warnings: replayWarnings, strategy: strategyMetrics, benchmark: benchmarkMetrics, excess, ...measured } = replay;
   return {
     figures: { performance: round({ strategy: strategyMetrics, benchmark: benchmarkMetrics, excess }), ...(round(measured) as object) } as Record<string, unknown>,
-    replayWarnings: replayWarnings as string[], engineWarnings, candidateTrades: candidates.length,
+    replayWarnings: replayWarnings as string[], engineWarnings, candidates, candidateTrades: candidates.length,
     hashes: { engineSha256: engineHash(ctx, strategy.origin), workerSha256: workerHash(), candidatesSha256: digest(candidates), resultSha256: digest(replay) },
   };
 }
+
+/** Sections of a recomputed run whose figures differ from the saved ones. */
+const changedSections = (figures: Record<string, unknown>, stored: Record<string, any>) => Object.keys(figures).filter((key) => JSON.stringify(figures[key]) !== JSON.stringify(stored[key]));
+
+/** The checks' own full-window baseline must equal the saved run, field by field. */
+export function baseMatches(base: Record<string, any>, stored: Record<string, any>) {
+  const { window: w, performance: p, trading: t } = stored;
+  return base.start === w.start && base.end === w.end && base.tradingDays === w.tradingDays
+    && base.cagrPct === p.strategy.cagrPct && base.benchmarkCagrPct === p.benchmark.cagrPct && base.excessCagrPct === p.excess.cagrPct
+    && base.sharpe === p.strategy.sharpe && base.benchmarkSharpe === p.benchmark.sharpe && base.maxDrawdownPct === p.strategy.maxDrawdownPct
+    && base.trades === t.closedTrades + t.openTrades;
+}
+
+/** A study is shown only when it was checked against the run it is stored with. */
+const matchedStudy = (robustness: Record<string, any> | null) => robustness && robustness.baseMatchesRun === true ? robustness : null;
 
 /** The strategy and inputs of a saved run, exactly as they were stored. */
 async function rebuild(ctx: ToolCtx, run: SavedRun) {
@@ -107,12 +122,14 @@ function runSummary(id: string, createdAt: number, result: Record<string, any>, 
     runId: id, savedAt: new Date(createdAt).toISOString(), strategy: result.strategy, universe: result.universe, benchmarkSymbol: result.benchmark, window: result.window, settings: result.settings,
     cagrPct: result.performance.strategy.cagrPct, sharpe: result.performance.strategy.sharpe, maxDrawdownPct: result.performance.strategy.maxDrawdownPct,
     benchmarkCagrPct: result.performance.benchmark.cagrPct, closedTrades: result.trading.closedTrades, validation: result.validation,
-    robustnessChecks: robustness ? robustness.summary : null,
+    datasetSha256: result.provenance?.datasetSha256 ?? null, workerSha256: result.provenance?.workerSha256 ?? null,
+    robustnessChecks: matchedStudy(robustness)?.summary ?? null,
   };
 }
 
 /** Verdicts and limits without the per-study tables, so a saved run fits in one tool result. */
-function robustnessBrief(robustness: Record<string, any> | null) {
+function robustnessBrief(stored: Record<string, any> | null) {
+  const robustness = matchedStudy(stored);
   if (!robustness) return null;
   const { base: _base, time: _time, universe: _universe, cost: _cost, bootstrap: _bootstrap, design: _design, ...brief } = robustness;
   return { ...brief, fullStudy: "Call get_quant_run with detail: 'robustness' for the per-study tables." };
@@ -126,7 +143,7 @@ export function listQuantRuns(db: DB, limit: number) {
 /** One saved run with its full robustness study, without the stored price series. */
 export function readQuantRun(db: DB, id: string) {
   const run = loadRun(db, id);
-  return { runId: run.id, savedAt: new Date(run.createdAt).toISOString(), ...run.result, robustness: run.robustness };
+  return { runId: run.id, savedAt: new Date(run.createdAt).toISOString(), ...run.result, robustness: matchedStudy(run.robustness) };
 }
 
 export const quantTools: ToolDef[] = [
@@ -160,6 +177,11 @@ export const quantTools: ToolDef[] = [
       const warnings: string[] = [];
       const bench = cleanSeries(benchmarkSymbol, results[benchmarkSymbol]?.points || [], now);
       if (bench.bars.length < MIN_BARS) throw new AgentError('NO_DATA', `Not enough history for benchmark ${benchmarkSymbol}.`);
+      const reportedCurrency = (row: any): string | undefined => row?.meta?.currencyReported === true ? row.meta.currency : undefined;
+      const benchCurrency = reportedCurrency(results[benchmarkSymbol]);
+      if (benchCurrency !== 'USD') throw new AgentError('BAD_INPUT', benchCurrency
+        ? `Benchmark ${benchmarkSymbol} is priced in ${benchCurrency}. This version compares in US dollars only, so choose a USD benchmark such as SPY.`
+        : `The currency of benchmark ${benchmarkSymbol} could not be confirmed as US dollars, so it cannot be used.`);
       const windowWarning = benchmarkWindowWarning(q.years, bench.bars);
       if (windowWarning) warnings.push(windowWarning);
       warnings.push(...bench.warnings);
@@ -167,10 +189,10 @@ export const quantTools: ToolDef[] = [
       const bars: Record<string, Bar[]> = {};
       for (const symbol of symbols) {
         const row = results[symbol];
-        const currency = row?.meta?.currency;
-        if (currency && currency !== 'USD') { warnings.push(`${symbol}: excluded, priced in ${currency} and this version is USD only.`); continue; }
         const cleaned = cleanSeries(symbol, row?.points || [], now);
         if (cleaned.bars.length < MIN_BARS) { warnings.push(`${symbol}: excluded, only ${cleaned.bars.length} usable bars.`); continue; }
+        const currency = reportedCurrency(row);
+        if (currency !== 'USD') { warnings.push(currency ? `${symbol}: excluded, priced in ${currency} and this version is USD only.` : `${symbol}: excluded, its currency could not be confirmed as US dollars.`); continue; }
         warnings.push(...cleaned.warnings);
         bars[symbol] = cleaned.bars;
       }
@@ -214,18 +236,17 @@ export const quantTools: ToolDef[] = [
       }
       const run = loadRun(ctx.db, q.runId);
       const savedAt = new Date(run.createdAt).toISOString();
-      if (!q.reproduce && q.detail === 'robustness') return { runId: run.id, savedAt, robustness: run.robustness };
+      if (!q.reproduce && q.detail === 'robustness') return { runId: run.id, savedAt, robustness: matchedStudy(run.robustness) };
       if (!q.reproduce) return { runId: run.id, savedAt, ...run.result, robustness: robustnessBrief(run.robustness) };
 
       const { strategy, stored, benchmark, bars, calendar } = await rebuild(ctx, run);
       const current = await simulate(ctx, strategy, bars, benchmark, calendar, stored.settings);
       const was = stored.provenance;
-      const changedSections = Object.keys(current.figures).filter((key) => JSON.stringify(current.figures[key]) !== JSON.stringify(stored[key]));
       const candidatesMatch = current.hashes.candidatesSha256 === was.candidatesSha256;
       const resultMatch = current.hashes.resultSha256 === was.resultSha256;
       return {
         runId: run.id, savedAt, strategy: stored.strategy, validation: stored.validation, datasetVerified: true,
-        reproduced: candidatesMatch && resultMatch, candidatesMatch, resultMatch, changedSections,
+        reproduced: candidatesMatch && resultMatch, candidatesMatch, resultMatch, changedSections: changedSections(current.figures, stored),
         engineChanged: current.hashes.engineSha256 !== was.engineSha256, workerChanged: current.hashes.workerSha256 !== was.workerSha256,
         stored: { engineSha256: was.engineSha256, workerSha256: was.workerSha256, candidatesSha256: was.candidatesSha256, resultSha256: was.resultSha256 }, current: current.hashes,
       };
@@ -239,13 +260,19 @@ export const quantTools: ToolDef[] = [
     async handler(q, ctx) {
       const run = loadRun(ctx.db, q.runId);
       const { strategy, stored, benchmark, bars, calendar } = await rebuild(ctx, run);
-      const { candidates } = await engineCandidates(ctx, strategy, bars);
-      if (digest(candidates) !== stored.provenance.candidatesSha256) throw new AgentError('QUANT_ENGINE_CHANGED', 'The strategy engine no longer produces this run\'s trades. Run a new backtest and validate that.');
+      // Checks describe a saved result only if that result still comes out of its stored prices.
+      const current = await simulate(ctx, strategy, bars, benchmark, calendar, stored.settings);
+      const { candidates } = current;
+      if (current.hashes.candidatesSha256 !== stored.provenance.candidatesSha256) throw new AgentError('QUANT_ENGINE_CHANGED', 'The strategy engine no longer produces this run\'s trades. Run a new backtest and validate that.');
+      if (current.hashes.resultSha256 !== stored.provenance.resultSha256 || changedSections(current.figures, stored).length) {
+        throw new AgentError('QUANT_RESULT_CHANGED', 'Recomputing this run from its stored prices no longer gives the saved result, so checks would describe a different result. Run a new backtest and validate that.');
+      }
       const { ok: _ok, ...study } = await runQuantWorker<Record<string, any>>({ version: 1, op: 'validate', calendar, bars, candidates, benchmark, config: workerConfig(stored.settings) }, ctx.signal, ROBUSTNESS_MS);
       const figures = round(study) as Record<string, any>;
       const summary = { pass: 0, fail: 0, insufficient: 0 } as Record<string, number>;
       for (const check of figures.checks) summary[check.status]!++;
-      const baseMatchesRun = figures.base.cagrPct === stored.performance.strategy.cagrPct && figures.base.benchmarkCagrPct === stored.performance.benchmark.cagrPct;
+      if (!baseMatches(figures.base, stored)) throw new AgentError('QUANT_BASE_MISMATCH', 'The checks\' full-window baseline does not match the saved run, so the checks were not saved. Run a new backtest and validate that.');
+      const baseMatchesRun = true;
       const robustness = {
         validatedAt: new Date().toISOString(), strategy: stored.strategy, status: stored.status, label: ROBUSTNESS_LABEL, summary, ...figures, baseMatchesRun,
         warnings: [SURVIVORSHIP], limits: ROBUSTNESS_LIMITS,

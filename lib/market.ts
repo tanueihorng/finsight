@@ -227,7 +227,8 @@ export async function getHistory(symbol: string, range = '1mo', interval = '1d')
   // can be served stale while it refreshes, and persisted across restarts.
   const intraday = /m$|h$/.test(interval);
   const ttl = intraday ? 60000 : (range === '1d' || range === '5d') ? 5 * 60000 : 15 * 60000;
-  const result = await cachedWithStatus(`h:${symbol}:${range}:${interval}`, ttl, () => fetchHistory(symbol, range, interval),
+  // hv2: entries carry meta.currencyReported, so none saved before it was added are served.
+  const result = await cachedWithStatus(`hv2:${symbol}:${range}:${interval}`, ttl, () => fetchHistory(symbol, range, interval),
     { stale: intraday ? 0 : 7 * 24 * 60 * 60000, persist: !intraday });
   return { ...result.value, cache: result.cache };
 }
@@ -248,7 +249,9 @@ async function fetchHistory(symbol: string, range: string, interval: string): Pr
   const points = ts
     .map((t, i) => ({ t: t * 1000, o: opens[i], h: highs[i], l: lows[i], c: closes[i], v: vols[i], ...(adj ? { adj: adj[i] } : {}) }))
     .filter((p) => p.c != null) as HistoryPoint[]; // c is a number after the filter
-  return { symbol, range, interval, meta: result.meta ? normalizeQuote(symbol, result.meta) : null, points };
+  // normalizeQuote fills a missing currency with USD for display; currencyReported
+  // tells callers that must not assume (portfolio backtests) whether Yahoo sent one.
+  return { symbol, range, interval, meta: result.meta ? { ...normalizeQuote(symbol, result.meta), currencyReported: Boolean(result.meta.currency) } : null, points };
 }
 
 export function search(q: string): Promise<SearchResult[]> {

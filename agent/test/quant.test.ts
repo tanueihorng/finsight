@@ -11,6 +11,7 @@ import { QUANT_PYTHON, runQuantWorker } from '../src/quant/host.ts';
 import { MAX_SAVED_RUNS, digest, listRuns, saveRun } from '../src/quant/runs.ts';
 import { openDb } from '../src/store/db.ts';
 import { buildRegistry } from '../src/tools/index.ts';
+import { baseMatches, listQuantRuns, readQuantRun } from '../src/tools/quant.ts';
 import { fakeFinsight, testConfig, testCtx, PROXY_SECRET } from './helpers.ts';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -264,6 +265,77 @@ test('validate_quant_run refuses when the engine no longer produces the saved tr
     assert.equal(out.ok, false);
     assert.match(out.content, /QUANT_ENGINE_CHANGED/);
     assert.equal((db.prepare('SELECT robustness_json j FROM quant_runs').get() as any).j, null);
+  } finally { db.close(); }
+});
+
+test('validate_quant_run refuses when the saved result no longer comes out of its stored prices, and saves nothing', needsWorker, async () => {
+  const s = await savedRun();
+  const db = openDb(s.file);
+  try {
+    const r = JSON.parse((db.prepare('SELECT result_json j FROM quant_runs').get() as any).j);
+    r.performance.strategy.cagrPct += 10;
+    db.prepare('UPDATE quant_runs SET result_json = ?').run(JSON.stringify(r));
+    const out = await s.registry.execute('validate_quant_run', { runId: s.saved.runId }, testCtx(s.cfg, db));
+    assert.equal(out.ok, false);
+    assert.match(out.content, /QUANT_RESULT_CHANGED/);
+    assert.equal((db.prepare('SELECT robustness_json j FROM quant_runs').get() as any).j, null);
+    r.performance.strategy.cagrPct -= 10; r.provenance.resultSha256 = 'different';
+    db.prepare('UPDATE quant_runs SET result_json = ?').run(JSON.stringify(r));
+    assert.match((await s.registry.execute('validate_quant_run', { runId: s.saved.runId }, testCtx(s.cfg, db))).content, /QUANT_RESULT_CHANGED/);
+  } finally { db.close(); }
+});
+
+test('the baseline guard compares every shared figure, and a study saved without a match is never shown', needsWorker, async () => {
+  const s = await savedRun();
+  const db = openDb(s.file);
+  try {
+    const study = content(await s.registry.execute('validate_quant_run', { runId: s.saved.runId }, testCtx(s.cfg, db)));
+    assert.equal(baseMatches(study.base, s.saved), true);
+    const nudged: [string, (b: any, r: any) => void][] = [
+      ['start', (b) => { b.start = '1999-01-01'; }], ['end', (b) => { b.end = '1999-01-01'; }], ['days', (b) => { b.tradingDays++; }],
+      ['cagr', (b) => { b.cagrPct += 1e-4; }], ['benchmark cagr', (b) => { b.benchmarkCagrPct += 1e-4; }], ['excess', (b) => { b.excessCagrPct += 1e-4; }],
+      ['sharpe', (b) => { b.sharpe += 1e-4; }], ['benchmark sharpe', (b) => { b.benchmarkSharpe += 1e-4; }], ['drawdown', (b) => { b.maxDrawdownPct += 1e-4; }],
+      ['trades', (b) => { b.trades++; }], ['open trades', (_b, r) => { r.trading.openTrades++; }],
+    ];
+    for (const [name, change] of nudged) {
+      const base = structuredClone(study.base), run = structuredClone(s.saved);
+      change(base, run);
+      assert.equal(baseMatches(base, run), false, name);
+    }
+    const old = JSON.parse((db.prepare('SELECT robustness_json j FROM quant_runs').get() as any).j);
+    db.prepare('UPDATE quant_runs SET robustness_json = ?').run(JSON.stringify({ ...old, baseMatchesRun: false }));
+    assert.equal(content(await ask(s, db, { runId: s.saved.runId })).robustness, null);
+    assert.equal(content(await ask(s, db, { runId: s.saved.runId, detail: 'robustness' })).robustness, null);
+    assert.equal(content(await ask(s, db, {})).runs[0].robustnessChecks, null);
+    assert.equal(readQuantRun(db, s.saved.runId).robustness, null);
+    assert.equal(listQuantRuns(db, 5).runs[0]!.robustnessChecks, null);
+  } finally { db.close(); }
+});
+
+test('backtests compare in US dollars only: a benchmark must be confirmed USD, and other stocks are left out', async () => {
+  const run = async (currency: Record<string, string | null>, symbols = ['AAA', 'BBBB']) => {
+    const fake = await fakeFinsight({ currency });
+    try { return await buildRegistry().execute('backtest_portfolio', { ...savedArgs, symbols }, testCtx(testConfig(fake))); }
+    finally { await fake.close(); }
+  };
+  assert.match((await run({ SPY: 'EUR' })).content, /BAD_INPUT.*Benchmark SPY is priced in EUR/);
+  assert.match((await run({ SPY: null })).content, /BAD_INPUT.*could not be confirmed as US dollars/);
+  if (needsWorker.skip) return;
+  const out = content(await run({ CCC: 'GBP', DDDD: null }, ['AAA', 'BBBB', 'CCC', 'DDDD']));
+  assert.deepEqual(out.universe, ['AAA', 'BBBB']);
+  assert.ok(out.warnings.includes('CCC: excluded, priced in GBP and this version is USD only.'));
+  assert.ok(out.warnings.includes('DDDD: excluded, its currency could not be confirmed as US dollars.'));
+  assert.match((await run({ AAA: 'EUR', BBBB: null })).content, /NO_DATA/);
+});
+
+test('saved-run summaries carry the data and replay fingerprints that comparisons need', needsWorker, async () => {
+  const s = await savedRun();
+  const db = openDb(s.file);
+  try {
+    const [row] = listQuantRuns(db, 5).runs;
+    assert.equal(row!.datasetSha256, s.saved.provenance.datasetSha256);
+    assert.equal(row!.workerSha256, s.saved.provenance.workerSha256);
+    assert.match(String(row!.datasetSha256), /^[0-9a-f]{64}$/);
   } finally { db.close(); }
 });
 

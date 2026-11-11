@@ -9,7 +9,7 @@ export interface Window { start: string; end: string; tradingDays: number }
 export interface Summary { pass: number; fail: number; insufficient: number }
 export interface RunSummary {
   runId: string; savedAt: string; strategy: string; universe: string[]; benchmarkSymbol: string; window: Window; settings: Settings;
-  cagrPct: number | null; sharpe: number | null; maxDrawdownPct: number | null; benchmarkCagrPct: number | null; closedTrades: number; validation: string; robustnessChecks: Summary | null;
+  cagrPct: number | null; sharpe: number | null; maxDrawdownPct: number | null; benchmarkCagrPct: number | null; closedTrades: number; validation: string; datasetSha256: string | null; workerSha256: string | null; robustnessChecks: Summary | null;
 }
 export interface RunList { validation: string; survivorship: string; maxSaved: number; runs: RunSummary[] }
 export interface StudyRow { start: string; end: string; tradingDays: number; cagrPct: number | null; benchmarkCagrPct: number | null; excessCagrPct: number | null; sharpe: number | null; benchmarkSharpe: number | null; maxDrawdownPct: number | null; trades: number }
@@ -191,11 +191,13 @@ export function bar(v: number | null | undefined, scale: [number, number]): Bar 
 
 // ---- comparing runs ------------------------------------------------------------------
 export const COMPARE_MAX = 8;
-const studyKey = (r: RunSummary) => JSON.stringify([[...r.universe].sort(), r.benchmarkSymbol, r.window.start, r.window.end, r.settings]);
-// Only runs of the same test belong side by side: the same stocks, window and
-// settings. The newest run of each strategy stands for it.
+const studyKey = (r: RunSummary) => JSON.stringify([[...r.universe].sort(), r.benchmarkSymbol, r.window.start, r.window.end, r.settings, r.datasetSha256, r.workerSha256]);
+// Only runs of the same test belong side by side: the same stocks, window,
+// settings, price data (by fingerprint) and replay code. A run without
+// fingerprints matches nothing but itself. The newest run of each strategy stands for it.
 export function comparable(runs: RunSummary[], selected: RunSummary | null): { rows: RunSummary[]; hidden: number } {
   if (!selected) return { rows: [], hidden: 0 };
+  if (!selected.datasetSha256 || !selected.workerSha256) return { rows: [selected], hidden: runs.length - 1 };
   const key = studyKey(selected), seen = new Set<string>(), rows: RunSummary[] = [];
   const same = runs.filter((r) => studyKey(r) === key);
   for (const r of same) {

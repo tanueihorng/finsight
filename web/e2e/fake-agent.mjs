@@ -88,7 +88,7 @@ const server = http.createServer(async (req, res) => {
   const m = p.match(/^\/threads\/([^/]+)(\/[a-z]+)?$/);
   const t = m && threads.get(m[1]);
 
-  if (p === '/strategies' || p.startsWith('/quant/') || p === '/__test/quant-reset') return void quantRoute(req, res, p, u, json, readBody);
+  if (p === '/strategies' || p.startsWith('/quant/') || p.startsWith('/__test/quant-')) return void quantRoute(req, res, p, u, json, readBody);
   if (req.method === 'GET' && p === '/info') return json(res, 200, { name: 'Kestrel', version: 'fake' });
   if (req.method === 'GET' && p === '/brains') return json(res, 200, { brains: [{ id: 'fake', label: 'Fake model', costTier: '$', available: true }], default: 'fake' });
   if (req.method === 'GET' && p === '/search-providers') return json(res, 200, { default: 'tavily', providers: [

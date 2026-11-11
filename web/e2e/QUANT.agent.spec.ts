@@ -72,19 +72,22 @@ test('the rail opens the matching plain-English answer, which reports results wi
   await expect(panel).not.toContainText(/because/i);
 });
 
-test('compare sorts by checks passed, not return, and leaves out runs of a different test', async ({ page }) => {
+test('compare sorts by checks passed, not return, and leaves out runs of a different test or different price data', async ({ page }) => {
+  test.setTimeout(60_000); // six backtests in one test
   await open(page);
   await runBacktest(page, 'RSI-2');
   await runBacktest(page, 'Breakout');
   await runBacktest(page, 'MA trend');
   await runBacktest(page, 'MA trend', 'AAA, ZZZ', /passed/);
+  expect((await page.request.post(`${FAKE_AGENT}/v1/__test/quant-revise`)).ok()).toBe(true);
+  await runBacktest(page, 'RSI-2');
   await lab(page).getByLabel('Saved runs').getByRole('button', { name: /Breakout/ }).click();
   await lab(page).getByRole('tab', { name: 'Compare' }).click();
   const panel = lab(page).getByRole('tabpanel');
   await expect(panel).toContainText('raises the odds that it won by luck');
   const names = panel.locator('table').first().locator('tbody th');
   await expect(names).toHaveText(['MA trend', 'Breakout', 'RSI-2']);
-  await expect(panel).toContainText('1 other saved run is left out');
+  await expect(panel).toContainText('2 other saved runs are left out');
   await names.nth(0).getByRole('button').click();
   await expect(lab(page).getByRole('heading', { name: /MA trend/ })).toBeVisible();
 });
