@@ -15,6 +15,12 @@ The earlier draft with unverified release numbers is preserved in `docs/archive/
 
 ## Unreleased
 
+- `QUANT-001` Quant Engine and Quant Lab ([FEAT-014](docs/features/FEAT-014-quant-engine.md)), merged on GitHub in PR #3 on 2026-11-11; not deployed to the personal app.
+  - Portfolio backtests replay in a sandboxed Python worker with cash, slots, costs, dividends from the adjusted close and a reconciled ledger (`88d2b28`). Runs are saved with their bars and data and code fingerprints, and can be reproduced exactly. Fixed robustness checks: time holdout, period consistency, universe halves, single-name removal, cost stress and a block bootstrap.
+  - Quant Lab workbench with run, results, checks and compare views (`328b26e`).
+  - Review fixes (`e193d8a`, `d980bb9`, `bf7fb0b`): checks are saved only when the run reproduces and the baseline matches, compare needs identical data and code, backtests use USD only, price-only fallback looks only at the test window, older weakly checked studies are hidden, and a dividend gap is told apart from no adjusted close.
+  - Verified: 40 Python tests; the independent checks match a reference model and vectorbt on 1500 generated portfolios; mutation 517/527 with the 10 survivors reviewed; agent 302 with secret scan; browser suite 302 with one existing phone screenshot failure; a live public-price run reproduced exactly.
+
 - Council specialists that answer without researching but list missing evidence are asked once to search (`508444b`, merged locally; not pushed). Live TSM rerun 2026-11-03 on the demo: 7/7 stages, US$0.0833, 107 s. Macro searched unprompted and Growth searched after the follow-up (4 searches; the TSMC investor-relations page returned HTTP 403). No P/E was computed from the 2024 trailing data. The chair still gave no computed range because forward estimates conflicted across sources.
 
 - `valuation_metrics` no longer computes P/E, earnings yield or price-to-sales from trailing figures that ended more than 18 months ago; the figures are still reported with a gap. Found in a live TSM Council run on 2026-11-02 (demo, 7/7 stages, US$0.0465): SEC data held only TSMC's FY2024 20-F, giving a P/E of 59.6 on 22-month-old EPS. The chair flagged it as stale. No specialist requested web search or other research tools in that run. Merged locally; not pushed.
