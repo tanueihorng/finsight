@@ -144,7 +144,7 @@ const symbolList = (u: URL): string[] => {
   return [...seen.values()];
 };
 
-// FEAT-014/015: whole-book weights (% of net worth) and the guardrail report, shared by several panels.
+// FEAT-017/015: whole-book weights (% of net worth) and the guardrail report, shared by several panels.
 type BookView = Awaited<ReturnType<typeof portfolioWithQuotes>>;
 function bookWeights(all: BookView) {
   return all.positions.map((x) => ({ symbol: x.symbol, weight: all.summary.netWorth > 0 ? (x.marketValue / all.summary.netWorth) * 100 : 0, last: x.last, currency: x.currency }));
@@ -478,7 +478,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       return sendJson(res, 200, await dividendsReport(base, acct));
     }
     if (p === '/api/guardrails' || p === '/api/guardrails/limits') {
-      // FEAT-014: whole-book exposures against the user's own limits (read-only; flags, never orders).
+      // FEAT-017: whole-book exposures against the user's own limits (read-only; flags, never orders).
       if (p === '/api/guardrails/limits' && req.method === 'POST') {
         try { guardrails.saveLimits((await readBody(req)).limits); }
         catch (e) { return sendJson(res, 400, { error: (e as Error).message }); }
@@ -486,7 +486,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       return sendJson(res, 200, await guardrailReport(base));
     }
     if (p === '/api/theses' || p.startsWith('/api/theses/')) {
-      // FEAT-014 §2: owner-written theses joined with whole-book holdings.
+      // FEAT-017 §2: owner-written theses joined with whole-book holdings.
       if (req.method === 'POST') {
         const b = await readBody(req);
         try {
@@ -555,7 +555,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       } catch (e) { return sendJson(res, 400, { error: (e as Error).message }); }
       return sendJson(res, 404, { error: 'Unknown endpoint' });
     }
-    if (p === '/api/decisions' && req.method === 'GET') return sendJson(res, 200, decisionsReport()); // FEAT-014 §3, read-only
+    if (p === '/api/decisions' && req.method === 'GET') return sendJson(res, 200, decisionsReport()); // FEAT-017 §3, read-only
     if (p === '/api/events') return sendJson(res, 200, await upcomingEvents(acct));
     if (p === '/api/discover') return sendJson(res, 200, await discover(acct));
     if (p === '/api/settings/withholding' && req.method === 'POST') {

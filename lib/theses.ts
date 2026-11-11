@@ -1,4 +1,4 @@
-// Thesis tracker (FEAT-014 §2): one written thesis per symbol, following the
+// Thesis tracker (FEAT-017 §2): one written thesis per symbol, following the
 // owner's policy §6 — role, value mechanism, valuation range, invalidation
 // triggers, review cadence and dated checks. FinSight never writes a thesis or a
 // verdict on its own; it only stores what the owner enters and reports what is due.

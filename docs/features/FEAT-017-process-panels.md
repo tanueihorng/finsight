@@ -1,4 +1,4 @@
-# FEAT-014: Process panels (guardrails, theses, decisions)
+# FEAT-017: Process panels (guardrails, theses, decisions)
 
 Status: in progress on branch `feat/policy-guardrails` (worktree `finsight-wt/guardrails`), not merged · 2026-11-07
 Execution task: `GUARDRAILS-001` (selected by the user 2026-11-07, items 1–3 of a ten-item build list).

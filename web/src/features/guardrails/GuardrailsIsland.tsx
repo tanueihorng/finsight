@@ -1,4 +1,4 @@
-// FEAT-014 Policy guardrails: live exposures against the user's own limits.
+// FEAT-017 Policy guardrails: live exposures against the user's own limits.
 // Nothing here is an instruction to trade: a breach asks for a review.
 import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';

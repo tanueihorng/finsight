@@ -1,6 +1,6 @@
 # FEAT-015: Process tools (after-cost returns, valuation column, cost-basis review, event radar, weekly digest, backtester and paper promotion)
 
-Status: implemented on branch `feat/process-tools` (worktree `finsight-wt/process-tools`, stacked on `feat/policy-guardrails` / FEAT-014), not merged, pushed or deployed · 2026-11-07
+Status: implemented on branch `feat/process-tools` (worktree `finsight-wt/process-tools`, stacked on `feat/policy-guardrails` / FEAT-017), not merged, pushed or deployed · 2026-11-07
 Execution task: `PROCESSTOOLS-001` (selected by the user 2026-11-07, items 4–10 of a ten-item build list).
 
 ## Intent
@@ -35,7 +35,7 @@ built-in strategies. None of it places, drafts or approves an order.
 
 ## 2. Valuation column (Positions, `VS FAIR`)
 
-- Price against the low/high range written in the holding's thesis (FEAT-014 §2). It shows BELOW n%,
+- Price against the low/high range written in the holding's thesis (FEAT-017 §2). It shows BELOW n%,
   IN RANGE or ABOVE n%. A range in a different currency from the price shows `ccy?` and is not converted.
 - The column appears only when at least one thesis has a range, so the table is unchanged until then.
 

@@ -1,4 +1,4 @@
-// FEAT-014 §3 decision-log shapes, shared by lib/decisions.ts and the web panel.
+// FEAT-017 §3 decision-log shapes, shared by lib/decisions.ts and the web panel.
 export type DecisionTag = 'pending' | 'decided' | 'unknown';
 export type ExecutionTag = 'none' | 'recorded' | 'unknown';
 export interface DecisionEntry {

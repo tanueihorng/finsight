@@ -1,4 +1,4 @@
-// FEAT-014 §3 Decision log: a read-only view of DECISION_LOG.md that keeps
+// FEAT-017 §3 Decision log: a read-only view of DECISION_LOG.md that keeps
 // proposals, user decisions and executions apart. FinSight never edits the log.
 import { useEffect, useState } from 'react';
 import { useDecisions } from '../../api/queries.ts';

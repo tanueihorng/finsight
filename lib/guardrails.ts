@@ -1,4 +1,4 @@
-// Policy guardrails (FEAT-014): compares the book's live exposures with limits
+// Policy guardrails (FEAT-017): compares the book's live exposures with limits
 // the user enters. FinSight never invents a limit: every kind starts UNSET, and a
 // limit is "proposed" until the user marks it "accepted". A breach is a flag for
 // review, never an order. Limits live in DATA_DIR/guardrails.json (personal,

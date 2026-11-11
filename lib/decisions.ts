@@ -1,4 +1,4 @@
-// Decision log view (FEAT-014 §3): a read-only parse of the owner's
+// Decision log view (FEAT-017 §3): a read-only parse of the owner's
 // DECISION_LOG.md. FinSight never writes the log. The user-decision and
 // execution lines are shown as written; the tags are only a coarse reading of
 // their first words so the panel can sort and flag "decided, not executed".

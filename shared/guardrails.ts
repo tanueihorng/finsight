@@ -1,4 +1,4 @@
-// FEAT-014 guardrail shapes, shared by lib/guardrails.ts and the web panel.
+// FEAT-017 guardrail shapes, shared by lib/guardrails.ts and the web panel.
 export const KINDS = {
   positionMax: { label: 'Largest single holding', unit: 'max % of net worth' },
   symbolMax: { label: 'Named holding', unit: 'max % of net worth' },

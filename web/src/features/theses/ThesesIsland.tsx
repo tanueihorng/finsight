@@ -1,4 +1,4 @@
-// FEAT-014 §2 Thesis tracker: the owner's written case per holding, its
+// FEAT-017 §2 Thesis tracker: the owner's written case per holding, its
 // disproving conditions and review dates. FinSight never writes a verdict.
 import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';

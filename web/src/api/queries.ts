@@ -201,21 +201,21 @@ export function useDividends() {
     queryFn: ({ signal }) => api<import('../../../shared/types.ts').DividendsReport>(`/api/dividends?base=${encodeURIComponent(base)}&account=${encodeURIComponent(account)}`, { signal }) });
 }
 
-/** FEAT-014: whole-book guardrails (not account-scoped: limits apply to the whole book). */
+/** FEAT-017: whole-book guardrails (not account-scoped: limits apply to the whole book). */
 export function useGuardrails() {
   const { base, enabled } = useScope();
   return useQuery({ queryKey: ['guardrails', base], enabled, staleTime: 120_000, refetchInterval: 120_000,
     queryFn: ({ signal }) => api<import('../../../shared/guardrails.ts').GuardrailReport>(`/api/guardrails?base=${encodeURIComponent(base)}`, { signal }) });
 }
 
-/** FEAT-014 §2: theses joined with whole-book holdings. */
+/** FEAT-017 §2: theses joined with whole-book holdings. */
 export function useTheses() {
   const { base, enabled } = useScope();
   return useQuery({ queryKey: ['theses', base], enabled, staleTime: 120_000, refetchInterval: 300_000,
     queryFn: ({ signal }) => api<import('../../../shared/theses.ts').ThesisReport>(`/api/theses?base=${encodeURIComponent(base)}`, { signal }) });
 }
 
-/** FEAT-014 §3: read-only parse of the owner's decision log. */
+/** FEAT-017 §3: read-only parse of the owner's decision log. */
 export function useDecisions() {
   const { enabled } = useScope();
   return useQuery({ queryKey: ['decisions'], enabled, staleTime: 60_000, refetchInterval: 300_000,

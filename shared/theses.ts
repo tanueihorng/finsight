@@ -1,4 +1,4 @@
-// FEAT-014 thesis shapes, shared by lib/theses.ts and the web panel.
+// FEAT-017 thesis shapes, shared by lib/theses.ts and the web panel.
 export const ROLES = ['core', 'tactical', 'unclassified'] as const;
 export type Role = typeof ROLES[number];
 export const TRIGGER_KINDS = ['business', 'valuation', 'portfolio-fit'] as const;
