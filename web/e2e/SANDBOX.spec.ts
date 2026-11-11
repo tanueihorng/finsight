@@ -42,6 +42,18 @@ test('pin an account and preview ordered trades, then reset without changing liv
   await expect(dialog.getByText('Assumed execution price', { exact: false })).toHaveCount(2);
   expect(await dialog.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
 
+  const price = second.getByLabel('Price', { exact: true });
+  await price.press('End');
+  await price.press('e');
+  await expect(second.getByRole('alert')).toContainText('Enter a price above zero');
+  await price.fill('200');
+  const openingCash = dialog.getByLabel(/Opening cash override/);
+  await openingCash.fill('20');
+  await openingCash.press('End');
+  await openingCash.press('e');
+  await expect(dialog.getByRole('alert')).toContainText('Enter an opening cash amount');
+  await openingCash.clear();
+
   await dialog.getByRole('button', { name: 'Move trade 2 up' }).click();
   await expect(dialog.getByRole('alert')).toContainText('Insufficient cash');
   await expect(dialog.getByRole('row', { name: /^Cash / }).last().locator('td')).toHaveText(['20.00', '—']);

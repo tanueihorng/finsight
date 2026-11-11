@@ -11,7 +11,8 @@ import { MAX_DRAFT_TRADES, QUOTE_AGE_LIMIT, SANDBOX_CURRENCY, SANDBOX_SYMBOL, pr
 
 type Row = { id: number; side: DraftTrade['side']; symbol: string; quantity: string; price: string; fee: string };
 const blank = (id: number): Row => ({ id, side: 'buy', symbol: '', quantity: '', price: '', fee: '0' });
-const number = (raw: string) => raw.trim() ? Number(raw) : NaN;
+const DECIMAL = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i;
+const number = (raw: string) => DECIMAL.test(raw.trim()) ? Number(raw) : NaN;
 const display = (n: number | null) => n === null || !Number.isFinite(n) ? '—' : n.toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 });
 const shares = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: 8 });
 const percent = (n: number | null) => n === null ? '—' : (n * 100).toFixed(1) + '%';
@@ -118,7 +119,7 @@ export default function SandboxIsland() {
           <div className={styles.pin}>
             <span>{pinned.book.toUpperCase()} · {pinned.name} · {pinned.currency} · Pinned {time(pinned.capturedAt)}</span>
             <label>Opening cash override ({currency})
-              <input type="number" min="0" step="any" placeholder={pinned.cash === null ? 'No recorded balance' : String(pinned.cash)}
+              <input type="text" inputMode="decimal" placeholder={pinned.cash === null ? 'No recorded balance' : String(pinned.cash)}
                 value={cashOverride} onChange={(e) => setCashOverride(e.target.value)} />
             </label>
             <span>{cashOverride ? 'Opening cash uses your assumption.' : pinned.cash === null ? 'Enter a cash assumption, including zero if applicable.' : 'Opening cash uses the recorded balance.'}</span>
@@ -138,7 +139,7 @@ export default function SandboxIsland() {
                   <label>Side<select value={row.side} onChange={(e) => change(row.id, { side: e.target.value as Row['side'] })}><option value="buy">Buy</option><option value="sell">Sell</option></select></label>
                   <label>Symbol<input list="sandbox-holdings" value={row.symbol} maxLength={24} placeholder="e.g. VOO" onChange={(e) => change(row.id, { symbol: e.target.value.toUpperCase() })} /></label>
                   <label>Shares<input type="number" min="0" step="any" value={row.quantity} onChange={(e) => change(row.id, { quantity: e.target.value })} /></label>
-                  <label>Price<input type="number" min="0" step="any" value={row.price} placeholder={reference?.price == null ? 'Quote' : String(reference.price)} onChange={(e) => change(row.id, { price: e.target.value })} /></label>
+                  <label>Price<input type="text" inputMode="decimal" value={row.price} placeholder={reference?.price == null ? 'Quote' : String(reference.price)} onChange={(e) => change(row.id, { price: e.target.value })} /></label>
                   <label>Fee<input type="number" min="0" step="any" value={row.fee} onChange={(e) => change(row.id, { fee: e.target.value })} /></label>
                   <div className={styles.actions}>
                     <button type="button" className={overlay.btn} aria-label={`Move trade ${index + 1} up`} disabled={index === 0} onClick={() => move(index, -1)}>↑</button>
