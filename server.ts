@@ -1,4 +1,6 @@
 import { transfer } from './lib/transfers.ts';
+import { sandboxSnapshot } from './lib/sandbox.ts';
+import { MAX_DRAFT_TRADES, SANDBOX_CURRENCY, SANDBOX_SYMBOL } from './shared/sandbox.ts';
 import { previewTradeImport, importTrades } from './lib/trade-import.ts';
 /*
  * FINSIGHT // PERSONAL TERMINAL  -  backend
@@ -360,6 +362,18 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       return sendJson(res, 200, listAccounts());
     }
 
+    if (p === '/api/portfolio/sandbox' && req.method === 'GET') {
+      const currency = u.searchParams.get('currency') || '';
+      const symbols = u.searchParams.getAll('symbol');
+      if (!acct || acct === 'ALL' || !SANDBOX_CURRENCY.test(currency)) {
+        return sendJson(res, 400, { error: 'Choose one account and a currency.' });
+      }
+      if (symbols.length > MAX_DRAFT_TRADES || symbols.some((s) => !SANDBOX_SYMBOL.test(s))) {
+        return sendJson(res, 400, { error: 'Enter valid symbols for up to 20 draft trades.' });
+      }
+      const snapshot = await sandboxSnapshot(acct, currency, symbols);
+      return snapshot ? sendJson(res, 200, snapshot) : sendJson(res, 404, { error: 'Account not found.' });
+    }
     if (p === '/api/portfolio' && req.method === 'GET') return sendJson(res, 200, await portfolioWithQuotes(base, acct));
     if (p === '/api/portfolio/buy' && req.method === 'POST') {
       const b = await readBody(req); await buy(b.symbol, b.quantity, b.price, b.date ? Date.parse(b.date) : null, acct, base);

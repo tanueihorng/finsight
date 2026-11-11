@@ -27,6 +27,7 @@ The Kestrel panel redesign and search-provider picker (`KESTRELUI-001` / `SEARCH
 
 | Feature | Execution | Status |
 |---|---|---|
+| [FEAT-020](features/FEAT-020-portfolio-sandbox.md) | `SANDBOX-001` | One-account draft preview implemented on `feat/portfolio-sandbox`. Synthetic unit and browser verification passed. Integration and deployment remain separate. |
 | In-chat stock price charts, source-bound to historical close prices | `CHATCHART-001` | Verified; included in the merge containing CHARTSHIP-001; deployment and live-provider chart qualification pending |
 | Smarter visual selection, richer charts, exposure views and safe navigation/alert drafts | `UIUPGRADE-001` | Integrated on main at `dc8a7c9`; demo activated; broader model qualification remains pending |
 | Demo defaults to supported Intelligent UI views | `DEMOPARITY-001` | Integrated on main at `dc8a7c9`; explicit settings and model gates remain effective |

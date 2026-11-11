@@ -19,13 +19,14 @@ const UNDO_MAX = 25;
 // --------------------------------------------------------------------------
 export function newAccountId(): string { return 'acc' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36); }
 export function newTxId(): string { return 'tx' + Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36); }
-export function loadPortfolio(): StoredPortfolio {
+export function loadPortfolio({ backupCorrupt = true } = {}): StoredPortfolio {
   let p: any, raw: string | undefined; // untrusted file contents, migrated into StoredPortfolio below
   try { raw = fs.readFileSync(portfolioFile(), 'utf8'); }
   catch (e) { if ((e as NodeJS.ErrnoException).code === 'ENOENT') p = {}; else throw e; } // missing = fresh start
   if (raw !== undefined) {
     try { p = JSON.parse(raw); }
     catch {
+      if (!backupCorrupt) throw new Error('Portfolio data is corrupt.');
       // File exists but is corrupt: back it up rather than silently wiping the portfolio.
       try { fs.renameSync(portfolioFile(), portfolioFile().replace(/\.json$/, '') + '.corrupt.' + Date.now() + '.json'); } catch {}
       throw new Error('portfolio.json was corrupt; backed up to a .corrupt.json file. Restart to begin fresh, or restore the backup.');

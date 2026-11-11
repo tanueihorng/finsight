@@ -1,0 +1,55 @@
+import { expect, test } from '@playwright/test';
+import { unlock } from './helpers';
+
+test('pin an account and preview ordered trades, then reset without changing live records', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await unlock(page);
+  const { activeId } = await (await page.request.get('/api/accounts')).json();
+  const scope = '?base=USD&account=' + activeId;
+  expect((await page.request.post('/api/portfolio/reset' + scope, { data: {} })).ok()).toBe(true);
+  expect((await page.request.post('/api/portfolio/buy' + scope, { data: { symbol: 'AAPL', quantity: 10, price: 100 } })).ok()).toBe(true);
+  expect((await page.request.post('/api/cash' + scope, { data: { ccy: 'USD', amount: 20 } })).ok()).toBe(true);
+  expect((await page.request.post('/api/portfolio/buy' + scope, { data: { symbol: 'D05.SI', quantity: 2, price: 40 } })).ok()).toBe(true);
+  const live = async () => {
+    const { positions, cash, transactions } = await (await page.request.get('/api/portfolio' + scope)).json();
+    return { positions: positions.map((p: { symbol: string; quantity: number }) => [p.symbol, p.quantity]), cash, transactions };
+  };
+  const baseline = await live();
+  await page.reload();
+  const launch = page.getByRole('button', { name: /^sandbox$/i });
+  await launch.click();
+  const dialog = page.getByRole('dialog', { name: 'Portfolio Sandbox' });
+  await dialog.getByLabel('Currency', { exact: true }).fill('USD');
+  const first = dialog.getByRole('group', { name: 'Trade 1' });
+  await first.getByLabel('Side').selectOption('sell');
+  await first.getByLabel('Symbol').fill('AAPL');
+  await first.getByLabel('Shares').fill('5');
+  await first.getByLabel('Price', { exact: true }).fill('100');
+  await first.getByLabel('Fee').fill('1');
+  await dialog.getByRole('button', { name: 'Add trade' }).click();
+  const second = dialog.getByRole('group', { name: 'Trade 2' });
+  await second.getByLabel('Symbol').fill('NVDA');
+  await second.getByLabel('Shares').fill('2');
+  await second.getByLabel('Price', { exact: true }).fill('200');
+  await second.getByLabel('Fee').fill('2');
+  await dialog.getByRole('button', { name: 'Pin snapshot' }).click();
+  await expect(dialog.getByText(/REAL · .* · USD · Pinned/)).toBeVisible();
+  await expect(dialog.getByRole('row', { name: /^Cash / }).last().locator('td')).toHaveText(['20.00', '117.00']);
+  await expect(dialog.getByRole('row', { name: /^Draft fees/ })).toContainText('3.00');
+  await expect(dialog.getByRole('row', { name: /^Priced securities/ }).locator('td')).toHaveText(['2,315.00', '1,522.30']);
+  await expect(dialog.getByRole('row', { name: /^Largest weight/ }).locator('td')).toHaveText(['AAPL · 100.0%', 'AAPL · 76.0%']);
+  await expect(dialog.getByText(/D05.SI · 2 shares/)).toContainText('outside this USD preview');
+  await expect(dialog.getByText('Assumed execution price', { exact: false })).toHaveCount(2);
+  expect(await dialog.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+
+  await dialog.getByRole('button', { name: 'Move trade 2 up' }).click();
+  await expect(dialog.getByRole('alert')).toContainText('Insufficient cash');
+  await expect(dialog.getByRole('row', { name: /^Cash / }).last().locator('td')).toHaveText(['20.00', '—']);
+  await dialog.getByRole('button', { name: 'Reset' }).click();
+  await expect(dialog.getByRole('heading', { name: /Before and after/ })).toHaveCount(0);
+  await expect(first.getByLabel('Symbol')).toHaveValue('');
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  await expect(launch).toBeFocused();
+  expect(await live()).toEqual(baseline);
+});

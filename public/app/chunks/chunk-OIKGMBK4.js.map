@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../../../web/src/features/sandbox/open.ts"],
+  "sourcesContent": ["import { createStore } from 'zustand/vanilla';\n\nexport const sandboxOpen = createStore<{ open: boolean }>()(() => ({ open: false }));\nexport const openSandbox = () => sandboxOpen.setState({ open: true });\nexport const closeSandbox = () => sandboxOpen.setState({ open: false });\n"],
+  "mappings": "wCAEO,IAAMA,EAAcC,EAA+B,EAAE,KAAO,CAAE,KAAM,EAAM,EAAE,EACtEC,EAAc,IAAMF,EAAY,SAAS,CAAE,KAAM,EAAK,CAAC,EACvDG,EAAe,IAAMH,EAAY,SAAS,CAAE,KAAM,EAAM,CAAC",
+  "names": ["sandboxOpen", "createStore", "openSandbox", "closeSandbox"]
+}

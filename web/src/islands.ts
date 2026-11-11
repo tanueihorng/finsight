@@ -97,6 +97,7 @@ export const islands: IslandRegistry = preloadable({
   'layout-button': () => Promise.resolve(LayoutButtonIsland),
   kestrel: () => import('./features/kestrel/KestrelIsland.tsx'),
   quant: () => import('./features/quant/QuantIsland.tsx'),
+  sandbox: () => import('./features/sandbox/SandboxIsland.tsx'),
   discover: () => import('./features/discover/DiscoverIsland.tsx'),
   calendar: () => Promise.resolve(CalendarIsland),
   worldbank: () => Promise.resolve(WorldBankIsland),
