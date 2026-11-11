@@ -1,4 +1,4 @@
-const holdings = ['portfolio', 'dividends', 'fx-risk', 'performance', 'wealth', 'ledger', 'realized', 'accounts', 'chart-trades', 'events', 'categories', 'discover'] as const;
+const holdings = ['portfolio', 'dividends', 'fx-risk', 'performance', 'wealth', 'ledger', 'realized', 'accounts', 'chart-trades', 'events', 'categories', 'discover', 'exposure'] as const;
 const scoped = [...holdings, 'alerts', 'detail'] as const;
 // Endpoint writes -> readers (docs/frontend-migration/COUPLING.md §A6). Keys are
 // refreshed in order: 'accounts' comes first where a write can remove the
@@ -8,7 +8,7 @@ export const mutationInvalidations = {
   'ledger-edit': holdings, 'ledger-delete': holdings,
   // Undo can revert trades, cash, accounts, the watchlist and alerts.
   undo: ['accounts', ...holdings.filter((key) => key !== 'accounts'), 'watchlist', 'chart-watch', 'alerts', 'chart-alerts'],
-  cash: ['portfolio', 'fx-risk', 'wealth'],
+  cash: ['portfolio', 'fx-risk', 'wealth', 'exposure'],
   withholding: ['dividends', 'realized'],
   // Intended fix (Phase 2 audit): the company calendar also includes watched symbols.
   'watchlist-add': ['watchlist', 'chart-watch', 'events', 'discover'], 'watchlist-remove': ['watchlist', 'chart-watch', 'events', 'discover'],

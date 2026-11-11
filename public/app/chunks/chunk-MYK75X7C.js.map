@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../../../web/src/ui/overlay.module.css"],
+  "sourcesContent": ["import \"./overlay.module.css?scoped\";\nexport default {\"scrim\":\"fs-overlay-1c226_scrim\",\"dialog\":\"fs-overlay-1c226_dialog\",\"dlgTitle\":\"fs-overlay-1c226_dlgTitle\",\"dlgBody\":\"fs-overlay-1c226_dlgBody\",\"dlgFoot\":\"fs-overlay-1c226_dlgFoot\",\"field\":\"fs-overlay-1c226_field\",\"btn\":\"fs-overlay-1c226_btn\",\"primary\":\"fs-overlay-1c226_primary\",\"danger\":\"fs-overlay-1c226_danger\",\"toastDock\":\"fs-overlay-1c226_toastDock\",\"toast\":\"fs-overlay-1c226_toast\",\"toastDot\":\"fs-overlay-1c226_toastDot\",\"toastErr\":\"fs-overlay-1c226_toastErr\",\"toastUndo\":\"fs-overlay-1c226_toastUndo\",\"toastX\":\"fs-overlay-1c226_toastX\"};"],
+  "mappings": "AACA,IAAOA,EAAQ,CAAC,MAAQ,yBAAyB,OAAS,0BAA0B,SAAW,4BAA4B,QAAU,2BAA2B,QAAU,2BAA2B,MAAQ,yBAAyB,IAAM,uBAAuB,QAAU,2BAA2B,OAAS,0BAA0B,UAAY,6BAA6B,MAAQ,yBAAyB,SAAW,4BAA4B,SAAW,4BAA4B,UAAY,6BAA6B,OAAS,yBAAyB",
+  "names": ["overlay_default"]
+}

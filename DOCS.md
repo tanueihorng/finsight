@@ -333,6 +333,19 @@ purchase-time FX anchoring as `/api/portfolio`, so `totalFxPnl` reconciles with 
      vol: { sigmaWeeklyPct, oneSigmaBase, var95Base },
      lots: [ { symbol, currency, t, q, px, entryRate, nowRate, fxPnl, dated, recent } ] }`
 
+#### `GET /api/exposure?base=SGD&account=<id>[&asOf=YYYY-MM-DD]`
+ETF look-through (FEAT-018), read-only. Combines the scope's stocks with one level of each fund's
+constituents from dated snapshots in `<data dir>/etf-holdings/*.json` (shape: `shared/lookthrough.ts`
+`HoldingsSnapshot`: `fund`, `holdingsDate`, `retrievedAt`, `source`, `constituents[{ ticker, name, weightPct, issuer?, type? }]`).
+The latest snapshot dated on or before `asOf` (default: today) is used; one older than 45 days, invalid or missing
+leaves the fund's whole value unmapped. `mapped + unmapped = basis` (the scope's invested value).
+→ `{ book, account, base, asOf, staleDays, basis, mapped, unmapped, reconciles, difference, cash, netWorth,
+     issuers: [ { issuer, name, tickers, direct, indirect, combined, share,
+                  contributions: [ { via, kind, value, weightPct, holdingsDate, tickers } ] } ],
+     unmappedRows: [ { position, reason, value, detail, holdingsDate } ],
+     funds: [ { fund, value, status, holdingsDate, retrievedAt, source, ageDays, mappedValue, mappedShare, note } ],
+     fileErrors: [ { file, error } ] }`
+
 #### `GET /api/calendar`
 Economic calendar (no key, no base/account). The FOMC anchor is a curated, hardcoded schedule
 (refresh annually); `events` is a best-effort, 1-hour-cached pull of this week's high-impact US (and
