@@ -93,6 +93,7 @@ function normalizeQuote(symbol: string, meta: YahooMeta): QuotedQuote {
     symbol: meta.symbol || symbol,
     name: meta.longName || meta.shortName || meta.symbol || symbol,
     currency: meta.currency || 'USD',
+    currencyReported: Boolean(meta.currency),
     exchange: meta.fullExchangeName || meta.exchangeName || '',
     type: meta.instrumentType || '',
     price,
@@ -251,7 +252,7 @@ async function fetchHistory(symbol: string, range: string, interval: string): Pr
     .filter((p) => p.c != null) as HistoryPoint[]; // c is a number after the filter
   // normalizeQuote fills a missing currency with USD for display; currencyReported
   // tells callers that must not assume (portfolio backtests) whether Yahoo sent one.
-  return { symbol, range, interval, meta: result.meta ? { ...normalizeQuote(symbol, result.meta), currencyReported: Boolean(result.meta.currency) } : null, points };
+  return { symbol, range, interval, meta: result.meta ? normalizeQuote(symbol, result.meta) : null, points };
 }
 
 export function search(q: string): Promise<SearchResult[]> {

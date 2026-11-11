@@ -73,6 +73,7 @@ Exploratory concepts under review; requires an RFC/spec before moving to the Bac
 
 | ID | Feature | Completion Date | Evidence / Release |
 | :--- | :--- | :--- | :--- |
+| **SANDBOX-001** | [Portfolio Sandbox (FEAT-020)](features/FEAT-020-portfolio-sandbox.md) | 2026-11-11 | Merged into local `main` with verified preview and override validation (`449d717`, `55bb9b4`). Deployment pending. |
 | **CORE-001** | Kestrel Research Agent Core | 2026-10-24 | Initial release with DeepSeek, Haiku, Claude Code brains, 35 tools. |
 | **IUI-001** | Intelligent UI Views | 2026-10-26 | Interactive cards and data tables via `render_ui`. |
 | **START-001**| Kestrel Briefing Start Screen | 2026-10-26 | Intraday charts, mover tiles, and dynamic jump list. |

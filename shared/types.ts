@@ -6,6 +6,7 @@ export type ApiErrorBody = { error: string | { code: string; message: string } }
 /** lib/market.ts normalizeQuote: undefined upstream properties are omitted by JSON. */
 export interface QuotedQuote {
   symbol: string; name: string; currency: string; exchange: string; type: string;
+  currencyReported?: boolean;
   price?: number | null; prevClose?: number | null;
   change: number | null; changePct: number | null;
   dayHigh?: number | null; dayLow?: number | null;
