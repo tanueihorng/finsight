@@ -495,10 +495,11 @@ const server = http.createServer((req, res) => {
 const ALERT_INTERVAL = Math.max(15, Number(process.env.ALERT_INTERVAL) || 60) * 1000;
 setInterval(() => { withBook(chosenBook(), () => evaluateAlerts(true)).catch(() => console.warn('Alert evaluation failed; see application diagnostics.')); }, ALERT_INTERVAL);
 
-paper.startPaper(); // Alpaca paper stream + book sync, when paper keys are connected
 agentlink.ensureLink(); // creates DATA_DIR/agent-link.json (0600) for the optional local agent
 // PORT may be a numeric string from the environment; listen() accepts that.
 server.listen(PORT as number, HOST, () => {
+  // A second launch on the same port must not recover the running server's active tickets.
+  paper.startPaper();
   console.log(`\n  FINSIGHT // PERSONAL TERMINAL`);
   console.log(`  running at  http://localhost:${PORT}  (bound to ${HOST})`);
   console.log(`  portfolio   ${PORTFOLIO_FILE}`);

@@ -64,6 +64,10 @@ export async function handle(u: URL, init?: RequestInit): Promise<Response> {
   if (!authed(init)) return json(401, { message: 'request is not authorized' });
   const method = (init?.method || 'GET').toUpperCase(), p = u.pathname;
   const s = load();
+  if (p === '/v2/orders:by_client_order_id' && method === 'GET') {
+    const o = s.orders.find((x) => x.client_order_id === u.searchParams.get('client_order_id'));
+    return o ? json(200, o) : json(404, { message: 'order not found' });
+  }
   try {
     await tick(s);
     if (p === '/v2/account' && method === 'GET') {
@@ -93,6 +97,7 @@ export async function handle(u: URL, init?: RequestInit): Promise<Response> {
       s.orders.push(o);
       emit('new', o);
       await tryFill(s, o);
+      if (process.env.FINSIGHT_FAKE_ALPACA_LOSE_ORDER_RESPONSE === '1') return json(503, { message: 'Synthetic lost order response' });
       return json(200, o);
     }
     const m = p.match(/^\/v2\/orders\/([A-Za-z0-9-]+)$/);

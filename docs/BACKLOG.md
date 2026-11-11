@@ -27,6 +27,7 @@ The Kestrel panel redesign and search-provider picker (`KESTRELUI-001` / `SEARCH
 
 | Feature | Execution | Status |
 |---|---|---|
+| Research validation, SEC request pacing, and interrupted paper approvals ([FEAT-011](features/FEAT-011-agent-data-sources.md), [FEAT-012](features/FEAT-012-paper-trading.md)) | `AUDITFIX-001` | Implemented on `fix/gemini-audit` for review. Integration and deployment remain separate. |
 | In-chat stock price charts, source-bound to historical close prices | `CHATCHART-001` | Verified; included in the merge containing CHARTSHIP-001; deployment and live-provider chart qualification pending |
 | Smarter visual selection, richer charts, exposure views and safe navigation/alert drafts | `UIUPGRADE-001` | Integrated on main at `dc8a7c9`; demo activated; broader model qualification remains pending |
 | Demo defaults to supported Intelligent UI views | `DEMOPARITY-001` | Integrated on main at `dc8a7c9`; explicit settings and model gates remain effective |

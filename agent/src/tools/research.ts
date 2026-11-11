@@ -20,6 +20,7 @@ const day = (t: number) => new Date(t).toISOString().slice(0, 10);
 
 export type InsiderTx = {
   owner: string; roles: string[]; date: string | null; code: string; security: string;
+  reportingOwners?: { name: string; roles: string[] }[];
   shares: number | null; price: number | null; acquired: boolean | null; ownedAfter: number | null;
   plan10b5_1: boolean; derivative: boolean; filed: string; url: string;
   ownerCik: string; period: string; amendment: boolean;
@@ -33,15 +34,26 @@ const TX_CODES: Record<string, string> = {
 const between = (xml: string, tag: string) => { const m = xml.match(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`)); return m ? m[1]! : ''; };
 const value = (xml: string, tag: string) => { const inner = between(xml, tag); const v = inner.includes('<value>') ? between(inner, 'value') : inner; return v.replace(/<[^>]+>/g, '').trim(); };
 const num = (s: string) => { const n = Number(s.replace(/,/g, '')); return s && Number.isFinite(n) ? n : null; };
-const unescape = (s: string) => s.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+const xmlEntities: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
+const unescape = (s: string) => s.replace(/&(amp|lt|gt|quot|apos|#[0-9]+|#x[\da-fA-F]+);/g, (raw, entity: string) => {
+  if (!entity.startsWith('#')) return xmlEntities[entity]!;
+  const code = entity.startsWith('#x') ? Number.parseInt(entity.slice(2), 16) : Number(entity.slice(1));
+  const valid = code === 9 || code === 10 || code === 13 || (code >= 32 && code <= 0xD7FF)
+    || (code >= 0xE000 && code <= 0xFFFD) || (code >= 0x10000 && code <= 0x10FFFF);
+  return valid ? String.fromCodePoint(code) : raw;
+});
+const ownerRoles = (owner: string) => {
+  const flag = (tag: string) => ['1', 'true'].includes(value(owner, tag));
+  return [flag('isDirector') ? 'director' : '', flag('isOfficer') ? unescape(value(owner, 'officerTitle')) || 'officer' : '',
+    flag('isTenPercentOwner') ? '10% owner' : ''].filter(Boolean);
+};
 
 /** Transactions from one Form 4 XML document. Unknown fields stay null. */
 export function parseForm4(xml: string, filed: string, url: string): InsiderTx[] {
   const owners = [...xml.matchAll(/<reportingOwner>([\s\S]*?)<\/reportingOwner>/g)].map((m) => m[1]!);
-  const ownerName = owners.map((o) => unescape(value(o, 'rptOwnerName'))).filter(Boolean).join('; ') || 'unknown';
-  const rel = owners[0] ?? '';
-  const roles = [value(rel, 'isDirector') === '1' || value(rel, 'isDirector') === 'true' ? 'director' : '', value(rel, 'isOfficer') === '1' || value(rel, 'isOfficer') === 'true' ? unescape(value(rel, 'officerTitle')) || 'officer' : '',
-    value(rel, 'isTenPercentOwner') === '1' || value(rel, 'isTenPercentOwner') === 'true' ? '10% owner' : ''].filter(Boolean);
+  const reportingOwners = owners.map((o) => ({ name: unescape(value(o, 'rptOwnerName')), roles: ownerRoles(o) }));
+  const ownerName = reportingOwners.map((o) => o.name).filter(Boolean).join('; ') || 'unknown';
+  const roles = [...new Set(reportingOwners.flatMap((o) => o.roles))];
   const plan = /<aff10b5One>\s*(1|true)\s*<\/aff10b5One>/i.test(xml);
   const ownerCik = owners.map((o) => value(o, 'rptOwnerCik')).filter(Boolean).sort().join(',') || ownerName;
   const period = value(xml, 'periodOfReport'), amendment = value(xml, 'documentType') === '4/A';
@@ -51,7 +63,8 @@ export function parseForm4(xml: string, filed: string, url: string): InsiderTx[]
       const t = m[1]!;
       const ad = value(t, 'transactionAcquiredDisposedCode');
       rows.push({
-        owner: ownerName, roles, date: value(t, 'transactionDate') || null, code: value(t, 'transactionCode') || '?', security: unescape(value(t, 'securityTitle')),
+        owner: ownerName, roles, ...(reportingOwners.length > 1 ? { reportingOwners } : {}),
+        date: value(t, 'transactionDate') || null, code: value(t, 'transactionCode') || '?', security: unescape(value(t, 'securityTitle')),
         shares: num(value(t, 'transactionShares')), price: num(value(t, 'transactionPricePerShare')), acquired: ad === 'A' ? true : ad === 'D' ? false : null,
         ownedAfter: num(value(t, 'sharesOwnedFollowingTransaction')), plan10b5_1: plan, derivative, filed, url, ownerCik, period, amendment,
       });
@@ -72,9 +85,9 @@ export function summariseInsiders(txs: InsiderTx[]) {
   };
   const buys = agg('P'), sells = agg('S');
   // Values use priced rows only, matching the totals above; unpriced rows are counted.
-  const byOwner = new Map<string, { owner: string; roles: string[]; boughtShares: number; soldShares: number; netValueUsd: number; unpricedTransactions: number }>();
+  const byOwner = new Map<string, Pick<InsiderTx, 'owner' | 'roles' | 'reportingOwners'> & { boughtShares: number; soldShares: number; netValueUsd: number; unpricedTransactions: number }>();
   for (const t of market) {
-    const o = byOwner.get(t.owner) ?? { owner: t.owner, roles: t.roles, boughtShares: 0, soldShares: 0, netValueUsd: 0, unpricedTransactions: 0 };
+    const o = byOwner.get(t.owner) ?? { owner: t.owner, roles: t.roles, reportingOwners: t.reportingOwners, boughtShares: 0, soldShares: 0, netValueUsd: 0, unpricedTransactions: 0 };
     const priced = t.shares !== null && t.price !== null;
     if (!priced) o.unpricedTransactions++;
     const v = priced ? t.shares! * t.price! : 0;
@@ -176,13 +189,15 @@ export function technicals(points: HistoryPoint[]) {
 
 // ------------------------------------------------------------ Fundamentals ---
 
-type Flow = { concept: string; unit: string; value: number; method: string; periodEnd: string } | null;
-function flowTtm(rf: ReturnType<typeof reportedFacts>, names: string[]): Flow {
+type Flow = { concept: string; unit: string; value: number; method: string; periodEnd: string; ambiguousOutflow?: boolean } | null;
+function flowTtm(rf: ReturnType<typeof reportedFacts>, names: string[], checkOutflow = false): Flow {
   const found = [...new Set(names.map(rf.concept))].flatMap((n) => {
     const u = rf.facts[n]?.units; if (!u) return [];
     const unit = ['USD', 'USD/shares'].find((k) => u[k]) ?? Object.keys(u)[0]!;
     const t = Array.isArray(u[unit]) && u[unit].length ? ttm(u[unit] as Fact[]) : null;
-    return t ? [{ concept: n, unit, value: t.value, method: t.method, periodEnd: t.periodEnd }] : [];
+    if (!t) return [];
+    const ambiguousOutflow = checkOutflow && (t.value < 0 || t.inputs.some((input) => input.val < 0));
+    return [{ concept: n, unit, value: t.value, method: t.method, periodEnd: t.periodEnd, ...(ambiguousOutflow ? { ambiguousOutflow } : {}) }];
   });
   return found.sort((a, b) => b.periodEnd.localeCompare(a.periodEnd))[0] ?? null;
 }
@@ -229,7 +244,8 @@ export function fundamentals(facts: any) {
   const rf = reportedFacts(facts);
   const rev = flowTtm(rf, ['RevenueFromContractWithCustomerExcludingAssessedTax', 'Revenues', 'SalesRevenueNet']);
   const op = flowTtm(rf, ['OperatingIncomeLoss']), ni = flowTtm(rf, ['NetIncomeLoss']);
-  const ocf = flowTtm(rf, ['NetCashProvidedByUsedInOperatingActivities']), capex = flowTtm(rf, ['PaymentsToAcquirePropertyPlantAndEquipment', 'PaymentsToAcquireProductiveAssets']);
+  const ocf = flowTtm(rf, ['NetCashProvidedByUsedInOperatingActivities']);
+  const capex = flowTtm(rf, ['PaymentsToAcquirePropertyPlantAndEquipment', 'PaymentsToAcquireProductiveAssets'], true);
   const sbc = flowTtm(rf, ['ShareBasedCompensation', 'AllocatedShareBasedCompensationExpense']);
   // Balance sheet items come from one date: the latest cash date. A concept
   // that stopped being tagged (NVDA moved marketable securities to
@@ -246,11 +262,15 @@ export function fundamentals(facts: any) {
   const mismatched: string[] = [];
   const onRevPeriod = (x: Flow, label: string) => { if (!x || !rev) return null; if (x.periodEnd !== rev.periodEnd) { mismatched.push(`${label} to ${x.periodEnd}`); return null; } return usd(x); };
   // FCF only when both legs cover the same trailing period.
-  const fcf = ocf && capex && ocf.unit === 'USD' && capex.unit === 'USD' && ocf.periodEnd === capex.periodEnd ? ocf.value - capex.value : null;
+  const fcf = ocf && capex && !capex.ambiguousOutflow && ocf.unit === 'USD' && capex.unit === 'USD' && ocf.periodEnd === capex.periodEnd ? ocf.value - capex.value : null;
   const gaps: string[] = [];
   if (rf.taxonomy === 'ifrs-full') gaps.push('IFRS filer: figures come from the annual 20-F in its reporting currency; USD ratios are not computed.');
   if (ocf && capex && ocf.periodEnd !== capex.periodEnd) gaps.push(`Operating cash flow (to ${ocf.periodEnd}) and capex (to ${capex.periodEnd}) cover different periods; free cash flow not computed.`);
-  const stale = !!rev && Date.parse(rev.periodEnd) < Date.now() - 548 * 864e5;
+  if (capex?.ambiguousOutflow) gaps.push(`Capex (${capex.concept}, to ${capex.periodEnd}) contains negative payment values; free cash flow not computed because the outflow sign is ambiguous.`);
+  const cutoff = Date.now() - 548 * 864e5;
+  const stale = !!rev && Date.parse(rev.periodEnd) < cutoff;
+  const fcfStale = fcf !== null && !!ocf && Date.parse(ocf.periodEnd) < cutoff;
+  if (fcfStale) gaps.push(`Free cash flow ends ${ocf!.periodEnd}, more than 18 months ago; excluded from current valuation.`);
   if (stale) gaps.push(`Trailing figures end ${rev!.periodEnd}, more than 18 months ago; yields and EV multiples against today's price are not computed.`);
   if (staleSti) gaps.push(`Short-term investments (${staleSti.concept}) were last reported ${staleSti.asOf}, not at the cash date ${cash!.asOf}; excluded, so net debt may be overstated.`);
   if (!ltd) gaps.push(anyDebt ? `Debt was last reported ${anyDebt.asOf}, not at the cash date ${cash?.asOf ?? 'unknown'}; net debt not computed.` : 'No long-term debt concept found; net debt treats debt as unknown, not zero.');
@@ -261,7 +281,7 @@ export function fundamentals(facts: any) {
   const debt = ltd ? ltd.value + (std?.value ?? 0) : null;
   const liquid = cash ? cash.value + (sti?.value ?? 0) : null;
   return {
-    taxonomy: rf.taxonomy, stale,
+    taxonomy: rf.taxonomy, stale, fcfStale,
     ttm: { revenue: rev, operatingIncome: op, netIncome: ni, operatingCashFlow: ocf, capex, shareBasedComp: sbc,
       freeCashFlow: fcf, freeCashFlowMeaning: 'Operating cash flow minus capital expenditure (the capex concept is named in capex.concept; PaymentsToAcquireProductiveAssets can include intangibles); share-based compensation not deducted.' },
     marginsPct,
@@ -278,6 +298,7 @@ export type DcfInput = { fcf0: number; growth: number; discount: number; termina
  * terminal rate when fade is set) plus a Gordon terminal value. */
 export function dcfPerShare(i: DcfInput): { perShare: number; enterpriseValue: number; terminalSharePct: number } {
   if (i.discount <= i.terminal) throw new AgentError('DCF_INPUT', 'Discount rate must exceed terminal growth.');
+  if (!Number.isFinite(i.shares) || i.shares <= 0) throw new AgentError('DCF_INPUT', 'Shares outstanding must be positive and finite.');
   let f = i.fcf0, pv = 0;
   for (let t = 1; t <= i.years; t++) {
     const g = i.fade && i.years > 1 ? i.growth + (i.terminal - i.growth) * ((t - 1) / (i.years - 1)) : i.growth;
@@ -442,12 +463,13 @@ export function createResearchTools(fetchImpl: typeof fetch = fetch): ToolDef[] 
         // Refusal is decided by these typed blockers, never by the wording of a gap.
         const gaps = [...f.gaps], blockers: string[] = [];
         const block = (code: string, text: string) => { blockers.push(code); gaps.push(text); };
-        if (f.stale) blockers.push('stale_financials');
+        if (f.fcfStale) blockers.push('stale_financials');
         if (filerType(sub.filings?.recent?.form || []) !== 'domestic') block('not_domestic', 'Not a domestic 10-K filer (foreign private issuer or unknown): DCF refused because ADR ratios and reporting currency make the per-share value unreliable.');
         const sbc = f.ttm.shareBasedComp?.unit === 'USD' ? f.ttm.shareBasedComp.value : null;
         if (a.deductStockComp && sbc === null) gaps.push('Share-based compensation not reported; FCF not adjusted.');
         const fcf0 = f.ttm.freeCashFlow !== null ? f.ttm.freeCashFlow - (a.deductStockComp && sbc !== null ? sbc : 0) : null;
-        if (fcf0 === null) block('no_fcf', 'Trailing free cash flow unavailable.');
+        if (f.ttm.capex?.ambiguousOutflow) blockers.push('capex_sign_ambiguous');
+        else if (fcf0 === null) block('no_fcf', 'Trailing free cash flow unavailable.');
         else if (fcf0 <= 0) block('fcf_not_positive', 'Trailing free cash flow is not positive; a growth-from-base DCF is meaningless here. Use a revenue/margin path instead.');
         if (!shares) block('no_shares', 'Shares outstanding unavailable.');
         else if (shares.basis) gaps.push(`Share count is the ${shares.basis}.`);
@@ -494,7 +516,7 @@ export function createResearchTools(fetchImpl: typeof fetch = fetch): ToolDef[] 
             const ev = mc !== null && f.balance.netDebt !== null ? mc + f.balance.netDebt : null;
             const rev = f.ttm.revenue?.unit === 'USD' ? f.ttm.revenue.value : null;
             return { ticker: raw, company: v.company, price: v.price?.value ?? null, marketCap: mc, peTrailing: v.peTrailing, psTrailing: v.psTrailing,
-              marketCapBasis: v.marketCapBasis ?? null, evToSales: comparable && ev !== null && rev ? r(ev / rev) : null, fcfYieldPct: comparable && mc && f.ttm.freeCashFlow !== null ? r((f.ttm.freeCashFlow / mc) * 100) : null,
+              marketCapBasis: v.marketCapBasis ?? null, evToSales: comparable && ev !== null && rev ? r(ev / rev) : null, fcfYieldPct: comparable && !f.fcfStale && mc && f.ttm.freeCashFlow !== null ? r((f.ttm.freeCashFlow / mc) * 100) : null,
               // Stale figures stay out of the peer medians.
               ...Object.fromEntries(Object.entries({ operatingMarginPct: f.marginsPct.operating, netMarginPct: f.marginsPct.net, fcfMarginPct: f.marginsPct.freeCashFlow, sbcToRevenuePct: f.marginsPct.sbcToRevenue }).map(([k, x]) => [k, f.stale ? null : x])),
               netDebt: f.balance.netDebt, revenueCagrPct: f.revenueCagr?.cagrPct ?? null, ...(f.taxonomy !== 'us-gaap' ? { comparability: 'IFRS filer: yield and EV multiples not computed' } : {}), revenueCagrYears: f.revenueCagr?.years ?? null,
