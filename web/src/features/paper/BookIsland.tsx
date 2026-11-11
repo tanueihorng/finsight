@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { showToast } from '../../ui/toast.tsx';
-import { loadBook, switchBook, useBook, type Book } from './book.ts';
+import { loadBook, switchBook, syncBook, useBook, watchBook, type Book } from './book.ts';
 import s from './Paper.module.css';
 
 // REAL | PAPER switch in the top bar (FEAT-012). Switching reloads the page in
@@ -8,9 +8,10 @@ import s from './Paper.module.css';
 export default function BookIsland() {
   const current = useBook();
   const [busy, setBusy] = useState(false);
-  useEffect(() => { void loadBook(); }, []);
+  useEffect(() => { void loadBook(); return watchBook(); }, []);
   const go = async (b: Book) => {
-    if (busy || b === current) return;
+    if (busy) return;
+    if (b === current) { void syncBook(); return; } // a stale tab's press shows the server's actual choice
     setBusy(true);
     try { await switchBook(b); } catch (e) { showToast((e as Error).message, { kind: 'err' }); setBusy(false); }
   };

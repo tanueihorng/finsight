@@ -6,7 +6,7 @@ import type { Config } from '../config.ts';
 import type { DB } from '../store/db.ts';
 import type { CitationBlock } from '../types.ts';
 import { AgentError } from '../types.ts';
-import type { FinsightClient } from './finsight.ts';
+import { BOOK_SCOPED, type FinsightClient } from './finsight.ts';
 import type { UiState } from './ui.ts';
 import { audit } from '../obs/audit.ts';
 
@@ -71,11 +71,16 @@ export class ToolRegistry {
     audit('tool.call', { ...ids, args: parsed.data });
     const done = (ok: boolean, content: string) => { audit('tool.result', { ...ids, ok, ms: Date.now() - t0, content }); return { ok, content }; };
     try {
+      // Portfolio results say which book they came from; a switch mid-read must not blend two.
+      const books = new Set<string>();
+      const finsight = ctx.finsight.observe?.((book, pathname) => { if (BOOK_SCOPED.test(pathname)) books.add(book); }) ?? ctx.finsight;
       const result = await Promise.race([
-        t.handler(parsed.data, ctx),
+        t.handler(parsed.data, { ...ctx, finsight }),
         new Promise((_, rej) => { timer = setTimeout(() => rej(new AgentError('TOOL_TIMEOUT', `${name} exceeded ${timeout / 1000}s`)), timeout); }),
       ]);
-      return done(true, shape(result));
+      if (books.size > 1) throw new AgentError('BOOK_CHANGED', 'The portfolio book changed while this tool was reading it. Call it again.');
+      const labelled = books.size === 1 && result && typeof result === 'object' && !Array.isArray(result);
+      return done(true, shape(labelled ? { ...result, book: [...books][0] } : result));
     } catch (e) {
       const err = e instanceof AgentError ? { code: e.code, message: e.message } : { code: 'TOOL_ERROR', message: String((e as Error)?.message || e) };
       return done(false, JSON.stringify({ error: err }));

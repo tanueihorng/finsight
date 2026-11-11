@@ -72,6 +72,25 @@ export function costOf(m: BrainManifest, u: Usage, searches = 0, at = Date.now()
     + searches * (p.perSearch ?? 0);
 }
 
+/** Fewest output tokens worth paying for: below this a step cannot return a useful answer or tool call. */
+export const MIN_STEP_OUTPUT_TOKENS = 512;
+/** Most a single model call may cost, shrinking the output allowance to fit
+ * `availableUsd`. Null when the input plus a minimal reply cannot fit. Takes
+ * peak rates, the long-context tier and Anthropic's cache-write premium, which
+ * a call may or may not incur; `inputTokens` should itself be an upper bound. */
+export function worstCaseStep(m: BrainManifest, inputTokens: number, availableUsd: number, searches = 0): { usd: number; maxOutputTokens: number } | null {
+  const p = m.pricing;
+  const tier = p.longContext && inputTokens > p.longContext.aboveTokens ? p.longContext : undefined;
+  const peak = Math.max(1, p.offPeak?.multiplier ?? 1), cacheWrite = m.transport === 'anthropic' ? 1.25 : 1;
+  const inputUsd = inputTokens * p.inputPerM * (tier?.inputMultiplier ?? 1) * cacheWrite * peak / 1e6 + searches * (p.perSearch ?? 0);
+  const perOutputToken = p.outputPerM * (tier?.outputMultiplier ?? 1) * peak / 1e6;
+  const left = availableUsd - inputUsd;
+  const affordable = perOutputToken > 0 ? Math.floor(left / perOutputToken) : left >= 0 ? m.maxOutputTokens : 0;
+  const maxOutputTokens = Math.min(m.maxOutputTokens, affordable);
+  if (maxOutputTokens < Math.min(m.maxOutputTokens, MIN_STEP_OUTPUT_TOKENS)) return null;
+  return { usd: inputUsd + maxOutputTokens * perOutputToken, maxOutputTokens };
+}
+
 /** Provider tool-call ids must match ^[A-Za-z0-9_-]+$ for some APIs; normalise once, consistently. */
 export const safeId = (id: string): string => id.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 64) || 'call';
 

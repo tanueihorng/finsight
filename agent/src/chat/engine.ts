@@ -8,10 +8,10 @@ import type { Config } from '../config.ts';
 import type { DB, StoredMsg } from '../store/db.ts';
 import * as store from '../store/db.ts';
 import { MAX_RESULT_CHARS, type ToolRegistry, type ToolCtx } from '../tools/registry.ts';
-import type { FinsightClient } from '../tools/finsight.ts';
+import { BOOK_SCOPED, type FinsightClient } from '../tools/finsight.ts';
 import type { BrainEntry } from '../brains/registry.ts';
 import type { ApiBrain, Brain, CliBrain, ConnectionFailure, StepResult } from '../brains/types.ts';
-import { Effort, costOf } from '../brains/types.ts';
+import { Effort, costOf, worstCaseStep } from '../brains/types.ts';
 import type { Block, CitationBlock, Msg, PageContext, Usage } from '../types.ts';
 import { AgentError } from '../types.ts';
 import type { EventBus } from './bus.ts';
@@ -27,9 +27,11 @@ import { attachmentBlock, ensureDocumentText, getUpload, imageBase64 } from '../
 export type SendInput = { threadId: string; content: string; lens?: LensId; brain?: string; effort?: Effort; search?: SearchChoice; pageContext?: PageContext; idempotencyKey?: string; expectedVersion?: number; attachmentIds?: string[] };
 
 import { UI_GUIDANCE } from '../ui/schema.ts';
-import { bytePrefix, inputBudget, selectContext } from './context.ts';
+import { bytePrefix, bytes, contextSize, inputBudget, selectContext } from './context.ts';
 import { basisNote } from './council-metrics.ts';
 const PACK_TTL_MS = 15 * 60_000;
+// Serialized request framing beyond the bytes of the prompt itself.
+const PROVIDER_OVERHEAD_TOKENS = 1024;
 
 export class ChatEngine {
   private councilRunning = false;
@@ -89,11 +91,7 @@ export class ChatEngine {
     const effort = input.effort ?? brain.manifest.thinking?.default;
     if (effort !== undefined && (!Effort.safeParse(effort).success || !brain.manifest.thinking?.levels.includes(effort))) throw new AgentError('BAD_INPUT', 'Thinking effort is not supported by this model', 400);
     if (council && brain.manifest.transport !== 'mock' && (brain.manifest.id !== 'deepseek-flash' || effort !== 'none')) throw new AgentError('COUNCIL_MODEL_UNQUALIFIED', 'Council release qualification currently covers DeepSeek Flash with thinking off only. Choose that model and effort.', 400);
-    const version = store.bumpThreadVersion(this.db, thread.id, input.expectedVersion);
-    const turn = store.createTurn(this.db, thread.id, brainId, input.idempotencyKey);
-    const ctrl = new AbortController();
-    this.running.set(thread.id, { turnId: turn.id, ctrl });
-    if (council) this.councilRunning = true;
+    // Everything that can refuse the message runs before the thread changes.
     const blocks: Block[] = [{ type: 'text', text: content }, { type: 'notice', kind: 'lens', text: lens + ':1' }];
     for (const id of (input.attachmentIds ?? []).slice(0, 5)) {
       const u = getUpload(this.cfg.home, id);
@@ -104,15 +102,30 @@ export class ChatEngine {
     const skill = slash ? this.skills().get(slash[1]!) : undefined;
     if (skill) blocks.push({ type: 'notice', kind: 'skill', text: JSON.stringify({ name: skill.name, instructions: skill.body }) });
     if (input.pageContext && Object.values(input.pageContext).some(Boolean)) blocks.push({ type: 'notice', kind: 'page_context', text: JSON.stringify(input.pageContext).slice(0, 600) });
-    store.appendMessage(this.db, thread.id, 'user', blocks, { turnId: turn.id });
-    if (thread.title === 'New chat') store.updateThread(this.db, thread.id, { title: content.replace(/\s+/g, ' ').slice(0, 60) });
-    if (input.brain && input.brain !== thread.defaultBrain) store.updateThread(this.db, thread.id, { defaultBrain: input.brain });
-    this.bus.emit(thread.id, 'turn.started', { turnId: turn.id, brain: brainId, label: brain.manifest.label, skill: skill?.name, effort, search: cfg.searchProvider, lens: lens + ':1' });
-    audit('turn.start', { turnId: turn.id, threadId: thread.id, brain: brainId, content, attachments: input.attachmentIds ?? [], skill: skill?.name, effort, search: cfg.searchProvider, pageContext: input.pageContext });
-    void auditContext.run({ ...(auditContext.getStore() ?? {}), turnId: turn.id, threadId: thread.id }, () => this.run(thread.id, turn.id, brain, ctrl, cfg, effort)).finally(() => {
+    const { version, turn } = this.db.transaction(() => {
+      const version = store.bumpThreadVersion(this.db, thread.id, input.expectedVersion);
+      const turn = store.createTurn(this.db, thread.id, brainId, input.idempotencyKey);
+      store.appendMessage(this.db, thread.id, 'user', blocks, { turnId: turn.id });
+      if (thread.title === 'New chat') store.updateThread(this.db, thread.id, { title: content.replace(/\s+/g, ' ').slice(0, 60) });
+      if (input.brain && input.brain !== thread.defaultBrain) store.updateThread(this.db, thread.id, { defaultBrain: input.brain });
+      return { version, turn };
+    })();
+    const ctrl = new AbortController();
+    this.running.set(thread.id, { turnId: turn.id, ctrl });
+    if (council) this.councilRunning = true;
+    const release = () => {
       if (council) this.councilRunning = false;
       if (this.running.get(thread.id)?.turnId === turn.id) this.running.delete(thread.id);
-    });
+    };
+    try {
+    this.bus.emit(thread.id, 'turn.started', { turnId: turn.id, brain: brainId, label: brain.manifest.label, skill: skill?.name, effort, search: cfg.searchProvider, lens: lens + ':1' });
+    audit('turn.start', { turnId: turn.id, threadId: thread.id, brain: brainId, content, attachments: input.attachmentIds ?? [], skill: skill?.name, effort, search: cfg.searchProvider, pageContext: input.pageContext });
+    void auditContext.run({ ...(auditContext.getStore() ?? {}), turnId: turn.id, threadId: thread.id }, () => this.run(thread.id, turn.id, brain, ctrl, cfg, effort)).finally(release);
+    } catch (e) { // never leave a turn running with no worker to finish it
+      store.finishTurn(this.db, turn.id, 'failed', 'INTERNAL', 'The reply could not be started.');
+      release();
+      throw e;
+    }
     return { turnId: turn.id, existing: false, version };
   }
 
@@ -132,7 +145,14 @@ export class ChatEngine {
     const t0 = Date.now();
     const deadline = setTimeout(() => ctrl.abort(new AgentError('BUDGET_EXCEEDED', 'time limit')), this.cfg.limits.turnSeconds * 1000 + 5000);
     const citations: CitationBlock[] = [];
-    const ctx: ToolCtx = { cfg, db: this.db, finsight: this.finsight, signal: ctrl.signal, turnId, threadId,
+    // One turn reads one book: if it changes mid-research, stop rather than mix REAL and PAPER figures.
+    let pinnedBook: string | undefined;
+    const finsight = this.finsight.observe?.((book, pathname) => {
+      if (!BOOK_SCOPED.test(pathname)) return;
+      pinnedBook ??= book;
+      if (book !== pinnedBook) ctrl.abort(new AgentError('BOOK_CHANGED', `The portfolio switched from ${pinnedBook.toUpperCase()} to ${book.toUpperCase()} during this reply, so it was stopped before mixing the two. Ask again.`, 409));
+    }) ?? this.finsight;
+    const ctx: ToolCtx = { cfg, db: this.db, finsight, signal: ctrl.signal, turnId, threadId,
       budget: { searches: this.cfg.limits.searchesPerTurn, fetches: this.cfg.limits.fetchesPerTurn }, citations };
     let streamed = '', step = 0, costUsd = 0, councilUnknown = false, councilReadiness: string | null = null;
     const usageTotal: Usage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0 };
@@ -164,14 +184,15 @@ export class ChatEngine {
       this.bus.emit(threadId, 'turn.finished', { turnId, usage: usageTotal, costUsd: councilUnknown ? null : round6(costUsd), steps: step, ms: Date.now() - t0 });
     } catch (e) {
       const aborted = ctrl.signal.aborted;
-      const timeLimit = aborted && ctrl.signal.reason instanceof AgentError;
-      if (aborted && !timeLimit) {
+      const reason = aborted && ctrl.signal.reason instanceof AgentError ? ctrl.signal.reason : null;
+      const timeLimit = reason?.code === 'BUDGET_EXCEEDED';
+      if (aborted && !reason) {
         store.appendMessage(this.db, threadId, 'assistant', [...(streamed ? [{ type: 'text' as const, text: streamed }] : []), { type: 'notice', kind: 'stopped', text: 'Stopped by you.' }], { brain: brain.manifest.id, turnId });
         store.finishTurn(this.db, turnId, 'stopped', 'user');
         audit('turn.end', { turnId, threadId, status: 'stopped', ms: Date.now() - t0 });
         this.bus.emit(threadId, 'turn.stopped', { turnId });
       } else {
-        const err = timeLimit ? new AgentError('BUDGET_EXCEEDED', `Time limit of ${this.cfg.limits.turnSeconds}s reached.`) : e;
+        const err = timeLimit ? new AgentError('BUDGET_EXCEEDED', `Time limit of ${this.cfg.limits.turnSeconds}s reached.`) : reason ?? e;
         const code = err instanceof AgentError ? err.code : 'INTERNAL';
         const message = err instanceof AgentError ? err.message : 'Something went wrong while answering. Details are in the agent log.';
         log('error', 'turn.failed', { turnId, code, error: String((e as Error)?.stack || e).slice(0, 2000) });
@@ -196,9 +217,12 @@ export class ChatEngine {
   private async attachContextPack(threadId: string, ctx: ToolCtx): Promise<void> {
     const msgs = store.listMessages(this.db, threadId);
     const lastPack = [...msgs].reverse().find((m) => m.blocks.some((b) => b.type === 'notice' && b.kind === 'context_pack'));
-    if (lastPack && Date.now() - lastPack.createdAt < PACK_TTL_MS) return;
+    const lastBook = lastPack ? packBook(lastPack.blocks.find((b) => b.type === 'notice' && b.kind === 'context_pack')) : undefined;
+    let book: string | undefined;
+    try { book = (await ctx.finsight.get<{ book?: string }>('/api/book', {}, ctx.signal)).book; } catch { /* unknown: age alone decides, as FinSight can't be asked */ }
+    if (lastPack && Date.now() - lastPack.createdAt < PACK_TTL_MS && (!book || book === lastBook)) return;
     try {
-      const pack = await buildContextPack(ctx);
+      const pack = { ...(await buildContextPack(ctx)), ...(book ? { book } : {}), ...(book && lastBook && book !== lastBook ? { bookChangedFrom: lastBook } : {}) };
       const last = msgs[msgs.length - 1];
       if (!last || last.role !== 'user') return;
       // Stored as its own notice row (role user) right after the message: history stays append-only.
@@ -234,8 +258,9 @@ export class ChatEngine {
         resolved.set(b.id, img ? [{ type: 'image', ...img }, { type: 'text', text: `[Attached image "${b.name}"]` }] : [{ type: 'text', text: `[Attached image "${b.name}" is unavailable.]` }]);
       } else resolved.set(b.id, [{ type: 'text', text: brain.kind === 'cli' ? `[Attached image "${b.name}" is in your working folder; use Read to view it]` : `[Attached image "${b.name}": the current model cannot view images. Choose a vision-capable model to analyse it.]` }]);
     }
+    const currentBook = packBook([...all].reverse().flatMap((m) => m.blocks).find((b) => b.type === 'notice' && b.kind === 'context_pack'));
     let entries = all.map((m) => ({
-      message: toModelMsg(m, (b) => resolved.get(b.id) || []),
+      message: toModelMsg(m, (b) => resolved.get(b.id) || [], currentBook),
       starts: m.role === 'user' && m.blocks.some((b) => b.type === 'text' || b.type === 'attachment'),
     })).filter((x): x is { message: Msg; starts: boolean } => x.message !== null);
     for (const { message } of entries) if (message.providerExtra?.brain !== brain.manifest.id) delete message.providerExtra;
@@ -251,39 +276,60 @@ export class ChatEngine {
     const tools = this.tools.schemas().filter((t) => t.name !== 'render_ui' || ctx.ui!.enabled);
     let costUsd = 0, step = 0, final = false, warnedContext = false;
     while (true) {
+      ctrl.signal.throwIfAborted(); // never pay for another call once the turn is stopped
       costUsd = store.turnSpend(this.db, turnId); // includes paid search and fetch
       const overLimit = step >= turnSteps || costUsd >= turnUsd || Date.now() - t0 > turnSeconds * 1000 * 0.8;
-      if (overLimit && !final) {
+      const goFinal = () => {
         final = true;
         store.appendMessage(this.db, threadId, 'user', [{ type: 'notice', kind: 'limit', text: FINAL_ANSWER_NUDGE }], { turnId });
         this.bus.emit(threadId, 'budget.warning', { turnId, scope: 'turn', note: 'Turn limit reached; writing the answer with what was found.' });
-      }
+      };
+      if (overLimit && !final) goFinal();
       resetStream();
       const t = Date.now();
       const [stable, dynamic] = this.system().split(DATE_SUFFIX);
       const lensNotice = [...store.listMessages(this.db, threadId)].reverse().flatMap((m) => m.blocks).find((b) => b.type === 'notice' && b.kind === 'lens');
       const lens = LENSES.find((l) => l.id === (lensNotice?.type === 'notice' ? lensNotice.text.split(':')[0] : 'balanced'))!;
       const system = stable + (ctx.ui.enabled ? '\n\n' + UI_GUIDANCE : '') + DATE_SUFFIX + dynamic + (lens.id === 'balanced' ? '' : '\nAnalytical lens (subordinate to core rules, accepted policy and capabilities): ' + JSON.stringify(lens));
-      const context = await this.history(threadId, brain, system, final ? [] : tools);
+      let context = await this.history(threadId, brain, system, final ? [] : tools);
+      // Check and reserve with no await between them, so concurrent turns cannot
+      // spend the same allowance. A research step that won't fit gives way to a
+      // final answer without the tool menu; if that won't fit either, nothing is sent.
+      let reservation = this.reserveStep(brain, threadId, turnId, system, final ? [] : tools, context.messages);
+      if (!reservation && !final) {
+        goFinal();
+        context = await this.history(threadId, brain, system, []);
+        reservation = this.reserveStep(brain, threadId, turnId, system, [], context.messages);
+      }
+      if (!reservation) {
+        if (step === 0) throw new AgentError('BUDGET_EXCEEDED', 'Not enough of the per-turn or daily API spending limit is free to send this to the model, so nothing was sent. Raise the limit in Kestrel limits, start a shorter chat, or use a CLI brain.', 429);
+        const text = 'I reached the spending limit before I could write a full answer, so I stopped without another paid model call. The research so far is above and in the trace. Raise the limit in Kestrel limits to go further.';
+        onText(text);
+        store.appendMessage(this.db, threadId, 'assistant', [{ type: 'text', text }], { brain: brain.manifest.id, turnId });
+        break;
+      }
       const messages = context.messages;
       if (!warnedContext && (context.omitted || context.partialDocuments)) {
         warnedContext = true;
         this.bus.emit(threadId, 'budget.warning', { turnId, scope: 'context', note: 'Some earlier conversation or document text is outside the current context. Original messages and documents remain available through search and document tools.' });
       }
-      audit('model.request', { turnId, threadId, step, brain: brain.manifest.id, model: brain.manifest.model, effort, final, system, tools: final ? [] : tools.map((x) => x.name),
+      audit('model.request', { turnId, threadId, step, brain: brain.manifest.id, model: brain.manifest.model, effort, final, reservedUsd: reservation.usd, maxOutputTokens: reservation.maxOutputTokens, system, tools: final ? [] : tools.map((x) => x.name),
         messages: messages.map((m) => ({ role: m.role, blocks: m.blocks.map((b) => (b.type === 'image' ? { type: 'image', mime: b.mime, name: b.name, bytes: b.data.length } : b)) })) });
       let res: StepResult;
       try {
-        res = await this.stepWithRetry(brain, { system, messages, effort, tools: final ? [] : tools, signal: ctrl.signal, onText }, threadId, turnId);
+        res = await this.stepWithRetry(brain, { system, messages, effort, maxOutputTokens: reservation.maxOutputTokens, tools: final ? [] : tools, signal: ctrl.signal, onText }, threadId, turnId);
       } catch (e) {
         audit('model.error', { turnId, step, brain: brain.manifest.id, ms: Date.now() - t, code: (e as AgentError).code, error: String((e as Error).message) });
+        // A rate-limit refusal is never billed; any other failure may have been, so the reservation stands.
+        reservation.settle((e as AgentError).code === 'PROVIDER_RATE_LIMIT' ? 0 : null);
         throw e;
       }
       audit('model.response', { turnId, step, brain: brain.manifest.id, ms: Date.now() - t, stopReason: res.stopReason, usage: res.usage, blocks: res.blocks });
-      const c = costOf(brain.manifest, res.usage, res.searches);
-      costUsd += c; addUsage(usageTotal, res.usage);
-      store.addTraceStep(this.db, turnId, step * 100, { kind: 'brain', name: brain.manifest.id, usage: res.usage, costUsd: c, ms: Date.now() - t, ok: true });
-      store.addCost(this.db, { brain: brain.manifest.id, kind: 'tokens', units: (res.usage.inputTokens ?? 0) + (res.usage.outputTokens ?? 0), usd: c, priceVersion: brain.manifest.pricing.version, turnId, threadId, usage: res.usage });
+      const reported = res.usage.inputTokens !== null && res.usage.outputTokens !== null;
+      const c = reported ? costOf(brain.manifest, res.usage, res.searches) : null; // unknown usage keeps the reservation
+      addUsage(usageTotal, res.usage);
+      store.addTraceStep(this.db, turnId, step * 100, { kind: 'brain', name: brain.manifest.id, usage: res.usage, costUsd: c ?? undefined, ms: Date.now() - t, ok: true });
+      reservation.settle(c, res.usage);
       step++;
       const calls = res.blocks.filter((b): b is Extract<Block, { type: 'tool_call' }> => b.type === 'tool_call');
       const blocks = [...res.blocks];
@@ -326,6 +372,17 @@ export class ChatEngine {
         && results.every((r) => r.type === 'tool_result' && r.ok)) break;
     }
     return { costUsd: store.turnSpend(this.db, turnId), step };
+  }
+
+  /** Reserve this call's worst case against the turn and daily caps; null when it can't fit. */
+  private reserveStep(brain: ApiBrain, threadId: string, turnId: string, system: string, tools: Parameters<typeof inputBudget>[2], messages: Msg[]) {
+    const { turnUsd, dayUsd, searchesPerTurn } = this.cfg.limits;
+    const free = Math.min(turnUsd - store.turnSpend(this.db, turnId), dayUsd - store.spendSince(this.db, store.startOfToday()));
+    // UTF-8 bytes overstate text tokens, as in context selection; that keeps this a ceiling.
+    const inputTokens = bytes(system) + bytes(tools) + contextSize(messages) + PROVIDER_OVERHEAD_TOKENS;
+    const worst = worstCaseStep(brain.manifest, inputTokens, free, brain.manifest.capabilities.nativeSearch ? searchesPerTurn : 0);
+    if (!worst) return null;
+    return { ...worst, settle: store.reserveCost(this.db, { brain: brain.manifest.id, kind: 'model-reserved', usd: worst.usd, priceVersion: brain.manifest.pricing.version, turnId, threadId }) };
   }
 
   private async stepWithRetry(brain: ApiBrain, req: Parameters<ApiBrain['step']>[0], threadId: string, turnId: string): Promise<StepResult> {
@@ -372,7 +429,21 @@ export class ChatEngine {
 }
 
 /** Neutral stored message → what a brain sees. Notices become short text; UI-only notices are dropped. */
-function toModelMsg(m: StoredMsg, resolve: (b: Extract<Block, { type: 'attachment' }>) => Block[]): Msg | null {
+function packBook(block: Block | undefined): string | undefined {
+  if (block?.type !== 'notice') return undefined;
+  try { const b = JSON.parse(block.text).book; return typeof b === 'string' ? b : undefined; } catch { return undefined; }
+}
+/** A snapshot says which book it describes; one from another book is history, never current holdings. */
+function packLabel(block: Extract<Block, { type: 'notice' }>, currentBook: string | undefined): string {
+  const book = packBook(block), name = book ? `${book.toUpperCase()} book` : 'book not recorded';
+  if (currentBook && book !== currentBook) return `[Context snapshot from FinSight (${name}), historical only: the current book is ${currentBook.toUpperCase()}, so these are not current holdings]\n${block.text}`;
+  if (!book) return `[Context snapshot from FinSight, computed by code. Use for orientation; call tools for detail]\n${block.text}`;
+  let from: unknown; try { from = JSON.parse(block.text).bookChangedFrom; } catch { /* no transition */ }
+  const moved = typeof from === 'string' ? ` The user switched from ${from.toUpperCase()} to ${book.toUpperCase()}: earlier snapshots, tool results and answers in this chat describe ${from.toUpperCase()} and are historical.` : '';
+  return `[Context snapshot from FinSight (${name}), computed by code. Use for orientation; call tools for detail.${moved}]\n${block.text}`;
+}
+
+function toModelMsg(m: StoredMsg, resolve: (b: Extract<Block, { type: 'attachment' }>) => Block[], currentBook?: string): Msg | null {
   const blocks: Block[] = [];
   for (const b of m.blocks) {
     if (b.type === 'attachment') { blocks.push(...resolve(b)); continue; }
@@ -382,7 +453,7 @@ function toModelMsg(m: StoredMsg, resolve: (b: Extract<Block, { type: 'attachmen
     }
     if (b.type === 'notice') {
       if (b.kind === 'page_context') blocks.push({ type: 'text', text: `[Optional FinSight panel context; the explicit question takes priority and may concern other companies: ${b.text}]` });
-      else if (b.kind === 'context_pack') blocks.push({ type: 'text', text: `[Context snapshot from FinSight, computed by code. Use for orientation; call tools for detail]\n${b.text}` });
+      else if (b.kind === 'context_pack') blocks.push({ type: 'text', text: packLabel(b, currentBook) });
       else if (b.kind === 'limit') blocks.push({ type: 'text', text: b.text });
       else if (b.kind === 'error' || b.kind === 'stopped') blocks.push({ type: 'text', text: `[previous reply ${b.kind}]` });
       continue;

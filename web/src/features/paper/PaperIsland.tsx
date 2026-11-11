@@ -11,7 +11,7 @@ import { fmt, signClass, signStr } from '../../ui/format.ts';
 import type { WatchItem } from '../../../../shared/types.ts';
 import { CHART_TF_RANGE, fetchRangeFor, RANGES, visibleStart, type DetailRange } from '../detail/detail.ts';
 import { closeTrade, tradeSheet } from '../trade/trade.ts';
-import { useBook } from './book.ts';
+import { onServerEvent, useBook } from './book.ts';
 import {
   bookSymbol, chartOrders, keyStats, type DeskDetails, dayChange, emptyForm, estimate, fillText, formOrder, limitsBody, limitsText, orderLabel, originLabel, quickAmount, streamLabel, usd,
   type Form, type PaperState, type Settings, type Ticket,
@@ -327,22 +327,18 @@ export default function PaperIsland() {
   useEffect(() => { if (paper && selected && selected !== f.symbol) { saveSymbol(selected); setF((x) => ({ ...x, symbol: selected, amount: '', limitPrice: '' })); } }, [paper, selected]); // eslint-disable-line react-hooks/exhaustive-deps
   // Live updates from the server.
   useEffect(() => {
-    if (!paper || typeof EventSource !== 'function') return;
-    const es = new EventSource('/api/paper/stream');
+    if (!paper) return;
     // One order arrives as several events (new, fill, book): refresh once per burst.
     let t: ReturnType<typeof setTimeout> | undefined, book = false;
-    es.onmessage = (m) => {
-      let e: { kind?: string } = {};
-      try { e = JSON.parse(m.data); } catch { return; }
-      if (e.kind === 'hello') return;
+    const off = onServerEvent((e) => {
       book ||= e.kind === 'book';
       clearTimeout(t);
       t = setTimeout(() => {
         void qc.invalidateQueries({ queryKey: ['paper-state'] });
         if (book) { book = false; void window.FinSight.bus.write('buy'); }
       }, 200);
-    };
-    return () => { clearTimeout(t); es.close(); };
+    });
+    return () => { clearTimeout(t); off(); };
   }, [paper, qc]);
   // Buy/Sell on a position row or + ADD opens this ticket instead of the REAL trade sheet.
   const sheet = useStore(tradeSheet, (x) => x.sheet);
@@ -414,6 +410,7 @@ export default function PaperIsland() {
                 <button className={`${s.btn} ${s.approve}`} onClick={() => void decide(t.id, true)}>Approve</button>
                 <button className={s.btn} onClick={() => void decide(t.id, false)}>Reject</button>
                 {t.note && <span className={s.note}>{t.note}</span>}
+                {t.error && <span role="alert" className={s.err}>Not sent: {t.error}</span>}
               </li>
             ))}
           </ul>

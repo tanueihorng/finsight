@@ -1,6 +1,6 @@
 import { test, after, before } from 'node:test';
 import assert from 'node:assert/strict';
-import { fakeFinsight, testConfig } from './helpers.ts';
+import { fakeFinsight, testConfig, testCtx } from './helpers.ts';
 import type { Fake } from './helpers.ts';
 import { openDb } from '../src/store/db.ts';
 import * as store from '../src/store/db.ts';
@@ -13,7 +13,9 @@ import type { Script } from '../src/brains/mock.ts';
 import { BrainManifest } from '../src/brains/types.ts';
 import { toOpenAiMessages } from '../src/brains/openai.ts';
 import { toAnthropicMessages } from '../src/brains/anthropic.ts';
+import { AgentError } from '../src/types.ts';
 import type { Msg } from '../src/types.ts';
+import { bytes, contextSize } from '../src/chat/context.ts';
 
 let fake: Fake;
 before(async () => { fake = await fakeFinsight(); });
@@ -195,4 +197,139 @@ test('unqualified council model is rejected before turn or message mutation', ()
  assert.throws(() => engine.send({ threadId: thread.id, content: '/committee ACME', brain: 'unqualified' }), (e: any) => e.code === 'COUNCIL_MODEL_UNQUALIFIED');
  assert.equal(store.listMessages(db, thread.id).length, 0);
  assert.equal(store.getThread(db, thread.id)?.version, thread.version);
+});
+
+// ---- spending caps (FR-8.3): every model call is reserved before dispatch ----
+const firstStepInputUsd = async () => {
+  let usd = 0;
+  const { db, engine } = setup((req) => { usd = (bytes(req.system) + bytes(req.tools) + contextSize(req.messages) + 1024) / 1e6; return [{ type: 'text', text: 'ok' }]; });
+  const t = store.createThread(db); await waitTurn(db, engine.send({ threadId: t.id, content: 'measure' }).turnId);
+  return usd;
+};
+
+test('caps that cannot cover the first call: no model call, no charge, a clear failure', async () => {
+  let calls = 0;
+  const { db, engine } = setup(() => { calls++; return [{ type: 'text', text: 'no' }]; }, { turnUsd: 0.0001, dayUsd: 0.0001 });
+  const t = store.createThread(db);
+  const r = engine.send({ threadId: t.id, content: 'test budget' });
+  assert.equal(await waitTurn(db, r.turnId), 'failed');
+  assert.equal(calls, 0);
+  assert.equal(store.spendSince(db, 0), 0);
+  assert.ok(store.eventsAfter(db, t.id, 0).some((e) => e.type === 'turn.failed' && (e.payload as { code?: string }).code === 'BUDGET_EXCEEDED'));
+});
+
+test('near the cap the output allowance shrinks, research gives way to a final answer, and spend stays under it', async () => {
+  const cap = await firstStepInputUsd() + 0.002;
+  const seen: { limit: number | undefined; tools: number }[] = [];
+  const { db, engine } = setup((req) => {
+    seen.push({ limit: req.maxOutputTokens, tools: req.tools.length });
+    return req.tools.length ? [{ type: 'tool_call', id: 'c' + seen.length, name: 'get_cash', args: {} }] : [{ type: 'text', text: 'final' }];
+  }, { turnUsd: cap, dayUsd: cap });
+  const t = store.createThread(db);
+  assert.equal(await waitTurn(db, engine.send({ threadId: t.id, content: 'test budget' }).turnId), 'succeeded');
+  assert.ok(seen.filter((s) => s.tools).every((s) => s.limit! >= 512 && s.limit! < 8000), JSON.stringify(seen));
+  assert.equal(seen.at(-1)!.tools, 0);
+  assert.ok(store.spendSince(db, 0) <= cap);
+  assert.equal((db.prepare("SELECT COUNT(*) n FROM cost_ledger WHERE kind='model-reserved'").get() as any).n, 0, 'measured usage replaces each reservation');
+});
+
+test('when even a final answer no longer fits, the turn ends with a local message and no further call', async () => {
+  let calls = 0;
+  const { db, engine } = setup(() => {
+    calls++;
+    store.addCost(db, { brain: 'other', kind: 'tokens', units: 1, usd: 4.99999 }); // another chat uses up the day
+    return [{ type: 'tool_call', id: 'c1', name: 'get_cash', args: {} }];
+  }, { dayUsd: 5 });
+  const t = store.createThread(db);
+  assert.equal(await waitTurn(db, engine.send({ threadId: t.id, content: 'test budget' }).turnId), 'succeeded');
+  assert.equal(calls, 1);
+  const last = store.listMessages(db, t.id).at(-1)!;
+  assert.equal(last.role, 'assistant'); assert.match((last.blocks[0] as any).text, /spending limit/);
+});
+
+test('two chats cannot spend the same daily allowance', async () => {
+  const cap = await firstStepInputUsd() + 0.002;
+  let calls = 0, release = () => {};
+  const held = new Promise<void>((r) => { release = r; });
+  const { db, engine } = setup(async () => { calls++; await held; return [{ type: 'text', text: 'ok' }]; }, { turnUsd: 1, dayUsd: cap });
+  const a = store.createThread(db), b = store.createThread(db);
+  const ra = engine.send({ threadId: a.id, content: 'first' }), rb = engine.send({ threadId: b.id, content: 'second' });
+  assert.equal(await waitTurn(db, rb.turnId), 'failed');
+  assert.equal(calls, 1);
+  release();
+  assert.equal(await waitTurn(db, ra.turnId), 'succeeded');
+});
+
+test('unknown usage and failed calls keep the reservation; a rate-limit refusal releases it', async () => {
+  const { db, engine } = setup(() => [{ type: 'text', text: 'x' }]);
+  let fail: Error | null = null;
+  engine.setBrain('mock', { kind: 'api', manifest, step: async () => {
+    if (fail) throw fail;
+    return { blocks: [{ type: 'text', text: 'ok' }], usage: { inputTokens: null, outputTokens: null }, stopReason: 'end' };
+  } });
+  const held = () => (db.prepare("SELECT COUNT(*) n FROM cost_ledger WHERE kind='model-reserved' AND usd > 0").get() as { n: number }).n;
+  const run = async () => { const t = store.createThread(db); await waitTurn(db, engine.send({ threadId: t.id, content: 'q' }).turnId); };
+  await run(); assert.equal(held(), 1);
+  fail = new Error('disconnected after dispatch'); await run(); assert.equal(held(), 2);
+  fail = new AgentError('PROVIDER_INVALID', 'rejected', 502); await run(); assert.equal(held(), 3);
+});
+
+test('a rate-limited call is not charged', async () => {
+  const { db, engine } = setup(() => [{ type: 'text', text: 'x' }]);
+  engine.setBrain('mock', { kind: 'api', manifest, step: async (req) => { req.onText('partial'); throw new AgentError('PROVIDER_RATE_LIMIT', 'slow down', 429); } });
+  const t = store.createThread(db);
+  assert.equal(await waitTurn(db, engine.send({ threadId: t.id, content: 'q' }).turnId), 'failed');
+  assert.equal(store.spendSince(db, 0), 0);
+});
+
+// ---- a message that cannot be admitted leaves nothing behind ----
+test('a missing attachment refuses the message without locking the chat', async () => {
+  const { db, engine } = setup(() => [{ type: 'text', text: 'fine' }]);
+  const t = store.createThread(db);
+  assert.throws(() => engine.send({ threadId: t.id, content: 'read this', attachmentIds: ['up_missing123'] }), (e: any) => e.code === 'NOT_FOUND');
+  assert.equal(store.getThread(db, t.id)!.version, t.version);
+  assert.equal((db.prepare('SELECT COUNT(*) n FROM turns').get() as any).n, 0);
+  assert.equal(store.listMessages(db, t.id).length, 0);
+  assert.equal(engine.isRunning(t.id), null);
+  const again = engine.send({ threadId: t.id, content: 'retry without file' });
+  assert.equal(await waitTurn(db, again.turnId), 'succeeded');
+});
+
+// ---- book identity: REAL and PAPER never pass for each other ----
+const contextPacks = (db: any, id: string) => store.listMessages(db, id).flatMap((m) => m.blocks).filter((b: any) => b.type === 'notice' && b.kind === 'context_pack').map((b: any) => JSON.parse(b.text));
+
+test('switching book replaces the context snapshot and labels the old one as history', async (t) => {
+  fake.book = 'real'; t.after(() => { delete fake.book; });
+  const seen: string[] = [];
+  const { db, engine } = setup((req) => { seen.push(JSON.stringify(req.messages)); return [{ type: 'text', text: 'ok' }]; });
+  const th = store.createThread(db);
+  await waitTurn(db, engine.send({ threadId: th.id, content: 'review' }).turnId);
+  assert.equal(contextPacks(db, th.id)[0].book, 'real');
+  assert.match(seen[0]!, /Context snapshot from FinSight \(REAL book\), computed by code/);
+  await waitTurn(db, engine.send({ threadId: th.id, content: 'same book, same snapshot' }).turnId);
+  assert.equal(contextPacks(db, th.id).length, 1);
+
+  fake.book = 'paper';
+  await waitTurn(db, engine.send({ threadId: th.id, content: 'review again' }).turnId);
+  const packs = contextPacks(db, th.id);
+  assert.equal(packs.length, 2); assert.equal(packs[1].book, 'paper'); assert.equal(packs[1].bookChangedFrom, 'real');
+  assert.match(seen[2]!, /\(REAL book\), historical only: the current book is PAPER/);
+  assert.match(seen[2]!, /\(PAPER book\), computed by code.*switched from REAL to PAPER/);
+});
+
+test('a book switch during a turn stops it before the next paid call', async (t) => {
+  fake.book = 'real'; t.after(() => { delete fake.book; });
+  let calls = 0;
+  const { db, engine } = setup(() => { calls++; fake.book = 'paper'; return [{ type: 'tool_call', id: 'c1', name: 'get_cash', args: {} }]; });
+  const th = store.createThread(db);
+  assert.equal(await waitTurn(db, engine.send({ threadId: th.id, content: 'review' }).turnId), 'failed');
+  assert.equal(calls, 1);
+  assert.ok(store.eventsAfter(db, th.id, 0).some((e) => e.type === 'turn.failed' && (e.payload as { code?: string }).code === 'BOOK_CHANGED'));
+});
+
+test('portfolio tool results name their book; market data does not', async (t) => {
+  fake.book = 'paper'; t.after(() => { delete fake.book; });
+  const cfg = testConfig(fake), ctx = testCtx(cfg), tools = buildRegistry();
+  assert.equal(JSON.parse((await tools.execute('get_cash', {}, ctx)).content).book, 'paper');
+  assert.equal(JSON.parse((await tools.execute('get_quote', { symbols: ['NVDA'] }, ctx)).content).book, undefined);
 });

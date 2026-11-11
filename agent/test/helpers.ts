@@ -86,7 +86,7 @@ function bars(n: number, start = 100, drift = 0.002) {
   return out;
 }
 
-export type Fake = { url: string; dataDir: string; calls: { method: string; path: string; auth: string | undefined }[]; close: () => Promise<void>; down: boolean };
+export type Fake = { url: string; dataDir: string; calls: { method: string; path: string; auth: string | undefined }[]; close: () => Promise<void>; down: boolean; book?: 'real' | 'paper' };
 
 export async function fakeFinsight(options: { scopedAccounts?: boolean; naturalHistory?: boolean; fx?: Record<string, number> } = {}): Promise<Fake> {
   // FX pairs the fake quote path knows; any other =X symbol has no price.
@@ -101,7 +101,9 @@ export async function fakeFinsight(options: { scopedAccounts?: boolean; naturalH
     const j = (s: number, b: unknown) => { res.writeHead(s, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(b)); };
     if (req.headers.authorization !== `Bearer ${TOKEN}`) return j(401, { error: 'Locked' });
     if (req.method !== 'GET') return j(403, { error: 'no' });
+    if (fake.book) res.setHeader('X-FinSight-Book', fake.book); // set by tests of book identity
     switch (u.pathname) {
+      case '/api/book': return fake.book ? j(200, { book: fake.book }) : j(404, { error: 'Unknown endpoint' });
       case '/api/portfolio': {
         const account = u.searchParams.get('account');
         if (!options.scopedAccounts || !account || account === 'ALL') return j(200, PORTFOLIO);

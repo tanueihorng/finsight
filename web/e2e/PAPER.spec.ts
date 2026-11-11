@@ -139,3 +139,19 @@ test('before connecting, the desk still shows a watchlist, key stats, news and f
   await watch.getByRole('button', { name: 'Remove MSFT from the watchlist' }).click();
   await expect(watch).toContainText('Add symbols above');
 });
+
+test('a second tab follows a switch made in another tab or by another client', async ({ page, context }) => {
+  await unlock(page);
+  const other = await context.newPage();
+  await other.goto('/');
+  await expect(other.locator('html')).toHaveAttribute('data-book', 'real');
+
+  await toPaper(page);
+  await expect(other.locator('html')).toHaveAttribute('data-book', 'paper');
+  await expect(other.locator('#book-paper')).toHaveAttribute('aria-pressed', 'true');
+
+  await page.request.post('/api/book', { data: { book: 'real' } }); // another client entirely
+  await expect(page.locator('html')).toHaveAttribute('data-book', 'real');
+  await expect(other.locator('html')).toHaveAttribute('data-book', 'real');
+  await other.close();
+});

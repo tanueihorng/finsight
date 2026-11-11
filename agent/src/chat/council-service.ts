@@ -96,12 +96,9 @@ export async function runStoredCouncil(o: { db: DB; bus: EventBus; tools: ToolRe
     effort: o.effort, capUsd, maxOutputTokens: cfg.limits.councilOutputTokens, researchCalls: cfg.limits.councilResearchCalls, dayBudget: new CouncilBudget(Math.max(0.000001, cfg.limits.dayUsd - store.spendSince(db, store.startOfToday()))),
     // Web search is offered only when a provider is configured, matching the UI.
     tools: tools.schemas().filter((t) => t.name !== 'web_search' || cfg.searchProvider !== 'none'),
-    reserveCost: (maximum) => {
-      // Persist before calling the provider; unknown/failure retains the
-      // conservative reservation in the daily ledger, never a fake zero.
-      const entry = db.prepare('INSERT INTO cost_ledger(ts,brain,kind,units,usd,price_version,turn_id,thread_id) VALUES (?,?,?,?,?,?,?,?)').run(Date.now(), brain.manifest.id, 'council-reserved', 0, maximum, brain.manifest.pricing.version, turnId, threadId);
-      return (actual, usage) => { if (actual !== null) db.prepare('UPDATE cost_ledger SET usd=?,kind=?,units=?,input_tokens=?,output_tokens=?,cache_read_tokens=?,cache_write_tokens=? WHERE id=?').run(actual, 'tokens', (usage?.inputTokens ?? 0) + (usage?.outputTokens ?? 0), usage?.inputTokens ?? null, usage?.outputTokens ?? null, usage?.cacheReadTokens ?? null, usage?.cacheWriteTokens ?? null, entry.lastInsertRowid); };
-    },
+    // Persisted before calling the provider; unknown/failure retains the
+    // conservative reservation in the daily ledger, never a fake zero.
+    reserveCost: (maximum) => store.reserveCost(db, { brain: brain.manifest.id, kind: 'council-reserved', usd: maximum, priceVersion: brain.manifest.pricing.version, turnId, threadId }),
     emit: (r) => progress(JSON.stringify(r)),
     account: (res, cost) => {
       usageTotal.inputTokens = usageTotal.inputTokens === null || res.usage.inputTokens === null ? null : usageTotal.inputTokens + res.usage.inputTokens;

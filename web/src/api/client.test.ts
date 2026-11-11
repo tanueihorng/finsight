@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createApi, ApiError } from './client.ts';
+import { bookGuard, createApi, ApiError } from './client.ts';
 import { createBus, mutationInvalidations } from './invalidation.ts';
 
 test('API maps plain and structured errors, including non-JSON errors', async () => {
@@ -58,4 +58,17 @@ test('bus works before Query, fans out once and cleans subscriptions despite fai
   assert.ok(mutationInvalidations.sell.includes('chart-trades'));
   assert.equal(mutationInvalidations.undo[0], 'accounts');
   assert.ok(mutationInvalidations.cash.includes('wealth'));
+});
+
+test('writes state the book this tab shows, and a response from another book triggers a recheck', async () => {
+  const served: string[] = [], sent: (string | null)[] = [];
+  bookGuard.shown = () => 'real'; bookGuard.served = (b) => served.push(b);
+  try {
+    let answering = 'real';
+    const api = createApi(async (_p, init) => { sent.push(new Headers(init?.headers).get('x-finsight-book')); return new Response('{}', { headers: { 'X-FinSight-Book': answering } }); }, () => {});
+    await api('/api/portfolio'); await api('/api/cash', { method: 'POST' }); await api('/api/book', { method: 'POST' });
+    assert.deepEqual(sent, [null, 'real', null]); assert.deepEqual(served, []);
+    answering = 'paper'; await api('/api/portfolio');
+    assert.deepEqual(served, ['paper']);
+  } finally { bookGuard.shown = () => null; bookGuard.served = () => {}; }
 });
