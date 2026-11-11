@@ -448,7 +448,9 @@ def check_worker_contract():
         gap = request(5)
         del gap["bars"]["A"][at]["adj"]
         notes = run(gap)["warnings"]
-        require(any(w.startswith("No adjusted close for A") for w in notes), "a window bar without adjusted close not flagged", (at, notes))
+        require(any(w.startswith("Adjusted close is missing on some days for A:") and "may be incomplete" in w for w in notes),
+                "a window bar without adjusted close not flagged as a gap", (at, notes))
+        require(not any(w.startswith("No adjusted close for A") for w in notes), "a gap reported as no adjusted close at all", (at, notes))
         bench_gap = request(5)
         day = days[at]
         rows = bench_gap["benchmark"]["bars"]
@@ -485,7 +487,8 @@ def check_worker_contract():
     partial["bars"]["C"] = bars_at(100.0)
     notes = run(partial)["warnings"]
     require(any("No adjusted close for A:" in w for w in notes), "price-only symbols not named", notes)
-    require(not any("C" in w.split(":")[0] for w in notes if w.startswith("No adjusted close for")), "complete symbols wrongly named", notes)
+    require(not any("C" in w.split(":")[0] for w in notes if "adjusted close" in w.lower()), "complete symbols wrongly named", notes)
+    require(not any("some days" in w for w in notes), "a symbol with no adjusted close reported as a gap", notes)
 
     missing_first = request(1)
     missing_first["benchmark"]["bars"] = missing_first["benchmark"]["bars"][1:]

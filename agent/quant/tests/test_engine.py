@@ -211,8 +211,19 @@ class BenchmarkCurve(unittest.TestCase):
             request["bars"] = {"A": rows}
             request["benchmark"]["bars"] = [{**b, "adj": b["c"]} for b in flat()]
             warnings = " ".join(run(request)["warnings"])
-            self.assertIn("No adjusted close for A", warnings, day)
+            self.assertIn("missing on some days for A: dividends on these may be incomplete", warnings, day)
+            self.assertNotIn("not counted", warnings, day)
             self.assertNotIn("its return excludes dividends", warnings, day)
+
+    def test_gap_and_no_adjusted_close_are_told_apart(self):
+        request = Worker().request()
+        gap = [{**b, "adj": b["c"]} for b in flat(110.0)]
+        del gap[3]["adj"]
+        request["bars"] = {"A": flat(110.0), "B": gap, "C": [{**b, "adj": b["c"]} for b in flat(110.0)]}
+        warnings = run(request)["warnings"]
+        self.assertIn("No adjusted close for A: dividends on these are not counted.", warnings)
+        self.assertIn("Adjusted close is missing on some days for B: dividends on these may be incomplete.", warnings)
+        self.assertFalse(any("C" in w.split(":")[0] for w in warnings if "adjusted close" in w.lower()))
 
 
 class Worker(unittest.TestCase):

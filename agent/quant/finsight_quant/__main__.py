@@ -34,9 +34,15 @@ def run(request: dict) -> dict:
     if skipped or result["reduced"]:
         warnings.append(f"{skipped} candidate trades were skipped and {result['reduced']} reduced for lack of cash or position slots, so the most-liquid-first ordering affects this result.")
     window = (calendar[0], calendar[-1])
-    price_only = sorted(s for s, rows in bars.items() if any(not b.get("adj") for b in rows if window[0] <= b["date"] <= window[1]))
-    if price_only:
-        warnings.append(f"No adjusted close for {', '.join(price_only)}: dividends on these are not counted.")
+    # A dividend is credited only between two bars that both have adjusted close,
+    # so none in the window means none are counted, and a gap means some may be missing.
+    in_window = {s: [bool(b.get("adj")) for b in rows if window[0] <= b["date"] <= window[1]] for s, rows in bars.items()}
+    no_adj = sorted(s for s, has in in_window.items() if has and not any(has))
+    some_adj = sorted(s for s, has in in_window.items() if any(has) and not all(has))
+    if no_adj:
+        warnings.append(f"No adjusted close for {', '.join(no_adj)}: dividends on these are not counted.")
+    if some_adj:
+        warnings.append(f"Adjusted close is missing on some days for {', '.join(some_adj)}: dividends on these may be incomplete.")
     if bench_price_only:
         warnings.append("No adjusted close for the benchmark: its return excludes dividends.")
 

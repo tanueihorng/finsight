@@ -147,6 +147,8 @@ A second review, of `6769a12`, found two more:
 
 The four real saved runs were re-validated with the stricter code: all passed both guards and gave the same studies, byte for byte.
 
+A third review, of `d980bb9`, found no blockers and one wording fault: a stock missing adjusted close on some days still earns dividends between days that have it, yet the warning said its dividends were not counted. The warning now tells the two cases apart. With no adjusted close in the window it says dividends are not counted, and with a gap it says they may be incomplete. Results are unchanged.
+
 ## Later milestones (not selected)
 
 | Order | Work | Note |
