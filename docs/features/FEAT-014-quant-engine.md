@@ -138,6 +138,13 @@ An independent review of `328b26e` found three defects. Each is fixed, with a te
 | Compare could show runs on revised prices as one test | Run summaries carry the dataset and replay-code fingerprints. Compare requires both to match, and a run without them stands alone. |
 | A non-USD or unreported benchmark currency was accepted | FinSight history now reports whether Yahoo sent a currency (`meta.currencyReported`). The benchmark must be reported USD or the backtest is refused. Stocks not reported as USD are excluded with a warning. History cache keys moved to `hv2:` so no entry without the flag is served. |
 
+A second review, of `6769a12`, found two more:
+
+| Finding | Fix |
+|---|---|
+| A warm-up bar with no adjusted close, before the test window, switched the whole benchmark to price-only returns | The fallback, and the matching warnings, now look only at bars inside the test window. |
+| Studies saved before the strict baseline check carried `baseMatchesRun: true` after comparing only two growth rates | Studies now record `baseCheckVersion: 2`, and reads hide any study without it. Checks saved before this change show as not checked until they are run again. |
+
 The four real saved runs were re-validated with the stricter code: all passed both guards and gave the same studies, byte for byte.
 
 ## Later milestones (not selected)

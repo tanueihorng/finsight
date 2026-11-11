@@ -104,8 +104,11 @@ export function baseMatches(base: Record<string, any>, stored: Record<string, an
     && base.trades === t.closedTrades + t.openTrades;
 }
 
-/** A study is shown only when it was checked against the run it is stored with. */
-const matchedStudy = (robustness: Record<string, any> | null) => robustness && robustness.baseMatchesRun === true ? robustness : null;
+// Version of the baseline comparison a stored study passed. Studies written before
+// version 2 compared only two growth rates, so they are hidden until checked again.
+const BASE_CHECK_VERSION = 2;
+/** A study is shown only when it was checked against the run it is stored with, by the current rule. */
+const matchedStudy = (robustness: Record<string, any> | null) => robustness && robustness.baseMatchesRun === true && robustness.baseCheckVersion === BASE_CHECK_VERSION ? robustness : null;
 
 /** The strategy and inputs of a saved run, exactly as they were stored. */
 async function rebuild(ctx: ToolCtx, run: SavedRun) {
@@ -274,7 +277,7 @@ export const quantTools: ToolDef[] = [
       if (!baseMatches(figures.base, stored)) throw new AgentError('QUANT_BASE_MISMATCH', 'The checks\' full-window baseline does not match the saved run, so the checks were not saved. Run a new backtest and validate that.');
       const baseMatchesRun = true;
       const robustness = {
-        validatedAt: new Date().toISOString(), strategy: stored.strategy, status: stored.status, label: ROBUSTNESS_LABEL, summary, ...figures, baseMatchesRun,
+        validatedAt: new Date().toISOString(), strategy: stored.strategy, status: stored.status, label: ROBUSTNESS_LABEL, summary, ...figures, baseMatchesRun, baseCheckVersion: BASE_CHECK_VERSION,
         warnings: [SURVIVORSHIP], limits: ROBUSTNESS_LIMITS,
         provenance: { datasetSha256: stored.provenance.datasetSha256, engineSha256: engineHash(ctx, strategy.origin), workerSha256: workerHash(), candidatesSha256: digest(candidates), studySha256: digest(study) },
       };

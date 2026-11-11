@@ -70,7 +70,9 @@ def benchmark_curve(bars: list[dict], calendar: list[str], initial_cash: float) 
     by_date = {b["date"]: b for b in bars}
     if calendar[0] not in by_date:
         raise ReplayError(f"benchmark has no bar on {calendar[0]}")
-    price_only = any(not b.get("adj") for b in bars)
+    # Only the bars this curve reads decide the fallback: a warm-up bar before the
+    # window must not switch the whole benchmark to price-only.
+    price_only = any(not by_date[day].get("adj") for day in calendar if day in by_date)
     field = "c" if price_only else "adj"
     start = by_date[calendar[0]][field]
     level, curve = start, []

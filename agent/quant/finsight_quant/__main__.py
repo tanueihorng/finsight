@@ -33,7 +33,8 @@ def run(request: dict) -> dict:
     skipped = result["rejected"]["max_positions"] + result["rejected"]["no_cash"]
     if skipped or result["reduced"]:
         warnings.append(f"{skipped} candidate trades were skipped and {result['reduced']} reduced for lack of cash or position slots, so the most-liquid-first ordering affects this result.")
-    price_only = sorted(s for s, rows in bars.items() if any(not b.get("adj") for b in rows))
+    window = (calendar[0], calendar[-1])
+    price_only = sorted(s for s, rows in bars.items() if any(not b.get("adj") for b in rows if window[0] <= b["date"] <= window[1]))
     if price_only:
         warnings.append(f"No adjusted close for {', '.join(price_only)}: dividends on these are not counted.")
     if bench_price_only:

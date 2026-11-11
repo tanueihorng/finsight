@@ -434,6 +434,30 @@ def check_worker_contract():
     require(close(out["benchmark"]["totalReturnPct"], (closes.iloc[-1] / closes.iloc[0] - 1) * 100), "price-only benchmark wrong", out["benchmark"])
     require(any("benchmark" in w for w in out["warnings"]), "price-only benchmark not flagged", out["warnings"])
 
+    # Only bars inside the window decide price-only: a warm-up or later bar without
+    # adjusted close changes neither the benchmark nor the warnings.
+    def outside(day, c):
+        return {"date": day, "o": c, "h": c, "l": c, "c": c, "v": 10}
+    edges = request(5)
+    edges["bars"]["A"] = [outside("1999-12-31", 100.0), *edges["bars"]["A"], outside("2999-01-04", 100.0)]
+    edges["benchmark"]["bars"] = [outside("1999-12-31", 50.0), *edges["benchmark"]["bars"], outside("2999-01-04", 500.0)]
+    out = run(edges)
+    require(close(out["benchmark"]["totalReturnPct"], want_total), "a bar outside the window changed the benchmark", out["benchmark"])
+    require(not any("adjusted close" in w for w in out["warnings"]), "a bar outside the window raised a price-only warning", out["warnings"])
+    for at in (0, len(days) // 2, len(days) - 1):
+        gap = request(5)
+        del gap["bars"]["A"][at]["adj"]
+        notes = run(gap)["warnings"]
+        require(any(w.startswith("No adjusted close for A") for w in notes), "a window bar without adjusted close not flagged", (at, notes))
+        bench_gap = request(5)
+        day = days[at]
+        rows = bench_gap["benchmark"]["bars"]
+        if any(b["date"] == day for b in rows):
+            del next(b for b in rows if b["date"] == day)["adj"]
+            out = run(bench_gap)
+            closes = pd.Series({b["date"]: b["c"] for b in rows}).reindex(days).ffill()
+            require(close(out["benchmark"]["totalReturnPct"], (closes.iloc[-1] / closes.iloc[0] - 1) * 100), "benchmark with a window gap not price-only", (at, out["benchmark"]))
+
     skipped = request(0)
     skipped["candidates"] = [{"symbol": "A", "entryDate": days[1], "entry": 1e9, "stop": 1.0, "exits": []}]
     require(any("skipped" in w for w in run(skipped)["warnings"]), "skipped candidates not flagged", skipped)

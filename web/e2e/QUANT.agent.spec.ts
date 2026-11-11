@@ -14,12 +14,20 @@ async function open(page: Page) {
   await page.click('#quant-open');
   await expect(lab(page)).toBeVisible();
 }
+// Waits for the run this call creates, not an earlier one with the same name.
 async function runBacktest(page: Page, strategy: string, symbols = SYMBOLS, wait: RegExp | string = /passed/) {
-  if (await lab(page).getByRole('button', { name: 'New backtest' }).isVisible()) await lab(page).getByRole('button', { name: 'New backtest' }).click();
-  await lab(page).getByLabel('Strategy', { exact: true }).selectOption({ label: strategy });
+  const select = lab(page).getByLabel('Strategy', { exact: true });
+  if (!await select.isVisible()) await lab(page).getByRole('button', { name: 'New backtest' }).click();
+  await expect(select).toBeVisible();
+  const rows = lab(page).getByLabel('Saved runs').locator('li');
+  const before = await rows.count();
+  await select.selectOption({ label: strategy });
   await lab(page).getByLabel(/^Stocks/).fill(symbols);
   await lab(page).getByRole('button', { name: 'Run backtest and checks' }).click();
-  await expect(lab(page).getByLabel('Saved runs').getByRole('button', { name: new RegExp(strategy) }).first()).toContainText(wait);
+  await expect(rows).toHaveCount(before + 1);
+  await expect(rows.first()).toContainText(strategy);
+  await expect(rows.first()).toContainText(wait);
+  await expect(lab(page).getByRole('button', { name: 'Cancel' })).toHaveCount(0);
 }
 
 test('a first run goes from the guided empty state to checked results, with the figures from the agent', async ({ page }) => {

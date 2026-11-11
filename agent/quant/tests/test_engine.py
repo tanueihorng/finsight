@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 
 from finsight_quant.__main__ import run
-from finsight_quant.metrics import performance, trading
+from finsight_quant.metrics import benchmark_curve, performance, trading
 from finsight_quant.portfolio import Config, ReplayError, derive_dividends, replay
 
 QUANT_ROOT = Path(__file__).resolve().parent.parent
@@ -172,6 +172,47 @@ class Metrics(unittest.TestCase):
         sd = math.sqrt(sum((r - mean) ** 2 for r in rets) / 2)
         self.assertAlmostEqual(performance(dates, series, 0.0)["sharpe"], mean / sd * math.sqrt(252))
         self.assertAlmostEqual(performance(dates, series, 2.52)["sharpe"], (mean - 0.0001) / sd * math.sqrt(252))
+
+
+class BenchmarkCurve(unittest.TestCase):
+    def adjusted(self):
+        return [{**b, "adj": 90.0 + i * 10 / (len(DAYS) - 1)} for i, b in enumerate(flat())]
+
+    def test_total_return_uses_adjusted_close(self):
+        curve, price_only = benchmark_curve(self.adjusted(), DAYS, 1000.0)
+        self.assertFalse(price_only)
+        self.assertAlmostEqual(curve[-1], 1000.0 * 100 / 90)
+
+    def test_a_warm_up_bar_without_adjusted_close_changes_nothing(self):
+        older = {"date": "2023-12-29", "o": 100.0, "h": 100.0, "l": 100.0, "c": 100.0, "v": 1000}
+        self.assertEqual(benchmark_curve([older, *self.adjusted()], DAYS, 1000.0), benchmark_curve(self.adjusted(), DAYS, 1000.0))
+
+    def test_a_window_bar_without_adjusted_close_falls_back_to_price(self):
+        bars = self.adjusted()
+        del bars[4]["adj"]
+        curve, price_only = benchmark_curve(bars, DAYS, 1000.0)
+        self.assertTrue(price_only)
+        self.assertAlmostEqual(curve[-1], 1000.0)
+
+    def test_price_only_warning_ignores_warm_up_bars(self):
+        request = Worker().request()
+        older = {"date": "2023-12-29", "o": 110.0, "h": 110.0, "l": 110.0, "c": 110.0, "v": 1000}
+        request["bars"] = {"A": [older, *[{**b, "adj": b["c"]} for b in flat(110.0)]]}
+        request["benchmark"]["bars"] = [older, *[{**b, "adj": b["c"]} for b in flat()]]
+        warnings = " ".join(run(request)["warnings"])
+        self.assertNotIn("dividends on these are not counted", warnings)
+        self.assertNotIn("its return excludes dividends", warnings)
+
+    def test_price_only_warning_covers_every_window_day(self):
+        for day in (0, 4, len(DAYS) - 1):
+            request = Worker().request()
+            rows = [{**b, "adj": b["c"]} for b in flat(110.0)]
+            del rows[day]["adj"]
+            request["bars"] = {"A": rows}
+            request["benchmark"]["bars"] = [{**b, "adj": b["c"]} for b in flat()]
+            warnings = " ".join(run(request)["warnings"])
+            self.assertIn("No adjusted close for A", warnings, day)
+            self.assertNotIn("its return excludes dividends", warnings, day)
 
 
 class Worker(unittest.TestCase):

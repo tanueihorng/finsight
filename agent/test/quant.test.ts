@@ -303,6 +303,14 @@ test('the baseline guard compares every shared figure, and a study saved without
       assert.equal(baseMatches(base, run), false, name);
     }
     const old = JSON.parse((db.prepare('SELECT robustness_json j FROM quant_runs').get() as any).j);
+    assert.equal(old.baseCheckVersion, 2);
+    const hidden = (study: object) => {
+      db.prepare('UPDATE quant_runs SET robustness_json = ?').run(JSON.stringify(study));
+      return [readQuantRun(db, s.saved.runId).robustness, listQuantRuns(db, 5).runs[0]!.robustnessChecks];
+    };
+    const { baseCheckVersion: _v, ...legacy } = old;
+    assert.deepEqual(hidden({ ...legacy, sharpe: 1.2, baseMatchesRun: true }), [null, null], 'a study from before the strict check is not trusted');
+    assert.deepEqual(hidden({ ...old, baseCheckVersion: 1 }), [null, null]);
     db.prepare('UPDATE quant_runs SET robustness_json = ?').run(JSON.stringify({ ...old, baseMatchesRun: false }));
     assert.equal(content(await ask(s, db, { runId: s.saved.runId })).robustness, null);
     assert.equal(content(await ask(s, db, { runId: s.saved.runId, detail: 'robustness' })).robustness, null);
