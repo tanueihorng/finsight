@@ -27,6 +27,7 @@ The Kestrel panel redesign and search-provider picker (`KESTRELUI-001` / `SEARCH
 
 | Feature | Execution | Status |
 |---|---|---|
+| [FEAT-018](features/FEAT-018-etf-look-through.md) ETF look-through, overlapping issuer exposure and single-issuer stress | `LOOKTHROUGH-001` (worktree) | First slice implemented and verified with synthetic data in `feat/etf-look-through`. Uncommitted when checked. Live issuer data and Kestrel integration remain open. |
 | In-chat stock price charts, source-bound to historical close prices | `CHATCHART-001` | Verified; included in the merge containing CHARTSHIP-001; deployment and live-provider chart qualification pending |
 | Smarter visual selection, richer charts, exposure views and safe navigation/alert drafts | `UIUPGRADE-001` | Integrated on main at `dc8a7c9`; demo activated; broader model qualification remains pending |
 | Demo defaults to supported Intelligent UI views | `DEMOPARITY-001` | Integrated on main at `dc8a7c9`; explicit settings and model gates remain effective |
@@ -53,6 +54,16 @@ The Kestrel panel redesign and search-provider picker (`KESTRELUI-001` / `SEARCH
 | [FEAT-001](features/FEAT-001-ibkr-mcp-integration.md) | IBKR MCP integration and live sync | Deferred architecture captured alongside `MULTIAGENT-001`; distinct from CSV import | Explicit user selection and verified design |
 | [FEAT-011](features/FEAT-011-agent-data-sources.md) | Agent data sources: insider/13F/congress/short interest, news, fundamentals cross-check, GDELT, EDGAR MCP servers (no sentiment) | None yet; feeds the paper-trading agent | Explicit user selection |
 | [FEAT-016](features/FEAT-016-evidence-bound-memory.md) | Evidence-bound Kestrel memory and session handoff | Assessment and proposal only; reconcile feature numbering across branches | Explicit user selection, agent spec reconciliation and verified design |
+| [FEAT-019](features/FEAT-019-thesis-change-review.md) | On-demand thesis change review with filing evidence and a saved baseline | Extends the thesis tracker and event radar | Explicit selection. Integrated workflow depends on the process panels |
+| [FEAT-021](features/FEAT-021-broker-statement-reconciliation.md) | Read-only IBKR statement comparison for position and cash differences | Builds on FEAT-008 | Explicit selection. Start with synthetic statements and matching cutoffs |
+| [FEAT-022](features/FEAT-022-historical-stress-replay.md) | Replay a fixed portfolio and a Sandbox draft through the same historical window | Builds on FEAT-020 and existing history retrieval | Explicit selection. Start with one USD account and frozen synthetic prices |
+| [FEAT-023](features/FEAT-023-portfolio-checkpoints.md) | Save and compare portfolio snapshots to explain changes in cash, holdings and weights | Uses account snapshots | Explicit selection. Start with one account and native currency |
+| [FEAT-024](features/FEAT-024-kestrel-image-optimization.md) | Resize and recompress chat images once at upload; vision brains get the small copy, the original is kept | From the [agent capability evaluation](architecture/agent-capability-eval.md) (criteria 13, 15). Large images likely fail on Claude brains (not reproduced) | Explicit selection. Recommended first of the agent gaps. Paid checks need approval |
+| [SPEC FR-5](../agent/docs/SPEC.md) | Durable background task queue: leases, per-step checkpoints, resume and cancel | Specified in the agent SPEC, never built. From the [agent capability evaluation](architecture/agent-capability-eval.md) (criterion 3) | Only together with background or scheduled tasks (SPEC §15 L2 triggers). Needed by FEAT-026 release 2 |
+| [FEAT-025](features/FEAT-025-kestrel-done-check.md) | Done check: before answering, check the draft against the question and the evidence, fill one gap or name what is missing, and label the answer Complete / Partial / Couldn't verify | Brings the Council's readiness idea to ordinary chat | Explicit selection. Cheapest of the agent improvements; no new data or permissions |
+| [FEAT-026](features/FEAT-026-watches-and-news-alerts.md) | Watches the user saves: earnings ahead, new filings, valuation thresholds, sell-condition checks and major-news alerts, notifying once per event with evidence. Never trades or changes records | Release 1 extends FinSight alerts. Release 2 needs `GUARDRAILS-001` and SPEC FR-5. Release 3 needs a FEAT-011 news source | Explicit selection. Start with release 1 (code-checked, no model cost) |
+
+Agent capability evaluation, 2026-11-15: Kestrel was checked against a 31-item agent-framework checklist (22 built, 4 partial, 2 missing, 3 not needed). Results, reasons and a learning guide to how the agent is built are in [agent-capability-eval.md](architecture/agent-capability-eval.md). FEAT-024 and the SPEC FR-5 row came from it; FEAT-025 and FEAT-026 came from the follow-up discussion about goals and acting on the user's behalf.
 
 ---
 
@@ -63,7 +74,7 @@ Exploratory concepts under review; requires an RFC/spec before moving to the Bac
 | ID | Concept | Description |
 | :--- | :--- | :--- |
 | **IDEA-001** | Portfolio PDF Memo Export | One-click export of portfolio state, thesis reviews, and Kestrel notes as a clean PDF memo. |
-| **IDEA-002** | Look-Through ETF Exposure | Automated fund holdings scraper (using SEC N-PORT / 13F) to resolve underlying tech/semis exposure in ETFs like VOO/QQQM. |
+| **IDEA-002** | Look-Through ETF Exposure | Expanded in [FEAT-018](features/FEAT-018-etf-look-through.md). |
 | **IDEA-003** | Multi-Broker Aggregation | Extending the MCP Client architecture to support Alpaca and Webull alongside IBKR. |
 | **IDEA-004** | Voice Input for Kestrel | Web Speech API integration in the composer for dictating research prompts. |
 
