@@ -56,6 +56,10 @@ test('HTTP: /api/quote and /api/categories de-duplicate and cap the symbol list'
   const dup = await srv.req('GET', '/api/quote?symbols=NVDA,NVDA,%20NVDA%20,MSFT', json(c));
   assert.equal(dup.status, 200);
   assert.deepEqual(dup.json.quotes.map((x: { symbol: string }) => x.symbol), ['NVDA', 'MSFT']);
+  // Case variants are one symbol; the first spelling is kept.
+  const mixed = await srv.req('GET', '/api/quote?symbols=NVDA,nvda,Nvda,MSFT,msft', json(c));
+  assert.deepEqual(mixed.json.quotes.map((x: { symbol: string }) => x.symbol), ['NVDA', 'MSFT']);
+  assert.equal((await srv.req('GET', '/api/quote?symbols=' + [...syms(200), ...syms(200).map((s) => s.toLowerCase())].join(','), json(c))).status, 200);
   const ok = await srv.req('GET', '/api/quote?symbols=' + syms(200).join(','), json(c));
   assert.equal(ok.status, 200); assert.equal(ok.json.quotes.length, 200);
   for (const path of ['/api/quote', '/api/categories']) {

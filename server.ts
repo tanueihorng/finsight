@@ -125,10 +125,15 @@ function paperStream(req: IncomingMessage, res: ServerResponse): void {
   req.on('close', () => paperClients.delete(res));
 }
 
-// Symbol lists from ?symbols=a,b,c: trimmed and de-duplicated, capped per request
+// Symbol lists from ?symbols=a,b,c: trimmed and de-duplicated ignoring case, capped per request
 // (BOOKRACE-001; the same cap as /api/history/batch). Fetches are also bounded in lib/market.ts.
+// The first spelling is kept, because callers match the returned symbol against what they sent.
 const MAX_SYMBOLS = 200;
-const symbolList = (u: URL): string[] => [...new Set((u.searchParams.get('symbols') || '').split(',').map((s) => s.trim()).filter(Boolean))];
+const symbolList = (u: URL): string[] => {
+  const seen = new Map<string, string>();
+  for (const s of (u.searchParams.get('symbols') || '').split(',').map((x) => x.trim()).filter(Boolean)) if (!seen.has(s.toUpperCase())) seen.set(s.toUpperCase(), s);
+  return [...seen.values()];
+};
 
 async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
   // Applied to every response: the terminal must not be framed or MIME-sniffed.
