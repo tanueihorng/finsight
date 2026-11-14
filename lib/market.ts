@@ -119,8 +119,27 @@ export async function getQuote(symbol: string): Promise<QuotedQuote> {
   return { ...result.value, cache: result.cache };
 }
 
+// Upstream fan-out bound (BOOKRACE-001): at most this many Yahoo requests in
+// flight per batch, however many symbols a caller passes (the same bound the
+// /api/history/batch route uses).
+export const FETCH_CONCURRENCY = 6;
+/** Promise.allSettled over items with at most `limit` running at once; results keep input order. */
+export async function settledLimit<T, R>(items: readonly T[], limit: number, fn: (x: T) => Promise<R>): Promise<PromiseSettledResult<R>[]> {
+  const out: PromiseSettledResult<R>[] = new Array(items.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const i = next++;
+      try { out[i] = { status: 'fulfilled', value: await fn(items[i]!) }; }
+      catch (reason) { out[i] = { status: 'rejected', reason }; }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, worker));
+  return out;
+}
+
 export async function getQuotes(symbols: string[]): Promise<Quote[]> {
-  const out = await Promise.allSettled(symbols.map((s) => getQuote(s)));
+  const out = await settledLimit(symbols, FETCH_CONCURRENCY, (s) => getQuote(s));
   return out.map((r, i) =>
     r.status === 'fulfilled' ? r.value : { symbol: symbols[i]!, error: String(r.reason && r.reason.message || r.reason) }
   );
@@ -479,7 +498,7 @@ async function fetchCategory(symbol: string): Promise<Category> {
   return { symbol, sector: sector || null, type: type || null, category };
 }
 export async function getCategories(symbols: string[]): Promise<Record<string, Category | { symbol: string; category: string }>> {
-  const out = await Promise.allSettled(symbols.map((s) => getCategory(s)));
+  const out = await settledLimit(symbols, FETCH_CONCURRENCY, (s) => getCategory(s));
   const map: Record<string, Category | { symbol: string; category: string }> = {};
   out.forEach((r, i) => { map[symbols[i]!.toUpperCase()] = r.status === 'fulfilled' ? r.value : { symbol: symbols[i]!, category: 'Other' }; });
   return map;

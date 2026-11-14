@@ -125,6 +125,11 @@ function paperStream(req: IncomingMessage, res: ServerResponse): void {
   req.on('close', () => paperClients.delete(res));
 }
 
+// Symbol lists from ?symbols=a,b,c: trimmed and de-duplicated, capped per request
+// (BOOKRACE-001; the same cap as /api/history/batch). Fetches are also bounded in lib/market.ts.
+const MAX_SYMBOLS = 200;
+const symbolList = (u: URL): string[] => [...new Set((u.searchParams.get('symbols') || '').split(',').map((s) => s.trim()).filter(Boolean))];
+
 async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
   // Applied to every response: the terminal must not be framed or MIME-sniffed.
   res.setHeader('X-Frame-Options', 'DENY');
@@ -295,8 +300,9 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       catch (e) { return sendJson(res, 404, { error: String((e as Error).message || e).slice(0, 200) }); }
     }
     if (p === '/api/quote') {
-      const symbols = (u.searchParams.get('symbols') || '').split(',').map((s) => s.trim()).filter(Boolean);
+      const symbols = symbolList(u);
       if (!symbols.length) return sendJson(res, 400, { error: 'symbols required' });
+      if (symbols.length > MAX_SYMBOLS) return sendJson(res, 400, { error: `at most ${MAX_SYMBOLS} symbols` });
       return sendJson(res, 200, { quotes: await getQuotes(symbols) });
     }
     // Earnings and dividend dates for any symbols (not only holdings).
@@ -437,8 +443,9 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
 
     // categories (sector) + portfolio performance (charts/heatmap)
     if (p === '/api/categories') {
-      const symbols = (u.searchParams.get('symbols') || '').split(',').map((s) => s.trim()).filter(Boolean);
+      const symbols = symbolList(u);
       if (!symbols.length) return sendJson(res, 200, {});
+      if (symbols.length > MAX_SYMBOLS) return sendJson(res, 400, { error: `at most ${MAX_SYMBOLS} symbols` });
       return sendJson(res, 200, await getCategories(symbols));
     }
     if (p === '/api/dividends') {
