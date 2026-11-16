@@ -26,6 +26,7 @@ The earlier draft with unverified release numbers is preserved in `docs/archive/
     - Browser suite: 294 passed, 2 failed, 1 skipped. Neither failure came from this fix.
       - The `390x844-light` detail-panel baseline had been missed when `50f0f9b` re-captured the others. It is re-captured in `b8c7378`, and all four visual tests pass twice in a row.
       - C3 "net worth breakdown" timed out once. It did not fail again in 26 later runs: 20 on its own, 1 with the A–C specs, and 5 replays of the exact 26 files that ran before it. It normally takes about 1 s. During the failing run, a second FinSight server and browser-pane chart work were running on the same machine. No code change was made because no cause was found.
+      - Full browser suite rerun at `20039d5` with nothing else running: 296 passed, 1 skipped (`UIQUAL`, needs `UI_QUAL_DIR`), 0 failed, in 9.5 min against 17.4 min for the loaded run. C3 took 0.9 s.
 
 - Council specialists that answer without researching but list missing evidence are asked once to search (`508444b`, merged locally; not pushed). Live TSM rerun 2026-11-03 on the demo: 7/7 stages, US$0.0833, 107 s. Macro searched unprompted and Growth searched after the follow-up (4 searches; the TSMC investor-relations page returned HTTP 403). No P/E was computed from the 2024 trailing data. The chair still gave no computed range because forward estimates conflicted across sources.
 
