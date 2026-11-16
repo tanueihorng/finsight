@@ -22,7 +22,8 @@ The earlier draft with unverified release numbers is preserved in `docs/archive/
     - New indicator tests cover the Singapore split, daylight saving, Asia/Kolkata and SGX.
     - Typecheck, 278 unit tests (run with `TZ=Asia/Singapore`), 275 agent tests with secret scan, and the web build check pass.
     - On a live test instance in SGT, the chart's VWAP reset only at 09:30 ET.
-    - Browser suite not run. Pivots and the session volume profile were not checked on the chart.
+    - On the same live AAPL data, pivot levels changed and session profiles started only at 09:30 ET, giving 5 profiles for 5 trading days.
+    - Browser suite: 294 passed, 2 failed, 1 skipped. C3 "net worth breakdown" timed out once and passed on rerun. The `390x844-light` detail-panel screenshot differs by 901 px. It differs by the same 901 px on the pre-fix commit `9f35500`, so the baseline problem predates this fix.
 
 - Council specialists that answer without researching but list missing evidence are asked once to search (`508444b`, merged locally; not pushed). Live TSM rerun 2026-11-03 on the demo: 7/7 stages, US$0.0833, 107 s. Macro searched unprompted and Growth searched after the follow-up (4 searches; the TSMC investor-relations page returned HTTP 403). No P/E was computed from the 2024 trailing data. The chair still gave no computed range because forward estimates conflicted across sources.
 
