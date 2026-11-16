@@ -115,11 +115,40 @@
   }
 
   // Session VWAP: resets when the calendar day (exchange-agnostic, UTC offset given) changes.
-  function vwap(b, tzOffsetMin = 0) {
+  // Trading days follow the exchange's calendar. `zone` is an IANA time zone
+  // ('America/New_York'), or a fixed offset in minutes east of UTC. A missing or
+  // unknown zone means UTC. The browser's own time zone is never used: in Asia
+  // the US session crosses local midnight and would split in two.
+  const OFFSETS = new Map(); // zone -> Map(hour -> offset ms)
+  function zoneOffset(t, zone) {
+    if (typeof zone === 'number') return zone * 60000;
+    if (!zone || zone === 'UTC') return 0;
+    let byHour = OFFSETS.get(zone);
+    if (!byHour) {
+      let fmt = null;
+      try { fmt = new Intl.DateTimeFormat('en-US', { timeZone: zone, hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric' }); } catch (e) { /* unknown zone: UTC */ }
+      byHour = new Map(); byHour.fmt = fmt; OFFSETS.set(zone, byHour);
+    }
+    if (!byHour.fmt) return 0;
+    // Zone offsets change on whole UTC hours, so one lookup per hour is exact.
+    const hour = Math.floor(t / 3600000);
+    let off = byHour.get(hour);
+    if (off === undefined) {
+      const p = {}; byHour.fmt.formatToParts(hour * 3600000).forEach(function (x) { p[x.type] = +x.value; });
+      off = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute) - hour * 3600000;
+      if (byHour.size > 50000) byHour.clear();
+      byHour.set(hour, off);
+    }
+    return off;
+  }
+  // Days since 1970-01-01 on the exchange's calendar.
+  function exchangeDay(t, zone) { return Math.floor((t + zoneOffset(t, zone)) / 86400000); }
+
+  function vwap(b, zone = 0) {
     const out = new Array(b.length).fill(null);
     let pv = 0, vv = 0, day = null;
     for (let i = 0; i < b.length; i++) {
-      const d = Math.floor((b[i].t + tzOffsetMin * 60000) / 86400000);
+      const d = exchangeDay(b[i].t, zone);
       if (d !== day) { day = d; pv = 0; vv = 0; }
       const tp = (b[i].h + b[i].l + b[i].c) / 3, v = b[i].v || 0;
       pv += tp * v; vv += v;
@@ -352,6 +381,6 @@
     return { lo, hi, step, up, dn, total, poc, vaLo: a, vaHi: z, pocPrice: lo + (poc + 0.5) * step, val: lo + a * step, vah: lo + (z + 1) * step };
   }
 
-  return { sma, ema, rma, stdev, bollinger, trueRange, atr, keltner, donchian, supertrend, vwap, rsi, macd, stoch, obv, adx, heikinAshi, anchoredVwap,
+  return { zoneOffset, exchangeDay, sma, ema, rma, stdev, bollinger, trueRange, atr, keltner, donchian, supertrend, vwap, rsi, macd, stoch, obv, adx, heikinAshi, anchoredVwap,
     rollHigh, rollLow, ichimoku, psar, cci, mfi, willr, hiLo, pivots, asOf, relStrength, volumeProfile };
 });

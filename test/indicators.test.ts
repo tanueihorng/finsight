@@ -77,3 +77,37 @@ test('adx in range and heikin-ashi close is OHLC/4', () => {
   const ha = I.heikinAshi([{ t: 0, o: 1, h: 4, l: 0, c: 3 }]);
   near(ha[0].c, 2); near(ha[0].o, 2);
 });
+
+// One US regular session (13 Nov 2026, 09:30-16:00 ET = 22:30-05:00 SGT), 5-minute bars.
+const usSession = (day: number) => {
+  const open = Date.UTC(2026, 10, day, 14, 30);
+  return Array.from({ length: 78 }, (_, i) => ({ t: open + i * 300_000, o: 100 + i * 0.1, h: 100.5 + i * 0.1, l: 99.5 + i * 0.1, c: 100 + i * 0.1, v: 1000 }));
+};
+
+test('vwap follows the exchange day, not the browser time zone (SGT midnight falls at 11:00 ET)', () => {
+  const b = usSession(13);
+  const whole = b.reduce((a, x) => a + (x.h + x.l + x.c) / 3 * x.v, 0) / b.reduce((a, x) => a + x.v, 0);
+  const v = I.vwap(b, 'America/New_York');
+  near(v.at(-1), whole, 1e-9);
+  // The old behaviour: the browser's Singapore offset (+480 min) split the session at bar 18.
+  assert.ok(Math.abs(I.vwap(b, 480).at(-1) - whole) > 0.5);
+  // Next trading day starts a new session at its 09:30 open.
+  const two = I.vwap([...b, ...usSession(16)], 'America/New_York');
+  const first = b[0]!;
+  near(two[78], (first.h + first.l + first.c) / 3, 1e-9);
+});
+
+test('exchangeDay: DST, half-hour zones, Asian sessions and unknown zones', () => {
+  // New York: -5 h before the 8 Mar 2026 switch, -4 h after.
+  assert.strictEqual(I.zoneOffset(Date.UTC(2026, 2, 8, 6), 'America/New_York'), -5 * 3600000);
+  assert.strictEqual(I.zoneOffset(Date.UTC(2026, 2, 8, 8), 'America/New_York'), -4 * 3600000);
+  // A summer session (13:30-20:00 UTC) stays on one day.
+  assert.strictEqual(I.exchangeDay(Date.UTC(2026, 6, 15, 13, 30), 'America/New_York'), I.exchangeDay(Date.UTC(2026, 6, 15, 19, 55), 'America/New_York'));
+  // India (+5:30): the day turns at 18:30 UTC, between whole hours.
+  assert.strictEqual(I.exchangeDay(Date.UTC(2026, 0, 5, 18, 31), 'Asia/Kolkata') - I.exchangeDay(Date.UTC(2026, 0, 5, 18, 29), 'Asia/Kolkata'), 1);
+  // SGX session (09:00-17:00 SGT = 01:00-09:00 UTC) is one Singapore day.
+  assert.strictEqual(I.exchangeDay(Date.UTC(2026, 0, 5, 1), 'Asia/Singapore'), I.exchangeDay(Date.UTC(2026, 0, 5, 8, 55), 'Asia/Singapore'));
+  // Missing or unknown zone means UTC.
+  assert.strictEqual(I.zoneOffset(Date.UTC(2026, 0, 5), undefined), 0);
+  assert.strictEqual(I.zoneOffset(Date.UTC(2026, 0, 5), 'Not/AZone'), 0);
+});
