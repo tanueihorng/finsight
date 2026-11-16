@@ -15,6 +15,15 @@ The earlier draft with unverified release numbers is preserved in `docs/archive/
 
 ## Unreleased
 
+- Chart VWAP, pivots and the per-session volume profile now start each day in the exchange's time zone instead of the browser's (`62b4c89`, on `feat/kestrel-research-tools`; not merged or pushed). Part of [FEAT-027](docs/features/FEAT-027-modern-web-platform-ui.md) release 1.
+  - The bug: in Singapore, the US session (22:30 to 05:00 SGT) crosses local midnight. VWAP restarted at 11:00 ET and each afternoon was joined to the next morning. Live AAPL 5-minute data over 5 days gave 6 VWAP sessions for 5 trading days.
+  - The fix: history meta now carries the exchange time zone as `timeZone`. If the feed doesn't name one, the chart uses UTC.
+  - Verified:
+    - New indicator tests cover the Singapore split, daylight saving, Asia/Kolkata and SGX.
+    - Typecheck, 278 unit tests (run with `TZ=Asia/Singapore`), 275 agent tests with secret scan, and the web build check pass.
+    - On a live test instance in SGT, the chart's VWAP reset only at 09:30 ET.
+    - Browser suite not run. Pivots and the session volume profile were not checked on the chart.
+
 - Council specialists that answer without researching but list missing evidence are asked once to search (`508444b`, merged locally; not pushed). Live TSM rerun 2026-11-03 on the demo: 7/7 stages, US$0.0833, 107 s. Macro searched unprompted and Growth searched after the follow-up (4 searches; the TSMC investor-relations page returned HTTP 403). No P/E was computed from the 2024 trailing data. The chair still gave no computed range because forward estimates conflicted across sources.
 
 - `valuation_metrics` no longer computes P/E, earnings yield or price-to-sales from trailing figures that ended more than 18 months ago; the figures are still reported with a gap. Found in a live TSM Council run on 2026-11-02 (demo, 7/7 stages, US$0.0465): SEC data held only TSMC's FY2024 20-F, giving a P/E of 59.6 on 22-month-old EPS. The chair flagged it as stale. No specialist requested web search or other research tools in that run. Merged locally; not pushed.
