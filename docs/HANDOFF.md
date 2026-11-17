@@ -8,11 +8,11 @@ Update this file when you hand work off. Replace stale sections instead of addin
 
 ## Current handoff — 2026-11-17 SGT
 
-The owner switched Claude accounts. **No work was in flight.** Start nothing new without the owner's request.
+The owner switched Claude accounts. The owner then asked to land the finished feature branches. Both are merged and deployed (below). Start nothing else without the owner's request.
 
 ### Where things stand
 
-- `origin/main` is at `bc02d4a`, the merge of [tanueihorng/finsight#5](https://github.com/tanueihorng/finsight/pull/5). CI on that push passed. This handoff file was added after it.
+- `origin/main` is at `e0c00d0`, the merge of [tanueihorng/finsight#6](https://github.com/tanueihorng/finsight/pull/6) (this handoff file). The last code change is `bc02d4a`, the merge of [#5](https://github.com/tanueihorng/finsight/pull/5); CI on that push passed. #6 was docs-only, so CI skipped it.
 - **Merged on 2026-11-17:**
   - [#4](https://github.com/tanueihorng/finsight/pull/4) (`21cac17`):
     - exchange-day fix for VWAP, pivots and the session profile (`62b4c89`)
@@ -20,12 +20,15 @@ The owner switched Claude accounts. **No work was in flight.** Start nothing new
     - specs FEAT-018 to FEAT-028
     - a merge of `main` that resolved docs-only conflicts
   - [#5](https://github.com/tanueihorng/finsight/pull/5) (`bc02d4a`): GitHub Actions CI. See [CI](#ci) below.
-- **Not deployed.** The owner's personal app has not been restarted on either change. Restart or deploy only on the owner's approval.
-- **The owner's local `main` is held by a Codex worktree that has another session's uncommitted changes** (agent Keychain secrets work in `agent/src/secrets.ts`, `agent/src/cli.ts`, `agent/README.md` and a new `agent/test/secrets-keychain.test.ts`). Don't touch it without asking. Branch new work from `origin/main`.
+- **Deployed on 2026-11-17 at about 22:33 SGT:** the personal app runs `81d6247` (`main`, with #7 and #8) from `~/.codex/worktrees/portfolio-sandbox/finsight`, with `FINSIGHT_DATA_DIR=~/FinSightData` on port 8000 and the agent on 8100. It was started in a Claude Code terminal tab, so it stops if that tab closes. The demo on 8003 still runs the older code it started with on Nov 14. Note: `node server.ts` without `FINSIGHT_DATA_DIR` uses the repo's `data/` folder, not `~/FinSightData`.
+- **The owner's local `main` (fast-forwarded to `81d6247` on 2026-11-17) is held by a Codex worktree that has the owner's uncommitted Keychain credential changes, backed up at `refs/backup/keychain-wip-2026-11-17`** (agent Keychain secrets work in `agent/src/secrets.ts`, `agent/src/cli.ts`, `agent/README.md` and a new `agent/test/secrets-keychain.test.ts`). Don't touch it without asking. Branch new work from `origin/main`.
+- **Landed and open (2026-11-17):**
+  - [#7](https://github.com/tanueihorng/finsight/pull/7) `feat/etf-look-through` (FEAT-018 LOOKTHROUGH-001, ETF look-through issuer exposure): **merged** at `c636b06`, with CI green.
+  - [#8](https://github.com/tanueihorng/finsight/pull/8) `feat/process-tools` (FEAT-017 GUARDRAILS-001 plus FEAT-015 PROCESSTOOLS-001): **merged** at `81d6247`, with CI green.
+  - To rebase a branch past a conflict in the generated `public/app` bundle, rebuild it with `npm run build` at each conflicting commit. Re-check the 390px screenshot baselines after any change to panel order.
+- **`feat/policy-guardrails` is superseded.** Its five commits are in #8. It was never pushed. Delete it only with the owner's approval.
 - **Still open from earlier work:**
-  - LOOKTHROUGH-001 (FEAT-018) is uncommitted in its worktree.
-  - GUARDRAILS-001 and PROCESSTOOLS-001 are unmerged.
-  - QUANT-001 acceptance reconciliation is still open.
+  - QUANT-001 acceptance reconciliation.
   - A stash, `observability WIP 2026-10-29`, exists.
 
 ### Decisions to respect
@@ -43,19 +46,19 @@ Before the switch, an agent said Claude Code's project memory should carry over 
 
 Check it, then record the result here:
 
-- [ ] Your startup context includes a `MEMORY.md` index with an entry named **"Handoff 2026-11-17"**. If it does, memory carried over.
-- [ ] `echo "${CLAUDE_CONFIG_DIR:-unset}"` prints `unset`, or a folder that contains `projects/`.
-- [ ] `ls ~/.claude/projects/ | grep finsight` lists this project's folder, and its `memory/` contains `handoff-2026-11-17.md`.
-- [ ] The session started in the `finsight/` folder itself, not in a parent folder or a worktree. Memory is keyed by the exact start directory, so another directory gets a separate, empty memory.
+- [x] Your startup context includes a `MEMORY.md` index with an entry named **"Handoff 2026-11-17"**. If it does, memory carried over.
+- [x] `echo "${CLAUDE_CONFIG_DIR:-unset}"` prints `unset`, or a folder that contains `projects/`.
+- [x] `ls ~/.claude/projects/ | grep finsight` lists this project's folder, and its `memory/` contains `handoff-2026-11-17.md`.
+- [x] The session started in the `finsight/` folder itself, not in a parent folder or a worktree. Memory is keyed by the exact start directory, so another directory gets a separate, empty memory.
 
-**Result:** _not yet checked_. Replace this with the date, what you found, and the account or config folder in use. If memory did not load, say so plainly, and treat this file as the source of truth.
+**Result (2026-11-17, new account):** memory carried over. The startup `MEMORY.md` index included "Handoff 2026-11-17"; `CLAUDE_CONFIG_DIR` is unset (default `~/.claude`); `~/.claude/projects/-Users-tanueihorng-Desktop-investment-finsight/memory/` holds `handoff-2026-11-17.md`; the session started in `finsight/` itself. Note that each worktree has its own memory folder, so sessions started in a worktree do not see this memory.
 
 **Codex** never reads Claude's memory. It reaches this file through [AGENTS.md](../AGENTS.md).
 
 ### 2. Confirm the repo state
 
-- [ ] `git fetch && git log --oneline -1 origin/main` is `bc02d4a` or later.
-- [ ] `gh pr list` shows no unexpected open PRs.
+- [x] `git fetch && git log --oneline -1 origin/main` is `e0c00d0` or later.
+- [x] `gh pr list` shows no unexpected open PRs (none open on 2026-11-17).
 
 ---
 
