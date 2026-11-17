@@ -16,3 +16,9 @@ agent/scratch/
 node_modules/
 test-results/
 playwright-report/
+
+# Python quant worker
+agent/quant/.venv/
+__pycache__/
+agent/quant/.venv-verify/
+.hypothesis/

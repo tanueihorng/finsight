@@ -104,8 +104,8 @@ const toAlpaca = (o: OrderInput, clientOrderId: string) => ({
 
 // ---- order records (origin, tickets) ------------------------------------------
 export interface OrderMeta { origin: Origin; threadId?: string; at: number; ticketId?: string }
-export type TicketStatus = 'pending' | 'approving' | 'approved' | 'rejected' | 'failed';
-export interface Ticket { id: string; status: TicketStatus; order: OrderInput; origin: 'kestrel'; threadId?: string; note?: string; createdAt: number; decidedAt?: number; orderId?: string; error?: string; estimate?: Estimate }
+export type TicketStatus = 'pending' | 'approving' | 'unconfirmed' | 'approved' | 'rejected' | 'failed';
+export interface Ticket { id: string; status: TicketStatus; order: OrderInput; origin: 'kestrel'; threadId?: string; note?: string; createdAt: number; decidedAt?: number; orderId?: string; clientOrderId?: string | null; error?: string; estimate?: Estimate }
 interface OrdersFile { meta: Record<string, OrderMeta>; tickets: Ticket[] }
 const readOrders = (): OrdersFile => { const j = readJson<Partial<OrdersFile>>(ORDERS_FILE(), {}); return { meta: j.meta || {}, tickets: Array.isArray(j.tickets) ? j.tickets : [] }; };
 let ordersLock: Promise<unknown> = Promise.resolve();
@@ -143,16 +143,35 @@ export async function limitBreach(o: OrderInput, s: PaperSettings, est: Estimate
 
 // ---- placing orders -------------------------------------------------------------
 const clientId = (origin: Origin) => `fs-${origin === 'kestrel' ? 'k' : 'u'}-${crypto.randomBytes(9).toString('base64url')}`;
+function matchesClientOrder(order: alpaca.AlpacaOrder, clientOrderId: string): boolean {
+  return typeof order?.id === 'string' && !!order.id && order.client_order_id === clientOrderId
+    && typeof order.status === 'string' && !!order.status;
+}
+function recordTicketOrder(ticket: Ticket, order: alpaca.AlpacaOrder) {
+  ticket.orderId = order.id;
+  ticket.status = order.status === 'rejected' ? 'failed' : 'approved';
+  if (order.status === 'rejected') ticket.error = 'Alpaca rejected the original order.';
+  else delete ticket.error;
+}
 async function submit(o: OrderInput, meta: Omit<OrderMeta, 'at'>) {
   const cid = clientId(meta.origin);
-  await withOrders((f) => { f.meta[cid] = { ...meta, at: Date.now() }; });
+  await withOrders((f) => {
+    if (meta.ticketId) {
+      const ticket = f.tickets.find((t) => t.id === meta.ticketId);
+      if (ticket?.status !== 'approving' || ticket.clientOrderId !== null) throw new Error('Ticket is no longer available for submission.');
+      // Commit the broker correlation ID before making a request with an uncertain outcome.
+      ticket.clientOrderId = cid;
+    }
+    f.meta[cid] = { ...meta, at: Date.now() };
+  });
   try {
     const order = await alpaca.placeOrder(toAlpaca(o, cid));
+    if (meta.ticketId && !matchesClientOrder(order, cid)) throw new Error('Alpaca response did not confirm the original client order ID.');
     notify('order', { orderId: order.id, origin: meta.origin });
     scheduleSync();
     return order;
   } catch (e) {
-    await withOrders((f) => { delete f.meta[cid]; });
+    if (!meta.ticketId) await withOrders((f) => { delete f.meta[cid]; });
     throw e;
   }
 }
@@ -225,6 +244,7 @@ export async function decideTicket(id: unknown, approve: boolean) {
     if (!x) throw new Error('No such ticket');
     if (x.status !== 'pending') throw new Error(`This ticket was already ${x.status}`);
     Object.assign(x, { status: approve ? 'approving' : 'rejected', decidedAt: Date.now() });
+    if (approve) x.clientOrderId = null; // The broker request cannot start while this is null.
     return { ...x };
   });
   if (!approve) {
@@ -239,23 +259,92 @@ export async function decideTicket(id: unknown, approve: boolean) {
     catch (e) { breach = `Can't check your limits right now: ${String((e as Error).message || e).slice(0, 200)}`; }
     if (breach) {
       const error = breach;
-      await withOrders((f) => { const x = f.tickets.find((y) => y.id === id); if (x) { Object.assign(x, { status: 'pending', error }); delete x.decidedAt; } });
+      await withOrders((f) => { const x = f.tickets.find((y) => y.id === id); if (x) { Object.assign(x, { status: 'pending', error }); delete x.decidedAt; delete x.clientOrderId; } });
       notify('tickets', { ticketId: id });
       throw new Error(`Not sent: ${error}. The ticket is still waiting.`);
     }
     try {
       const order = await submit(t.order, { origin: 'kestrel', threadId: t.threadId, ticketId: t.id });
-      await withOrders((f) => { const x = f.tickets.find((y) => y.id === id); if (x) { Object.assign(x, { status: 'approved', decidedAt: Date.now(), orderId: order.id }); delete x.error; } });
+      await withOrders((f) => {
+        const x = f.tickets.find((y) => y.id === id);
+        if (x) { recordTicketOrder(x, order); x.decidedAt = Date.now(); }
+      });
       notify('tickets', { ticketId: id });
+      if (order.status === 'rejected') throw new Error('Alpaca rejected the original order.');
       return { ticketId: id, status: 'approved' as const, order };
     } catch (e) {
-      const error = String((e as Error).message || e).slice(0, 300);
-      await withOrders((f) => { const x = f.tickets.find((y) => y.id === id); if (x) Object.assign(x, { status: 'failed', decidedAt: Date.now(), error }); });
+      const unconfirmed = await withOrders((f) => {
+        const x = f.tickets.find((y) => y.id === id);
+        if (x?.status !== 'approving') return false;
+        if (x.clientOrderId) {
+          x.status = 'unconfirmed';
+          x.error = 'Submission could not be confirmed. FinSight will check the original order with Alpaca.';
+          return true;
+        }
+        Object.assign(x, { status: 'failed', error: String((e as Error).message || e).slice(0, 300) });
+        return false;
+      });
       notify('tickets', { ticketId: id });
+      if (unconfirmed) {
+        scheduleSync();
+        throw new Error('Submission could not be confirmed. Check the original order status before placing another order.');
+      }
       throw e;
     }
   });
 }
+
+async function recoverInterruptedApprovals() {
+  if (!readOrders().tickets.some((t) => t.status === 'approving')) return;
+  await withOrders((f) => {
+    for (const t of f.tickets) {
+      if (t.status !== 'approving') continue;
+      if (t.clientOrderId === null) {
+        t.status = 'pending';
+        t.error = 'The previous approval stopped before submission. Review the ticket again.';
+        delete t.decidedAt;
+        delete t.clientOrderId;
+        continue;
+      }
+      // Legacy tickets may have an ID only in the order metadata.
+      const ids = Object.keys(f.meta).filter((id) => f.meta[id]?.ticketId === t.id);
+      if (!t.clientOrderId && ids.length === 1) t.clientOrderId = ids[0];
+      t.status = 'unconfirmed';
+      t.error = t.clientOrderId
+        ? 'Approval was interrupted. FinSight will check the original order with Alpaca.'
+        : 'Approval was interrupted and has no recorded order ID. Check Alpaca paper order history.';
+    }
+  });
+  notify('tickets');
+}
+
+let nextTicketCheck = 0;
+async function reconcileUnconfirmedApprovals() {
+  const tickets = readOrders().tickets.filter((t) => t.status === 'unconfirmed' && t.clientOrderId);
+  if (!tickets.length) return;
+  const start = nextTicketCheck % tickets.length;
+  const batch = [...tickets.slice(start), ...tickets.slice(0, start)].slice(0, 6);
+  nextTicketCheck = start + batch.length;
+  await Promise.all(batch.map(async (ticket) => {
+    const clientOrderId = ticket.clientOrderId!;
+    let order: alpaca.AlpacaOrder;
+    try {
+      order = await alpaca.getOrderByClientId(clientOrderId);
+    } catch {
+      // A 404 or a connection error cannot establish that submission never happened.
+      return;
+    }
+    if (!matchesClientOrder(order, clientOrderId)) return;
+    const changed = await withOrders((f) => {
+      const current = f.tickets.find((t) => t.id === ticket.id);
+      if (current?.status !== 'unconfirmed' || current.clientOrderId !== clientOrderId) return false;
+      recordTicketOrder(current, order);
+      return true;
+    });
+    if (changed) notify('tickets', { ticketId: ticket.id });
+  }));
+}
+
 export async function cancelOrder(id: unknown, by: Origin = 'user') {
   const oid = String(id || '');
   if (!/^[A-Za-z0-9-]{8,64}$/.test(oid)) throw new Error('Unknown order id');
@@ -316,6 +405,7 @@ async function compare(): Promise<string[]> {
 }
 async function syncOnce() {
   const st = readSync();
+  const recovery = reconcileUnconfirmedApprovals().catch(() => console.warn('Could not reconcile unconfirmed paper approvals.'));
   try {
     const acct = await alpaca.account();
     if (st.accountNumber !== acct.account_number) { // first sync, or the paper account was reset
@@ -339,6 +429,7 @@ async function syncOnce() {
   }
   writeJson(SYNC_FILE(), st);
   notify('book', { error: st.error });
+  await recovery;
   return st;
 }
 let syncing: Promise<SyncState> | null = null, again = false, timer: NodeJS.Timeout | null = null;
@@ -393,8 +484,10 @@ export async function connect(keyId: unknown, secret: unknown) {
 export function disconnect() { alpaca.disconnect(); stream.stop(); notify('stream'); return { connected: false }; }
 /** Server start: stream and a first sync when keys exist; a slow poll as a backstop. */
 export function startPaper(): void {
+  void recoverInterruptedApprovals().then(() => {
+    if (alpaca.loadKeys()) void sync();
+  }).catch(() => console.warn('Could not recover interrupted paper approvals.'));
   if (!alpaca.loadKeys()) return;
   stream.start();
-  void sync();
   setInterval(() => { if (alpaca.loadKeys()) void sync(); }, 5 * 60_000).unref();
 }

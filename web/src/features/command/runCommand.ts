@@ -4,6 +4,7 @@ import { blockIfAll, requestNotify, selectSymbol, setStatus } from '../../legacy
 import { signStr } from '../../ui/format.ts';
 import type { Portfolio } from '../../../../shared/types.ts';
 import { HELP, parseCommand } from './commands.ts';
+import { openQuantLab } from '../quant/open.ts';
 
 // Runs one command-bar line (F7). Every write goes through bus.write(kind),
 // so islands and the remaining legacy readers refresh as before.
@@ -23,6 +24,7 @@ export async function runCommand(raw: string): Promise<void> {
       case 'none': return;
       case 'help': return setStatus(HELP, 'ok');
       case 'clear': return setStatus('');
+      case 'lab': openQuantLab(); return setStatus('');
       case 'usage': return setStatus(c.msg, 'err');
       case 'add':
         if (blockIfAll()) return;

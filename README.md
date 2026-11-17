@@ -111,6 +111,8 @@ Today Kestrel trades when you are talking to it. A scheduled cycle that screens,
 ## 🚀 Quick start
 
 > Requires **Node.js 24+** to run: the server is TypeScript that Node runs directly. The web UI ships pre-built, so there is still nothing to `npm install`. (See [DOCS.md](DOCS.md) for rebuilding the UI and running the tests.)
+>
+> Kestrel's portfolio backtesting tools and the Quant Lab also need the Python worker. Install [uv](https://docs.astral.sh/uv/), then run `uv sync --project agent/quant` once. Everything else works without it.
 
 ```bash
 git clone https://github.com/tanueihorng/finsight.git
@@ -226,6 +228,7 @@ Type in the top command bar:
 | `Q TSLA` / just `TSLA` | Pull up a security's detail + chart + news |
 | `WATCH NVDA` / `UNWATCH NVDA` | Add / remove from the watchlist |
 | `ALERT AAPL > 320` | Alert when AAPL crosses a target (`<` for below) |
+| `LAB` | Open the Quant Lab: backtest a strategy on history and see whether the result holds up (needs Kestrel) |
 | `NEWS TSLA` · `MKT` · `HELP` | News for a symbol · refresh markets · help |
 
 <details>

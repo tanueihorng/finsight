@@ -1,0 +1,53 @@
+.dialog {
+  width: min(940px, 100%);
+  max-height: min(90dvh, 980px);
+  overflow: auto;
+  color: var(--text);
+}
+.header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.header h2 { margin: 0; font: 600 20px var(--font); }
+.header p, .section p, .pin span { margin: 5px 0; color: var(--dim); font-size: 13px; line-height: 1.45; }
+.toolbar, .pin { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; margin-top: 16px; }
+.pin { align-items: center; padding: 10px 12px; background: var(--bg); border: 1px solid var(--border-2); border-radius: 8px; }
+.pin span:first-child { flex-basis: 100%; color: var(--text); font-family: var(--font); }
+.dialog label { display: grid; gap: 4px; min-width: 0; color: var(--dim); font-size: 12px; }
+.dialog input, .dialog select {
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+  padding: 0 8px;
+  color: var(--text);
+  border: 1px solid var(--border-2);
+  border-radius: 6px;
+  background: var(--bg);
+  font: 13px var(--font);
+}
+.dialog :is(input, select, .tableScroll):focus-visible { outline: 2px solid var(--amber); outline-offset: 1px; }
+.toolbar input { max-width: 75px; }
+.dialog button:disabled { opacity: .55; cursor: default; }
+.section { margin-top: 18px; }
+.section h3, .coverage h4 { margin: 0 0 6px; font-size: 14px; }
+.trade { min-width: 0; padding: 8px 10px 10px; margin: 8px 0; border: 1px solid var(--border-2); border-radius: 8px; }
+.trade legend { padding: 0 5px; font: 12px var(--font); }
+.fields { display: grid; grid-template-columns: .8fr 1.15fr 1fr 1fr .8fr auto; align-items: end; gap: 8px; }
+.actions { display: flex; gap: 4px; }
+.actions button { min-width: 30px; padding: 0 6px; }
+.tableScroll { overflow-x: auto; }
+.table { width: 100%; border-collapse: collapse; margin-top: 8px; font: 12px var(--font); }
+.table th, .table td { padding: 7px; border-bottom: 1px solid var(--border-2); text-align: right; }
+.table th:first-child { text-align: left; }
+.table th small { display: block; color: var(--dim); font-weight: normal; line-height: 1.5; }
+.table td { white-space: nowrap; }
+.coverage { margin-top: 12px; color: var(--dim); font-size: 12px; }
+.coverage ul { margin: 0; padding-left: 17px; }
+.dialog .error { color: var(--down); }
+
+@media (max-width: 670px) {
+  .fields { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .header h2 { font-size: 17px; }
+  .dialog { padding: 13px; }
+  .table th, .table td { padding: 6px 4px; }
+}
+@media (max-width: 380px) {
+  .fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

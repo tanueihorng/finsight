@@ -88,7 +88,7 @@ function bars(n: number, start = 100, drift = 0.002) {
 
 export type Fake = { url: string; dataDir: string; calls: { method: string; path: string; auth: string | undefined }[]; close: () => Promise<void>; down: boolean; book?: 'real' | 'paper' };
 
-export async function fakeFinsight(options: { scopedAccounts?: boolean; naturalHistory?: boolean; fx?: Record<string, number> } = {}): Promise<Fake> {
+export async function fakeFinsight(options: { scopedAccounts?: boolean; naturalHistory?: boolean; fx?: Record<string, number>; currency?: Record<string, string | null> } = {}): Promise<Fake> {
   // FX pairs the fake quote path knows; any other =X symbol has no price.
   const fx = options.fx ?? { 'XTWUSD=X': 0.032 };
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-fs-'));
@@ -143,7 +143,10 @@ export async function fakeFinsight(options: { scopedAccounts?: boolean; naturalH
       }
       case '/api/history/batch': {
         const results: Record<string, unknown> = {};
-        for (const s of (u.searchParams.get('symbols') || '').split(',')) results[s.toUpperCase()] = { points: bars(500, 50 + s.length * 10) };
+        for (const s of (u.searchParams.get('symbols') || '').split(',')) {
+          const currency = options.currency && s.toUpperCase() in options.currency ? options.currency[s.toUpperCase()] : 'USD';
+          results[s.toUpperCase()] = { meta: currency ? { currency, currencyReported: true } : { currency: 'USD', currencyReported: false }, points: bars(500, 50 + s.length * 10) };
+        }
         return j(200, { results });
       }
       case '/api/watchlist': return j(200, { watchlist: [{ symbol: 'AMD' }] });

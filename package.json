@@ -11,6 +11,8 @@
     "demo:reset": "node scripts/demo.ts --reset",
     "agent:install": "npm --prefix agent ci --no-audit --no-fund",
     "agent:test": "npm --prefix agent run check",
+    "quant:test": "cd agent/quant && PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests -t .",
+    "quant:verify": "sh agent/quant/verify/run.sh",
     "e2e": "playwright test",
     "build": "node scripts/build-web.mjs",
     "dev": "node scripts/build-web.mjs --watch",

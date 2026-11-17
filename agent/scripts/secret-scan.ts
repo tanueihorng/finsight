@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
-const SKIP = new Set(['node_modules', '.git', 'scratch']);
+const SKIP = new Set(['node_modules', '.git', 'scratch', '.venv', '.venv-verify', '.hypothesis', '__pycache__']);
 const PATTERNS: [string, RegExp][] = [
   ['provider key', /\bsk-[A-Za-z0-9_-]{20,}/],
   ['Anthropic key', /\bsk-ant-[A-Za-z0-9_-]{20,}/],

@@ -7,6 +7,7 @@ import { attachmentTools } from './attachments.ts';
 import { factsTools, fetchPortfolio, summarise } from './facts.ts';
 import { recordsTools } from './records.ts';
 import { strategyTools } from './strategies.ts';
+import { quantTools } from './quant.ts';
 import { webTools } from './web.ts';
 import { paperTools } from './paper.ts';
 import { researchTools } from './research.ts';
@@ -65,5 +66,5 @@ const proposeNote: ToolDef = {
 };
 
 export function buildRegistry(skills: () => Map<string, Skill> = () => new Map()): ToolRegistry {
-  return new ToolRegistry().add(uiTool, contextPackTool, ...factsTools, ...attachmentTools, ...recordsTools, ...strategyTools, ...webTools, ...researchTools, ...paperTools, proposeNote, ...skillTools(skills));
+  return new ToolRegistry().add(uiTool, contextPackTool, ...factsTools, ...attachmentTools, ...recordsTools, ...strategyTools, ...quantTools, ...webTools, ...researchTools, ...paperTools, proposeNote, ...skillTools(skills));
 }

@@ -8,6 +8,8 @@ import { islands } from './islands.ts';
 import { kestrelDock } from './features/kestrel/dock.ts';
 import { setFooter } from './legacy/app.ts';
 import { setChartHoldings } from './shell/chartHooks.ts';
+import { openQuantLab, quantLab } from './features/quant/open.ts';
+import { openSandbox, sandboxOpen } from './features/sandbox/open.ts';
 import { columns, dropBefore, hiddenPanels, HIDE_ID, movePanel, saveLayout, type Side } from './shell/layout.ts';
 
 // The whole page as one React app (X1). The markup, ids and classes are the
@@ -108,6 +110,7 @@ const PANELS: Record<string, () => ReactNode> = {
     <Panel pid="positions" title={<span className="panel-title">PORTFOLIO &nbsp;·&nbsp; POSITIONS</span>} head={
       <div className="head-btns">
         <button id="add-toggle" className="mini-btn" aria-haspopup="dialog" aria-controls="trade-sheet" onClick={openNewTrade}>+ ADD</button>
+        <button id="sandbox-open" className="mini-btn" aria-haspopup="dialog" onClick={openSandbox}>SANDBOX</button>
         <button id="cash-btn" className="mini-btn" title="Set uninvested cash per currency (counts toward net worth and FX exposure)" onClick={() => open('cashEditorOpen')}>CASH</button>
         <button id="import-btn" className="mini-btn" onClick={() => open('importOpen')}>IMPORT</button>
         <button id="export-btn" className="mini-btn" onClick={() => void window.FinSight.actions?.exportPortfolio()}>EXPORT</button>
@@ -275,6 +278,8 @@ function PortfolioEffects() {
 }
 
 export default function App() {
+  const labMounted = useStore(quantLab, (x) => x.mounted);
+  const showSandbox = useStore(sandboxOpen, (x) => x.open);
   return (
     <>
       <div id="lock-screen" className="lock">
@@ -287,6 +292,7 @@ export default function App() {
         </div>
         <div className="topbar-right">
           <span id="agent-toggle-slot" style={{ display: 'contents' }}></span>
+          <button type="button" id="quant-open" className="topbar-btn" title="Quant Lab: backtest strategies on history" onClick={openQuantLab}>LAB</button>
           <Host as="span" island="book" style={contents} />
           <Host as="label" island="account" className="base-sel" title="Account / portfolio — each holds its own positions" />
           <Host as="span" island="profile" style={contents} />
@@ -306,6 +312,7 @@ export default function App() {
 
       {/* FEAT-012: the paper trade desk, full width above the panels, PAPER mode only (styles.css hides it in REAL). */}
       <Host island="paper" id="paper-panel" className="paper-desk" />
+      {labMounted && <Host island="quant" id="quant-lab" />}
       <main className="grid">
         <Column side="left">
           <Summary />
@@ -326,6 +333,7 @@ export default function App() {
       <Host island="ledger" id="ledger-modal-host" />
       <div id="toasts" className="toasts"></div>
       <Host island="trade" />
+      {showSandbox && <Host island="sandbox" />}
       <Host island="toast" />
       <Host island="dialog" />
       <Host island="kestrel" />

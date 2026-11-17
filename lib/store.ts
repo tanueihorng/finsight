@@ -2,7 +2,7 @@
 // and the single write lock every read-modify-write goes through.
 import fs from 'node:fs';
 import path from 'node:path';
-import { bookDir } from './book.ts';
+import { activeBook, bookDir, withBook } from './book.ts';
 import type { AccountHolding } from '../shared/types.ts';
 import type { StoredAccount, StoredPortfolio, StoredPosition, StoredTransaction, StoredDividend, UndoEntry } from './model.ts';
 
@@ -19,13 +19,14 @@ const UNDO_MAX = 25;
 // --------------------------------------------------------------------------
 export function newAccountId(): string { return 'acc' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36); }
 export function newTxId(): string { return 'tx' + Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36); }
-export function loadPortfolio(): StoredPortfolio {
+export function loadPortfolio({ backupCorrupt = true } = {}): StoredPortfolio {
   let p: any, raw: string | undefined; // untrusted file contents, migrated into StoredPortfolio below
   try { raw = fs.readFileSync(portfolioFile(), 'utf8'); }
   catch (e) { if ((e as NodeJS.ErrnoException).code === 'ENOENT') p = {}; else throw e; } // missing = fresh start
   if (raw !== undefined) {
     try { p = JSON.parse(raw); }
     catch {
+      if (!backupCorrupt) throw new Error('Portfolio data is corrupt.');
       // File exists but is corrupt: back it up rather than silently wiping the portfolio.
       try { fs.renameSync(portfolioFile(), portfolioFile().replace(/\.json$/, '') + '.corrupt.' + Date.now() + '.json'); } catch {}
       throw new Error('portfolio.json was corrupt; backed up to a .corrupt.json file. Restart to begin fresh, or restore the backup.');
@@ -183,4 +184,11 @@ export function viewDividends(p: StoredPortfolio, accountId: string | null | und
 // saves can't clobber each other. NOTE: locked functions must never call another
 // locked function (buy/importCsv use buyUnlocked) or they'd deadlock the chain.
 let _lock: Promise<unknown> = Promise.resolve();
-export function withLock<T>(fn: () => T | Promise<T>): Promise<T> { const r = _lock.then(fn, fn); _lock = r.catch(() => {}); return r; }
+// The book is fixed when the change is requested (BOOKRACE-001): a REAL/PAPER
+// switch while it waits for the lock, or awaits quotes/FX inside it, must not
+// make it load one book and save into the other.
+export function withLock<T>(fn: () => T | Promise<T>): Promise<T> {
+  const book = activeBook();
+  const run = () => withBook(book, fn);
+  const r = _lock.then(run, run); _lock = r.catch(() => {}); return r;
+}

@@ -1,6 +1,6 @@
 # FEAT-020 · Portfolio Sandbox
 
-Selected as SANDBOX-001 and merged into local `main` at `3ae8879` on 2026-11-11 SGT. Deployment pending.
+Selected as SANDBOX-001 and merged into local `main` at `3ae8879` on 2026-11-11 SGT. Implementation `449d717`, review fix `55bb9b4`. Deployment pending.
 
 ## Outcome
 

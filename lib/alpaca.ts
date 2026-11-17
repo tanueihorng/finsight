@@ -86,6 +86,8 @@ export const positions = () => call<AlpacaPosition[]>(requireKeys(), 'GET', '/v2
 export const orders = (status: 'open' | 'all' = 'all', limit = 100) =>
   call<AlpacaOrder[]>(requireKeys(), 'GET', `/v2/orders?status=${status}&limit=${limit}&direction=desc&nested=false`);
 export const getOrder = (id: string) => call<AlpacaOrder>(requireKeys(), 'GET', `/v2/orders/${encodeURIComponent(id)}`);
+export const getOrderByClientId = (id: string) =>
+  call<AlpacaOrder>(requireKeys(), 'GET', `/v2/orders:by_client_order_id?client_order_id=${encodeURIComponent(id)}`);
 export const placeOrder = (o: Record<string, unknown>) => call<AlpacaOrder>(requireKeys(), 'POST', '/v2/orders', o);
 export const cancelOrder = (id: string) => call<null>(requireKeys(), 'DELETE', `/v2/orders/${encodeURIComponent(id)}`);
 

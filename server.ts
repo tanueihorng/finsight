@@ -1,4 +1,6 @@
 import { transfer } from './lib/transfers.ts';
+import { sandboxSnapshot } from './lib/sandbox.ts';
+import { MAX_DRAFT_TRADES, SANDBOX_CURRENCY, SANDBOX_SYMBOL } from './shared/sandbox.ts';
 import { previewTradeImport, importTrades } from './lib/trade-import.ts';
 /*
  * FINSIGHT // PERSONAL TERMINAL  -  backend
@@ -122,6 +124,16 @@ function paperStream(req: IncomingMessage, res: ServerResponse): void {
   paperClients.add(res);
   req.on('close', () => paperClients.delete(res));
 }
+
+// Symbol lists from ?symbols=a,b,c: trimmed and de-duplicated ignoring case, capped per request
+// (BOOKRACE-001; the same cap as /api/history/batch). Fetches are also bounded in lib/market.ts.
+// The first spelling is kept, because callers match the returned symbol against what they sent.
+const MAX_SYMBOLS = 200;
+const symbolList = (u: URL): string[] => {
+  const seen = new Map<string, string>();
+  for (const s of (u.searchParams.get('symbols') || '').split(',').map((x) => x.trim()).filter(Boolean)) if (!seen.has(s.toUpperCase())) seen.set(s.toUpperCase(), s);
+  return [...seen.values()];
+};
 
 async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
   // Applied to every response: the terminal must not be framed or MIME-sniffed.
@@ -293,8 +305,9 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       catch (e) { return sendJson(res, 404, { error: String((e as Error).message || e).slice(0, 200) }); }
     }
     if (p === '/api/quote') {
-      const symbols = (u.searchParams.get('symbols') || '').split(',').map((s) => s.trim()).filter(Boolean);
+      const symbols = symbolList(u);
       if (!symbols.length) return sendJson(res, 400, { error: 'symbols required' });
+      if (symbols.length > MAX_SYMBOLS) return sendJson(res, 400, { error: `at most ${MAX_SYMBOLS} symbols` });
       return sendJson(res, 200, { quotes: await getQuotes(symbols) });
     }
     // Earnings and dividend dates for any symbols (not only holdings).
@@ -360,6 +373,18 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       return sendJson(res, 200, listAccounts());
     }
 
+    if (p === '/api/portfolio/sandbox' && req.method === 'GET') {
+      const currency = u.searchParams.get('currency') || '';
+      const symbols = u.searchParams.getAll('symbol');
+      if (!acct || acct === 'ALL' || !SANDBOX_CURRENCY.test(currency)) {
+        return sendJson(res, 400, { error: 'Choose one account and a currency.' });
+      }
+      if (symbols.length > MAX_DRAFT_TRADES || symbols.some((s) => !SANDBOX_SYMBOL.test(s))) {
+        return sendJson(res, 400, { error: 'Enter valid symbols for up to 20 draft trades.' });
+      }
+      const snapshot = await sandboxSnapshot(acct, currency, symbols);
+      return snapshot ? sendJson(res, 200, snapshot) : sendJson(res, 404, { error: 'Account not found.' });
+    }
     if (p === '/api/portfolio' && req.method === 'GET') return sendJson(res, 200, await portfolioWithQuotes(base, acct));
     if (p === '/api/portfolio/buy' && req.method === 'POST') {
       const b = await readBody(req); await buy(b.symbol, b.quantity, b.price, b.date ? Date.parse(b.date) : null, acct, base);
@@ -423,8 +448,9 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
 
     // categories (sector) + portfolio performance (charts/heatmap)
     if (p === '/api/categories') {
-      const symbols = (u.searchParams.get('symbols') || '').split(',').map((s) => s.trim()).filter(Boolean);
+      const symbols = symbolList(u);
       if (!symbols.length) return sendJson(res, 200, {});
+      if (symbols.length > MAX_SYMBOLS) return sendJson(res, 400, { error: `at most ${MAX_SYMBOLS} symbols` });
       return sendJson(res, 200, await getCategories(symbols));
     }
     if (p === '/api/dividends') {
@@ -481,10 +507,11 @@ const server = http.createServer((req, res) => {
 const ALERT_INTERVAL = Math.max(15, Number(process.env.ALERT_INTERVAL) || 60) * 1000;
 setInterval(() => { withBook(chosenBook(), () => evaluateAlerts(true)).catch(() => console.warn('Alert evaluation failed; see application diagnostics.')); }, ALERT_INTERVAL);
 
-paper.startPaper(); // Alpaca paper stream + book sync, when paper keys are connected
 agentlink.ensureLink(); // creates DATA_DIR/agent-link.json (0600) for the optional local agent
 // PORT may be a numeric string from the environment; listen() accepts that.
 server.listen(PORT as number, HOST, () => {
+  // A second launch on the same port must not recover the running server's active tickets.
+  paper.startPaper();
   console.log(`\n  FINSIGHT // PERSONAL TERMINAL`);
   console.log(`  running at  http://localhost:${PORT}  (bound to ${HOST})`);
   console.log(`  portfolio   ${PORTFOLIO_FILE}`);

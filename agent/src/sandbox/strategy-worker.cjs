@@ -74,6 +74,19 @@ function compact(res, bars) {
   };
 }
 
+// Every simulated trade with its exit legs, for the portfolio replay (FEAT-014).
+// A trade still open at the last bar is included with the legs filled so far.
+function fullTrades(res, bars) {
+  const rows = res.bars || bars;
+  const date = (i) => rows[i].date; // the session date assigned by the dataset, so both sides share one key
+  const leg = (x) => ({ date: date(x.i), px: x.px, qty: x.qty, why: x.why });
+  const trade = (t) => {
+    if (!Array.isArray(t.exits)) throw new Error('engine does not report exit legs');
+    return { entryDate: date(t.entryIdx), entry: t.entry, stop: t.stop, exits: t.exits.map(leg) };
+  };
+  return [...(res.trades || []), ...(res.open ? [res.open] : [])].map(trade);
+}
+
 process.on('message', (msg) => {
   try {
     lockDown();
@@ -81,6 +94,18 @@ process.on('message', (msg) => {
     const invalid = loadPrivate();
     if (msg.op === 'list') {
       return process.send({ ok: true, strategies: [...engines.values()].map((e) => ({ ...e.meta, mechanical: !!e.run })), invalid });
+    }
+    if (msg.op === 'trades') {
+      const out = [];
+      for (const job of msg.jobs) {
+        const e = engines.get(job.id);
+        if (!e || !e.run) { out.push({ symbol: job.symbol, error: 'no mechanical engine' }); continue; }
+        try {
+          const res = e.run(job.bars || []);
+          out.push(res.kind === 'trade' ? { symbol: job.symbol, trades: fullTrades(res, job.bars) } : { symbol: job.symbol, error: `strategy kind "${res.kind}" produces no trades` });
+        } catch (err) { out.push({ symbol: job.symbol, error: String(err && err.message || err) }); }
+      }
+      return process.send({ ok: true, results: out });
     }
     if (msg.op === 'run') {
       const out = [];

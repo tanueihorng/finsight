@@ -21,7 +21,7 @@ type Col = (number | null)[];
 interface YahooChart {
   chart?: { result?: {
     meta?: YahooMeta; timestamp?: number[];
-    indicators?: { quote?: { close?: Col; open?: Col; high?: Col; low?: Col; volume?: Col }[] };
+    indicators?: { quote?: { close?: Col; open?: Col; high?: Col; low?: Col; volume?: Col }[]; adjclose?: { adjclose?: Col }[] };
     events?: { dividends?: Record<string, { date: number; amount: number }> };
   }[] | null };
 }
@@ -93,6 +93,7 @@ function normalizeQuote(symbol: string, meta: YahooMeta): QuotedQuote {
     symbol: meta.symbol || symbol,
     name: meta.longName || meta.shortName || meta.symbol || symbol,
     currency: meta.currency || 'USD',
+    currencyReported: Boolean(meta.currency),
     exchange: meta.fullExchangeName || meta.exchangeName || '',
     type: meta.instrumentType || '',
     price,
@@ -120,8 +121,27 @@ export async function getQuote(symbol: string): Promise<QuotedQuote> {
   return { ...result.value, cache: result.cache };
 }
 
+// Upstream fan-out bound (BOOKRACE-001): at most this many Yahoo requests in
+// flight per batch, however many symbols a caller passes (the same bound the
+// /api/history/batch route uses).
+export const FETCH_CONCURRENCY = 6;
+/** Promise.allSettled over items with at most `limit` running at once; results keep input order. */
+export async function settledLimit<T, R>(items: readonly T[], limit: number, fn: (x: T) => Promise<R>): Promise<PromiseSettledResult<R>[]> {
+  const out: PromiseSettledResult<R>[] = new Array(items.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const i = next++;
+      try { out[i] = { status: 'fulfilled', value: await fn(items[i]!) }; }
+      catch (reason) { out[i] = { status: 'rejected', reason }; }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, worker));
+  return out;
+}
+
 export async function getQuotes(symbols: string[]): Promise<Quote[]> {
-  const out = await Promise.allSettled(symbols.map((s) => getQuote(s)));
+  const out = await settledLimit(symbols, FETCH_CONCURRENCY, (s) => getQuote(s));
   return out.map((r, i) =>
     r.status === 'fulfilled' ? r.value : { symbol: symbols[i]!, error: String(r.reason && r.reason.message || r.reason) }
   );
@@ -229,7 +249,8 @@ export async function getHistory(symbol: string, range = '1mo', interval = '1d')
   // can be served stale while it refreshes, and persisted across restarts.
   const intraday = /m$|h$/.test(interval);
   const ttl = intraday ? 60000 : (range === '1d' || range === '5d') ? 5 * 60000 : 15 * 60000;
-  const result = await cachedWithStatus(`h:${symbol}:${range}:${interval}`, ttl, () => fetchHistory(symbol, range, interval),
+  // hv2: entries carry meta.currencyReported, so none saved before it was added are served.
+  const result = await cachedWithStatus(`hv2:${symbol}:${range}:${interval}`, ttl, () => fetchHistory(symbol, range, interval),
     { stale: intraday ? 0 : 7 * 24 * 60 * 60000, persist: !intraday });
   return { ...result.value, cache: result.cache };
 }
@@ -245,9 +266,13 @@ async function fetchHistory(symbol: string, range: string, interval: string): Pr
   // Keep `c` (and the c-not-null filter) so every existing consumer that reads
   // point.c — performance/fx/wb/fred — is unaffected; OHLCV is purely additive
   // so the security-detail chart can render candlesticks + volume.
+  // `adj` (dividend-adjusted close) is additive too; `c` is split-adjusted only.
+  const adj = result.indicators?.adjclose?.[0]?.adjclose;
   const points = ts
-    .map((t, i) => ({ t: t * 1000, o: opens[i], h: highs[i], l: lows[i], c: closes[i], v: vols[i] }))
+    .map((t, i) => ({ t: t * 1000, o: opens[i], h: highs[i], l: lows[i], c: closes[i], v: vols[i], ...(adj ? { adj: adj[i] } : {}) }))
     .filter((p) => p.c != null) as HistoryPoint[]; // c is a number after the filter
+  // normalizeQuote fills a missing currency with USD for display; currencyReported
+  // tells callers that must not assume (portfolio backtests) whether Yahoo sent one.
   return { symbol, range, interval, meta: result.meta ? normalizeQuote(symbol, result.meta) : null, points };
 }
 
@@ -475,7 +500,7 @@ async function fetchCategory(symbol: string): Promise<Category> {
   return { symbol, sector: sector || null, type: type || null, category };
 }
 export async function getCategories(symbols: string[]): Promise<Record<string, Category | { symbol: string; category: string }>> {
-  const out = await Promise.allSettled(symbols.map((s) => getCategory(s)));
+  const out = await settledLimit(symbols, FETCH_CONCURRENCY, (s) => getCategory(s));
   const map: Record<string, Category | { symbol: string; category: string }> = {};
   out.forEach((r, i) => { map[symbols[i]!.toUpperCase()] = r.status === 'fulfilled' ? r.value : { symbol: symbols[i]!, category: 'Other' }; });
   return map;

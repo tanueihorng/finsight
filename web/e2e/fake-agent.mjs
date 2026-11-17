@@ -11,6 +11,7 @@
 // POST /messages reply arrives (the race the G card fixes).
 import http from 'node:http';
 import { uiFixture } from './ui-fixture.mjs';
+import { quantRoute } from './quant-fixture.mjs';
 
 const PORT = Number(process.env.FAKE_AGENT_PORT || 8097);
 let seq = 0, ids = 0;
@@ -87,6 +88,7 @@ const server = http.createServer(async (req, res) => {
   const m = p.match(/^\/threads\/([^/]+)(\/[a-z]+)?$/);
   const t = m && threads.get(m[1]);
 
+  if (p === '/strategies' || p.startsWith('/quant/') || p.startsWith('/__test/quant-')) return void quantRoute(req, res, p, u, json, readBody);
   if (req.method === 'GET' && p === '/info') return json(res, 200, { name: 'Kestrel', version: 'fake' });
   if (req.method === 'GET' && p === '/brains') return json(res, 200, { brains: [{ id: 'fake', label: 'Fake model', costTier: '$', available: true }], default: 'fake' });
   if (req.method === 'GET' && p === '/search-providers') return json(res, 200, { default: 'tavily', providers: [

@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { startServer, setup, json, sleep, type Server } from './serverproc.ts';
+import { startServer, setup, json, sleep, cookieOf, type Server } from './serverproc.ts';
 import { handleFrame, decodeFrame, backoffMs } from '../lib/paperstream.ts';
 import { checkKeyShape } from '../lib/alpaca.ts';
 import { normalizeOrder, toAlpacaSymbol, toBookSymbol, limitBreach } from '../lib/paper.ts';
@@ -144,6 +144,67 @@ test('Kestrel in "auto" mode places directly, within the limits the user set', a
   assert.match(third.json.reason, /already placed 2 paper orders today; your limit is 2/);
   // The user's own orders are not bound by Kestrel's limits.
   assert.equal((await s.req('POST', '/api/paper/orders', json(c, { symbol: 'NVDA', side: 'buy', qty: 20 }))).json.placed, true);
+});
+
+test('startup recovers interrupted approvals without creating a second broker order', async (t) => {
+  const { s, c } = await connected();
+  t.after(() => s.stop());
+  const propose = (symbol: string) => s.req('POST', '/api/paper/orders', agent(s, { symbol, side: 'buy', qty: 1 }));
+  const known = (await propose('NVDA')).json.ticket.id;
+  const approved = (await s.req('POST', '/api/paper/tickets/decide', json(c, { id: known, approve: true }))).json.order;
+  const beforeSend = (await propose('AAPL')).json.ticket.id;
+  const missing = (await propose('AMD')).json.ticket.id;
+  const legacy = (await propose('MSFT')).json.ticket.id;
+  await s.stop();
+
+  const orderFile = path.join(s.dataDir, 'paper', 'orders.json');
+  const state = JSON.parse(fs.readFileSync(orderFile, 'utf8'));
+  for (const ticket of state.tickets) {
+    ticket.status = 'approving';
+    ticket.decidedAt = Date.now();
+    delete ticket.orderId;
+    if (ticket.id === beforeSend) ticket.clientOrderId = null;
+    else if (ticket.id === missing) ticket.clientOrderId = 'fixture-missing-order';
+    else delete ticket.clientOrderId; // Legacy ticket with or without metadata.
+  }
+  fs.writeFileSync(orderFile, JSON.stringify(state));
+
+  const restarted = await startServer({ dataDir: s.dataDir });
+  t.after(() => restarted.stop());
+  const login = await restarted.req('POST', '/api/auth/login', json(null, { pin: '482916' }));
+  assert.equal(login.status, 200, login.text);
+  const auth = cookieOf(login);
+  const readState = () => restarted.req('GET', '/api/paper/state', json(auth)).then((r) => r.json);
+  const recovered = await until(readState, (r) => r.tickets?.some((ticket: { id: string; status: string }) => ticket.id === known && ticket.status === 'approved'));
+  const tickets = Object.fromEntries(recovered.tickets.map((ticket: { id: string }) => [ticket.id, ticket]));
+  assert.equal(tickets[known].orderId, approved.id);
+  assert.equal(tickets[beforeSend].status, 'pending');
+  assert.equal(tickets[missing].status, 'unconfirmed');
+  assert.equal(tickets[legacy].status, 'unconfirmed');
+  assert.match(tickets[legacy].error, /no recorded order ID/);
+  for (const id of [known, missing, legacy]) {
+    const retry = await restarted.req('POST', '/api/paper/tickets/decide', json(auth, { id, approve: true }));
+    assert.equal(retry.status, 400, retry.text);
+  }
+  const after = await readState();
+  assert.deepEqual(after.recentOrders.map((order: { id: string }) => order.id), [approved.id]);
+});
+
+test('an accepted paper order with a lost response reconciles against the original client ID', async (t) => {
+  const s = await startServer({ env: { FINSIGHT_FAKE_ALPACA_LOSE_ORDER_RESPONSE: '1' } });
+  t.after(() => s.stop());
+  const c = await setup(s);
+  assert.equal((await s.req('POST', '/api/paper/connect', json(c, KEY))).status, 200);
+  const proposed = await s.req('POST', '/api/paper/orders', agent(s, { symbol: 'NVDA', side: 'buy', qty: 1 }));
+  const id = proposed.json.ticket.id;
+  const res = await s.req('POST', '/api/paper/tickets/decide', json(c, { id, approve: true }));
+  assert.match(res.json.error, /could not be confirmed/);
+  assert.equal((await s.req('POST', '/api/paper/tickets/decide', json(c, { id, approve: true }))).status, 400);
+  const recovered = await until(() => s.req('GET', '/api/paper/state', json(c)).then((r) => r.json),
+    (r) => r.tickets[0].status === 'approved');
+  assert.equal(recovered.recentOrders.length, 1);
+  assert.equal(recovered.tickets[0].orderId, recovered.recentOrders[0].id);
+  assert.equal(recovered.recentOrders[0].origin, 'kestrel');
 });
 
 test('the paper event stream pushes order and book changes', async (t) => {

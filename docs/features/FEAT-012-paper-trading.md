@@ -20,6 +20,8 @@ Give FinSight a second mode next to the real portfolio: a **paper trading** book
   - Settings are changed only from the terminal (PIN session); the agent can read them but not change them.
 - **Every order records its origin** (`user` or `kestrel`, with the Kestrel thread) and is listed in the orders panel.
 
+An approved Kestrel ticket records its client order ID before submission. After a restart, a ticket proven to have stopped before submission returns to pending for a fresh user decision. When submission may have happened, FinSight shows an unconfirmed status and checks Alpaca by the original client order ID. A missing order, failed lookup, or missing legacy ID leaves the ticket unconfirmed. Recovery sends only read requests to Alpaca.
+
 ## Trade desk (UI, 2026-10-31)
 
 The user asked for the paper screen to follow what professional trading screens do (chart, ticket and orders together). Patterns taken from broker and exchange terminals (TradingView's order panel, Binance/OKX/Kraken Pro spot screens, Webull, DXtrade): chart in the centre with the order ticket docked beside it, one symbol linked across chart, ticket and tables, BUY/SELL tabs, order-type tabs, size in shares or USD with 25/50/75/100% quick sizes, an estimate block (price, cost or proceeds, buying power and buying power after), one large side-coloured submit button, and a tabbed strip below for positions, open orders and history. Fills and open orders are drawn on the chart.

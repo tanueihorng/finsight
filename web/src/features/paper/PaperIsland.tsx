@@ -224,7 +224,7 @@ function KestrelSettings({ settings, onSaved }: { settings: Settings; onSaved: (
     </form>
   );
 }
-const ticketStatus: Record<Ticket['status'], string> = { pending: 'waiting for you', approving: 'sending', approved: 'approved', rejected: 'rejected', failed: 'failed' };
+const ticketStatus: Record<Ticket['status'], string> = { pending: 'waiting for you', approving: 'sending', unconfirmed: 'submission unconfirmed', approved: 'approved', rejected: 'rejected', failed: 'failed' };
 
 // ---- watchlist and information ------------------------------------------------------
 // The book's own watchlist (the same list as the Watchlist panel) and the paper
@@ -492,7 +492,7 @@ export default function PaperIsland() {
             <Table head={['Order', 'Status', 'Note', 'Time']} empty="Kestrel has not proposed a paper order yet. Ask it in the Kestrel panel.">
               {data.tickets.map((t) => (
                 <tr key={t.id} onClick={() => selectSym(t.order.symbol)}>
-                  <td>{orderLabel(t.order)}</td><td className={t.status === 'failed' ? s.down : t.status === 'pending' ? s.amber : ''}>{ticketStatus[t.status]}{t.error ? `: ${t.error}` : ''}</td>
+                  <td>{orderLabel(t.order)}</td><td className={t.status === 'failed' ? s.down : t.status === 'pending' || t.status === 'unconfirmed' ? s.amber : ''}>{ticketStatus[t.status]}{t.error ? `: ${t.error}` : ''}</td>
                   <td className={s.muted}>{t.note || ''}</td><td className={s.muted}>{when(new Date(t.createdAt).toISOString())}</td>
                 </tr>
               ))}

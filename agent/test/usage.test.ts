@@ -57,7 +57,7 @@ test('the migration fills token splits on existing ledger rows from their traces
   try {
     openDb(file).close();
     const old = new Database(file);
-    old.exec('ALTER TABLE cost_ledger DROP COLUMN input_tokens; ALTER TABLE cost_ledger DROP COLUMN output_tokens; ALTER TABLE cost_ledger DROP COLUMN cache_read_tokens; ALTER TABLE cost_ledger DROP COLUMN cache_write_tokens; DELETE FROM schema_migrations WHERE version >= 4;');
+    old.exec('DROP TABLE quant_run_series; DROP TABLE quant_series; DROP TABLE quant_runs; ALTER TABLE cost_ledger DROP COLUMN input_tokens; ALTER TABLE cost_ledger DROP COLUMN output_tokens; ALTER TABLE cost_ledger DROP COLUMN cache_read_tokens; ALTER TABLE cost_ledger DROP COLUMN cache_write_tokens; DELETE FROM schema_migrations WHERE version >= 4;');
     old.prepare("INSERT INTO cost_ledger(ts, brain, kind, units, usd, turn_id) VALUES (1, 'b', 'tokens', 120, 0.5, 't')").run();
     old.prepare("INSERT INTO cost_ledger(ts, brain, kind, units, usd, turn_id) VALUES (1, 'b', 'ui_qualification', 9, 0.1, NULL)").run();
     old.pragma('foreign_keys = OFF');

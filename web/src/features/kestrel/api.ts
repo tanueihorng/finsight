@@ -5,12 +5,12 @@ export class AgentError extends Error {
   readonly status: number; readonly code: string | undefined;
   constructor(message: string, status: number, code?: string) { super(message); this.status = status; this.code = code; }
 }
-export async function agentApi<T>(path: string, o: { method?: string; body?: unknown } = {}): Promise<T> {
+export async function agentApi<T>(path: string, o: { method?: string; body?: unknown; signal?: AbortSignal } = {}): Promise<T> {
   // Like api/client.ts: nothing is sent while FinSight is locked (the session
   // gate would refuse it anyway). No lock() call here, as above.
   if (window.FinSight?.auth?.unlocked === false) throw new AgentError('Locked. Enter your PIN.', 401);
   const res = await fetch('/api/agent' + path, { method: o.method || 'GET', headers: o.body ? { 'Content-Type': 'application/json' } : {},
-    body: o.body ? JSON.stringify(o.body) : undefined, credentials: 'same-origin' });
+    body: o.body ? JSON.stringify(o.body) : undefined, credentials: 'same-origin', signal: o.signal });
   let j: { error?: string | { code?: string; message?: string } } | null = null;
   try { j = await res.json(); } catch { /* empty */ }
   if (!res.ok) {
