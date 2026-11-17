@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../../../web/src/ui/Empty.tsx"],
+  "sourcesContent": ["import type { ReactNode } from 'react';\nimport styles from './primitives.module.css';\nexport function Empty({ children = 'No data.' }: { children?: ReactNode }) { return <div className={styles.empty}>{children}</div>; }\n"],
+  "mappings": "wHAEoF,IAAAA,EAAA,SAA7E,SAASC,EAAM,CAAE,SAAAC,EAAW,UAAW,EAA6B,CAAE,SAAO,OAAC,OAAI,UAAWC,EAAO,MAAQ,SAAAD,EAAS,CAAQ",
+  "names": ["import_jsx_runtime", "Empty", "children", "primitives_default"]
+}

@@ -23,6 +23,7 @@ import { URL } from 'node:url';
 
 import { PORT, HOST, PUBLIC_DIR, PORTFOLIO_FILE } from './lib/config.ts';
 import { persistNow } from './lib/cache.ts';
+import { exposureReport } from './lib/holdings.ts';
 import { getQuotes, getQuoteDetails, getHistory, search, getMarkets, getNews, getCategories, getFundProfile } from './lib/market.ts';
 import { worldBank, getFred, getCalendar } from './lib/macro.ts';
 import {
@@ -480,6 +481,12 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     if (p === '/api/undo' && req.method === 'POST') return sendJson(res, 200, await undo());
     if (p === '/api/portfolio/performance') {
       return sendJson(res, 200, await portfolioPerformance(u.searchParams.get('range') || '1y', base, acct, u.searchParams.get('benchmark') || undefined));
+    }
+    // FEAT-018 look-through: read-only, from DATA_DIR/etf-holdings snapshots.
+    if (p === '/api/exposure' && req.method === 'GET') {
+      const asOf = u.searchParams.get('asOf');
+      if (asOf !== null && !/^\d{4}-\d{2}-\d{2}$/.test(asOf)) return sendJson(res, 400, { error: 'asOf must be YYYY-MM-DD' });
+      return sendJson(res, 200, await exposureReport(base, acct, asOf ?? undefined));
     }
     if (p === '/api/fx-risk') {
       return sendJson(res, 200, await fxRisk(base, acct));

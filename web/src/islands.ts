@@ -79,6 +79,7 @@ export const islands: IslandRegistry = preloadable({
   wealth: () => import('./features/analytics/WealthIsland.tsx'),
   allocation: () => import('./features/analytics/AllocationIsland.tsx'),
   heatmap: () => import('./features/analytics/HeatmapIsland.tsx'),
+  exposure: () => import('./features/analytics/ExposureIsland.tsx'),
   detail: () => import('./features/detail/DetailIsland.tsx'),
   command: () => Promise.resolve(CommandIsland),
   status: () => Promise.resolve(StatusIsland),

@@ -7,6 +7,7 @@
     "AAPL":   { "name": "Apple Inc.", "currency": "USD", "price": 231.5, "exchange": "NasdaqGS", "type": "EQUITY", "sector": "Technology", "div": { "amount": 0.26, "months": [2, 5, 8, 11] }, "earningsInDays": 5 },
     "GOOGL":  { "name": "Alphabet Inc.", "currency": "USD", "price": 196.8, "exchange": "NasdaqGS", "type": "EQUITY", "sector": "Communication Services", "div": { "amount": 0.21, "months": [3, 6, 9, 12] }, "earningsInDays": 4 },
     "VOO":    { "name": "Vanguard S&P 500 ETF", "currency": "USD", "price": 552.1, "exchange": "NYSEArca", "type": "ETF", "div": { "amount": 1.74, "months": [3, 6, 9, 12] } },
+    "QQQM":   { "name": "Invesco NASDAQ 100 ETF", "currency": "USD", "price": 214.8, "exchange": "NasdaqGM", "type": "ETF", "div": { "amount": 0.3, "months": [3, 6, 9, 12] } },
     "TSM":    { "name": "Taiwan Semiconductor Manufacturing", "currency": "USD", "price": 205.3, "exchange": "NYSE", "type": "EQUITY", "sector": "Technology", "div": { "amount": 0.7, "months": [1, 4, 7, 10] } },
     "D05.SI": { "name": "DBS Group Holdings Ltd", "currency": "SGD", "price": 44.6, "exchange": "SES", "type": "EQUITY", "sector": "Financial Services", "div": { "amount": 0.6, "months": [2, 5, 8, 11] } },
     "O39.SI": { "name": "Oversea-Chinese Banking Corp", "currency": "SGD", "price": 17.1, "exchange": "SES", "type": "EQUITY", "sector": "Financial Services", "div": { "amount": 0.44, "months": [5, 11] } },

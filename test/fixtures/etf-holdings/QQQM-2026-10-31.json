@@ -1,0 +1,59 @@
+{
+  "fund": "QQQM",
+  "name": "Invesco NASDAQ 100 ETF",
+  "holdingsDate": "2026-10-31",
+  "retrievedAt": "2026-11-04T02:00:00Z",
+  "source": "Synthetic fixture: made-up weights for tests and demos, not issuer data",
+  "constituents": [
+    {
+      "ticker": "NVDA",
+      "name": "NVIDIA Corp",
+      "weightPct": 9.0
+    },
+    {
+      "ticker": "MSFT",
+      "name": "Microsoft Corp",
+      "weightPct": 8.2
+    },
+    {
+      "ticker": "AAPL",
+      "name": "Apple Inc",
+      "weightPct": 7.6
+    },
+    {
+      "ticker": "AMZN",
+      "name": "Amazon.com Inc",
+      "weightPct": 5.4
+    },
+    {
+      "ticker": "AVGO",
+      "name": "Broadcom Inc",
+      "weightPct": 5.1
+    },
+    {
+      "ticker": "TSLA",
+      "name": "Tesla Inc",
+      "weightPct": 3.1
+    },
+    {
+      "ticker": "GOOGL",
+      "name": "Alphabet Inc Class A",
+      "weightPct": 2.6
+    },
+    {
+      "ticker": "GOOG",
+      "name": "Alphabet Inc Class C",
+      "weightPct": 2.5
+    },
+    {
+      "ticker": "AMD",
+      "name": "Advanced Micro Devices Inc",
+      "weightPct": 1.6
+    },
+    {
+      "name": "Cash & equivalents",
+      "weightPct": 0.2,
+      "type": "cash"
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 # FEAT-018 · ETF look-through and portfolio stress
 
-First slice implemented in the `feat/etf-look-through` worktree, 2026-11-11 SGT. Extends IDEA-002. The worktree records it as LOOKTHROUGH-001. See the implementation status below.
+First slice (LOOKTHROUGH-001) implemented on `feat/etf-look-through`, 2026-11-11 SGT. Extends IDEA-002. See the implementation status below.
 
 ## User outcome
 
@@ -20,6 +20,11 @@ See the portfolio's combined exposure to an issuer across direct positions and f
 - Snapshots are reproducible and tagged with their actual holdings date. Changing the selected account or book recomputes the scope and cannot show rows from the previous scope.
 - The workflow is read-only with respect to positions, policy, and orders. It works with synthetic holdings and imported fixture files before a live source is qualified.
 
-## Implementation status
+## First slice — 2026-11-11 SGT (`LOOKTHROUGH-001`, branch `feat/etf-look-through`)
 
-The worktree implements local dated JSON snapshots, `GET /api/exposure`, the Analytics issuer exposure panel, and the single-issuer shock slider. The panel shows each contributing fund and its holdings date, plus coverage and reconciliation. The targeted engine, API and view-model tests pass on synthetic fixtures. Live issuer data and Kestrel integration are future work. The implementation was uncommitted on top of `117e89c` when checked.
+Selected by the user. Implemented and committed (`31e10ad`, rebased onto `main` on 2026-11-17); not merged or deployed:
+
+- `shared/lookthrough.ts`: the calculation (issuer aggregation, share-class merge, one-level expansion, residuals, staleness at 45 days, rounding within 100.5% scaled to 100%) and `shockImpact`.
+- `lib/holdings.ts` and `GET /api/exposure`: reads `<data dir>/etf-holdings/*.json` without writing; scoped to the request's account and book.
+- Analytics panel LOOK-THROUGH · ISSUER EXPOSURE (layout B, stacked source bars, chosen by the user): scope line, mapped/unmapped reconciliation, fund legend with holdings dates, per-issuer detail with weights and dates, INVESTED / NET WORTH basis, what-if slider enabled only when totals reconcile.
+- Synthetic fixtures in `test/fixtures/etf-holdings/` (made-up weights, labelled as such). No provider, fetcher or Kestrel tool yet.

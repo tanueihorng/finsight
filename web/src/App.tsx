@@ -137,6 +137,11 @@ const PANELS: Record<string, () => ReactNode> = {
       <Host island="allocation" id="alloc-body" className="chart-body muted" />
     </Panel>
   ),
+  exposure: () => (
+    <Panel pid="exposure" title={<span className="panel-title">LOOK-THROUGH &nbsp;·&nbsp; ISSUER EXPOSURE</span>} head={<span data-island-slot="exposure:head"></span>}>
+      <Host island="exposure" id="exposure-body" className="chart-body" />
+    </Panel>
+  ),
   heatmap: () => (
     <Panel pid="heatmap" title={<span className="panel-title">SECTOR HEATMAP</span>} head={<span data-island-slot="heatmap:head"></span>}>
       <Host island="heatmap" id="heatmap-body" className="heatmap-body muted" data-metric="day" />

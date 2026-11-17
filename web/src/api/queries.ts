@@ -3,6 +3,7 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { api } from './client.ts';
 import { loadPortfolio } from './early.ts';
 import type { Accounts, Alert, Category, FxRisk, History, Ledger, Markets, NewsResponse, Performance, Portfolio, Quote, QuotedQuote, Realized, WatchItem } from '../../../shared/types.ts';
+import type { ExposureReport } from '../../../shared/lookthrough.ts';
 import type {} from '../bootstrap.ts';
 
 // F4 supplies this source in bootstrap, before legacy startup. Until then hooks
@@ -33,6 +34,12 @@ export function usePortfolio() {
   const { base, account, enabled } = useScope();
   return useQuery({ queryKey: ['portfolio', base, account], enabled, staleTime: 15_000, refetchInterval: 15_000,
     queryFn: ({ signal }) => loadPortfolio(`/api/portfolio?base=${encodeURIComponent(base)}&account=${encodeURIComponent(account)}`, signal) });
+}
+// FEAT-018 ETF look-through for the scope: read-only, recomputed per account/base.
+export function useExposure() {
+  const { base, account, enabled } = useScope();
+  return useQuery({ queryKey: ['exposure', base, account], enabled, staleTime: 60_000, refetchInterval: 60_000,
+    queryFn: ({ signal }) => api<ExposureReport>(`/api/exposure?base=${encodeURIComponent(base)}&account=${encodeURIComponent(account)}`, { signal }) });
 }
 export function useMarkets() {
   const { enabled } = useScope();

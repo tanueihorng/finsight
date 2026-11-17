@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../../../web/src/ui/primitives.module.css", "../../../web/src/ui/ErrorLine.tsx"],
+  "sourcesContent": ["import \"./primitives.module.css?scoped\";\nexport default {\"privateValue\":\"fs-primitives-01e13_privateValue\",\"empty\":\"fs-primitives-01e13_empty\",\"error\":\"fs-primitives-01e13_error\"};", "import type { ReactNode } from 'react';\nimport styles from './primitives.module.css';\nexport function ErrorLine({ children }: { children: ReactNode }) { return <div role=\"alert\" className={styles.error}>{children}</div>; }\n"],
+  "mappings": "gFACA,IAAOA,EAAQ,CAAC,aAAe,mCAAmC,MAAQ,4BAA4B,MAAQ,2BAA2B,ECC/D,IAAAC,EAAA,SAAnE,SAASC,EAAU,CAAE,SAAAC,CAAS,EAA4B,CAAE,SAAO,OAAC,OAAI,KAAK,QAAQ,UAAWC,EAAO,MAAQ,SAAAD,EAAS,CAAQ",
+  "names": ["primitives_default", "import_jsx_runtime", "ErrorLine", "children", "primitives_default"]
+}
