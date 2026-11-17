@@ -15,6 +15,19 @@ The earlier draft with unverified release numbers is preserved in `docs/archive/
 
 ## Unreleased
 
+- Chart VWAP, pivots and the per-session volume profile now start each day in the exchange's time zone instead of the browser's (`62b4c89`, on `feat/kestrel-research-tools`, PR #4; not merged). Part of [FEAT-027](docs/features/FEAT-027-modern-web-platform-ui.md) release 1.
+  - The bug: in Singapore, the US session (22:30 to 05:00 SGT) crosses local midnight. VWAP restarted at 11:00 ET and each afternoon was joined to the next morning. Live AAPL 5-minute data over 5 days gave 6 VWAP sessions for 5 trading days.
+  - The fix: history meta now carries the exchange time zone as `timeZone`. If the feed doesn't name one, the chart uses UTC.
+  - Verified:
+    - New indicator tests cover the Singapore split, daylight saving, Asia/Kolkata and SGX.
+    - Typecheck, 278 unit tests (run with `TZ=Asia/Singapore`), 275 agent tests with secret scan, and the web build check pass.
+    - On a live test instance in SGT, the chart's VWAP reset only at 09:30 ET.
+    - On the same live AAPL data, pivot levels changed and session profiles started only at 09:30 ET, giving 5 profiles for 5 trading days.
+    - Browser suite: 294 passed, 2 failed, 1 skipped. Neither failure came from this fix.
+      - The `390x844-light` detail-panel baseline had been missed when `50f0f9b` re-captured the others. It is re-captured in `b8c7378`, and all four visual tests pass twice in a row.
+      - C3 "net worth breakdown" timed out once. It did not fail again in 26 later runs: 20 on its own, 1 with the A–C specs, and 5 replays of the exact 26 files that ran before it. It normally takes about 1 s. During the failing run, a second FinSight server and browser-pane chart work were running on the same machine. No code change was made because no cause was found.
+      - Full browser suite rerun at `20039d5` with nothing else running: 296 passed, 1 skipped (`UIQUAL`, needs `UI_QUAL_DIR`), 0 failed, in 9.5 min against 17.4 min for the loaded run. C3 took 0.9 s.
+
 - `AUDITFIX-001` research and paper approval fixes (`5bd0629`, integrated 2026-11-12). SEC pacing uses elapsed time and supports cancellation. DCF refuses invalid share counts, stale cash flow and ambiguous capex signs. Form 4 retains each joint filer’s roles. Interrupted paper approvals reconcile the original order with Alpaca and stay unconfirmed when the broker cannot confirm it.
 
 - `SANDBOX-001` Portfolio Sandbox ([FEAT-020](docs/features/FEAT-020-portfolio-sandbox.md)), merged into local `main` on 2026-11-11 (`449d717`, `55bb9b4`). Open it from Positions to preview ordered draft trades against a pinned account and currency. The comparison shows cash, fees and concentration, flags oversells and funding shortfalls, and validates incomplete price and cash overrides. Previewing leaves the portfolio and ledger untouched.

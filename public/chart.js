@@ -127,7 +127,7 @@
     st: { name: 'SuperTrend', short: 'ST', params: [['atr', 'ATR length', 10], ['mult', 'Factor', 3]], color: '#089981',
       calc: function (b, p) { const r = IND_LIB.supertrend(b, p.atr, p.mult); return { lines: [{ data: r.line, dirs: r.dir, width: 1.6 }] }; } },
     vwap: { name: 'VWAP (session, intraday)', short: 'VWAP', params: [], color: '#fb923c', intradayOnly: true,
-      calc: function (b) { return { lines: [{ data: IND_LIB.vwap(b, -new Date().getTimezoneOffset()) }] }; } },
+      calc: function (b, p, ctx) { return { lines: [{ data: IND_LIB.vwap(b, ctx.timeZone) }] }; } },
     vol: { name: 'Volume', short: 'Vol', pane: true, weight: 0.7, params: [['ma', 'MA length', 20]], color: '#7b8794',
       calc: function (b, p) { return { volume: true, lines: p.ma > 0 ? [{ data: IND_LIB.sma(b.map(function (x) { return x.v || 0; }), p.ma), color: '#38bdf8' }] : [] }; } },
     rsi: { name: 'RSI', pane: true, params: [['length', 'Length', 14]], color: '#ff9e16',
@@ -153,11 +153,13 @@
       calc: function (b, p) { const r = IND_LIB.hiLo(b, p.length); return { lines: [{ data: r.upper, dash: true, color: '#26a69a' }, { data: r.lower, dash: true, color: '#ef5350' }] }; } },
     pivots: { name: 'Pivot points (standard)', short: 'Pivots', params: [], color: '#ffb74d',
       calc: function (b, p, ctx) {
-        const iv = ctx.interval, off = -new Date().getTimezoneOffset() * 60000;
-        // period: intraday -> previous day, daily -> previous month, weekly/monthly -> previous year
-        const key = isIntraday(iv) ? function (t) { return Math.floor((t + off) / 86400000); }
-          : iv === '1d' ? function (t) { const d = new Date(t); return d.getFullYear() * 12 + d.getMonth(); }
-          : function (t) { return new Date(t).getFullYear(); };
+        const iv = ctx.interval, tz = ctx.timeZone;
+        // period: intraday -> previous day, daily -> previous month, weekly/monthly -> previous year,
+        // all on the exchange's calendar (not the browser's).
+        const day = function (t) { return new Date(IND_LIB.exchangeDay(t, tz) * 86400000); };
+        const key = isIntraday(iv) ? function (t) { return IND_LIB.exchangeDay(t, tz); }
+          : iv === '1d' ? function (t) { const d = day(t); return d.getUTCFullYear() * 12 + d.getUTCMonth(); }
+          : function (t) { return day(t).getUTCFullYear(); };
         const r = IND_LIB.pivots(b, key), col = { p: '#ffb74d', r1: '#ef5350', r2: '#ef5350', r3: '#ef5350', s1: '#26a69a', s2: '#26a69a', s3: '#26a69a' };
         return { lines: ['p', 'r1', 'r2', 'r3', 's1', 's2', 's3'].map(function (k) { return { data: r[k], step: true, label: k.toUpperCase(), color: col[k], width: k === 'p' ? 1.4 : 1 }; }), noScale: true };
       } },
@@ -1091,11 +1093,14 @@
   PriceChart.prototype._dirty = function () { this._dirtyStatic = true; this.requestRender(); };
 
   // ---- indicators ------------------------------------------------------------
+  // Exchange time zone from the history meta; UTC when the feed does not say.
+  PriceChart.prototype._timeZone = function () { return (this.meta && this.meta.timeZone) || 'UTC'; };
+
   PriceChart.prototype._computeIndicators = function () {
     const b = this.bars, self = this;
     this.disp = this.cfg.chartType === 'heikin' && b.length ? IND_LIB.heikinAshi(b) : b;
     const intraday = isIntraday(this.interval);
-    const ictx = { interval: this.interval, series: function (sym) { return self._series(sym); } };
+    const ictx = { interval: this.interval, timeZone: this._timeZone(), series: function (sym) { return self._series(sym); } };
     this.indOut = this.cfg.indicators.map(function (inst) {
       const def = IND[inst.type];
       let out = { lines: [] };
@@ -1642,10 +1647,10 @@
     const o = x.out, self = this, P = this.panes.price, col = x.inst.color;
     if (o.profile === 'visible') this._profileBox(IND_LIB.volumeProfile(this.bars, this.i0, this.i1, o.rows, o.va), P.x + P.w, P.w * 0.24, -1, col, true);
     else {
-      const off = -new Date().getTimezoneOffset() * 60000;
+      const tz = this._timeZone();
       let s = this.i0;
       for (let i = this.i0 + 1; i <= this.i1; i++) {
-        const newDay = i === this.i1 || Math.floor((this.bars[i].t + off) / 86400000) !== Math.floor((this.bars[i - 1].t + off) / 86400000);
+        const newDay = i === this.i1 || IND_LIB.exchangeDay(this.bars[i].t, tz) !== IND_LIB.exchangeDay(this.bars[i - 1].t, tz);
         if (!newDay) continue;
         if (i - s >= 3) {
           const x0 = this.xFromIndex(s) - this.slotW / 2, w = (i - s) * this.slotW;

@@ -15,7 +15,7 @@ interface YahooMeta {
   symbol?: string; longName?: string; shortName?: string; currency?: string; fullExchangeName?: string; exchangeName?: string;
   instrumentType?: string; regularMarketPrice?: number | null; chartPreviousClose?: number | null; previousClose?: number | null;
   regularMarketDayHigh?: number | null; regularMarketDayLow?: number | null; fiftyTwoWeekHigh?: number | null; fiftyTwoWeekLow?: number | null;
-  regularMarketVolume?: number | null; regularMarketTime?: number | null;
+  regularMarketVolume?: number | null; regularMarketTime?: number | null; exchangeTimezoneName?: string;
 }
 type Col = (number | null)[];
 interface YahooChart {
@@ -106,6 +106,8 @@ function normalizeQuote(symbol: string, meta: YahooMeta): QuotedQuote {
     weekLow52: meta.fiftyTwoWeekLow,
     volume: meta.regularMarketVolume,
     marketTime: meta.regularMarketTime ? meta.regularMarketTime * 1000 : null,
+    // IANA zone of the exchange: intraday charts start each trading day here, not at the browser's midnight.
+    ...(meta.exchangeTimezoneName ? { timeZone: meta.exchangeTimezoneName } : {}),
   };
 }
 

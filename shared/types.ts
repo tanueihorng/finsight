@@ -12,6 +12,8 @@ export interface QuotedQuote {
   dayHigh?: number | null; dayLow?: number | null;
   weekHigh52?: number | null; weekLow52?: number | null; volume?: number | null;
   marketTime: number | null;
+  /** Exchange time zone (IANA), when Yahoo reports it. */
+  timeZone?: string;
   cache?: { cachedAt: string; status: 'fresh' | 'stale-revalidating' | 'stale-fallback' };
   error?: never;
 }
