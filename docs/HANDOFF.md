@@ -20,8 +20,11 @@ The owner switched Claude accounts. The owner then asked to land the finished fe
     - specs FEAT-018 to FEAT-028
     - a merge of `main` that resolved docs-only conflicts
   - [#5](https://github.com/tanueihorng/finsight/pull/5) (`bc02d4a`): GitHub Actions CI. See [CI](#ci) below.
-- **Deployed on 2026-11-17 at about 22:33 SGT:** the personal app runs `81d6247` (`main`, with #7 and #8) from `~/.codex/worktrees/portfolio-sandbox/finsight`, with `FINSIGHT_DATA_DIR=~/FinSightData` on port 8000 and the agent on 8100. It was started in a Claude Code terminal tab, so it stops if that tab closes. The demo on 8003 still runs the older code it started with on Nov 14. Note: `node server.ts` without `FINSIGHT_DATA_DIR` uses the repo's `data/` folder, not `~/FinSightData`.
-- **The owner's local `main` (fast-forwarded to `81d6247` on 2026-11-17) is held by a Codex worktree that has the owner's uncommitted Keychain credential changes, backed up at `refs/backup/keychain-wip-2026-11-17`** (agent Keychain secrets work in `agent/src/secrets.ts`, `agent/src/cli.ts`, `agent/README.md` and a new `agent/test/secrets-keychain.test.ts`). Don't touch it without asking. Branch new work from `origin/main`.
+- **Deployed:** the personal app runs `81d6247` (`main`, with #7 and #8) on **port 8001**, with the agent on 8100. On 2026-11-18 it was restarted through the owner's launcher, `~/FinSightData/start-finsight-personal.command`.
+  - **Always start or restart through that launcher.** It sets `FINSIGHT_DATA_DIR=~/FinSightData`, port 8001, `AGENT_HOME` and `RECORDS_DIR`, clears the inherited `OPENAI_API_KEY`, and runs `~/.codex/worktrees/portfolio-sandbox/finsight`.
+  - Plain `node server.ts` uses the repo's `data/` folder and port 8000. Port 8000 is a different browser origin, so the owner's saved layout and sign-in don't carry over.
+  - The demo (port 8003, `npm run demo`) still runs Nov 14 code.
+- **The owner's local `main` is at `81d6247`, held by the Codex worktree the app runs from.** That worktree has an uncommitted copy of the Keychain change, now committed in [#10](https://github.com/tanueihorng/finsight/pull/10) and backed up at `refs/backup/keychain-wip-2026-11-17`. After #10 merges, discard the uncommitted copy and fast-forward.
 - **Landed and open (2026-11-17):**
   - [#7](https://github.com/tanueihorng/finsight/pull/7) `feat/etf-look-through` (FEAT-018 LOOKTHROUGH-001, ETF look-through issuer exposure): **merged** at `c636b06`, with CI green.
   - [#8](https://github.com/tanueihorng/finsight/pull/8) `feat/process-tools` (FEAT-017 GUARDRAILS-001 plus FEAT-015 PROCESSTOOLS-001): **merged** at `81d6247`, with CI green.
