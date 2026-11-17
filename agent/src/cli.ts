@@ -10,6 +10,7 @@ import { ChatEngine } from './chat/engine.ts';
 import { createApi } from './api/server.ts';
 import { runMcp } from './mcp/server.ts';
 import { log } from './log.ts';
+import { keychainService } from './secrets.ts';
 import { AuditLog, setAudit } from './obs/audit.ts';
 import { loadSkills, installFromGithub } from './skills.ts';
 import fs from 'node:fs';
@@ -100,6 +101,6 @@ if (cmd === 'mcp') {
 }
 
 function hasKeychain(name: string): boolean {
-  try { return !!(require('node:child_process') as typeof import('node:child_process')).execFileSync('security', ['find-generic-password', '-s', 'finsight-agent', '-a', name, '-w'], { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); }
+  try { return !!(require('node:child_process') as typeof import('node:child_process')).execFileSync('security', ['find-generic-password', '-s', keychainService(name), '-a', name, '-w'], { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); }
   catch { return false; }
 }

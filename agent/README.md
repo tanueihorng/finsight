@@ -22,12 +22,13 @@ Then start FinSight as usual. For your personal setup, double-click `~/FinSightD
 
 ## Keys (macOS Keychain, never in files)
 
-The agent reads keys from the Keychain (service `finsight-agent`), then from environment variables. DeepSeek already works from your `DEEPSEEK_API_KEY` environment variable. To store keys in the Keychain instead, run each command and paste the key when prompted:
+OpenAI, Anthropic and DeepSeek keys use the shared Keychain service `personal-ai-keys`; other keys use `finsight-agent`. The agent falls back to environment variables and its private 0600 env file. To add or update a key, use the matching service and enter it at the prompt:
 
 ```bash
-security add-generic-password -U -s finsight-agent -a DEEPSEEK_API_KEY -w
+security add-generic-password -U -s personal-ai-keys -a OPENAI_API_KEY -w
+security add-generic-password -U -s personal-ai-keys -a ANTHROPIC_API_KEY -w
+security add-generic-password -U -s personal-ai-keys -a DEEPSEEK_API_KEY -w
 security add-generic-password -U -s finsight-agent -a TAVILY_API_KEY -w
-security add-generic-password -U -s finsight-agent -a ANTHROPIC_API_KEY -w
 ```
 
 - **Web search** needs `TAVILY_API_KEY` (free tier at tavily.com) or `BRAVE_API_KEY`. Without one, `web_search` reports "not configured"; SEC EDGAR, FinSight news and FRED still work.
