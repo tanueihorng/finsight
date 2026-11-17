@@ -22,10 +22,10 @@ The owner switched Claude accounts. The owner then asked to land the finished fe
   - [#5](https://github.com/tanueihorng/finsight/pull/5) (`bc02d4a`): GitHub Actions CI. See [CI](#ci) below.
 - **Not deployed.** The owner's personal app has not been restarted on either change. Restart or deploy only on the owner's approval.
 - **The owner's local `main` is held by a Codex worktree that has another session's uncommitted changes** (agent Keychain secrets work in `agent/src/secrets.ts`, `agent/src/cli.ts`, `agent/README.md` and a new `agent/test/secrets-keychain.test.ts`). Don't touch it without asking. Branch new work from `origin/main`.
-- **Open PRs (2026-11-17), both rebased onto `e0c00d0` and verified locally (typecheck, unit tests, agent tests, macOS screenshots):**
-  - [#7](https://github.com/tanueihorng/finsight/pull/7) `feat/etf-look-through`: FEAT-018 LOOKTHROUGH-001, ETF look-through issuer exposure.
-  - [#8](https://github.com/tanueihorng/finsight/pull/8) `feat/process-tools`: FEAT-017 GUARDRAILS-001 plus FEAT-015 PROCESSTOOLS-001.
-  - Both touch `web/src/App.tsx`, `islands.ts` and `shell/layout.ts`. Whichever merges second needs a rebase: rebuild `public/app` with `npm run build` at each conflicting commit, and re-check the 390px screenshot baselines.
+- **Landed and open (2026-11-17):**
+  - [#7](https://github.com/tanueihorng/finsight/pull/7) `feat/etf-look-through` (FEAT-018 LOOKTHROUGH-001, ETF look-through issuer exposure): **merged** at `c636b06`, with CI green.
+  - [#8](https://github.com/tanueihorng/finsight/pull/8) `feat/process-tools` (FEAT-017 GUARDRAILS-001 plus FEAT-015 PROCESSTOOLS-001): open, rebased onto `c636b06`. It is verified locally (typecheck, unit tests, agent tests, macOS screenshots) and waiting for CI and the owner's review.
+  - To rebase a branch past a conflict in the generated `public/app` bundle, rebuild it with `npm run build` at each conflicting commit. Re-check the 390px screenshot baselines after any change to panel order.
 - **`feat/policy-guardrails` is superseded.** Its five commits are in #8. It was never pushed. Delete it only with the owner's approval.
 - **Still open from earlier work:**
   - QUANT-001 acceptance reconciliation.
