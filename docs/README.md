@@ -4,6 +4,7 @@ Start with [AGENTS.md](../AGENTS.md) for coding instructions. Load the documents
 
 | Need | Start here |
 |---|---|
+| Continue another session's work | [Agent handoff](HANDOFF.md) |
 | Run or use FinSight | [README](../README.md), [setup entrypoint](../START-HERE.md) |
 | Find a product requirement | [Product backlog](BACKLOG.md), then its linked feature spec |
 | Understand the current code | [System overview](architecture/SYSTEM.md), [developer/API reference](../DOCS.md) |

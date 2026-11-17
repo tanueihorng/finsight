@@ -2,6 +2,8 @@
 
 > Instructions for coding agents (Claude Code, Codex, Antigravity, Cursor) working inside `finsight/`.
 
+> **Picking up from another session or account?** Read [docs/HANDOFF.md](docs/HANDOFF.md) first. It holds the current state, the first checks to run, and how CI and branch protection work.
+
 ---
 
 ## 1. Product Backlog & Docs-as-Code Protocol
