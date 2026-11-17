@@ -7,17 +7,17 @@ export type Side = 'left' | 'right';
 export interface Columns { left: string[]; right: string[] }
 // Default order, as in the pre-X1 index.html (Kestrel's dock sits after the detail).
 export const DEFAULT_COLUMNS: Columns = {
-  left: ['positions', 'performance', 'wealth', 'allocation', 'exposure', 'heatmap', 'watchlist', 'alerts', 'fxrisk', 'dividends', 'activity'],
-  right: ['detail', 'kestrel', 'news', 'markets', 'discover', 'calendar', 'worldbank', 'fred', 'inflation'],
+  left: ['positions', 'performance', 'wealth', 'allocation', 'exposure', 'heatmap', 'watchlist', 'alerts', 'fxrisk', 'dividends', 'activity', 'guardrails', 'theses', 'decisions', 'costs', 'costbasis'],
+  right: ['detail', 'kestrel', 'news', 'markets', 'discover', 'calendar', 'worldbank', 'fred', 'inflation', 'radar', 'digest', 'backtest'],
 };
 // ⚙ Layout's show/hide list: [body id, label]; the body id is what finsight-panels stores.
 export const PANELS: [string, string][] = [
   ['perf-body', 'Performance'], ['alloc-body', 'Allocation'], ['exposure-body', 'Look-through'], ['heatmap-body', 'Sector Heatmap'],
-  ['fxrisk', 'FX Risk'], ['dividends', 'Dividends'], ['watchlist', 'Watchlist'], ['alerts', 'Price Alerts'], ['activity', 'Recent Activity'],
-  ['news', 'News'], ['markets', 'World Markets'], ['discover', 'Discover'], ['calendar', 'Econ Calendar'], ['wb-body', 'World Bank'], ['fred-body', 'US Fed (FRED)'], ['infl-body', 'US Inflation Gauges'],
+  ['fxrisk', 'FX Risk'], ['dividends', 'Dividends'], ['watchlist', 'Watchlist'], ['alerts', 'Price Alerts'], ['activity', 'Recent Activity'], ['guardrails', 'Policy Guardrails'], ['theses', 'Thesis Tracker'], ['decisions', 'Decision Log'], ['costs', 'Returns After Costs'], ['costbasis', 'Cost Basis Review'],
+  ['news', 'News'], ['markets', 'World Markets'], ['discover', 'Discover'], ['calendar', 'Econ Calendar'], ['wb-body', 'World Bank'], ['fred-body', 'US Fed (FRED)'], ['infl-body', 'US Inflation Gauges'], ['radar', 'Event Radar'], ['digest', 'Weekly Digest'], ['backtest', 'Backtester'],
 ];
 export const HIDE_ID: Record<string, string> = {
-  performance: 'perf-body', allocation: 'alloc-body', exposure: 'exposure-body', heatmap: 'heatmap-body', fxrisk: 'fxrisk', dividends: 'dividends', watchlist: 'watchlist',
+  guardrails: 'guardrails', theses: 'theses', decisions: 'decisions', costs: 'costs', costbasis: 'costbasis', radar: 'radar', digest: 'digest', backtest: 'backtest', performance: 'perf-body', allocation: 'alloc-body', exposure: 'exposure-body', heatmap: 'heatmap-body', fxrisk: 'fxrisk', dividends: 'dividends', watchlist: 'watchlist',
   alerts: 'alerts', activity: 'activity', news: 'news', markets: 'markets', discover: 'discover', calendar: 'calendar', worldbank: 'wb-body', fred: 'fred-body', inflation: 'infl-body',
 };
 export interface SavedLayout { left?: string[]; right?: string[] }

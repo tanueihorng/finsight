@@ -21,7 +21,7 @@ const subscribeAuth = (fn: () => void) => {
   return () => { window.removeEventListener('finsight:locked', fn); window.removeEventListener('finsight:unlocked', fn); };
 };
 const getUnlocked = () => window.FinSight.auth?.unlocked ?? false;
-function useScope() {
+export function useScope() {
   const state = useSyncExternalStore(subscribeState, getState);
   const unlocked = useSyncExternalStore(subscribeAuth, getUnlocked);
   return { ...state, enabled: unlocked && state.accountReady };
@@ -199,4 +199,46 @@ export function useDividends() {
   const { base, account, enabled } = useScope();
   return useQuery({ queryKey: ['dividends', base, account], enabled, staleTime: 120_000, refetchInterval: 120_000,
     queryFn: ({ signal }) => api<import('../../../shared/types.ts').DividendsReport>(`/api/dividends?base=${encodeURIComponent(base)}&account=${encodeURIComponent(account)}`, { signal }) });
+}
+
+/** FEAT-017: whole-book guardrails (not account-scoped: limits apply to the whole book). */
+export function useGuardrails() {
+  const { base, enabled } = useScope();
+  return useQuery({ queryKey: ['guardrails', base], enabled, staleTime: 120_000, refetchInterval: 120_000,
+    queryFn: ({ signal }) => api<import('../../../shared/guardrails.ts').GuardrailReport>(`/api/guardrails?base=${encodeURIComponent(base)}`, { signal }) });
+}
+
+/** FEAT-017 §2: theses joined with whole-book holdings. */
+export function useTheses() {
+  const { base, enabled } = useScope();
+  return useQuery({ queryKey: ['theses', base], enabled, staleTime: 120_000, refetchInterval: 300_000,
+    queryFn: ({ signal }) => api<import('../../../shared/theses.ts').ThesisReport>(`/api/theses?base=${encodeURIComponent(base)}`, { signal }) });
+}
+
+/** FEAT-017 §3: read-only parse of the owner's decision log. */
+export function useDecisions() {
+  const { enabled } = useScope();
+  return useQuery({ queryKey: ['decisions'], enabled, staleTime: 60_000, refetchInterval: 300_000,
+    queryFn: ({ signal }) => api<import('../../../shared/decisions.ts').DecisionReport>('/api/decisions', { signal }) });
+}
+
+/** FEAT-015 §1: after-cost return decomposition (account-scoped like Dividends). */
+export function useCosts() {
+  const { base, account, enabled } = useScope();
+  return useQuery({ queryKey: ['costs', base, account], enabled, staleTime: 300_000, refetchInterval: 600_000,
+    queryFn: ({ signal }) => api<import('../../../shared/costs.ts').CostReport>(`/api/costs?base=${encodeURIComponent(base)}&account=${encodeURIComponent(account)}`, { signal }) });
+}
+
+/** FEAT-015 §3: cost-basis review (whole book; marks are per account and symbol). */
+export function useCostReview() {
+  const { base, enabled } = useScope();
+  return useQuery({ queryKey: ['costbasis', base], enabled, staleTime: 300_000,
+    queryFn: ({ signal }) => api<import('../../../shared/costbasis.ts').CostReview>(`/api/costbasis?base=${encodeURIComponent(base)}`, { signal }) });
+}
+
+/** FEAT-015 §4: event radar over the whole book (30 days). */
+export function useRadar() {
+  const { base, enabled } = useScope();
+  return useQuery({ queryKey: ['radar', base], enabled, staleTime: 900_000, refetchInterval: 900_000,
+    queryFn: ({ signal }) => api<import('../../../shared/radar.ts').RadarReport>(`/api/radar?base=${encodeURIComponent(base)}`, { signal }) });
 }
