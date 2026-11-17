@@ -8,7 +8,7 @@ Update this file when you hand work off. Replace stale sections instead of addin
 
 ## Current handoff — 2026-11-17 SGT
 
-The owner switched Claude accounts. The owner then asked to land the finished feature branches, and two PRs are now open (below). Start nothing else without the owner's request.
+The owner switched Claude accounts. The owner then asked to land the finished feature branches. Both are merged and deployed (below). Start nothing else without the owner's request.
 
 ### Where things stand
 
@@ -20,11 +20,11 @@ The owner switched Claude accounts. The owner then asked to land the finished fe
     - specs FEAT-018 to FEAT-028
     - a merge of `main` that resolved docs-only conflicts
   - [#5](https://github.com/tanueihorng/finsight/pull/5) (`bc02d4a`): GitHub Actions CI. See [CI](#ci) below.
-- **Deployed on 2026-11-17 at about 16:31 SGT:** the personal app runs `c636b06` (`main`, with look-through) from `~/.codex/worktrees/portfolio-sandbox/finsight`, with `FINSIGHT_DATA_DIR=~/FinSightData` on port 8000 and the agent on 8100. It was started in a Claude Code terminal tab, so it stops if that tab closes. The demo on 8003 still runs the older code it started with on Nov 14. #8 is not deployed. Note: `node server.ts` without `FINSIGHT_DATA_DIR` uses the repo's `data/` folder, not `~/FinSightData`.
-- **The owner's local `main` (fast-forwarded to `c636b06` on 2026-11-17) is held by a Codex worktree that has the owner's uncommitted Keychain credential changes, backed up at `refs/backup/keychain-wip-2026-11-17`** (agent Keychain secrets work in `agent/src/secrets.ts`, `agent/src/cli.ts`, `agent/README.md` and a new `agent/test/secrets-keychain.test.ts`). Don't touch it without asking. Branch new work from `origin/main`.
+- **Deployed on 2026-11-17 at about 22:33 SGT:** the personal app runs `81d6247` (`main`, with #7 and #8) from `~/.codex/worktrees/portfolio-sandbox/finsight`, with `FINSIGHT_DATA_DIR=~/FinSightData` on port 8000 and the agent on 8100. It was started in a Claude Code terminal tab, so it stops if that tab closes. The demo on 8003 still runs the older code it started with on Nov 14. Note: `node server.ts` without `FINSIGHT_DATA_DIR` uses the repo's `data/` folder, not `~/FinSightData`.
+- **The owner's local `main` (fast-forwarded to `81d6247` on 2026-11-17) is held by a Codex worktree that has the owner's uncommitted Keychain credential changes, backed up at `refs/backup/keychain-wip-2026-11-17`** (agent Keychain secrets work in `agent/src/secrets.ts`, `agent/src/cli.ts`, `agent/README.md` and a new `agent/test/secrets-keychain.test.ts`). Don't touch it without asking. Branch new work from `origin/main`.
 - **Landed and open (2026-11-17):**
   - [#7](https://github.com/tanueihorng/finsight/pull/7) `feat/etf-look-through` (FEAT-018 LOOKTHROUGH-001, ETF look-through issuer exposure): **merged** at `c636b06`, with CI green.
-  - [#8](https://github.com/tanueihorng/finsight/pull/8) `feat/process-tools` (FEAT-017 GUARDRAILS-001 plus FEAT-015 PROCESSTOOLS-001): open, rebased onto `c636b06`. It is verified locally (typecheck, unit tests, agent tests, macOS screenshots) and waiting for CI and the owner's review.
+  - [#8](https://github.com/tanueihorng/finsight/pull/8) `feat/process-tools` (FEAT-017 GUARDRAILS-001 plus FEAT-015 PROCESSTOOLS-001): **merged** at `81d6247`, with CI green.
   - To rebase a branch past a conflict in the generated `public/app` bundle, rebuild it with `npm run build` at each conflicting commit. Re-check the 390px screenshot baselines after any change to panel order.
 - **`feat/policy-guardrails` is superseded.** Its five commits are in #8. It was never pushed. Delete it only with the owner's approval.
 - **Still open from earlier work:**
