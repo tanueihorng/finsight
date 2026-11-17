@@ -49,7 +49,9 @@ export default defineConfig({
     viewport: { width: 1600, height: 1000 },
   },
   projects: [
-    { name: 'chromium', testIgnore: /\.(agent|sw|realagent)\.spec\.ts$/, use: { baseURL: `http://127.0.0.1:${PORT}` } },
+    // Screenshot baselines are captured on macOS; E2E_SKIP_VISUAL=1 (CI on Linux) leaves them out.
+    { name: 'chromium', testIgnore: process.env.E2E_SKIP_VISUAL === '1' ? [/\.(agent|sw|realagent)\.spec\.ts$/, /visual\.spec\.ts$/] : /\.(agent|sw|realagent)\.spec\.ts$/,
+      use: { baseURL: `http://127.0.0.1:${PORT}` } },
     { name: 'agent', testMatch: /\.agent\.spec\.ts$/, use: { baseURL: `http://127.0.0.1:${AGENT_FINSIGHT_PORT}` } },
     { name: 'sw', testMatch: /\.sw\.spec\.ts$/, use: { baseURL: `http://127.0.0.1:${SW_PORT}`, serviceWorkers: 'allow' } },
   ],
