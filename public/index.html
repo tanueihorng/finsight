@@ -53,7 +53,9 @@ try { var d = document.documentElement;
 try { (function () {
   var get = function (k) { try { return localStorage.getItem(k); } catch (e) { return null; } };
   var opts = { credentials: 'same-origin', headers: { Accept: 'application/json' } };
-  var body = function (r) { return r.ok ? r.json() : null; };
+  // An error body is read too: left unread it would hold its connection open
+  // (a removed account's saved ID now gets a 404, not another account's data).
+  var body = function (r) { return r.ok ? r.json() : r.text().then(function () { return null; }); };
   var early = window.finsightEarly = {};
   early.auth = fetch('/api/auth/status', { credentials: 'same-origin' }).then(function (r) { if (!r.ok) throw new Error(); return r.json(); });
   var hinted = get('finsight-signed-in') === '1', saved = get('finsight-account') || get('fincept-account') || '';
