@@ -54,3 +54,20 @@ test('without holdings files every fund stays unmapped and the totals still reco
   await expect(body.locator('[data-issuer=VOO]')).toHaveCount(0);
   await expect(body.locator('[data-issuer=NVDA]')).toBeVisible();
 });
+
+test('cash in a currency with no rate is left out and named, not counted one-for-one', async ({ page }) => {
+  await seeded(page);
+  // The fake market has no KZT rate, so this cash cannot be converted to SGD.
+  await page.request.post('/api/cash?base=SGD', { data: { ccy: 'KZT', amount: 1000 } });
+  try {
+    await page.reload();
+    const warn = page.locator('#exposure-body [data-testid=exposure-fx-missing]');
+    await expect(warn).toContainText('No exchange rate for KZT to SGD');
+    await expect(warn).toContainText(`Cash KZT ${(1000).toLocaleString()}`);
+    const ex = await (await page.request.get('/api/exposure?base=SGD&account=main')).json();
+    expect(ex.fxMissing).toEqual(['KZT']);
+    expect(ex.netWorth).toBeCloseTo(ex.basis + ex.cash, 6);
+  } finally {
+    await page.request.post('/api/cash?base=SGD', { data: { ccy: 'KZT', amount: 0 } });
+  }
+});

@@ -24,6 +24,7 @@ import { URL } from 'node:url';
 import { PORT, HOST, PUBLIC_DIR, PORTFOLIO_FILE } from './lib/config.ts';
 import { persistNow } from './lib/cache.ts';
 import { exposureReport } from './lib/holdings.ts';
+import { isCalendarDate } from './shared/lookthrough.ts';
 import { getQuotes, getQuoteDetails, getHistory, search, getMarkets, getNews, getCategories, getFundProfile } from './lib/market.ts';
 import { worldBank, getFred, getCalendar } from './lib/macro.ts';
 import {
@@ -153,7 +154,7 @@ async function guardrailReport(base: string) {
   const all = await portfolioWithQuotes(base, 'ALL');
   const accounts = [];
   for (const a of listAccounts().accounts) accounts.push({ id: a.id, name: a.name, netWorth: (await portfolioWithQuotes(base, a.id)).summary.netWorth });
-  return guardrails.evaluate({ base: all.base, positions: all.positions, cash: all.cash, accounts }, guardrails.loadLimits());
+  return guardrails.evaluate({ base: all.base, positions: all.positions, cash: all.cash, accounts, fxMissing: all.fxMissing }, guardrails.loadLimits());
 }
 
 async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -584,7 +585,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     // FEAT-018 look-through: read-only, from DATA_DIR/etf-holdings snapshots.
     if (p === '/api/exposure' && req.method === 'GET') {
       const asOf = u.searchParams.get('asOf');
-      if (asOf !== null && !/^\d{4}-\d{2}-\d{2}$/.test(asOf)) return sendJson(res, 400, { error: 'asOf must be YYYY-MM-DD' });
+      if (asOf !== null && !isCalendarDate(asOf)) return sendJson(res, 400, { error: 'asOf must be a real date as YYYY-MM-DD' });
       return sendJson(res, 200, await exposureReport(base, acct, asOf ?? undefined));
     }
     if (p === '/api/fx-risk') {

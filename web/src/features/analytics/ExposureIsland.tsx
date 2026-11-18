@@ -85,6 +85,11 @@ export default function ExposureIsland() {
         ))}
         {basis === 'networth' && rep.cash !== 0 && <div className={styles.ug}><span>Cash (not invested)</span><span className={styles.val}>{amt(rep.cash)}</span><span className={styles.ud}>counted in net worth only</span></div>}
         {rep.fileErrors.map((f) => <div key={f.file} className={styles.bad}>Unreadable holdings file {f.file}: {f.error}</div>)}
+        {(rep.fxMissing?.length ?? 0) > 0 && (
+          <div className={styles.bad} data-testid="exposure-fx-missing">
+            No exchange rate for {rep.fxMissing.join(', ')} to {rep.base}. Left out of every figure above: {rep.unvalued.map((x) => `${x.item} ${x.currency} ${x.amount.toLocaleString()}`).join(' · ')}
+          </div>
+        )}
       </div>
     </>
   );

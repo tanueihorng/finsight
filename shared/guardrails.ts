@@ -22,6 +22,8 @@ export interface GuardrailInput {
   positions: { symbol: string; currency: string; marketValue: number; quoted?: boolean }[];
   cash: { ccy: string; base: number }[];
   accounts: { id: string; name: string; netWorth: number }[];
+  /** Currencies with no rate to base: their amounts were not really converted. */
+  fxMissing?: string[];
 }
 export interface GuardrailReport {
   base: string; netWorth: number; asOf: number; checks: Check[];

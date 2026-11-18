@@ -15,6 +15,13 @@ The earlier draft with unverified release numbers is preserved in `docs/archive/
 
 ## Unreleased
 
+- Valuation and reporting fixes from the SWEEP-002 audit (AUDITFIX-003, branch `fix/reporting-integrity` on top of `fix/ledger-import-integrity`; not merged).
+  - Look-through exposure leaves out holdings and cash whose currency has no rate to base, instead of counting JPY 10,000 as USD 10,000. It lists them in `fxMissing` and `unvalued`, and the panel says so. Guardrails compute no weights while a rate is missing and say which currency.
+  - A holdings file with a non-text ticker, name or issuer, an unknown type, or a non-object constituent marks its fund invalid, with its value unmapped. It no longer breaks the whole exposure request.
+  - Ticker normalization rewrites only US share classes A to C from the dot form, plus any slash form. `ABC.L` and `ABC-L` stay separate issuers.
+  - Holdings dates and the exposure route's `asOf` must be real calendar days. A snapshot dated February 30 is reported as invalid.
+  - Event Radar flags every holding over a breached position cap, not only the largest.
+  - Verified: 10 new regression tests, an HTTP check for `asOf` and a browser test for the panel warning; 374 app tests, typecheck, web build check, and 305 agent tests with secret scan pass. Browser suite: 306 passed, 1 skipped, before the new browser test was added; `LOOKTHROUGH.spec.ts` passes 3/3 with it.
 - Ledger and import integrity fixes from the SWEEP-002 audit (AUDITFIX-002, branch `fix/ledger-import-integrity`; not merged).
   - A replacement import is all or nothing. If any row fails, the account is restored as it was and the error names the failed rows. An additive import still keeps the good rows.
   - A dated sale draws only on shares bought by its date, with one day of slack, and is costed from those lots. A sale needing later purchases is rejected. Fully sold lots are removed, so the ledger can't edit or delete a buy that was sold.

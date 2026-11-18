@@ -8,7 +8,7 @@ const lt = lookThrough([
   { symbol: 'BIG', marketValue: 1000, assetType: 'ETF' },
   { symbol: 'NOFILE', marketValue: 400, assetType: 'ETF' },
 ], [{ fund: 'BIG', holdingsDate: '2026-10-31', retrievedAt: '2026-11-01T00:00:00Z', source: 't', constituents: [{ ticker: 'NVDA', name: 'NVIDIA', weightPct: 20 }] }], { asOf: '2026-11-11' });
-const rep: ExposureReport = { ...lt, book: 'real', account: 'a1', base: 'SGD', cash: 500, netWorth: 2500, fileErrors: [] };
+const rep: ExposureReport = { ...lt, book: 'real', account: 'a1', base: 'SGD', cash: 500, netWorth: 2500, fxMissing: [], unvalued: [], fileErrors: [] };
 
 test('legend lists direct, then each fund; funds without a usable file are grey', () => {
   const s = sources(rep);
