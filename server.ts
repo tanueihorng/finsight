@@ -597,7 +597,8 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     if (p.startsWith('/api/')) return sendJson(res, 404, { error: 'Unknown endpoint' });
     return serveStatic(req, res, p);
   } catch (err) {
-    return sendJson(res, 500, { error: String(err && (err as Error).message || err) });
+    const status = (err as { status?: number }).status; // e.g. 404 for an unknown account
+    return sendJson(res, status && status >= 400 && status < 500 ? status : 500, { error: String(err && (err as Error).message || err) });
   }
 }
 // Each request stays on the book chosen when it arrived: a write awaits quotes
