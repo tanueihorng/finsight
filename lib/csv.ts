@@ -23,6 +23,19 @@ export function splitCsvLine(line: string): string[] {
   return out.map((s) => s.trim());
 }
 
+// One numeric cell from a broker export: optional currency mark or code around
+// the number, thousands commas in groups of three, and scientific notation.
+// Anything else is NaN, never the digits salvaged from it ("1e3" is not 13,
+// "1,2" is not 12).
+const NUMBER_RE = /^[-+]?(?:\d{1,3}(?:,\d{3})+|\d+)?(?:\.\d+)?(?:[eE][-+]?\d+)?$/;
+export function parseNumberCell(v: unknown): number {
+  const s = String(v ?? '').replace(/\s+/g, '')
+    .replace(/^(?:[A-Z]{1,3}\$|[A-Z]{3}(?=[-+\d.])|[$€£¥])/, '') // US$ / S$ / USD / $ prefix
+    .replace(/(?<=[\d.])[A-Z]{3}$/, '');                          // trailing USD
+  if (!/\d/.test(s.replace(/[eE].*$/, '')) || !NUMBER_RE.test(s)) return NaN;
+  return Number(s.replaceAll(',', ''));
+}
+
 // Map a broker's listing-exchange or market label to the Yahoo ticker suffix.
 const EXCHANGE_SUFFIX: Record<string, string> = {
   // US (no suffix)
@@ -71,8 +84,8 @@ export function parseIbkrPositions(rows: string[][]): CsvRow[] {
       const cat = (r[3] || '').toLowerCase();
       if (!/stock|etf|equity|fund|adr/.test(cat)) continue; // skip forex/cash rows
       let symbol = (r[5] || '').toUpperCase().replace(/[^A-Z0-9.\-=^]/g, '');
-      const quantity = parseFloat(r[6]!);
-      const price = parseFloat(r[8]!); // Cost Price = average cost per share
+      const quantity = parseNumberCell(r[6]);
+      const price = parseNumberCell(r[8]); // Cost Price = average cost per share
       if (symbol && quantity > 0 && price >= 0) {
         out.push({ symbol: applyExchangeSuffix(symbol, exch[symbol]), quantity, price, dateMs: null });
       }
@@ -138,8 +151,8 @@ export function parseCsv(text: unknown): CsvRow[] {
   for (let i = start; i < grid.length; i++) {
     const c = grid[i]!;
     let symbol = (c[iSym] || '').toUpperCase().replace(/[^A-Z0-9.\-=^]/g, '');
-    const quantity = parseFloat((c[iQty] || '').replace(/[^0-9.\-]/g, ''));
-    const price = parseFloat((c[iPrice] || '').replace(/[^0-9.\-]/g, ''));
+    const quantity = parseNumberCell(c[iQty]);
+    const price = parseNumberCell(c[iPrice]);
     const dm = iDate >= 0 && c[iDate] ? Date.parse(c[iDate]) : NaN;
     if (iExch >= 0) symbol = applyExchangeSuffix(symbol, c[iExch]);
     if (symbol && quantity > 0 && price >= 0) rows.push({ symbol, quantity, price, dateMs: Number.isFinite(dm) ? dm : null });
