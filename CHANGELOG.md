@@ -15,6 +15,7 @@ The earlier draft with unverified release numbers is preserved in `docs/archive/
 
 ## Unreleased
 
+- Quant Lab browser test timing fix from the SWEEP-002 audit (AUDITFIX-004, branch `fix/quant-e2e-timing`; not merged). `runBacktest` in `web/e2e/QUANT.agent.spec.ts` waits for the strategy form or the New backtest button before choosing; it no longer checks the form while saved runs are loading and then waits forever for a button an empty Lab never shows. Reproduced by delaying the saved-runs request 1.5 s; the spec passes 6/6, and 18/18 over three repeats.
 - Chart VWAP, pivots and the per-session volume profile now start each day in the exchange's time zone instead of the browser's (`62b4c89`, on `feat/kestrel-research-tools`, PR #4; not merged). Part of [FEAT-027](docs/features/FEAT-027-modern-web-platform-ui.md) release 1.
   - The bug: in Singapore, the US session (22:30 to 05:00 SGT) crosses local midnight. VWAP restarted at 11:00 ET and each afternoon was joined to the next morning. Live AAPL 5-minute data over 5 days gave 6 VWAP sessions for 5 trading days.
   - The fix: history meta now carries the exchange time zone as `timeZone`. If the feed doesn't name one, the chart uses UTC.
