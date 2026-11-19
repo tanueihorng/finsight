@@ -15,6 +15,13 @@ The earlier draft with unverified release numbers is preserved in `docs/archive/
 
 ## Unreleased
 
+- Verification loops and faster CI (VERIFY-001, branch `feat/verification-loops`; not merged). Based on the Claude Code team's and Lauren Tan's writing on agent verification.
+  - Ledger property tests (`test/ledger-properties.test.ts`, 0.2 s): random dated buy/sell sequences, number spellings, CSV round trips, failed replace imports and unknown accounts. All six fail on the code before AUDITFIX-002 and pass on 21 seeds now.
+  - Kestrel answer number check (FEAT-029, SPEC FR-1.15): figures in a chat answer that match no tool result or data snapshot are shown as unverified. No model call.
+  - `npm run verify:diff` replays an API session against `origin/main` (1.2 s); `compare-servers.mjs` no longer reports macOS `/private` paths as differences.
+  - `/verify` skill and feature map (`.claude/skills/verify/`) with `scripts/verify-server.ts`, an isolated seeded server that refuses the personal, default and demo ports. `REVIEW.md` lists diff-triggered review checks from SWEEP-002; AGENTS.md gains verification rules.
+  - CI: quant Python pinned to 3.12 (numpy was compiled from source for 3 min each run); browser shards balanced by run time; seven browser tests use the fake clock instead of 16–31 s real waits, with the same failures caught under mutation.
+  - Agent tests ignore provider keys in the developer's shell.
 - Ledger and import integrity fixes from the SWEEP-002 audit (AUDITFIX-002, branch `fix/ledger-import-integrity`; not merged).
   - A replacement import is all or nothing. If any row fails, the account is restored as it was and the error names the failed rows. An additive import still keeps the good rows.
   - A dated sale draws only on shares bought by its date, with one day of slack, and is costed from those lots. A sale needing later purchases is rejected. Fully sold lots are removed, so the ledger can't edit or delete a buy that was sold.
