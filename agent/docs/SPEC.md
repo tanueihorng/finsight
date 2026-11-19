@@ -140,6 +140,7 @@ Each requirement has an ID, a statement, and acceptance criteria (AC) that map t
 | FR-1.12 | The user MUST be able to stop an in-flight turn. Stopping cancels pending tool calls and persists the partial reply marked "stopped". |
 | FR-1.13 | Two concurrent sends to the same thread MUST NOT interleave. The second waits or is rejected with `409` according to the expected thread version (§9). |
 | FR-1.14 | Durable facts the user states in chat ("my loan rate is 4.5%") MUST become a **proposal** shown for confirmation. Nothing is written to profile or records without the user's explicit yes (L3 gate; in the MVP proposals are stored but nothing is applied). |
+| FR-1.15 | After an API-brain chat turn, code MUST check the answer's figures against the conversation's tool results, context snapshots and user messages, and show any figure that matches none as unverified, without changing the answer or calling a model ([FEAT-029](../../docs/features/FEAT-029-answer-number-check.md)). |
 
 AC: a golden eval passes ≥ 18/20 (§12.3); stream reconnect loses no events; a concurrency test passes for FR-1.13.
 
@@ -325,7 +326,7 @@ All requests need the proxy secret header; JSON bodies are validated by schema; 
 
 ### 5.3 SSE event types
 
-`turn.started`, `message.delta {text}`, `tool.started {name, argsSummary}`, `tool.finished {name, ok, resultSummary, ms}`, `citation {url, title, retrievedAt, class}`, `turn.finished {usage, cost}`, `turn.stopped`, `turn.failed {code}`, `task.created {taskId}`, `task.progress {step, of?, note}`, `task.finished {taskId, resultRef}`, `budget.warning {scope, pct}`, `brain.fallback {from, to}`, `proposal.created {id}`. Every event has a monotonically increasing `id` per thread.
+`turn.started`, `message.delta {text}`, `tool.started {name, argsSummary}`, `tool.finished {name, ok, resultSummary, ms}`, `citation {url, title, retrievedAt, class}`, `answer.check {checked, untraced, note}`, `turn.finished {usage, cost}`, `turn.stopped`, `turn.failed {code}`, `task.created {taskId}`, `task.progress {step, of?, note}`, `task.finished {taskId, resultRef}`, `budget.warning {scope, pct}`, `brain.fallback {from, to}`, `proposal.created {id}`. Every event has a monotonically increasing `id` per thread.
 
 ### 5.4 MCP interface
 The tool layer runs as an MCP server over **stdio** for Claude Code/Codex (local, no network port). It exposes the tools from §4 under the same names and schemas as in-process. Tool descriptions are the single source used for MCP, for the OpenAI-compatible function format and for the Anthropic tool format. Adapters are generated from the registry, never hand-copied.

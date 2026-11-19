@@ -125,6 +125,7 @@ function openStream() {
   on<D>('ui.render', (d) => { if (typeof d.callId === 'string') updateTurn(d.turnId, (t) => addUi(t, d.callId as string, d.view)); });
   on<D & Citation>('citation', (d) => updateTurn(d.turnId, (t) => addCite(t, d)));
   on<D>('budget.warning', (d) => updateTurn(d.turnId, (t) => addNotice(t, String(d.note || 'Limit reached.'), 'warn')));
+  on<D>('answer.check', (d) => updateTurn(d.turnId, (t) => addNotice(t, String(d.note), 'warn')));
   on<D>('turn.retry', (d) => { updateTurn(d.turnId, (t) => addNotice(t, retryNotice(d.code as string | undefined, d.connection as string | undefined), 'warn')); set({ status: { ...get().status, verb: 'Waiting for the model' } }); });
   on<D>('turn.finished', (d) => { updateTurn(d.turnId, (t) => finish(t, { label: t.label, costUsd: d.costUsd as number | undefined, ms: d.ms as number | undefined })); done(d.turnId); afterTurn(); });
   on<D>('turn.stopped', (d) => { updateTurn(d.turnId, (t) => finish(addNotice(t, 'Interrupted by you.', 'warn'), { label: t.label })); done(d.turnId); afterTurn(); });

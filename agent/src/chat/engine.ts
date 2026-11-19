@@ -29,6 +29,7 @@ export type SendInput = { threadId: string; content: string; lens?: LensId; brai
 import { UI_GUIDANCE } from '../ui/schema.ts';
 import { bytePrefix, bytes, contextSize, inputBudget, selectContext } from './context.ts';
 import { basisNote } from './council-metrics.ts';
+import { checkAnswer, groundingNote } from './grounding.ts';
 const PACK_TTL_MS = 15 * 60_000;
 // Serialized request framing beyond the bytes of the prompt itself.
 const PROVIDER_OVERHEAD_TOKENS = 1024;
@@ -175,6 +176,7 @@ export class ChatEngine {
           ({ costUsd } = await this.runCli(threadId, turnId, brain, ctrl, onText, usageTotal, (n) => { step = n; }));
         } else {
           ({ costUsd, step } = await this.runApi(threadId, turnId, brain, ctx, ctrl, onText, usageTotal, t0, () => { streamed = ''; }, effort));
+          this.checkNumbers(threadId, turnId);
         }
       }
       this.emitCitations(threadId, turnId, citations);
@@ -401,6 +403,23 @@ export class ChatEngine {
         await new Promise((r) => setTimeout(r, wait));
       }
     }
+  }
+
+  // FR-1.4: figures in the answer that match no tool result, data snapshot or
+  // user message in this conversation are reported as unverified. Deterministic;
+  // the answer is left as written. CLI brains run their tools out of process, so
+  // their results are not stored and their answers are not checked.
+  private checkNumbers(threadId: string, turnId: string): void {
+    const msgs = store.listMessages(this.db, threadId);
+    const answer = msgs.filter((m) => m.turnId === turnId && m.role === 'assistant').flatMap((m) => m.blocks).map((b) => (b.type === 'text' ? b.text : '')).join('\n');
+    const evidence = msgs.flatMap((m) => m.blocks.flatMap((b) => b.type === 'tool_result' ? [b.content]
+      : b.type === 'notice' && b.kind === 'context_pack' ? [b.text] : b.type === 'text' && m.role === 'user' ? [b.text] : []));
+    const g = checkAnswer(answer, evidence);
+    audit('turn.numbers', { turnId, threadId, ...g });
+    if (!g.untraced.length) return;
+    const note = groundingNote(g);
+    store.appendMessage(this.db, threadId, 'assistant', [{ type: 'notice', kind: 'numbers', text: note }], { turnId });
+    this.bus.emit(threadId, 'answer.check', { turnId, ...g, note });
   }
 
   private async runCli(threadId: string, turnId: string, brain: CliBrain, ctrl: AbortController, onText: (d: string) => void, usageTotal: Usage, setStep: (n: number) => void): Promise<{ costUsd: number }> {

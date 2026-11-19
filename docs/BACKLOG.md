@@ -27,6 +27,7 @@ The Kestrel panel redesign and search-provider picker (`KESTRELUI-001` / `SEARCH
 
 | Feature | Execution | Status |
 |---|---|---|
+| [FEAT-029](features/FEAT-029-answer-number-check.md) Kestrel answer number check (SPEC FR-1.4) and verification loops: ledger property tests, `verify:diff`, `/verify` skill, REVIEW.md, faster CI | `VERIFY-001` | User selected 2026-11-19. Committed on `feat/verification-loops`; PR open, not merged |
 | [FEAT-018](features/FEAT-018-etf-look-through.md) ETF look-through, overlapping issuer exposure and single-issuer stress | `LOOKTHROUGH-001` | User selected 2026-11-11. First slice committed on `feat/etf-look-through` and rebased onto `main` 2026-11-17; PR open, not merged or deployed: local dated snapshot import, `/api/exposure`, Analytics LOOK-THROUGH panel (stacked source bars, user-chosen layout B) and what-if on reconciled totals; synthetic fixtures only, no provider. Live issuer data and the Kestrel tool remain open. |
 | In-chat stock price charts, source-bound to historical close prices | `CHATCHART-001` | Verified; included in the merge containing CHARTSHIP-001; deployment and live-provider chart qualification pending |
 | Smarter visual selection, richer charts, exposure views and safe navigation/alert drafts | `UIUPGRADE-001` | Integrated on main at `dc8a7c9`; demo activated; broader model qualification remains pending |

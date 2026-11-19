@@ -50,6 +50,7 @@ test('tool loop: brain calls a tool, gets the real result, answers; events + tra
   assert.match(sawResult, /"totalBase":4350/);
   const types = store.eventsAfter(db, t.id, 0).map((e) => e.type);
   for (const ty of ['turn.started', 'message.delta', 'tool.started', 'tool.finished', 'turn.finished']) assert.ok(types.includes(ty), ty);
+  assert.ok(!types.includes('answer.check'), 'S$4,350 traces to the tool result');
   assert.deepEqual((store.getTrace(db, r.turnId) as {kind: string}[]).map((s) => s.kind), ['brain', 'tool', 'brain']);
   assert.ok(store.spendSince(db, 0) > 0);
   const msgs = store.listMessages(db, t.id);
@@ -57,6 +58,22 @@ test('tool loop: brain calls a tool, gets the real result, answers; events + tra
   // same idempotency key: no second turn
   const again = engine.send({ threadId: t.id, content: 'How much cash?', idempotencyKey: 'idem-000001' });
   assert.equal(again.existing, true); assert.equal(again.turnId, r.turnId);
+});
+
+test('number check: figures that match no tool result are reported as unverified; rounding, dates and counts pass', async () => {
+  const { db, engine } = setup((_req, step) => step === 0
+    ? [{ type: 'tool_call', id: 'c1', name: 'get_cash', args: {} }]
+    : [{ type: 'text', text: 'As of 2026-11-19 you hold about S$4.35K in 2 currencies, roughly 4,350. That is 12.5% of the S$31,200 book.' }]);
+  const t = store.createThread(db);
+  const r = engine.send({ threadId: t.id, content: 'How much cash?', idempotencyKey: 'idem-numcheck1' });
+  assert.equal(await waitTurn(db, r.turnId), 'succeeded');
+  const ev = store.eventsAfter(db, t.id, 0).find((e) => e.type === 'answer.check');
+  assert.ok(ev, 'answer.check emitted');
+  const d = ev!.payload as { untraced: string[]; checked: number };
+  assert.deepEqual(d.untraced, ['12.5%', 'S$31,200']);
+  assert.equal(d.checked, 4);
+  const notice = store.listMessages(db, t.id).flatMap((m) => m.blocks).find((b) => b.type === 'notice' && b.kind === 'numbers');
+  assert.match((notice as { text: string }).text, /2 of 4 figures .* \(12\.5%, S\$31,200\)/);
 });
 
 test('one running turn per thread; stale version is rejected', async () => {

@@ -4,12 +4,8 @@ import { expect, type APIRequestContext, type Page } from '@playwright/test';
 
 export const PIN = '2468';
 
-// Same portfolio as scripts/demo.ts DEMO_CSV (kept inline: *.csv files are never committed).
-export const DEMO_CSV = [
-  'symbol,quantity,avg price,date',
-  'NVDA,60,95.5,2024-11-04', 'MSFT,18,402,2025-01-15', 'AAPL,25,188,2024-12-02', 'GOOGL,30,165,2025-02-10',
-  'VOO,22,470,2024-10-01', 'TSM,40,170,2025-03-03', 'D05.SI,300,36.2,2024-09-12', 'O39.SI,500,14.8,2025-04-08', 'ES3.SI,1200,3.45,2024-08-20',
-].join('\n');
+export { DEMO_CSV } from '../../scripts/demo-portfolio.ts';
+import { DEMO_CSV } from '../../scripts/demo-portfolio.ts';
 
 // Create the PIN on the fresh data folder if no test has yet.
 export async function ensurePin(request: APIRequestContext): Promise<void> {
@@ -59,6 +55,22 @@ export async function cmd(page: Page, text: string): Promise<void> {
 
 // The quantity cell of a position row.
 export const qtyCell = (page: Page, sym: string) => page.locator(`#positions-body tr[data-sym="${sym}"] td`).nth(1);
+
+// Advance an installed page.clock by `ms` in small steps, letting the requests
+// each step starts finish before the next. One large jump fires a 15 s poll's
+// next tick while the previous fetch is still in flight, and the query layer
+// then drops it, so a poll that runs too often would go unnoticed.
+export async function advanceClock(page: Page, ms: number, step = 1_000): Promise<void> {
+  const inFlight = new Set<object>();
+  const add = (r: object) => inFlight.add(r), done = (r: object) => inFlight.delete(r);
+  page.on('request', add); page.on('requestfinished', done); page.on('requestfailed', done);
+  try {
+    for (let t = 0; t < ms; t += step) {
+      await page.clock.runFor(Math.min(step, ms - t));
+      await expect.poll(() => inFlight.size, { intervals: [10, 25, 50, 100] }).toBe(0);
+    }
+  } finally { page.off('request', add); page.off('requestfinished', done); page.off('requestfailed', done); }
+}
 
 // Drag a panel by its ⠿ grip into a column (stepped moves so HTML5 dragover fires).
 // Under load Chromium sometimes never starts the HTML5 drag from the first

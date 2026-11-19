@@ -50,6 +50,19 @@ To maintain architectural integrity and prevent task fragmentation across runs:
 * **Python quant worker:** After changing `agent/quant/`, run `npm run quant:test` (first `uv sync --project agent/quant`) and `npm run quant:verify`. Portfolio replay and metrics live there.
 * **Agent Spec First:** Read `agent/docs/SPEC.md` before changing the agent. Changes that contradict it need the user's approval.
 
+### Verification
+
+A change is done when there is evidence it works, not when the code is written.
+
+* **Run it.** For anything a user can see, use the `/verify` skill (`.claude/skills/verify/`): an isolated server with synthetic data, driven through the feature map. Never verify against the personal app on port 8001.
+* **Review against [REVIEW.md](REVIEW.md).** Check only the items whose trigger matches the diff.
+* **Ledger and import rules are properties.** A new rule about lots, sales, imports, number parsing or accounts goes in `test/ledger-properties.test.ts` as a rule that holds for every input. Keep a single-example test only as a regression for a reported case.
+* **Refactors:** `npm run verify:diff` compares the API against `origin/main`.
+* **Three rounds, then stop.** If checks still fail after three fix attempts, stop and report what fails and why.
+* **Flaky tests:** no sleeps, no reruns until green, no weakened assertions. Find the cause or delete the test and record why.
+* **Say what was verified.** End each commit message with `Verified:` and the checks run (for example `Verified: npm test, e2e PILOT-1, /verify`), or `Verified: none` and the reason.
+* **Keep checks lean.** Before adding a CI step or a slow test, check whether an existing one already covers it. Remove checks that a type, lint rule or other test now enforces.
+
 ---
 
 ## 4. External MCP Client Protocol (`claude mcp add finsight`)

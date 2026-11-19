@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { build } from 'esbuild';
-import { seeded, PIN } from './helpers';
+import { seeded, advanceClock, PIN } from './helpers';
 import type {} from '../src/bootstrap.ts';
 
 async function mount(page: Page) {
@@ -29,8 +29,7 @@ test('a test-only React island follows legacy base and account changes', async (
   await expect(page.locator('#store-probe')).toHaveAttribute('data-account', newId);
 });
 test('session expiry with a React query stops requests, keeps PIN and resumes', async ({ page, context }) => {
-  test.setTimeout(60_000);
-  await seeded(page); await mount(page);
+  await page.clock.install(); await seeded(page); await mount(page);
   await expect(page.locator('#store-probe')).toHaveAttribute('data-account', /.+/);
   await context.clearCookies();
   // Exercise the new API client's 401 path, not the legacy wrapper.
@@ -40,7 +39,7 @@ test('session expiry with a React query stops requests, keeps PIN and resumes', 
   await page.fill('#lock-pin', PIN.slice(0, 2));
   const calls: string[] = [];
   page.on('request', (r) => { const path = new URL(r.url()).pathname; if (path.startsWith('/api/') && !path.startsWith('/api/auth/')) calls.push(path); });
-  await page.waitForTimeout(16_000);
+  await advanceClock(page, 31_000); // two full 15 s poll cycles
   expect(calls).toEqual([]);
   await expect(page.locator('#lock-pin')).toHaveValue(PIN.slice(0, 2));
   await page.locator('#lock-pin').pressSequentially(PIN.slice(2)); await page.press('#lock-pin', 'Enter');

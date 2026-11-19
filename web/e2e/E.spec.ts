@@ -1,7 +1,7 @@
 // E1 + E2: the security detail (header, stats, ranges) and the chart host.
 // Written against legacy first.
 import { test, expect, type Page } from '@playwright/test';
-import { seeded, cmd, answerDialog } from './helpers';
+import { seeded, cmd, answerDialog, advanceClock } from './helpers';
 
 declare const detailChart: { symbol: string; maxed?: boolean; root: HTMLElement; toggleMax(v?: boolean): void;
   onRequest(r: { interval: string }): void; onGrid(o: { n: number }): void };
@@ -120,12 +120,13 @@ test('expand and the 2-chart grid move the chart out and back; a theme change ke
 });
 
 test('the 30 s refresh re-reads the quote but not daily history', async ({ page }) => {
-  test.setTimeout(60_000);
-  await seeded(page);
+  await page.clock.install(); await seeded(page);
   await expect(page.locator('#detail-body canvas').first()).toBeAttached();
+  await page.waitForLoadState('networkidle');
   const quotes: string[] = [], hists: string[] = [];
   page.on('request', (r) => { if (path(r.url()) === '/api/quote') quotes.push(r.url()); if (path(r.url()) === '/api/history') hists.push(r.url()); });
-  await page.waitForTimeout(31_000);
-  expect(quotes.filter((u) => u.includes('VOO')).length).toBeGreaterThanOrEqual(1);
+  await advanceClock(page, 30_010);
+  await expect.poll(() => quotes.filter((u) => u.includes('VOO')).length).toBeGreaterThanOrEqual(1);
+  await page.waitForLoadState('networkidle');
   expect(hists).toEqual([]);
 });

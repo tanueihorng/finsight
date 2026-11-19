@@ -5,7 +5,8 @@ data/
 # Local working files (not part of the published project)
 finsight-handoff.md
 *.zip
-.claude/
+.claude/*
+!.claude/skills/
 
 # macOS
 .DS_Store

@@ -73,8 +73,8 @@ Workflow: [`.github/workflows/ci.yml`](../.github/workflows/ci.yml). It runs on 
 |---|---|---|
 | `changes` | Works out whether anything other than `docs/**`, top-level `*.md` or `LICENSE` changed | — |
 | `checks` | Typecheck, unit tests with `TZ=Asia/Singapore`, `check:web` | 38 s |
-| `agent` | `uv sync --project agent/quant --frozen`, then `agent:test` (including the secret scan) and `quant:test` | 4 min 18 s |
-| `e2e` | Playwright `--shard=N/4` on 4 runners | 2 min 17 s to 4 min 56 s |
+| `agent` | `uv sync --project agent/quant --frozen` on Python 3.12, then `agent:test` (including the secret scan) and `quant:test` | 4 min 18 s; about 1 min expected after the 3.12 pin (the runner's 3.14 compiled numpy for 3 min 9 s) |
+| `e2e` | 4 runners; `scripts/e2e-shard.mjs` assigns whole spec files by run time from `web/e2e/durations.json` | 2 min 17 s to 4 min 56 s before; about 3 min 8 s of tests each expected |
 | `CI result` | Fails if any job failed or was cancelled; skipped jobs pass | — |
 
 - **Wall time:** about 5 min. The browser suite alone takes about 10.5 min locally on one worker.
@@ -84,6 +84,6 @@ Workflow: [`.github/workflows/ci.yml`](../.github/workflows/ci.yml). It runs on 
   - Auto-merge is allowed. Use the merge-commit method; the history uses merge commits.
   - **Renaming or removing the `CI result` job blocks every PR** until branch protection is updated to match.
 - **Screenshot tests do not run in CI.** CI sets `E2E_SKIP_VISUAL=1`, which leaves out `visual.spec.ts` because its baselines are macOS-only (`*-chromium-darwin.png`). Run them locally before merging UI changes.
-- **Locally, run agent tests with `env -u TAVILY_API_KEY`.** One Council test assumes no search key. CI has no keys, so it passes there.
+- **Agent tests ignore shell API keys.** `agent/test/helpers.ts` removes `TAVILY_API_KEY` and the other provider keys, so no `env -u` is needed.
 - **Don't run the 4 shards in parallel on one Mac.** CPU contention causes false 30–70 s timeouts. Use CI, or run them one after another with different `E2E_PORT_BASE` values.
-- **To make CI faster:** the agent job and the slowest shard set the wall time. Add a fifth shard, or split the quant setup from the agent tests.
+- **To make CI faster:** the slowest shard sets the wall time. Refresh `web/e2e/durations.json` from a CI log when shards drift apart; drive app timers with `page.clock` (`advanceClock` in `web/e2e/helpers.ts`) instead of real waits.

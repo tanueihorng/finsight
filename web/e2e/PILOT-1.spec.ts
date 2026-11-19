@@ -2,7 +2,7 @@
 // Proves the plan's gate: drag/hide/reload keep one host, one 15 s poll,
 // lock stops and unlock resumes polling, removal unmounts (no more requests).
 import { test, expect, type Page } from '@playwright/test';
-import { seeded, cmd, dragPanel, PIN } from './helpers';
+import { seeded, cmd, dragPanel, advanceClock, PIN } from './helpers';
 
 const isMarkets = (url: string) => new URL(url).pathname === '/api/markets';
 function countMarkets(page: Page) {
@@ -27,8 +27,7 @@ test('renders like legacy: groups, prices, update label, LIVE pill; a row select
 });
 
 test('MKT refetches now; dragged to the other column it survives reload and polls once per 15 s', async ({ page }) => {
-  test.setTimeout(75_000);
-  await seeded(page);
+  await page.clock.install(); await seeded(page);
   await expect(page.locator('#markets [data-sym]').first()).toBeVisible();
   const refetch = page.waitForRequest((r) => isMarkets(r.url()));
   await cmd(page, 'MKT');
@@ -43,9 +42,12 @@ test('MKT refetches now; dragged to the other column it survives reload and poll
   await expect(panel(page)).toHaveCount(1);
   await expect(page.locator('#markets [data-sym]').first()).toBeVisible();
 
+  await page.waitForLoadState('networkidle');
   const times = countMarkets(page);
-  await page.waitForTimeout(31_000);
-  expect(times.length, `requests at ${times.map((t) => t - (times[0] ?? t)).join(', ')} ms`).toBe(2);
+  await advanceClock(page, 15_010);
+  await expect.poll(() => times.length).toBe(1);
+  await advanceClock(page, 15_010);
+  await expect.poll(() => times.length).toBe(2);
 });
 
 test('hidden in ⚙ Layout it stays hidden after reload, and shows again with content', async ({ page }) => {
@@ -64,14 +66,14 @@ test('hidden in ⚙ Layout it stays hidden after reload, and shows again with co
 });
 
 test('lock stops markets polling and unlock resumes it', async ({ page, context }) => {
-  test.setTimeout(60_000);
-  await seeded(page);
+  await page.clock.install(); await seeded(page);
   await expect(page.locator('#markets [data-sym]').first()).toBeVisible();
   await context.clearCookies();
   await page.evaluate(() => { void (window as any).loadWatchlist(); }); // legacy-any: any API call now 401s
   await expect(page.locator('body')).toHaveClass(/\blocked\b/);
   const times = countMarkets(page);
-  await page.waitForTimeout(16_000);
+  await advanceClock(page, 15_010);
+  await advanceClock(page, 15_010);
   expect(times).toEqual([]);
   const resumed = page.waitForRequest((r) => isMarkets(r.url()));
   await page.fill('#lock-pin', PIN);
@@ -81,11 +83,11 @@ test('lock stops markets polling and unlock resumes it', async ({ page, context 
 });
 
 test('removing the host unmounts the island: no further requests', async ({ page }) => {
-  test.setTimeout(45_000);
-  await seeded(page);
+  await page.clock.install(); await seeded(page);
   await expect(page.locator('#markets [data-sym]').first()).toBeVisible();
   await page.evaluate(() => document.getElementById('markets')!.remove());
   const times = countMarkets(page);
-  await page.waitForTimeout(16_000);
+  await advanceClock(page, 15_010);
+  await advanceClock(page, 15_010);
   expect(times).toEqual([]);
 });
