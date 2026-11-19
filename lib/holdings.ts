@@ -36,12 +36,22 @@ const today = () => new Date().toLocaleDateString('en-CA');
 export async function exposureReport(base: string, account?: string, asOf = today()): Promise<ExposureReport> {
   const book = activeBook();
   const pf = await portfolioWithQuotes(base, account);
-  const cats = pf.positions.length ? await getCategories(pf.positions.map((p) => p.symbol)) : {};
-  const positions = pf.positions.map((p) => ({
+  // An amount with no rate to base was counted one-for-one; leave it out of
+  // every figure and list it instead, so no share is computed from it.
+  const missing = new Set(pf.fxMissing);
+  const valued = pf.positions.filter((p) => !missing.has(p.currency));
+  const valuedCash = pf.cash.filter((c) => !missing.has(c.ccy));
+  const unvalued = [
+    ...pf.positions.filter((p) => missing.has(p.currency)).map((p) => ({ item: p.symbol, currency: p.currency, amount: p.last * p.quantity })),
+    ...pf.cash.filter((c) => missing.has(c.ccy)).map((c) => ({ item: 'Cash', currency: c.ccy, amount: c.amount })),
+  ];
+  const cats = valued.length ? await getCategories(valued.map((p) => p.symbol)) : {};
+  const positions = valued.map((p) => ({
     symbol: p.symbol, name: p.name, marketValue: p.marketValue,
     assetType: (cats[p.symbol.toUpperCase()] as { type?: string | null } | undefined)?.type ?? null,
   }));
   const { snapshots, errors } = loadSnapshots();
   const lt = lookThrough(positions, snapshots, { asOf });
-  return { ...lt, book, account: pf.account, base: pf.base, cash: pf.summary.cashBase, netWorth: pf.summary.netWorth, fileErrors: errors };
+  const cash = valuedCash.reduce((s, c) => s + c.base, 0);
+  return { ...lt, book, account: pf.account, base: pf.base, cash, netWorth: lt.basis + cash, fxMissing: [...missing], unvalued, fileErrors: errors };
 }

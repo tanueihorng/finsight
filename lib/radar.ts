@@ -26,8 +26,11 @@ export function radar(i: RadarInput): RadarReport {
   const guard = new Map<string, Check[]>();
   for (const c of i.guardrails) {
     if (c.state !== 'breach' && c.state !== 'near') continue;
-    const sym = c.kind === 'symbolMax' ? c.symbol : c.kind === 'positionMax' ? c.worst?.key : undefined;
-    if (sym) guard.set(sym.toUpperCase(), [...(guard.get(sym.toUpperCase()) ?? []), c]);
+    // A breached cap applies to every holding over it, not only the largest;
+    // a near one is about the largest holding.
+    const syms = c.kind === 'symbolMax' ? [c.symbol]
+      : c.kind === 'positionMax' ? (c.state === 'breach' && c.over?.length ? c.over.map((o) => o.key) : [c.worst?.key]) : [];
+    for (const sym of syms) if (sym) guard.set(sym.toUpperCase(), [...(guard.get(sym.toUpperCase()) ?? []), c]);
   }
   const items: RadarItem[] = [];
   for (const e of i.events) {

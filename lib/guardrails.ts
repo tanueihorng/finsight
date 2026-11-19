@@ -85,8 +85,12 @@ export function evaluate(input: GuardrailInput, limits: Limit[], now = Date.now(
   const cashValue = input.cash.reduce((s, c) => s + (finite(c.base) ? c.base : 0), 0);
   const netWorth = posValue + cashValue;
   const notes: string[] = [];
-  const ok = netWorth > 0;
-  if (!ok) notes.push('Net worth is zero or negative, so no weights can be computed.');
+  // Without a rate, an amount was counted one-for-one in base (JPY 10,000 as
+  // 10,000), so every weight would be wrong: report no data instead.
+  const fxMissing = [...new Set(input.fxMissing ?? [])];
+  const ok = netWorth > 0 && !fxMissing.length;
+  if (fxMissing.length) notes.push(`No exchange rate for ${fxMissing.join(', ')} to ${base}, so no weights can be computed until it is available.`);
+  else if (!ok) notes.push('Net worth is zero or negative, so no weights can be computed.');
   const pctOf = (v: number) => ok ? r2((v / netWorth) * 100) : 0;
   const obs = (key: string, value: number): Observation => ({ key, value: r2(value), pct: pctOf(value) });
 

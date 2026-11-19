@@ -53,6 +53,7 @@ test('/api/exposure aggregates NVDA across a direct holding, VOO and QQQM, per a
   assert.equal(ex3.book, 'paper'); assert.equal(ex3.issuers.length, 0); close(ex3.basis, 0);
 
   assert.equal((await s.req('GET', '/api/exposure?asOf=11/11/2026', json(c))).status, 400);
+  assert.equal((await s.req('GET', '/api/exposure?asOf=2026-02-30', json(c))).status, 400); // not a real day
   // Read-only: the REAL portfolio file is unchanged by exposure reads.
   await s.req('POST', '/api/book', json(c, { book: 'real' }));
   const after = (await s.req('GET', `/api/portfolio?base=USD&account=${pf.account}`, json(c))).json;

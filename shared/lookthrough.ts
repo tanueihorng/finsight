@@ -73,6 +73,10 @@ export interface LookThrough {
 /** /api/exposure: the look-through for one account in one book, base currency. */
 export type ExposureReport = LookThrough & {
   book: string; account: string; base: string; cash: number; netWorth: number;
+  /** Currencies with no rate to base; their amounts are in `unvalued`, not in any figure. */
+  fxMissing: string[];
+  /** Holdings and cash left out for lack of a rate, in their own currency. */
+  unvalued: { item: string; currency: string; amount: number }[];
   /** Holdings files that could not be read at all. */
   fileErrors: { file: string; error: string }[];
 };
@@ -83,14 +87,24 @@ const DAY = 86_400_000;
 // Share classes of one issuer. Keys and values are normalised tickers.
 const SHARE_CLASSES: Record<string, string> = { GOOG: 'GOOGL', 'BRK-A': 'BRK-B', 'FOXA': 'FOX', 'NWSA': 'NWS' };
 
-/** Upper-case; US class suffixes "BRK.B"/"BRK/B" become "BRK-B". Exchange suffixes (".SI") stay. */
+/**
+ * Upper-case; US share classes "BRK.B"/"BRK/B" become "BRK-B". Only classes A-C
+ * are rewritten from the dot form: a one-letter exchange suffix (London ".L",
+ * Venture ".V") is a different listing and stays as written.
+ */
 export function normTicker(t: string): string {
   const u = t.trim().toUpperCase();
-  return /^[A-Z]{1,5}[./][A-Z]$/.test(u) ? u.replace(/[./]/, '-') : u;
+  return /^[A-Z]{1,5}\/[A-Z]$/.test(u) || /^[A-Z]{1,5}\.[A-C]$/.test(u) ? u.replace(/[./]/, '-') : u;
 }
 export const issuerOf = (ticker: string): string => { const n = normTicker(ticker); return SHARE_CLASSES[n] ?? n; };
 
-const isDate = (s: unknown): s is string => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(s + 'T00:00:00Z'));
+/** A real calendar day as YYYY-MM-DD ("2026-02-30" is not one, though Date.parse accepts it). */
+export const isCalendarDate = (s: unknown): s is string => {
+  if (typeof s !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const t = Date.parse(s + 'T00:00:00Z');
+  return !Number.isNaN(t) && new Date(t).toISOString().slice(0, 10) === s;
+};
+const isDate = isCalendarDate;
 const dayMs = (d: string) => Date.parse(d + 'T00:00:00Z');
 
 /** Problems that make a snapshot unusable; empty when it is valid. */
@@ -103,8 +117,15 @@ export function snapshotProblems(s: HoldingsSnapshot): string[] {
   if (!Array.isArray(s.constituents) || !s.constituents.length) out.push('no constituents');
   else {
     let sum = 0;
+    const text = (v: unknown) => v == null || typeof v === 'string';
     for (const c of s.constituents) {
-      if (typeof c?.weightPct !== 'number' || !Number.isFinite(c.weightPct) || c.weightPct < 0) { out.push(`bad weight for ${c?.ticker ?? c?.name ?? '?'}`); break; }
+      // Files are imported by hand: check every field the expansion reads.
+      if (!c || typeof c !== 'object') { out.push('a constituent is not an object'); break; }
+      const who = typeof c.ticker === 'string' ? c.ticker : typeof c.name === 'string' ? c.name : '?';
+      if (!text(c.ticker)) { out.push(`ticker must be text (${who})`); break; }
+      if (!text(c.name) || !text(c.issuer)) { out.push(`name and issuer must be text (${who})`); break; }
+      if (c.type != null && !['equity', 'fund', 'cash', 'other'].includes(c.type)) { out.push(`unknown type for ${who}`); break; }
+      if (typeof c.weightPct !== 'number' || !Number.isFinite(c.weightPct) || c.weightPct < 0) { out.push(`bad weight for ${who}`); break; }
       sum += c.weightPct;
     }
     // Rounding in issuer files can push a full list slightly past 100%.
@@ -161,6 +182,12 @@ export function lookThrough(positions: ScopePosition[], snapshots: HoldingsSnaps
     const cov: FundCoverage = { fund: sym, value: v, status: 'missing', holdingsDate: null, retrievedAt: null, source: null, ageDays: null, mappedValue: 0, mappedShare: 0, note: '' };
     funds.push(cov);
     if (!snap) {
+      const badDate = snapshots.find((s) => s?.fund && normTicker(s.fund) === sym && !isDate(s.holdingsDate));
+      if (badDate) {
+        cov.status = 'invalid'; cov.note = `holdingsDate ${JSON.stringify(badDate.holdingsDate)} is not a real YYYY-MM-DD date`;
+        miss(sym, 'invalid-holdings', v, cov.note);
+        continue;
+      }
       const future = snapshots.some((s) => s?.fund && normTicker(s.fund) === sym && isDate(s.holdingsDate) && s.holdingsDate > asOf);
       cov.note = future ? `only holdings dated after ${asOf}` : 'no holdings file imported';
       miss(sym, 'no-holdings-file', v, cov.note);
