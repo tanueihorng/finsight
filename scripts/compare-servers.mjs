@@ -269,8 +269,11 @@ function shapeHeader(k, v) {
   if (k === 'etag') return /^W\/"[0-9a-z]+-[0-9a-z]+"$/.test(v) ? 'W/"<size>-<mtime>"' : v;
   return v;
 }
-// The checkout and data folder differ per side by construction.
-const local = (text, side) => text.split(side.dataDir).join('<data>').split(side.root).join('<root>');
+// The checkout and data folder differ per side by construction. Each may be
+// reported by its real path too (macOS: /var/... is /private/var/...).
+const real = (p) => { try { return fs.realpathSync(p); } catch { return p; } };
+const swap = (text, p, tag) => [...new Set([real(p), p])].reduce((t, v) => t.split(v).join(tag), text);
+const local = (text, side) => swap(swap(text, side.dataDir, '<data>'), side.root, '<root>');
 function body(res, side) {
   const ct = String(res.headers['content-type'] || '');
   if (ct.startsWith('application/json')) { const t = local(res.buf.toString('utf8'), side); try { return JSON.parse(t); } catch { return { '<invalid json>': t }; } }

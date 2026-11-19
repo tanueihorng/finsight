@@ -4,12 +4,8 @@ import { expect, type APIRequestContext, type Page } from '@playwright/test';
 
 export const PIN = '2468';
 
-// Same portfolio as scripts/demo.ts DEMO_CSV (kept inline: *.csv files are never committed).
-export const DEMO_CSV = [
-  'symbol,quantity,avg price,date',
-  'NVDA,60,95.5,2024-11-04', 'MSFT,18,402,2025-01-15', 'AAPL,25,188,2024-12-02', 'GOOGL,30,165,2025-02-10',
-  'VOO,22,470,2024-10-01', 'TSM,40,170,2025-03-03', 'D05.SI,300,36.2,2024-09-12', 'O39.SI,500,14.8,2025-04-08', 'ES3.SI,1200,3.45,2024-08-20',
-].join('\n');
+export { DEMO_CSV } from '../../scripts/demo-portfolio.ts';
+import { DEMO_CSV } from '../../scripts/demo-portfolio.ts';
 
 // Create the PIN on the fresh data folder if no test has yet.
 export async function ensurePin(request: APIRequestContext): Promise<void> {

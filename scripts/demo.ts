@@ -9,6 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn, execFile } from 'node:child_process';
 import { assertAgentDataDir, isInsidePersonalData } from './demo-safety.ts';
+import { DEMO_CSV } from './demo-portfolio.ts';
 
 const ROOT = path.join(import.meta.dirname, '..');
 const DEMO_DIR = path.resolve(process.env.FINSIGHT_DEMO_DIR || path.join(os.homedir(), 'FinSightDemo'));
@@ -26,12 +27,6 @@ if ([DEMO_DIR, path.join(DEMO_DIR, 'agent'), path.join(DEMO_DIR, 'agent', 'confi
 if (!process.argv.includes('--reset')) assertAgentDataDir(DEMO_DIR);
 
 if (process.argv.includes('--reset')) { fs.rmSync(DEMO_DIR, { recursive: true, force: true }); console.log(`Reset ${DEMO_DIR}`); }
-
-const DEMO_CSV = [
-  'symbol,quantity,avg price,date',
-  'NVDA,60,95.5,2024-11-04', 'MSFT,18,402,2025-01-15', 'AAPL,25,188,2024-12-02', 'GOOGL,30,165,2025-02-10',
-  'VOO,22,470,2024-10-01', 'TSM,40,170,2025-03-03', 'D05.SI,300,36.2,2024-09-12', 'O39.SI,500,14.8,2025-04-08', 'ES3.SI,1200,3.45,2024-08-20',
-].join('\n');
 
 const RECORDS: Record<string, string> = {
   'INVESTMENT_POLICY.md': `# Demo investment policy v0.1\n\nThis is a DEMO policy for a fictional investor.\n\n- Goal: long-term growth with a 10-year horizon.\n- Proposed (not accepted) limits: single stock <= 15% of net worth; technology sector <= 45%; cash buffer >= 6 months of expenses.\n- Process: every buy needs a written thesis, a valuation check and an invalidation condition.\n`,
