@@ -16,6 +16,9 @@ import { setLogSink } from '../src/log.ts';
 export const logs: string[] = [];
 setLogSink((l) => logs.push(l));
 process.env.AGENT_NO_KEYCHAIN = '1';
+// Keys in the developer's shell must not reach tests either: with one set, a
+// "no search key" test made a real search and passed or failed by machine.
+for (const k of ['TAVILY_API_KEY', 'BRAVE_API_KEY', 'DEEPSEEK_API_KEY', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY']) delete process.env[k];
 
 // SEC EDGAR is never reached from tests: sec.gov requests get synthetic data
 // (AMD is the only registrant) and every other host goes to the real fetch,
