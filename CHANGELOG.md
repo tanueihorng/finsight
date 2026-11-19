@@ -15,6 +15,7 @@ The earlier draft with unverified release numbers is preserved in `docs/archive/
 
 ## Unreleased
 
+- Browser test drag fix (branch `fix/e2e-drag-retry`; not merged). Under load Chromium sometimes never started the HTML5 drag, so panel-drag tests (C3, layout-drag) failed at random on CI. `dragPanel` in `web/e2e/helpers.ts` now waits for the panel to be marked as dragging before moving it and repeats the gesture if the drag did not start. Reproduced with the CPU slowed 4-8x: 14 misses in 80 runs before, 0 in 60 after; all 26 tests in the six specs that drag panels pass.
 - Ledger and import integrity fixes from the SWEEP-002 audit (AUDITFIX-002, branch `fix/ledger-import-integrity`; not merged).
   - A replacement import is all or nothing. If any row fails, the account is restored as it was and the error names the failed rows. An additive import still keeps the good rows.
   - A dated sale draws only on shares bought by its date, with one day of slack, and is costed from those lots. A sale needing later purchases is rejected. Fully sold lots are removed, so the ledger can't edit or delete a buy that was sold.
