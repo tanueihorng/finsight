@@ -59,11 +59,11 @@ export function evidenceFacts(content: string): Facts {
 }
 
 const NUMBER = /(?<![\w.])-?\d{1,3}(?:,\d{3})+(?:\.\d+)?|(?<![\w.])-?\d+(?:\.\d+)?/g;
-type Figure = { value: number; percent: boolean; decimals: number; text: string; limit: boolean };
+export type Figure = { value: number; percent: boolean; decimals: number; text: string; limit: boolean };
 // A limit, cap or threshold named next to a percentage ("the 15% cap", "limit
 // of 15%") makes it a rule, not a holding's weight, even when the values match.
 const LIMIT_WORDS = /\b(?:limits?|caps?|ceilings?|thresholds?|max(?:imum)?|targets?|bands?|guidelines?|triggers?|proposed)\b/i;
-function figures(text: string): Figure[] {
+export function figures(text: string): Figure[] {
   const out: Figure[] = [], ms = [...text.matchAll(NUMBER)];
   ms.forEach((m, k) => {
     const raw = m[0], value = Number(raw.replace(/,/g, '')), end = m.index! + raw.length;
@@ -80,7 +80,7 @@ function figures(text: string): Figure[] {
 // percentage glued to the word before it still counts in evidence prose.
 const proseNumbers = (text: string) => [...figures(text).map((f) => f.value), ...[...text.matchAll(/(?<=[A-Za-z])\d+(?:\.\d+)?(?=\s?%)/g)].map((m) => Number(m[0]))];
 // A rounded figure matches the evidence it was rounded from.
-const near = (f: Figure, v: number) => Math.abs(f.value - v) <= 0.5 * 10 ** -f.decimals + 1e-9;
+export const near = (f: Figure, v: number) => Math.abs(f.value - v) <= 0.5 * 10 ** -f.decimals + 1e-9;
 
 const escape = (x: string) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 // Whole words only: "Cash" must not match inside "securities-plus-cash".
