@@ -17,7 +17,12 @@ async function open(page: Page) {
 // Waits for the run this call creates, not an earlier one with the same name.
 async function runBacktest(page: Page, strategy: string, symbols = SYMBOLS, wait: RegExp | string = /passed/) {
   const select = lab(page).getByLabel('Strategy', { exact: true });
-  if (!await select.isVisible()) await lab(page).getByRole('button', { name: 'New backtest' }).click();
+  const fresh = lab(page).getByRole('button', { name: 'New backtest' });
+  // While saved runs load, neither the form nor its button is shown. Wait for
+  // one of them; checking the form at once and clicking the button can wait
+  // forever for a button an empty Lab never draws.
+  await expect(select.or(fresh).filter({ visible: true })).toHaveCount(1);
+  if (await fresh.isVisible()) await fresh.click();
   await expect(select).toBeVisible();
   const rows = lab(page).getByLabel('Saved runs').locator('li');
   const before = await rows.count();

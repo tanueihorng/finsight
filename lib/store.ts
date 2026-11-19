@@ -137,8 +137,22 @@ export function resolveAccount(p: StoredPortfolio, accountId: string | null | un
   const id = accountId || p.activeId;
   if (id === 'ALL') throw new Error('Pick a specific account first (not "All Accounts")');
   const a = p.accounts.find((x) => x.id === id);
-  if (!a) throw new Error('Unknown account');
+  if (!a) throw unknownAccount();
   return a;
+}
+const unknownAccount = () => Object.assign(new Error('Unknown account'), { status: 404 });
+// The accounts a read covers: all of them for "ALL", else the one named, else
+// the active one. A named account that doesn't exist (removed, or from the
+// other book) is an error, never a silent fallback to another account's data.
+function viewAccounts(p: StoredPortfolio, accountId: string | null | undefined): StoredAccount[] {
+  if ((accountId || p.activeId) === 'ALL') return p.accounts;
+  if (accountId) {
+    const a = p.accounts.find((x) => x.id === accountId);
+    if (!a) throw unknownAccount();
+    return [a];
+  }
+  const a = p.accounts.find((x) => x.id === p.activeId) || p.accounts[0];
+  return a ? [a] : [];
 }
 // Positions/transactions for a view (one account, or "ALL" = merged across accounts).
 export function viewPositions(p: StoredPortfolio, accountId: string | null | undefined): ViewPosition[] {
@@ -155,28 +169,19 @@ export function viewPositions(p: StoredPortfolio, accountId: string | null | und
     }
     const list = [...map.values()]; list.forEach(recalcPosition); return list;
   }
-  const a = p.accounts.find((x) => x.id === id) || p.accounts[0];
-  return a ? a.positions : [];
+  return viewAccounts(p, accountId)[0]?.positions ?? [];
 }
 export function viewTransactions(p: StoredPortfolio, accountId: string | null | undefined): StoredTransaction[] {
-  const id = accountId || p.activeId;
-  if (id === 'ALL') return p.accounts.flatMap((a) => a.transactions);
-  const a = p.accounts.find((x) => x.id === id) || p.accounts[0];
-  return a ? a.transactions : [];
+  return viewAccounts(p, accountId).flatMap((a) => a.transactions);
 }
 // Uninvested cash for a view: { CCY: amount }, summed across accounts for "ALL".
 export function viewCash(p: StoredPortfolio, accountId: string | null | undefined): Record<string, number> {
-  const id = accountId || p.activeId;
-  const accts = id === 'ALL' ? p.accounts : [p.accounts.find((x) => x.id === id) || p.accounts[0]].filter((a): a is StoredAccount => Boolean(a));
   const out: Record<string, number> = {};
-  for (const a of accts) for (const [c, v] of Object.entries(a.cash || {})) if (Number.isFinite(v) && v !== 0) out[c] = (out[c] || 0) + v;
+  for (const a of viewAccounts(p, accountId)) for (const [c, v] of Object.entries(a.cash || {})) if (Number.isFinite(v) && v !== 0) out[c] = (out[c] || 0) + v;
   return out;
 }
 export function viewDividends(p: StoredPortfolio, accountId: string | null | undefined): StoredDividend[] {
-  const id = accountId || p.activeId;
-  if (id === 'ALL') return p.accounts.flatMap((a) => a.dividends || []);
-  const a = p.accounts.find((x) => x.id === id) || p.accounts[0];
-  return a ? (a.dividends || []) : [];
+  return viewAccounts(p, accountId).flatMap((a) => a.dividends || []);
 }
 
 // Serialize every portfolio read-modify-write (buy/sell/del/watch/alert/import/

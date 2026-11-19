@@ -15,6 +15,15 @@ The earlier draft with unverified release numbers is preserved in `docs/archive/
 
 ## Unreleased
 
+- Quant Lab browser test timing fix from the SWEEP-002 audit (AUDITFIX-004, branch `fix/quant-e2e-timing`; not merged). `runBacktest` in `web/e2e/QUANT.agent.spec.ts` waits for the strategy form or the New backtest button before choosing; it no longer checks the form while saved runs are loading and then waits forever for a button an empty Lab never shows. Reproduced by delaying the saved-runs request 1.5 s; the spec passes 6/6, and 18/18 over three repeats.
+- Browser test drag fix (branch `fix/e2e-drag-retry`; not merged). Under load Chromium sometimes never started the HTML5 drag, so panel-drag tests (C3, layout-drag) failed at random on CI. `dragPanel` in `web/e2e/helpers.ts` now waits for the panel to be marked as dragging before moving it and repeats the gesture if the drag did not start. Reproduced with the CPU slowed 4-8x: 14 misses in 80 runs before, 0 in 60 after; all 26 tests in the six specs that drag panels pass.
+- Ledger and import integrity fixes from the SWEEP-002 audit (AUDITFIX-002, branch `fix/ledger-import-integrity`; not merged).
+  - A replacement import is all or nothing. If any row fails, the account is restored as it was and the error names the failed rows. An additive import still keeps the good rows.
+  - A dated sale draws only on shares bought by its date, with one day of slack, and is costed from those lots. A sale needing later purchases is rejected. Fully sold lots are removed, so the ledger can't edit or delete a buy that was sold.
+  - Sale prices must be finite and nonnegative, and buys reject infinite quantities or prices.
+  - CSV and IBKR position imports read numbers whole: thousands separators (`1,234` was 1), scientific notation (`1e3` was 13), and currency marks. Anything else drops the row instead of salvaging digits.
+  - A named account that doesn't exist returns `404 Unknown account` instead of another account's positions, transactions, cash or dividends. `index.html` now reads the error body of its early requests so a removed saved account can't hold a connection open. Service-worker shell is `v62`.
+  - Verified: 12 new regression tests from the audit's examples; 364 app tests, typecheck, web build check, and 305 agent tests with secret scan pass. Browser suite: 306 passed, 1 skipped (the fixture-dependent UI qualification test).
 - Chart VWAP, pivots and the per-session volume profile now start each day in the exchange's time zone instead of the browser's (`62b4c89`, on `feat/kestrel-research-tools`, PR #4; not merged). Part of [FEAT-027](docs/features/FEAT-027-modern-web-platform-ui.md) release 1.
   - The bug: in Singapore, the US session (22:30 to 05:00 SGT) crosses local midnight. VWAP restarted at 11:00 ET and each afternoon was joined to the next morning. Live AAPL 5-minute data over 5 days gave 6 VWAP sessions for 5 trading days.
   - The fix: history meta now carries the exchange time zone as `timeZone`. If the feed doesn't name one, the chart uses UTC.

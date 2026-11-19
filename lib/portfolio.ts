@@ -32,7 +32,7 @@ export async function buyUnlocked(symbolIn: unknown, quantityIn: unknown, priceI
   const quantity = Number(quantityIn);
   const price = Number(priceIn);
   if (!SYMBOL_RE.test(symbol)) throw new Error('Need a valid symbol (up to 24 of A–Z 0–9 . ^ = _ : -)');
-  if (!(quantity > 0) || !(price >= 0)) throw new Error('Need symbol, quantity > 0, price >= 0');
+  if (!(quantity > 0 && Number.isFinite(quantity)) || !(price >= 0 && Number.isFinite(price))) throw new Error('Need symbol, a finite quantity > 0 and price >= 0');
   const p = loadPortfolio();
   const acc = resolveAccount(p, accountId);
   let info: { name?: string; currency?: string } = {};
@@ -101,31 +101,41 @@ export function sell(symbolIn: unknown, quantityIn: unknown, priceIn: unknown, a
     const acc = resolveAccount(p, accountId);
     const pos = findPos(acc, symbol);
     if (!pos) throw new Error(`No position in ${symbol}`);
-    if (!(quantity > 0)) throw new Error('Quantity must be > 0');
+    if (!(quantity > 0 && Number.isFinite(quantity))) throw new Error('Quantity must be > 0');
     if (quantity > pos.quantity + 1e-9) throw new Error(`You only hold ${pos.quantity} ${symbol}`);
     // A sale can't predate the first purchase: there were no shares to sell yet.
     const first = Math.min(...(pos.lots || []).map((l) => l.t ?? Infinity));
     if (t !== now && Number.isFinite(first) && t < first - 864e5) throw new Error(`You first bought ${symbol} on ${new Date(first).toISOString().slice(0, 10)}; the sale date can't be earlier`);
+    // A dated sale draws only on lots bought by then. The day of slack matches
+    // the check above (dates arrive as midnight, buys may carry a time of day).
+    const pool = (pos.lots || []).filter((l) => t === now || l.t == null || l.t < t + 864e5);
+    const held = pool.reduce((s, l) => s + l.q, 0);
+    if (quantity > held + 1e-9) throw new Error(`You held ${+held.toFixed(6)} ${symbol} on ${new Date(t).toISOString().slice(0, 10)}; a sale can't use shares bought later`);
     // If price not supplied, use the market price fetched before locking.
     if (needPrice) {
       price = await pricePromise;
       if (price == null) throw new Error('Could not fetch price; supply a sell price');
     }
     const sellPrice = Number(price);
-    const realized = (sellPrice - pos.avgCost) * quantity;
-    // Selling (effectively) the whole position -> factor 0 so no float dust survives.
-    const full = quantity >= pos.quantity - 1e-9;
-    const factor = full ? 0 : (pos.quantity - quantity) / pos.quantity; // proportional lot reduction
+    if (!(Number.isFinite(sellPrice) && sellPrice >= 0)) throw new Error('Sell price must be a number >= 0');
+    // Cost basis comes from the same lots the sale draws on.
+    const poolAvgCost = held ? pool.reduce((s, l) => s + l.q * l.px, 0) / held : 0;
+    const realized = (sellPrice - poolAvgCost) * quantity;
+    // Selling (effectively) every eligible share -> factor 0 so no float dust survives.
+    const full = quantity >= held - 1e-9;
+    const factor = full ? 0 : (held - quantity) / held; // proportional reduction of the eligible lots
     // Snapshot the consumed slice of each lot (with its purchase-time FX) BEFORE
     // scaling them down, so realized P&L can later be split into stock vs FX.
     const currency = (pos.currency || 'USD').toUpperCase();
     const consumed = 1 - factor;
-    const lotsSold: SoldLot[] = (pos.lots || [])
+    const lotsSold: SoldLot[] = pool
       .map((l) => ({ q: l.q * consumed, px: l.px, fxUsd: l.fxUsd ?? null, t: l.t ?? null,
         usdBase: l.usdBase ?? null, usdBaseCcy: l.usdBaseCcy ?? null }))
       .filter((l) => l.q > 1e-12);
     const { fxUsdSell = null, usdBaseSell = null } = await fxPromise;
-    pos.lots.forEach((l) => { l.q *= factor; });
+    pool.forEach((l) => { l.q *= factor; });
+    // Fully sold lots go, so the ledger can't edit or delete a buy that was sold.
+    if (full) pos.lots = pos.lots.filter((l) => !pool.includes(l));
     recalcPosition(pos);
     const tx: StoredTransaction = { id: newTxId(), type: 'SELL', symbol, quantity, price: sellPrice, realized, currency, fxUsdSell, lotsSold, time: t };
     if (usdBaseSell != null) { tx.usdBaseSell = usdBaseSell; tx.usdBaseSellCcy = usdBaseCcy; }
@@ -620,11 +630,18 @@ export async function importCsv(text: unknown, replace: boolean, accountId?: str
     // Resolve the account up front so importing into "ALL"/unknown fails with a clear
     // error instead of every row silently failing inside the per-row catch below.
     const p = loadPortfolio(); const acc = resolveAccount(p, accountId);
+    // A replacement is all or nothing: if any row fails, the book is restored
+    // exactly as it was, so a bad file can't leave the account empty.
+    const original = replace ? structuredClone(p) : null;
     if (replace) { acc.positions = []; acc.transactions = []; acc.dividends = []; savePortfolio(p); }
     let added = 0; const failed: string[] = [];
     for (const r of rows) {
       try { await buyUnlocked(r.symbol, r.quantity, r.price, r.dateMs, accountId, base); added++; }
       catch (e) { failed.push(r.symbol); }
+    }
+    if (original && failed.length) {
+      savePortfolio(original);
+      throw new Error(`Nothing was replaced: ${failed.length} of ${rows.length} rows failed (${failed.slice(0, 10).join(', ')}${failed.length > 10 ? ', …' : ''}). Fix them and import again.`);
     }
     // Store dividends (reload since buyUnlocked re-saved the file each row).
     if (divs.length) {
