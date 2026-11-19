@@ -56,6 +56,22 @@ export async function cmd(page: Page, text: string): Promise<void> {
 // The quantity cell of a position row.
 export const qtyCell = (page: Page, sym: string) => page.locator(`#positions-body tr[data-sym="${sym}"] td`).nth(1);
 
+// Advance an installed page.clock by `ms` in small steps, letting the requests
+// each step starts finish before the next. One large jump fires a 15 s poll's
+// next tick while the previous fetch is still in flight, and the query layer
+// then drops it, so a poll that runs too often would go unnoticed.
+export async function advanceClock(page: Page, ms: number, step = 1_000): Promise<void> {
+  const inFlight = new Set<object>();
+  const add = (r: object) => inFlight.add(r), done = (r: object) => inFlight.delete(r);
+  page.on('request', add); page.on('requestfinished', done); page.on('requestfailed', done);
+  try {
+    for (let t = 0; t < ms; t += step) {
+      await page.clock.runFor(Math.min(step, ms - t));
+      await expect.poll(() => inFlight.size, { intervals: [10, 25, 50, 100] }).toBe(0);
+    }
+  } finally { page.off('request', add); page.off('requestfinished', done); page.off('requestfailed', done); }
+}
+
 // Drag a panel by its ⠿ grip into a column (stepped moves so HTML5 dragover fires).
 export async function dragPanel(page: Page, pid: string, column: '.col-left' | '.col-right'): Promise<void> {
   const grip = page.locator(`.panel[data-pid="${pid}"] .drag-grip`);

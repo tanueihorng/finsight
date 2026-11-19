@@ -1,9 +1,8 @@
 import { test, expect } from '@playwright/test';
-import { seeded, PIN } from '../helpers';
+import { seeded, advanceClock, PIN } from '../helpers';
 
 test('an expired session locks the app, stops polling, keeps a typed PIN, and unlock resumes', async ({ page, context }) => {
-  test.setTimeout(60_000);
-  await seeded(page);
+  await page.clock.install(); await seeded(page);
   await context.clearCookies(); // the server no longer knows this browser
   // The next API call gets 401 (a poll may get there first; either way the app locks).
   // loadMarkets moved to a React island (PILOT-1); any legacy API loader triggers the same 401 path.
@@ -15,7 +14,7 @@ test('an expired session locks the app, stops polling, keeps a typed PIN, and un
   await page.fill('#lock-pin', PIN.slice(0, 2));
   const calls: string[] = [];
   page.on('request', (r) => { const p = new URL(r.url()).pathname; if (p.startsWith('/api/') && !p.startsWith('/api/auth/')) calls.push(p); });
-  await page.waitForTimeout(16_000);
+  await advanceClock(page, 31_000); // two full 15 s poll cycles
   expect(calls).toEqual([]);
   await expect(page.locator('#lock-pin')).toHaveValue(PIN.slice(0, 2));
 

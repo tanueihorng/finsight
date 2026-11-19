@@ -8,7 +8,7 @@
 // Findings F1–F4 (harness/runs/*AUTHVAL-001*/REPORT.md) were fixed in
 // AUTHFIX-001; their repros (3a, 3b, 4b, 4c) now run as ordinary tests.
 import { test, expect, type Page, type Route } from '@playwright/test';
-import { PIN, seeded } from './helpers';
+import { PIN, seeded, advanceClock } from './helpers';
 
 const FAKE_AGENT = `http://127.0.0.1:${Number(process.env.E2E_PORT_BASE || 8096) + 1}`;
 const rows = (page: Page) => page.locator('#positions-body tr[data-sym]');
@@ -183,8 +183,7 @@ test('3b. locked: the app behind the lock is hidden, not just covered (positions
 });
 
 test('3c. responses held across a lock: no new protected work while locked, the lock and a typed PIN survive the late replies', async ({ page }) => {
-  test.setTimeout(60_000);
-  await seeded(page);
+  await page.clock.install(); await seeded(page);
   await page.waitForLoadState('networkidle');
   const gate = await hold(page, (u) => ['/api/portfolio', '/api/dividends', '/api/fx-risk', '/api/chart-trades'].includes(u.pathname));
   await page.evaluate(() => { for (const k of ['portfolio', 'dividends', 'fx-risk', 'chart-trades']) void window.FinSight.bus.invalidate(k); });
@@ -193,7 +192,7 @@ test('3c. responses held across a lock: no new protected work while locked, the 
   await page.fill('#lock-pin', PIN.slice(0, 2));
   const after = recorder(page);
   await gate.release();
-  await page.waitForTimeout(16_000); // a full 15 s poll cycle
+  await advanceClock(page, 31_000); // two full 15 s poll cycles
   expect(after, 'protected requests sent while locked').toEqual([]);
   await expect(page.locator('body')).toHaveClass(/\blocked\b/);
   await expect(page.locator('#lock-pin')).toHaveValue(PIN.slice(0, 2));
